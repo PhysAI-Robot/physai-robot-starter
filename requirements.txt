@@ -1,0 +1,13 @@
+# Phase 0 — simulation only. No ROS2, no torch required to run the sim.
+mujoco>=3.2
+numpy>=1.26
+imageio>=2.34
+imageio-ffmpeg>=0.4.9
+PyYAML>=6.0
+
+# VLM high-level planner (optional — only needed for scripts/plan_task.py)
+anthropic>=0.40
+
+# VLA policy training/inference (optional, install separately — heavy)
+# torch>=2.4
+# lerobot @ git+https://github.com/huggingface/lerobot.git

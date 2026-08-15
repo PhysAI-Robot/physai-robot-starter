@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "physai"
+version = "0.0.1"
+description = "Phase 0 starter: SO-101 arm in MuJoCo with VLM planner + VLA policy seams"
+requires-python = ">=3.10"
+dependencies = [
+    "mujoco>=3.2",
+    "numpy>=1.26",
+    "imageio>=2.34",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+vlm = ["anthropic>=0.40"]
+dev = ["pytest>=8.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

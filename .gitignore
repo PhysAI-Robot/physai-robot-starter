@@ -1,0 +1,19 @@
+# downloaded robot description (fetched by scripts/fetch_assets.py)
+assets/so101/
+
+# recorded data / rollouts
+data/
+outputs/
+*.mp4
+*.npz
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# secrets
+.env
