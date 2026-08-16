@@ -1,9 +1,11 @@
 # downloaded robot description (fetched by scripts/fetch_assets.py)
 assets/so101/
 
-# recorded data / rollouts
-data/
-outputs/
+# recorded data / rollouts (root-level only — do NOT match src/physai/data/,
+# which is real source code; an unanchored `data/` pattern silently ate it
+# from the very first commit until this fix)
+/data/
+/outputs/
 *.mp4
 *.npz
 
