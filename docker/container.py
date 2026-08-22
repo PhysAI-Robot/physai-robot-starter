@@ -22,8 +22,8 @@ COMPOSE = DOCKER_DIR / "docker-compose.yml"
 COMPOSE_GPU = DOCKER_DIR / "docker-compose.gpu.yml"
 MODE_FILE = DOCKER_DIR / ".mode"
 
-CUDA_BASE = "nvidia/cuda:12.8.1-devel-ubuntu22.04"
-CPU_BASE = "ubuntu:22.04"
+CUDA_BASE = "nvidia/cuda:12.8.1-devel-ubuntu24.04"
+CPU_BASE = "ubuntu:24.04"
 
 
 def compose(args: list[str], gpu: bool) -> int:
