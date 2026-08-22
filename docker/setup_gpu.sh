@@ -5,7 +5,7 @@ set -euo pipefail
 
 KEYRING=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
 LIST=/etc/apt/sources.list.d/nvidia-container-toolkit.list
-PROBE=ubuntu:22.04
+PROBE=ubuntu:24.04
 
 say() { printf '\n== %s\n' "$*"; }
 
