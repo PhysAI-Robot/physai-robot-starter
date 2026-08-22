@@ -18,11 +18,13 @@ import numpy as np
 
 from physai.data import load_episode
 from physai.policy import ConstantPolicy, ReplayPolicy, ScriptedPickPlace
-from physai.sim import EnvConfig, SO101PickPlaceEnv
+from physai.robots import available_robots, create_robot
+from physai.sim import EnvConfig
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--robot", default="so101", choices=available_robots())
     ap.add_argument("--policy", default="scripted",
                     choices=["scripted", "constant", "replay"])
     ap.add_argument("--episodes", type=int, default=20)
@@ -33,8 +35,8 @@ def main() -> int:
                     help="render cameras (slower; needed for image-conditioned policies)")
     args = ap.parse_args()
 
-    env = SO101PickPlaceEnv(EnvConfig(seed=args.seed, max_steps=args.max_steps,
-                                      render=args.render))
+    env = create_robot(args.robot, config=EnvConfig(seed=args.seed, max_steps=args.max_steps,
+                                                    render=args.render))
 
     episodes = None
     if args.policy == "replay":

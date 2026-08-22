@@ -23,7 +23,7 @@ import numpy as np
 
 from ..contracts import Action, GripperCommand, Observation, PoseStamped
 from ..control.resolver import JointRateLimiter
-from ..sim.kinematics import TOP_DOWN, ArmKinematics
+from ..robots.so101.kinematics import TOP_DOWN, ArmKinematics
 from .base import Policy
 
 

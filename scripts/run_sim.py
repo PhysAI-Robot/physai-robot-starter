@@ -15,7 +15,8 @@ import _bootstrap  # noqa: F401
 import numpy as np
 
 from physai.policy import ConstantPolicy, ScriptedPickPlace
-from physai.sim import EnvConfig, SO101PickPlaceEnv, SceneConfig
+from physai.robots import available_robots, create_robot
+from physai.sim import EnvConfig, SceneConfig
 
 
 def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
@@ -52,6 +53,7 @@ def build_policy(name: str, env):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--robot", default="so101", choices=available_robots())
     ap.add_argument("--policy", default="scripted", choices=["scripted", "constant"])
     ap.add_argument("--episodes", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
@@ -66,7 +68,7 @@ def main() -> int:
     if args.viewer:
         return run_viewer(args)
 
-    env = SO101PickPlaceEnv(EnvConfig(
+    env = create_robot(args.robot, config=EnvConfig(
         scene=SceneConfig(camera_width=640, camera_height=480),
         seed=args.seed, max_steps=args.max_steps, render=True,
     ))
@@ -105,8 +107,8 @@ def main() -> int:
 def run_viewer(args) -> int:
     import mujoco.viewer
 
-    env = SO101PickPlaceEnv(EnvConfig(seed=args.seed, render=False,
-                                      max_steps=args.max_steps))
+    env = create_robot(args.robot, config=EnvConfig(seed=args.seed, render=False,
+                                                    max_steps=args.max_steps))
     obs = env.reset()
     policy = build_policy(args.policy, env)
     policy.reset(obs)

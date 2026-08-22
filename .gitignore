@@ -3,6 +3,8 @@ assets/so101/
 
 # recorded data / rollouts
 data/
+!src/physai/data/
+!src/physai/data/**
 outputs/
 *.mp4
 *.npz
@@ -17,3 +19,6 @@ venv/
 
 # secrets
 .env
+
+# workspace
+.vscode/
