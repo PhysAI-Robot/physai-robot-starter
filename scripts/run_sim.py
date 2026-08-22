@@ -3,6 +3,7 @@
     python scripts/run_sim.py                      # scripted expert, 1 episode
     python scripts/run_sim.py --episodes 5 --seed 0
     python scripts/run_sim.py --policy constant    # baseline: do nothing
+    python scripts/run_sim.py --policy lerobot --checkpoint outputs/act_ckpt
     python scripts/run_sim.py --viewer             # interactive MuJoCo viewer
 """
 
@@ -14,7 +15,7 @@ from pathlib import Path
 import _bootstrap  # noqa: F401
 import numpy as np
 
-from physai.policy import ConstantPolicy, ScriptedPickPlace
+from physai.policy import ConstantPolicy, LeRobotPolicy, ScriptedPickPlace
 from physai.sim import EnvConfig, SO101PickPlaceEnv, SceneConfig
 
 
@@ -42,21 +43,33 @@ def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
     return gif
 
 
-def build_policy(name: str, env):
+def build_policy(name: str, env, checkpoint: Path | None = None):
     if name == "scripted":
         return ScriptedPickPlace(env.kin, env)
     if name == "constant":
         return ConstantPolicy()
+    if name == "lerobot":
+        if checkpoint is None:
+            raise ValueError("--policy lerobot needs --checkpoint")
+        return LeRobotPolicy.from_checkpoint(env, checkpoint)
     raise ValueError(f"unknown policy {name!r}")
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--policy", default="scripted", choices=["scripted", "constant"])
+    ap.add_argument("--policy", default="scripted",
+                    choices=["scripted", "constant", "lerobot"])
+    ap.add_argument("--checkpoint", type=Path, help="required for --policy lerobot")
     ap.add_argument("--episodes", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--max-steps", type=int, default=600)
     ap.add_argument("--camera", default="front")
+    ap.add_argument("--camera-size", type=int,
+                    help="square render resolution. IMPORTANT for --policy lerobot: "
+                         "a policy trained on square images (collect_demos.py's "
+                         "default) sees a stretched, off-distribution image if "
+                         "you render non-square here — pass the training size "
+                         "(e.g. 128) to avoid the mismatch.")
     ap.add_argument("--out", type=Path, default=Path("outputs"))
     ap.add_argument("--no-video", action="store_true")
     ap.add_argument("--viewer", action="store_true",
@@ -66,16 +79,19 @@ def main() -> int:
     if args.viewer:
         return run_viewer(args)
 
+    cam_w, cam_h = (args.camera_size, args.camera_size) if args.camera_size else (640, 480)
     env = SO101PickPlaceEnv(EnvConfig(
-        scene=SceneConfig(camera_width=640, camera_height=480),
+        scene=SceneConfig(camera_width=cam_w, camera_height=cam_h),
         seed=args.seed, max_steps=args.max_steps, render=True,
     ))
     args.out.mkdir(parents=True, exist_ok=True)
     successes = 0
 
+    # Built once — a lerobot checkpoint is expensive to reload per episode.
+    policy = build_policy(args.policy, env, args.checkpoint)
+
     for ep in range(args.episodes):
         obs = env.reset(seed=args.seed + ep)
-        policy = build_policy(args.policy, env)
         policy.reset(obs)
         frames, total_reward, info = [], 0.0, {}
 
@@ -105,10 +121,10 @@ def main() -> int:
 def run_viewer(args) -> int:
     import mujoco.viewer
 
-    env = SO101PickPlaceEnv(EnvConfig(seed=args.seed, render=False,
+    env = SO101PickPlaceEnv(EnvConfig(seed=args.seed, render=args.policy == "lerobot",
                                       max_steps=args.max_steps))
     obs = env.reset()
-    policy = build_policy(args.policy, env)
+    policy = build_policy(args.policy, env, args.checkpoint)
     policy.reset(obs)
 
     print("Viewer open. Close the window to exit.")

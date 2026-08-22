@@ -2,7 +2,8 @@
 
 Simulation-first starter for physical-AI research on the **SO-101** 5-DoF arm.
 Phase 0 runs the whole stack from your architecture diagram in one process, in
-MuJoCo, with no ROS2 and no GPU:
+MuJoCo, with no ROS2. The sim, scripted expert, and planner path need no GPU;
+training a real VLA policy (`scripts/train_act.py`) does.
 
 ```
   natural language ──▶ VLM planner ──▶ sub-goals (PoseStamped)
@@ -41,22 +42,43 @@ python scripts/run_sim.py --viewer                    # interactive
 python scripts/teleop_keyboard.py                     # jog it by hand
 ```
 
+**Training a real VLA** (optional, GPU strongly recommended — see `requirements.txt`
+for the `torch`/`lerobot` install, which needs a hardware-specific command so it
+isn't pinned in the base install):
+
+```bash
+python scripts/collect_demos.py --episodes 50 --out data/pickplace_v1 --width 128 --height 128
+python scripts/train_act.py --dataset data/pickplace_v1 --steps 5000
+python scripts/eval_policy.py --policy lerobot --checkpoint outputs/act_ckpt --episodes 20 --camera-size 128
+```
+
 ## Verified status
 
-Measured on this repo, Python 3.13 + MuJoCo 3.11, CPU only:
+Measured on this repo, Python 3.13 + MuJoCo 3.11:
 
 | Check | Result |
 |---|---|
-| Scripted expert, 20 seeds | **20/20 success** (mean 145 control steps ≈ 5.8 s) |
-| Demo collection, 6 episodes | 6/6 kept, 0 discarded |
-| Record → replay round-trip | **6/6 success** |
+| Scripted expert, 30 seeds | **30/30 success** (mean ~145 control steps ≈ 5.8 s) |
+| Demo collection, 50 episodes | 50/50 kept, 0 discarded |
+| Record → replay round-trip | success |
 | Planner → PlanRunner (scripted planner) | success |
-| Test suite | 22 passed |
+| **ACT trained from 50 demos, 5000 steps** (GTX 1650, 4 GB, ~15 min) | **7/20 = 35%** success, camera-only, vs a **95%** scripted-expert ceiling on the same 20 seeds |
+| Test suite | 24 passed |
 | Sim speed | ~700 control steps/s headless without cameras |
 
 The VLM planner path (`--planner claude`) is implemented and type-checked
 against the Messages API but **has not been run against the live API here** —
 it needs your `ANTHROPIC_API_KEY`.
+
+35% is not meant to look good in isolation — it is the measured cost of
+replacing the scripted expert's privileged simulator access with two camera
+feeds, at this data and compute scale. The two most likely levers are more
+demonstrations and more training steps (L1 loss was still trending down at
+step 5000); see the training report generated alongside this run for the
+loss curve, per-episode breakdown, and two preprocessing bugs that were
+caught and fixed while producing it (`training_meta.json` filename collision;
+non-square camera renders silently degrading the policy — both now fixed in
+`vla_adapter.py` and `act_dataset.py`).
 
 ---
 
@@ -172,15 +194,16 @@ src/physai/
     base.py               the Policy interface everything implements
     scripted.py           privileged expert; the demonstration generator
     plan_runner.py        executes a Plan open-loop (the VLA baseline)
-    vla_adapter.py        seam for SmolVLA / TurboVLA / ACT; ReplayPolicy
+    act_dataset.py        recorded .npz episodes -> ACT training batches
+    vla_adapter.py        LeRobotPolicy (real ACT/SmolVLA checkpoints); ReplayPolicy
   planner/
     base.py               Plan / SubGoal, plus an offline ScriptedPlanner
     claude_vlm.py         Claude Messages API planner, structured outputs
   data/recorder.py        LeRobot-shaped episode recorder
   bridge/ros2_contract.py Phase 1 topics, types, rates — declared now, used later
-scripts/                  runnable entry points (see Quick start)
+scripts/                  runnable entry points (see Quick start), incl. train_act.py
 configs/                  the numbers that matter, with reasoning attached
-tests/                    22 tests; the sim ones skip if assets aren't fetched
+tests/                    24 tests; the sim ones skip if assets aren't fetched
 ```
 
 ### Data format
