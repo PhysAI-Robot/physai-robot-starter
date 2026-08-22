@@ -17,7 +17,7 @@ import _bootstrap  # noqa: F401
 import numpy as np
 
 from physai.sim import EnvConfig, SO101PickPlaceEnv
-from physai.sim.kinematics import TOP_DOWN
+from physai.robots.so101.kinematics import TOP_DOWN
 
 
 def main() -> int:

@@ -1,5 +1,5 @@
 from .env import EnvConfig, HOME_QPOS, SO101PickPlaceEnv
-from .kinematics import ArmKinematics, IKResult, top_down_quat
+from ..robots.so101.kinematics import ArmKinematics, IKResult, top_down_quat
 from .scene import SceneConfig, build_model, build_spec, export_xml
 
 __all__ = [

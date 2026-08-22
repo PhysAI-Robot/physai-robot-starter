@@ -62,7 +62,7 @@ def test_gripper_normalisation_round_trips(env):
 
 @requires_assets
 def test_ik_reaches_a_point_on_the_table(env):
-    from physai.sim.kinematics import TOP_DOWN
+    from physai.robots.so101.kinematics import TOP_DOWN
 
     obs = env.reset(seed=0)
     target = env.cube_pos + np.array([0.0, 0.0, 0.01])
@@ -73,7 +73,7 @@ def test_ik_reaches_a_point_on_the_table(env):
 @requires_assets
 def test_ik_pinch_puts_the_object_between_the_jaws_not_on_the_site(env):
     from physai.contracts import Action, GripperCommand
-    from physai.sim.kinematics import TOP_DOWN
+    from physai.robots.so101.kinematics import TOP_DOWN
 
     obs = env.reset(seed=0)
     target = env.cube_pos.copy()
@@ -91,7 +91,7 @@ def test_ik_pinch_puts_the_object_between_the_jaws_not_on_the_site(env):
 @requires_assets
 def test_top_down_approach_is_unreachable_high_above_the_table(env):
     """Documents a real limit of this 5-DoF arm rather than a solver bug."""
-    from physai.sim.kinematics import TOP_DOWN
+    from physai.robots.so101.kinematics import TOP_DOWN
 
     obs = env.reset(seed=0)
     high = env.cube_pos + np.array([0.0, 0.0, 0.12])

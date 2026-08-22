@@ -1,24 +1,9 @@
-"""Episode recorder in a LeRobot-shaped layout.
-
-Writes one .npz per episode plus a dataset-level meta.json. Keys match the
-LeRobot v2 convention so `scripts/to_lerobot.py` (or your own converter) is a
-rename, not a reshape:
-
-    observation.images.front  (T, H, W, 3) uint8
-    observation.images.wrist  (T, H, W, 3) uint8
-    observation.state         (T, 6)  float32  arm joints + gripper, radians
-    action                    (T, 6)  float32  absolute joint targets, radians
-    reward, done, phase       (T,)
-
-Absolute joint targets — not deltas — because that is what the real SO-101
-follower takes, so a policy trained here transfers to hardware without an
-action-space change.
-"""
+"""Episode recorder in a LeRobot-shaped layout."""
 
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -56,7 +41,6 @@ class EpisodeRecorder:
         self.episodes: list[dict] = []
         self._buf: EpisodeBuffer | None = None
 
-    # ------------------------------------------------------------------
     def start_episode(self) -> None:
         self._buf = EpisodeBuffer()
 
@@ -69,15 +53,10 @@ class EpisodeRecorder:
         phase: str = "",
         gripper_joint: float | None = None,
     ) -> None:
-        """Append one control tick.
-
-        `observation` is the state the policy saw; `action` is what it emitted
-        in response — the standard (s, a) alignment for behaviour cloning.
-        `gripper_joint` is the commanded gripper in *radians*; pass it so the
-        recorded action is homogeneous with `observation.state`.
-        """
         if self._buf is None:
             raise RuntimeError("call start_episode() first")
+        if action.joint_position is None:
+            raise ValueError("EpisodeRecorder requires joint-position actions")
 
         if self.store_images:
             for name, frame in observation.images.items():
@@ -110,7 +89,7 @@ class EpisodeRecorder:
             arrays[f"observation.images.{name}"] = np.stack(frames)
         np.savez_compressed(path, **arrays)
 
-        meta = {
+        self.episodes.append({
             "index": idx,
             "file": path.name,
             "length": len(self._buf),
@@ -118,13 +97,16 @@ class EpisodeRecorder:
             "task": self.task,
             "fps": self.fps,
             **(extra or {}),
-        }
-        self.episodes.append(meta)
+        })
         self._buf = None
         return path
 
     def write_meta(self) -> Path:
         n_ok = sum(e["success"] for e in self.episodes)
+        names = [
+            "shoulder_pan", "shoulder_lift", "elbow_flex",
+            "wrist_flex", "wrist_roll", "gripper",
+        ]
         meta = {
             "codebase_version": "physai-0.0.1",
             "created_utc": datetime.now(timezone.utc).isoformat(),
@@ -135,13 +117,8 @@ class EpisodeRecorder:
             "num_successful_episodes": n_ok,
             "total_frames": sum(e["length"] for e in self.episodes),
             "features": {
-                "observation.state": {"dtype": "float32", "shape": [6],
-                                      "names": ["shoulder_pan", "shoulder_lift",
-                                                "elbow_flex", "wrist_flex",
-                                                "wrist_roll", "gripper"]},
-                "action": {"dtype": "float32", "shape": [6],
-                           "names": ["shoulder_pan", "shoulder_lift", "elbow_flex",
-                                     "wrist_flex", "wrist_roll", "gripper"]},
+                "observation.state": {"dtype": "float32", "shape": [6], "names": names},
+                "action": {"dtype": "float32", "shape": [6], "names": names},
             },
             "episodes": self.episodes,
         }
@@ -151,5 +128,5 @@ class EpisodeRecorder:
 
 
 def load_episode(path: str | Path) -> dict:
-    with np.load(Path(path), allow_pickle=False) as z:
-        return {k: z[k] for k in z.files}
+    with np.load(Path(path), allow_pickle=False) as archive:
+        return {key: archive[key] for key in archive.files}

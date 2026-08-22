@@ -16,11 +16,13 @@ import _bootstrap  # noqa: F401
 
 from physai.data import EpisodeRecorder
 from physai.policy import ScriptedPickPlace
-from physai.sim import EnvConfig, SO101PickPlaceEnv, SceneConfig
+from physai.robots import available_robots, create_robot
+from physai.sim import EnvConfig, SceneConfig
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--robot", default="so101", choices=available_robots())
     ap.add_argument("--episodes", type=int, default=20)
     ap.add_argument("--out", type=Path, default=Path("data/pickplace_v1"))
     ap.add_argument("--seed", type=int, default=0)
@@ -33,7 +35,7 @@ def main() -> int:
     ap.add_argument("--task", default="put the red cube on the green pad")
     args = ap.parse_args()
 
-    env = SO101PickPlaceEnv(EnvConfig(
+    env = create_robot(args.robot, config=EnvConfig(
         scene=SceneConfig(camera_width=args.width, camera_height=args.height),
         seed=args.seed, max_steps=args.max_steps, render=not args.no_images,
     ))

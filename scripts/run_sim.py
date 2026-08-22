@@ -15,8 +15,9 @@ from pathlib import Path
 import _bootstrap  # noqa: F401
 import numpy as np
 
-from physai.policy import ConstantPolicy, LeRobotPolicy, ScriptedPickPlace
-from physai.sim import EnvConfig, SO101PickPlaceEnv, SceneConfig
+from physai.policy import ConstantPolicy, ScriptedPickPlace
+from physai.robots import available_robots, create_robot
+from physai.sim import EnvConfig, SceneConfig
 
 
 def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
@@ -57,9 +58,8 @@ def build_policy(name: str, env, checkpoint: Path | None = None):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--policy", default="scripted",
-                    choices=["scripted", "constant", "lerobot"])
-    ap.add_argument("--checkpoint", type=Path, help="required for --policy lerobot")
+    ap.add_argument("--robot", default="so101", choices=available_robots())
+    ap.add_argument("--policy", default="scripted", choices=["scripted", "constant"])
     ap.add_argument("--episodes", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--max-steps", type=int, default=600)
@@ -79,9 +79,8 @@ def main() -> int:
     if args.viewer:
         return run_viewer(args)
 
-    cam_w, cam_h = (args.camera_size, args.camera_size) if args.camera_size else (640, 480)
-    env = SO101PickPlaceEnv(EnvConfig(
-        scene=SceneConfig(camera_width=cam_w, camera_height=cam_h),
+    env = create_robot(args.robot, config=EnvConfig(
+        scene=SceneConfig(camera_width=640, camera_height=480),
         seed=args.seed, max_steps=args.max_steps, render=True,
     ))
     args.out.mkdir(parents=True, exist_ok=True)
@@ -121,8 +120,8 @@ def main() -> int:
 def run_viewer(args) -> int:
     import mujoco.viewer
 
-    env = SO101PickPlaceEnv(EnvConfig(seed=args.seed, render=args.policy == "lerobot",
-                                      max_steps=args.max_steps))
+    env = create_robot(args.robot, config=EnvConfig(seed=args.seed, render=False,
+                                                    max_steps=args.max_steps))
     obs = env.reset()
     policy = build_policy(args.policy, env, args.checkpoint)
     policy.reset(obs)

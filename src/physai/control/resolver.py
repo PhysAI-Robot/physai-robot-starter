@@ -16,7 +16,7 @@ from __future__ import annotations
 import numpy as np
 
 from ..contracts import Action, GripperCommand, JointState, PoseStamped, Twist
-from ..sim.kinematics import TOP_DOWN, ArmKinematics
+from ..robots.so101.kinematics import TOP_DOWN, ArmKinematics
 
 
 class JointRateLimiter:
