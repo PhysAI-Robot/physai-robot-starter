@@ -1,0 +1,11 @@
+services:
+  physai:
+    environment:
+      - MUJOCO_GL=${MUJOCO_GL:-egl}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, graphics]
