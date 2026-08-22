@@ -28,7 +28,8 @@ from ..contracts import (
     JointState,
     Observation,
 )
-from .kinematics import ArmKinematics
+from ..tasks import create_task
+from ..robots.so101.kinematics import ArmKinematics
 from .scene import EE_SITE, SceneConfig, build_model
 
 HOME_QPOS = np.array([0.0, -1.05, 1.25, 0.75, 0.0], dtype=np.float64)
@@ -41,6 +42,7 @@ class EnvConfig:
     render: bool = True
     cameras: tuple[str, ...] = ("front", "wrist")
     max_steps: int = 400
+    task: str = "pick_place"
 
     # Domain randomisation. The default band is where the scripted expert is
     # actually reliable, not the full IK-reachable area — top-down grasps solve
@@ -62,6 +64,7 @@ class EnvConfig:
 class SO101PickPlaceEnv:
     def __init__(self, cfg: EnvConfig | None = None) -> None:
         self.cfg = cfg or EnvConfig()
+        self.task = create_task(self.cfg.task, success_xy_tol=self.cfg.success_xy_tol)
         self.model, self.spec = build_model(self.cfg.scene)
         self.data = mujoco.MjData(self.model)
         self.rng = np.random.default_rng(self.cfg.seed)
@@ -115,6 +118,20 @@ class SO101PickPlaceEnv:
         self._success_streak = 0
         self._last_action = Action(joint_position=HOME_QPOS.copy())
 
+    @property
+    def robot_spec(self):
+        """Generic embodiment metadata exposed to registries and tooling."""
+        from ..robots.base import RobotSpec
+
+        return RobotSpec(
+            name="so101",
+            kind="fixed_base_manipulator",
+            joint_names=ALL_JOINT_NAMES,
+            action_modes=("joint_position",),
+            observation_modalities=("state", "images", "ee_pose"),
+            metadata={"control_hz": self.cfg.control_hz},
+        )
+
     # ------------------------------------------------------------------
     # gripper unit conversion
     # ------------------------------------------------------------------
@@ -156,6 +173,7 @@ class SO101PickPlaceEnv:
         self.data.ctrl[self.grip_act_id] = self.gripper_to_joint(1.0)
 
         mujoco.mj_forward(self.model, self.data)
+        self.task.reset(self, self.rng)
         self.step_count = 0
         self._success_streak = 0
         self._last_action = Action(joint_position=HOME_QPOS.copy(),
@@ -247,32 +265,20 @@ class SO101PickPlaceEnv:
     def target_pos(self) -> np.ndarray:
         return self.data.site_xpos[self.target_sid].copy()
 
+    @property
+    def ee_pos(self) -> np.ndarray:
+        return self.data.site_xpos[self.kin.site_id].copy()
+
+    @property
+    def table_top(self) -> float:
+        return self.cfg.scene.table_pos[2] + self.cfg.scene.table_size[2]
+
+    @property
+    def cube_half(self) -> float:
+        return self.cfg.scene.cube_half
+
     def task_state(self) -> dict:
-        cube = self.cube_pos
-        target = self.target_pos
-        ee = self.data.site_xpos[self.kin.site_id].copy()
-        table_top = self.cfg.scene.table_pos[2] + self.cfg.scene.table_size[2]
-        return {
-            "cube_pos": cube,
-            "target_pos": target,
-            "ee_pos": ee,
-            "dist_ee_cube": float(np.linalg.norm(ee - cube)),
-            "dist_cube_target": float(np.linalg.norm(cube[:2] - target[:2])),
-            "cube_lifted": bool(cube[2] > table_top + 2.5 * self.cfg.scene.cube_half),
-            "cube_dropped": bool(cube[2] < table_top - 0.05),
-            "at_target": bool(
-                np.linalg.norm(cube[:2] - target[:2]) < self.cfg.success_xy_tol
-                and abs(cube[2] - (table_top + self.cfg.scene.cube_half)) < 0.02
-            ),
-        }
+        return self.task.evaluate(self)
 
     def reward(self, info: dict | None = None) -> float:
-        info = info or self.task_state()
-        r = -0.02 * info["dist_ee_cube"] - 0.05 * info["dist_cube_target"]
-        if info["cube_lifted"]:
-            r += 0.2
-        if info["at_target"]:
-            r += 1.0
-        if info["cube_dropped"]:
-            r -= 1.0
-        return float(r)
+        return self.task.reward(self, info)

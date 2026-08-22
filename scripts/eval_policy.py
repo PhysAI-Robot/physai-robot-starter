@@ -17,12 +17,14 @@ import _bootstrap  # noqa: F401
 import numpy as np
 
 from physai.data import load_episode
-from physai.policy import ConstantPolicy, LeRobotPolicy, ReplayPolicy, ScriptedPickPlace
-from physai.sim import EnvConfig, SO101PickPlaceEnv, SceneConfig
+from physai.policy import ConstantPolicy, ReplayPolicy, ScriptedPickPlace
+from physai.robots import available_robots, create_robot
+from physai.sim import EnvConfig
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--robot", default="so101", choices=available_robots())
     ap.add_argument("--policy", default="scripted",
                     choices=["scripted", "constant", "replay", "lerobot"])
     ap.add_argument("--episodes", type=int, default=20)
@@ -38,11 +40,8 @@ def main() -> int:
     ap.add_argument("--json-out", type=Path, help="write full per-episode results as JSON")
     args = ap.parse_args()
 
-    needs_images = args.policy == "lerobot"
-    env = SO101PickPlaceEnv(EnvConfig(
-        scene=SceneConfig(camera_width=args.camera_size, camera_height=args.camera_size),
-        seed=args.seed, max_steps=args.max_steps, render=args.render or needs_images,
-    ))
+    env = create_robot(args.robot, config=EnvConfig(seed=args.seed, max_steps=args.max_steps,
+                                                    render=args.render))
 
     episodes = None
     if args.policy == "replay":

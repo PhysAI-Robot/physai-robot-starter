@@ -3,7 +3,10 @@
     # offline, no API key needed — checks the planner->policy plumbing
     python scripts/plan_task.py --planner scripted
 
-    # real VLM
+    # local VLM
+    python scripts/plan_task.py --planner smolvlm
+
+    # Claude VLM
     set ANTHROPIC_API_KEY=...          # PowerShell: $env:ANTHROPIC_API_KEY="..."
     python scripts/plan_task.py --instruction "put the red cube on the green pad"
 
@@ -20,16 +23,19 @@ from pathlib import Path
 import _bootstrap  # noqa: F401
 import numpy as np
 
-from physai.planner import ScriptedPlanner
+from physai.planner import available_planners, create_planner
 from physai.policy.plan_runner import PlanRunner
-from physai.sim import EnvConfig, SO101PickPlaceEnv, SceneConfig
+from physai.robots import available_robots, create_robot
+from physai.sim import EnvConfig, SceneConfig
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--instruction", default="put the red cube on the green pad")
-    ap.add_argument("--planner", default="claude", choices=["claude", "scripted"])
-    ap.add_argument("--model", default="claude-opus-5")
+    ap.add_argument("--robot", default="so101", choices=available_robots())
+    ap.add_argument("--planner", default="smolvlm", choices=available_planners())
+    ap.add_argument("--model")
+    ap.add_argument("--device")
     ap.add_argument("--effort", default="medium",
                     choices=["low", "medium", "high", "xhigh", "max"])
     ap.add_argument("--seed", type=int, default=0)
@@ -40,7 +46,7 @@ def main() -> int:
                     help="write the images sent to the planner, for debugging")
     args = ap.parse_args()
 
-    env = SO101PickPlaceEnv(EnvConfig(
+    env = create_robot(args.robot, config=EnvConfig(
         scene=SceneConfig(camera_width=512, camera_height=384),
         seed=args.seed, max_steps=args.max_steps, render=True,
     ))
@@ -54,12 +60,20 @@ def main() -> int:
             iio.imwrite(args.save_frames / f"{name}.png", frame.data)
         print(f"frames -> {args.save_frames}")
 
-    if args.planner == "claude":
-        from physai.planner import ClaudePlanner
+    if args.planner == "scripted":
+        from physai.planner import ScriptedPlanner
 
-        planner = ClaudePlanner(model=args.model, effort=args.effort)
-    else:
         planner = ScriptedPlanner(env.cube_pos, env.target_pos)
+    elif args.planner == "claude":
+        planner = create_planner(
+            args.planner, model=args.model or "claude-opus-5", effort=args.effort
+        )
+    else:
+        from physai.planner.smolvlm import DEFAULT_MODEL
+
+        planner = create_planner(
+            args.planner, model=args.model or DEFAULT_MODEL, device=args.device
+        )
 
     plan = planner.plan(args.instruction, obs)
     print(f"\nplanner: {planner.name}")

@@ -1,24 +1,12 @@
 # Phase 0 — simulation only. No ROS2, no torch required to run the sim.
+setuptools>=68
 mujoco>=3.2
 numpy>=1.26
 imageio>=2.34
 imageio-ffmpeg>=0.4.9
 PyYAML>=6.0
 
-# VLM high-level planner (optional — only needed for scripts/plan_task.py)
-anthropic>=0.40
-
-# VLA policy training/inference (optional — only needed for scripts/train_act.py
-# and `--policy lerobot` in eval_policy.py). Not in this file because torch
-# needs a hardware-specific install command; do it by hand:
-#
-#   pip install torch --index-url https://download.pytorch.org/whl/cu126   # NVIDIA GPU
-#   pip install torch                                                       # CPU only
-#   pip install lerobot
-#
-# `pip install torch` with no index gives a CPU-only wheel on recent
-# releases — if `python -c "import torch; print(torch.cuda.is_available())"`
-# prints False on a machine with an NVIDIA GPU, that's why. `lerobot` pins its
-# own torch version and WILL downgrade a CUDA build to a CPU one if installed
-# afterwards — reinstall the matching cuNNN wheel (see error above) once
-# lerobot is in.
+# Optional model dependencies live in pyproject.toml extras:
+# python -m pip install -e ".[smolvlm]"  # local SmolVLM planner
+# python -m pip install -e ".[vlm]"      # Claude planner
+# python -m pip install -e ".[vla]"      # LeRobot VLA policies
