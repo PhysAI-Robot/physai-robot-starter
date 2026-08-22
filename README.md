@@ -76,6 +76,26 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/ -q
 ROS2 is installed system-wide. It is not needed in an environment without
 that plugin.
 
+## Run in Docker
+
+```bash
+python docker/container.py build    # build the image
+python docker/container.py start    # run the container in the background
+python docker/container.py shell    # open a shell inside the running container
+python docker/container.py stop     # stop and remove the container
+```
+
+Flags:
+
+```bash
+--gpu         # force the CUDA image and pass the GPU through
+--cpu         # force the CPU-only image, needed on a MacBook
+--no-cache    # rebuild without the layer cache
+```
+
+Without `--gpu` or `--cpu`, the GPU is used when Docker has the NVIDIA runtime
+and the CPU image is used otherwise.
+
 ## Choose your next workflow
 
 The commands below are independent options. Pick the one that matches what
