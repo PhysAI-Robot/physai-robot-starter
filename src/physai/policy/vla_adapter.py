@@ -130,38 +130,101 @@ class ReplayPolicy(VLAPolicy):
 
 
 class LeRobotPolicy(VLAPolicy):
-    """Thin wrapper over a LeRobot `PreTrainedPolicy` (SmolVLA, ACT, pi0, ...).
+    """Wraps a LeRobot `PreTrainedPolicy` plus its pre/post-processing pipeline.
 
-    Requires `pip install lerobot` and torch. Kept import-light so the rest of
-    Phase 0 runs on a machine with neither.
+    `action_horizon` defaults to 1 deliberately: policies like ACT already
+    manage their own action-chunk queue inside `select_action` (it only
+    re-invokes the model when its internal queue empties). Layering this
+    class's own chunk buffer on top at horizon 1 makes it a no-op passthrough,
+    so the two don't fight over how many steps to play open-loop.
 
-        from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
-        model = SmolVLAPolicy.from_pretrained("lerobot/smolvla_base")
-        policy = LeRobotPolicy(env, model, action_horizon=10,
-                               instruction="put the red cube on the green pad")
+    Build with `LeRobotPolicy.from_checkpoint(...)` — see act_dataset.py /
+    scripts/train_act.py for how a checkpoint is produced.
     """
 
     name = "lerobot"
 
-    def __init__(self, env, model, device: str = "cpu", **kw) -> None:
+    def __init__(self, env, policy, preprocessor, postprocessor,
+                 image_size: int | None = None, **kw) -> None:
+        kw.setdefault("action_horizon", 1)
         super().__init__(env, **kw)
-        self.model = model
-        self.device = device
+        self.policy = policy
+        self.preprocessor = preprocessor
+        self.postprocessor = postprocessor
+        self.image_size = image_size
+
+    @classmethod
+    def from_checkpoint(cls, env, checkpoint_dir, device: str | None = None, **kw) -> "LeRobotPolicy":
+        import json
+        from pathlib import Path
+
+        import torch
+        from lerobot.policies.act import ACTPolicy, make_act_pre_post_processors
+
+        checkpoint_dir = Path(checkpoint_dir)
+        device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        policy = ACTPolicy.from_pretrained(checkpoint_dir).to(device)
+        policy.eval()
+
+        stats = json.loads((checkpoint_dir / "dataset_stats.json").read_text(encoding="utf-8"))
+        preprocessor, postprocessor = make_act_pre_post_processors(policy.config, dataset_stats=stats)
+
+        # Not config.json — ACTPolicy.save_pretrained() owns that filename
+        # (it's the full ACTConfig dump). Our own metadata lives alongside it
+        # under a name that can't collide. See train_act.py for why this
+        # matters: this used to silently read None here.
+        image_size = None
+        meta_path = checkpoint_dir / "training_meta.json"
+        if meta_path.exists():
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            image_size = meta.get("image_size")
+            kw.setdefault("instruction", meta.get("task", ""))
+
+        return cls(env, policy, preprocessor, postprocessor, image_size=image_size, **kw)
+
+    def reset(self, observation: Observation, goal: PoseStamped | None = None,
+              instruction: str | None = None) -> None:
+        super().reset(observation, goal, instruction)
+        self.policy.reset()
+
+    def _resize(self, arr: np.ndarray):
+        """Match training preprocessing: centre-crop to square, then resize.
+
+        training_data collection always renders square frames, so a naive
+        stretch-to-square resize of a *non*-square camera render (e.g.
+        run_sim.py's default 640x480) silently feeds the policy a distorted,
+        off-distribution image — verified: it measurably hurts success rate
+        even though every shape lines up and nothing errors. Center-cropping
+        first makes any camera aspect ratio degrade gracefully instead.
+        """
+        import torch
+
+        t = torch.from_numpy(arr).permute(2, 0, 1).float() / 255.0
+        if t.shape[-2] != t.shape[-1]:
+            h, w = t.shape[-2], t.shape[-1]
+            side = min(h, w)
+            top, left = (h - side) // 2, (w - side) // 2
+            t = t[:, top:top + side, left:left + side]
+        if self.image_size and t.shape[-1] != self.image_size:
+            t = torch.nn.functional.interpolate(
+                t.unsqueeze(0), size=(self.image_size, self.image_size),
+                mode="bilinear", align_corners=False,
+            ).squeeze(0)
+        return t
 
     def _infer(self, batch: dict) -> np.ndarray:
         import torch
 
-        tensors = {}
+        sample = {}
         for k, v in batch.items():
             if k.startswith("observation.images."):
-                img = torch.from_numpy(v).permute(2, 0, 1).float().div(255.0)
-                tensors[k] = img.unsqueeze(0).to(self.device)
+                sample[k] = self._resize(v)
             elif k == "observation.state":
-                tensors[k] = torch.from_numpy(v).float().unsqueeze(0).to(self.device)
+                sample[k] = torch.from_numpy(v).float()
             else:
-                tensors[k] = [v]
+                sample[k] = v
 
-        self.model.eval()
-        with torch.inference_mode():
-            action = self.model.select_action(tensors)
-        return action.squeeze(0).cpu().numpy()
+        processed = self.preprocessor(sample)
+        action = self.policy.select_action(processed)
+        action = self.postprocessor(action)
+        return action.squeeze(0).detach().cpu().numpy()
