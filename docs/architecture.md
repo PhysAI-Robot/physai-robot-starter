@@ -169,7 +169,9 @@ backend for the same planner interface.
 
 SmolVLA is a different model class: it is a low-level vision-language-action
 policy that predicts joint actions at the control rate. It should not be
-confused with SmolVLM. The adapter in
+confused with SmolVLM. SmolVLA and TurboVLA snapshots are stored under the
+ignored `models/` directory and loaded through an explicit local path. The
+adapter in
 `src/physai/policy/vla_adapter.py` defines the policy boundary.
 
 ## Data contract

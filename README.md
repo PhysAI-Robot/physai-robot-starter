@@ -12,6 +12,7 @@ pick-and-place workflow in MuJoCo before connecting a real robot or ROS2.
 - Uses SmolVLM to turn camera images and a task instruction into robot
   sub-goals.
 - Keeps the interfaces ready for a future VLA policy and ROS2 integration.
+- Stores downloaded VLM/VLA models locally under the ignored `models/` folder.
 
 ## Requirements
 
@@ -63,6 +64,32 @@ Download the official TurtleBot4 description and meshes with:
 ```bash
 python scripts/fetch_assets.py --robot turtlebot4
 ```
+
+Download the local SmolVLM model snapshot from Hugging Face:
+
+```bash
+python -m pip install huggingface-hub
+python scripts/download_models.py --model smolvlm
+```
+
+Copy `.env.example` to `.env` and set `HF_TOKEN` only when the Hugging Face
+model is gated/private or the anonymous API limit is reached. Public models do
+not normally require a token.
+
+Download VLA model snapshots into the same local store:
+
+```bash
+python scripts/download_models.py --model smolvla
+python scripts/download_models.py --model turbovla
+```
+
+`lerobot/smolvla_base` is the default LeRobot-compatible SmolVLA checkpoint.
+TurboVLA is downloaded for local storage, but may require a dedicated adapter
+because its checkpoint layout is not the same as an ACT/LeRobot checkpoint.
+
+Model loaders use `models/` with `local_files_only=True`; they do not silently
+download into the global Hugging Face cache. VLA checkpoints can also be placed
+under `models/` and passed by local path with `--checkpoint`.
 
 The TurtleBot4 environment uses a native MuJoCo MJCF model adapted from
 [`narcispr/turtlebot4_mujoco`](https://github.com/narcispr/turtlebot4_mujoco).

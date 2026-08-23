@@ -54,3 +54,18 @@ def test_action_reports_generic_mode_and_rejects_ambiguous_commands():
     assert Action(ee_twist=Twist()).mode == "twist"
     with pytest.raises(ValueError, match="both"):
         Action(joint_position=[0], ee_twist=Twist()).mode
+
+
+def test_model_store_requires_a_local_model(tmp_path, monkeypatch):
+    from physai import model_store
+
+    monkeypatch.setattr(model_store, "MODEL_ROOT", tmp_path)
+    with pytest.raises(FileNotFoundError, match="download_models.py"):
+        model_store.resolve_local_model("org/missing-model")
+
+
+def test_model_download_presets_include_vla_models():
+    from scripts.download_models import MODEL_REPOS
+
+    assert MODEL_REPOS["smolvla"] == "lerobot/smolvla_base"
+    assert MODEL_REPOS["turbovla"] == "H-EmbodVis/TurboVLA"

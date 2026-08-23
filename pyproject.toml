@@ -17,7 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 vlm = ["anthropic>=0.40"]
-smolvlm = ["torch>=2.4", "transformers>=4.45", "Pillow>=10.0"]
+smolvlm = ["torch>=2.4", "transformers>=4.45", "Pillow>=10.0", "huggingface-hub>=0.24"]
 vla = ["torch>=2.4", "lerobot"]
 dev = ["pytest>=8.0"]
 

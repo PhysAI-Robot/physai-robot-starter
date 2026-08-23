@@ -1,4 +1,3 @@
-# Phase 0 — simulation only. No ROS2, no torch required to run the sim.
 setuptools>=68
 mujoco>=3.2
 numpy>=1.26
@@ -6,7 +5,14 @@ imageio>=2.34
 imageio-ffmpeg>=0.4.9
 PyYAML>=6.0
 
-# Optional model dependencies live in pyproject.toml extras:
-# python -m pip install -e ".[smolvlm]"  # local SmolVLM planner
-# python -m pip install -e ".[vlm]"      # Claude planner
-# python -m pip install -e ".[vla]"      # LeRobot VLA policies
+# Local VLM/VLA runtime dependencies. Model weights are downloaded separately
+# into the ignored models/ directory by scripts/download_models.py.
+torch>=2.4
+transformers>=4.45
+Pillow>=10.0
+huggingface-hub>=0.24
+python-dotenv>=1.0
+lerobot
+
+# Optional cloud planner:
+# anthropic>=0.40
