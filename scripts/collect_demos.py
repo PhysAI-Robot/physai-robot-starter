@@ -22,7 +22,8 @@ from physai.sim import EnvConfig, SceneConfig
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--robot", default="so101", choices=available_robots())
+    ap.add_argument("--robot", default="so101", choices=["so101"],
+                    help="collect_demos currently supports the SO-101 manipulation workflow")
     ap.add_argument("--episodes", type=int, default=20)
     ap.add_argument("--out", type=Path, default=Path("data/pickplace_v1"))
     ap.add_argument("--seed", type=int, default=0)

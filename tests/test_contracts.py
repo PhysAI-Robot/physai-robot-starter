@@ -46,3 +46,11 @@ def test_action_coerces_joint_position_to_array():
     a = Action(joint_position=[0, 1, 2, 3, 4])
     assert isinstance(a.joint_position, np.ndarray)
     assert a.joint_position.shape == (5,)
+
+
+def test_action_reports_generic_mode_and_rejects_ambiguous_commands():
+    from physai.contracts import Action, Twist
+
+    assert Action(ee_twist=Twist()).mode == "twist"
+    with pytest.raises(ValueError, match="both"):
+        Action(joint_position=[0], ee_twist=Twist()).mode

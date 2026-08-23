@@ -15,8 +15,10 @@ from pathlib import Path
 import _bootstrap  # noqa: F401
 import numpy as np
 
+from physai.contracts import Action, Twist
 from physai.policy import ConstantPolicy, ScriptedPickPlace
 from physai.robots import available_robots, create_robot
+from physai.robots.turtlebot import TurtleBot4Config
 from physai.sim import EnvConfig, SceneConfig
 
 
@@ -45,6 +47,10 @@ def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
 
 
 def build_policy(name: str, env, checkpoint: Path | None = None):
+    if env.robot_spec.supports("base_velocity"):
+        if name != "constant":
+            raise ValueError("TurtleBot4 currently supports --policy constant only")
+        return ConstantTwistPolicy()
     if name == "scripted":
         return ScriptedPickPlace(env.kin, env)
     if name == "constant":
@@ -56,6 +62,20 @@ def build_policy(name: str, env, checkpoint: Path | None = None):
     raise ValueError(f"unknown policy {name!r}")
 
 
+class ConstantTwistPolicy:
+    """Hold a mobile base still for the generic simulation smoke test."""
+
+    def reset(self, observation, goal=None, instruction=None) -> None:
+        pass
+
+    def act(self, observation) -> Action:
+        return Action(ee_twist=Twist())
+
+    @property
+    def done(self) -> bool:
+        return False
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--robot", default="so101", choices=available_robots())
@@ -64,6 +84,7 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--max-steps", type=int, default=600)
     ap.add_argument("--camera", default="front")
+    ap.add_argument("--checkpoint", type=Path)
     ap.add_argument("--camera-size", type=int,
                     help="square render resolution. IMPORTANT for --policy lerobot: "
                          "a policy trained on square images (collect_demos.py's "
@@ -79,10 +100,17 @@ def main() -> int:
     if args.viewer:
         return run_viewer(args)
 
-    env = create_robot(args.robot, config=EnvConfig(
-        scene=SceneConfig(camera_width=640, camera_height=480),
-        seed=args.seed, max_steps=args.max_steps, render=True,
-    ))
+    if args.robot == "turtlebot4":
+        env = create_robot(args.robot, config=TurtleBot4Config(
+            max_steps=args.max_steps, render=not args.no_video,
+        ))
+        camera_name = "free"
+    else:
+        env = create_robot(args.robot, config=EnvConfig(
+            scene=SceneConfig(camera_width=640, camera_height=480),
+            seed=args.seed, max_steps=args.max_steps, render=True,
+        ))
+        camera_name = args.camera
     args.out.mkdir(parents=True, exist_ok=True)
     successes = 0
 
@@ -96,7 +124,7 @@ def main() -> int:
 
         for _ in range(args.max_steps):
             if not args.no_video:
-                frames.append(env.render_camera(args.camera))
+                frames.append(env.render_camera(camera_name))
             obs, reward, terminated, truncated, info = env.step(policy.act(obs))
             total_reward += reward
             if terminated or truncated or policy.done:
@@ -104,8 +132,10 @@ def main() -> int:
 
         ok = bool(info.get("success"))
         successes += ok
+        distance = info.get("dist_cube_target")
+        suffix = f" dist_cube_target={distance:.3f}" if distance is not None else ""
         print(f"episode {ep}: success={ok} steps={env.step_count} "
-              f"return={total_reward:.2f} dist_cube_target={info['dist_cube_target']:.3f}")
+              f"return={total_reward:.2f}{suffix}")
 
         if frames and not args.no_video:
             path = write_video(np.stack(frames), args.out / f"{args.policy}_ep{ep:03d}",
@@ -120,8 +150,14 @@ def main() -> int:
 def run_viewer(args) -> int:
     import mujoco.viewer
 
-    env = create_robot(args.robot, config=EnvConfig(seed=args.seed, render=False,
-                                                    max_steps=args.max_steps))
+    if args.robot == "turtlebot4":
+        env = create_robot(args.robot, config=TurtleBot4Config(
+            max_steps=args.max_steps, render=False,
+        ))
+    else:
+        env = create_robot(args.robot, config=EnvConfig(
+            seed=args.seed, render=False, max_steps=args.max_steps,
+        ))
     obs = env.reset()
     policy = build_policy(args.policy, env, args.checkpoint)
     policy.reset(obs)

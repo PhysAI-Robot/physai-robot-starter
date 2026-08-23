@@ -24,7 +24,8 @@ from physai.sim import EnvConfig
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--robot", default="so101", choices=available_robots())
+    ap.add_argument("--robot", default="so101", choices=["so101"],
+                    help="eval_policy currently supports the SO-101 manipulation workflow")
     ap.add_argument("--policy", default="scripted",
                     choices=["scripted", "constant", "replay", "lerobot"])
     ap.add_argument("--episodes", type=int, default=20)

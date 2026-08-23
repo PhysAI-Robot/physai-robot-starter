@@ -39,3 +39,7 @@ def _load_builtins() -> None:
         from .so101.factory import make_so101
 
         register_robot("so101", make_so101)
+    if "turtlebot4" not in _FACTORIES:
+        from .turtlebot.factory import make_turtlebot4
+
+        register_robot("turtlebot4", make_turtlebot4)

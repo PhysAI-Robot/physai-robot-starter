@@ -129,6 +129,7 @@ class SO101PickPlaceEnv:
             joint_names=ALL_JOINT_NAMES,
             action_modes=("joint_position",),
             observation_modalities=("state", "images", "ee_pose"),
+            capabilities=("joint_position", "arm_kinematics", "gripper", "images"),
             metadata={"control_hz": self.cfg.control_hz},
         )
 
