@@ -24,6 +24,7 @@ from collections import deque
 import numpy as np
 
 from ..contracts import Action, GripperCommand, Observation, PoseStamped
+from ..model_store import resolve_local_model
 from .base import Policy
 
 
@@ -161,7 +162,7 @@ class LeRobotPolicy(VLAPolicy):
         import torch
         from lerobot.policies.act import ACTPolicy, make_act_pre_post_processors
 
-        checkpoint_dir = Path(checkpoint_dir)
+        checkpoint_dir = resolve_local_model(str(checkpoint_dir))
         device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         policy = ACTPolicy.from_pretrained(checkpoint_dir).to(device)
         policy.eval()

@@ -1,5 +1,6 @@
 # downloaded robot description (fetched by scripts/fetch_assets.py)
 assets/
+models/
 
 # recorded data / rollouts
 data/
