@@ -1,5 +1,5 @@
 # downloaded robot description (fetched by scripts/fetch_assets.py)
-assets/so101/
+assets/
 
 # recorded data / rollouts
 data/

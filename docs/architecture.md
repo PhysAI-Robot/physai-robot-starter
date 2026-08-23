@@ -33,8 +33,9 @@ physai-robot-starter/
 │   ├── contracts.py          shared Observation and Action data types
 │   ├── robots/               robot discovery and embodiment factories
 │   │   ├── base.py           RobotSpec and RobotEnv contracts
-│   │   ├── registry.py       create_robot("so101")
-│   │   └── so101/            complete SO-101 implementation package
+│   │   ├── registry.py       create_robot("so101" or "turtlebot4")
+│   │   ├── so101/            complete SO-101 implementation package
+│   │   └── turtlebot/        TurtleBot4 MuJoCo implementation package
 │   │       ├── factory.py    SO-101 environment factory
 │   │       └── kinematics.py SO-101 FK, IK, and Jacobian
 │   ├── tasks/                task rules, independent from robot and model
@@ -86,10 +87,14 @@ task-specific rules belong in `tasks/`, and model decisions belong in
 ### Current implementation status
 
 The boundaries are in place, but the first implementation is still intentionally
-small. `so101` is the only registered robot, `pick_place` is the only registered
-task, and the MuJoCo backend currently constructs the SO-101 pick-and-place
-world. The CLI exposes `--robot` and `--planner`; task selection is currently an
-API/configuration concern through `EnvConfig.task` and `create_task()`.
+small. `so101` and `turtlebot4` are registered robots. `pick_place` is the only
+registered task, and it belongs to the SO-101 manipulation workflow. TurtleBot4
+has its own native MuJoCo model, differential-drive controls, wheel state, and
+base pose observation, but no navigation task yet.
+
+The generic simulation smoke-test CLI supports both robots. The policy, demo,
+and planner CLIs are currently SO-101-only because their workflows require arm
+kinematics, a gripper, or the pick-and-place task.
 
 This means a TurtleBot should get its own robot package, motion capabilities,
 backend, and navigation task. It should not be forced through
@@ -104,7 +109,7 @@ so101 robot factory
                     + MuJoCo backend
 ```
 
-Future compositions can be `turtlebot + navigation task + Nav2 policy` or
+Future compositions can be `turtlebot4 + navigation task + Nav2 policy` or
 `mobile_manipulator + mobile_pick_place task + fine-tuned VLA`. Those additions
 should implement new adapters and registrations rather than modify shared
 planner, policy, or contract interfaces.
@@ -123,11 +128,12 @@ generic capability contract
      +-- MobileManipulatorIK   base motion + arm IK + gripper
 ```
 
-The generic layer should describe capabilities, not force one action model on
-every embodiment. A mobile base may provide `base_velocity` and `odometry`, an
-arm may provide `joint_position` and `end_effector_pose`, and a mobile
-manipulator may provide both. Robot adapters should expose only the capabilities
-they support; tasks and policies can then declare which capability they need.
+The generic layer describes capabilities, not one action model for every
+embodiment. `RobotSpec.supports()` and `RobotSpec.require()` are the capability
+gate at workflow boundaries. A mobile base may provide `base_velocity` and
+`odometry`, an arm may provide `joint_position` and `arm_kinematics`, and a
+mobile manipulator may provide both. Tasks and policies should request
+capabilities, not identify robots by name.
 
 ## Extension boundaries
 
@@ -140,8 +146,8 @@ robot adapter -> generic Observation/Action contracts <- planners and policies
 ```
 
 - `physai.robots` owns embodiment discovery and factories.
-- `physai.sim` currently contains the SO-101 MuJoCo implementation; it is not
-     yet a generic simulation backend.
+- `physai.sim` contains the SO-101 task backend; robot-specific MuJoCo adapters
+     live under `physai.robots`.
 - `physai.tasks` owns task rules such as pick-and-place metrics, reward, and
   termination; it consumes backend state instead of robot internals.
 - `physai.planner` owns language-to-plan backends and the `Plan` contract.

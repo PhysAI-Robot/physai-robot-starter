@@ -35,7 +35,7 @@ From the project directory:
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
-python scripts/fetch_assets.py
+python scripts/fetch_assets.py --robot so101
 ```
 
 ### 2. Run the first simulation
@@ -47,11 +47,32 @@ way to check that the installation works:
 python scripts/run_sim.py
 ```
 
-The video is written to `outputs/`. The current built-in robot is `so101`:
+The video is written to `outputs/`. The current built-in robots are `so101` and
+`turtlebot4`. The generic simulation smoke test supports both:
 
 ```bash
 python scripts/run_sim.py --robot so101
+python scripts/run_sim.py --robot turtlebot4 --policy constant --no-video
 ```
+
+The pick-and-place, demo collection, evaluation, and planner commands below
+are currently SO-101-specific because they require arm and gripper capabilities.
+
+Download the official TurtleBot4 description and meshes with:
+
+```bash
+python scripts/fetch_assets.py --robot turtlebot4
+```
+
+The TurtleBot4 environment uses a native MuJoCo MJCF model adapted from
+[`narcispr/turtlebot4_mujoco`](https://github.com/narcispr/turtlebot4_mujoco).
+It accepts ROS2-shaped `Twist` commands through `Action.ee_twist` and exposes
+wheel state and base pose through `Observation`.
+
+Credit: TurtleBot4 MJCF and converted meshes by [narcispr/turtlebot4_mujoco](https://github.com/narcispr/turtlebot4_mujoco),
+with the original model noted there as originating from the HTWK Leipzig
+`ai-enhanced-ros` project. The upstream repository's license should be
+reviewed before redistribution.
 
 ### 3. Open the simulator GUI (optional)
 

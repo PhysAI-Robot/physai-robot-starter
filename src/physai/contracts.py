@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-# Canonical joint ordering. Matches the SO-101 MJCF and the LeRobot follower.
+# SO-101 compatibility names. Other embodiments must provide their own ordering.
 ARM_JOINT_NAMES: tuple[str, ...] = (
     "shoulder_pan",
     "shoulder_lift",
@@ -198,15 +198,25 @@ class Observation:
 class Action:
     """Everything a policy emits at one control tick.
 
-    Exactly one of `joint_position` / `ee_twist` should be set. Joint position
-    is the VLA-native action space (LeRobot records absolute joint targets);
-    ee_twist exists for the Twist-based closed-loop path in the diagram.
+    A policy may emit either joint targets or a Cartesian/base twist. The
+    selected robot capability decides which representation is valid.
     """
 
-    joint_position: np.ndarray | None = None  # (5,) rad, arm only
+    joint_position: np.ndarray | None = None  # embodiment-defined joint targets
     ee_twist: Twist | None = None
     gripper: GripperCommand = field(default_factory=GripperCommand)
 
     def __post_init__(self) -> None:
         if self.joint_position is not None:
             self.joint_position = np.asarray(self.joint_position, dtype=np.float64).reshape(-1)
+
+    @property
+    def mode(self) -> str | None:
+        """Return the action representation carried by this command."""
+        if self.joint_position is not None and self.ee_twist is not None:
+            raise ValueError("Action cannot contain both joint_position and ee_twist")
+        if self.joint_position is not None:
+            return "joint_position"
+        if self.ee_twist is not None:
+            return "twist"
+        return None

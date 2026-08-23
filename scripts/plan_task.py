@@ -32,7 +32,8 @@ from physai.sim import EnvConfig, SceneConfig
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--instruction", default="put the red cube on the green pad")
-    ap.add_argument("--robot", default="so101", choices=available_robots())
+    ap.add_argument("--robot", default="so101", choices=["so101"],
+                    help="plan_task currently supports the SO-101 manipulation workflow")
     ap.add_argument("--planner", default="smolvlm", choices=available_planners())
     ap.add_argument("--model")
     ap.add_argument("--device")
