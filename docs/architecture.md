@@ -9,13 +9,13 @@ instruction + camera images
    VLM planner (SmolVLM or Claude)
         |
         v
-   Plan: language sub-goals + PoseStamped waypoints
+     Plan: language sub-goals + optional PoseStamped waypoints
         |
         v
    low-level policy or PlanRunner
         |
         v
-   absolute joint targets + gripper command
+     capability-specific Action command
         |
         v
    MuJoCo environment
@@ -31,13 +31,14 @@ future VLA policy can consume the same camera, state, and task interfaces.
 physai-robot-starter/
 ├── src/physai/
 │   ├── contracts.py          shared Observation and Action data types
+│   ├── model_store.py        local Hugging Face model path resolution
 │   ├── robots/               robot discovery and embodiment factories
 │   │   ├── base.py           RobotSpec and RobotEnv contracts
 │   │   ├── registry.py       create_robot("so101" or "turtlebot4")
 │   │   ├── so101/            complete SO-101 implementation package
+│   │   │   ├── factory.py    SO-101 environment factory
+│   │   │   └── kinematics.py SO-101 FK, IK, and Jacobian
 │   │   └── turtlebot/        TurtleBot4 MuJoCo implementation package
-│   │       ├── factory.py    SO-101 environment factory
-│   │       └── kinematics.py SO-101 FK, IK, and Jacobian
 │   ├── tasks/                task rules, independent from robot and model
 │   │   ├── base.py           Task contract
 │   │   ├── registry.py       create_task("pick_place")
@@ -176,7 +177,7 @@ adapter in
 
 ## Data contract
 
-Recorded episodes use LeRobot-shaped keys:
+SO-101 demonstration episodes use LeRobot-shaped keys:
 
 ```text
 observation.images.front  (T, H, W, 3) uint8
