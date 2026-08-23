@@ -1,17 +1,15 @@
 # PhysAI Robot Starter
 
-Simulation-first starter project for an SO-101 robot arm. It lets you test a
-pick-and-place workflow in MuJoCo before connecting a real robot or ROS2.
+Simulation-first robot stack for running multiple embodiments in MuJoCo before
+connecting a real robot or ROS2. The current adapters are SO-101 and TurtleBot4.
 
 ## What this project does
 
-- Simulates an SO-101 arm, table, cube, and target pad.
-- Runs a scripted pick-and-place policy without an API key.
-- Collects demonstrations as `.npz` files.
-- Replays demonstrations to check the data and action format.
-- Uses SmolVLM to turn camera images and a task instruction into robot
-  sub-goals.
-- Keeps the interfaces ready for a future VLA policy and ROS2 integration.
+- Provides registered robot adapters with capability-aware actions and observations.
+- Simulates an SO-101 arm and TurtleBot4 differential-drive base in MuJoCo.
+- Runs the SO-101 pick-and-place workflow without an API key.
+- Supports local VLM/VLA model snapshots downloaded from Hugging Face.
+- Keeps the interfaces ready for additional robots, tasks, and ROS2 integration.
 - Stores downloaded VLM/VLA models locally under the ignored `models/` folder.
 
 ## Requirements
@@ -20,8 +18,8 @@ pick-and-place workflow in MuJoCo before connecting a real robot or ROS2.
 - Linux or macOS
 - A working virtual environment named `.venv`
 
-The simulation runs on CPU. SmolVLM downloads its model on first use and may
-need additional memory. A GPU is helpful but not required.
+The simulation runs on CPU. VLM/VLA inference may need additional memory; a GPU
+is helpful but not required.
 
 ## Getting started
 
@@ -235,7 +233,7 @@ the model roles, data format, ROS2 contract, and experiment notes.
 ## Adding a new approach
 
 Keep robot-specific code behind a robot factory and model-specific code behind
-a planner or policy adapter. The built-in SO-101 is registered in
+a planner or policy adapter. Built-in robots are registered in
 `src/physai/robots/registry.py`; planner backends are registered in
 `src/physai/planner/registry.py`.
 
