@@ -1,0 +1,14 @@
+.git
+.gitignore
+assets/so101/
+data/
+outputs/
+*.mp4
+*.npz
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.env

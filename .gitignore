@@ -22,3 +22,6 @@ venv/
 
 # workspace
 .vscode/
+
+# container mode recorded by docker/container.py
+docker/.mode

@@ -1,0 +1,19 @@
+services:
+  physai:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-nvidia/cuda:12.8.1-devel-ubuntu24.04}
+    image: physai-robot-starter:jazzy
+    container_name: physai
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - MUJOCO_GL=${MUJOCO_GL:-osmesa}
+      - DISPLAY=${DISPLAY:-}
+    volumes:
+      - ..:/workspace
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
