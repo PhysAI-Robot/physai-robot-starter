@@ -17,9 +17,9 @@ import _bootstrap  # noqa: F401
 import numpy as np
 
 from physai.data import load_episode
-from physai.policy import ConstantPolicy, ReplayPolicy, ScriptedPickPlace
+from physai.policy import ConstantPolicy, LeRobotPolicy, ReplayPolicy, ScriptedPickPlace
 from physai.robots import available_robots, create_robot
-from physai.sim import EnvConfig
+from physai.sim import EnvConfig, SceneConfig
 
 
 def main() -> int:
@@ -41,8 +41,22 @@ def main() -> int:
     ap.add_argument("--json-out", type=Path, help="write full per-episode results as JSON")
     args = ap.parse_args()
 
-    env = create_robot(args.robot, config=EnvConfig(seed=args.seed, max_steps=args.max_steps,
-                                                    render=args.render))
+    # An image-conditioned policy cannot run without rendered cameras, and it
+    # must see them at the resolution --camera-size asks for. Both were lost
+    # when env construction moved behind create_robot(): render defaulted to
+    # --render alone (so `--policy lerobot` died on an empty images dict) and
+    # --camera-size stopped reaching SceneConfig entirely.
+    needs_images = args.policy == "lerobot"
+    env = create_robot(
+        args.robot,
+        config=EnvConfig(
+            scene=SceneConfig(camera_width=args.camera_size,
+                              camera_height=args.camera_size),
+            seed=args.seed,
+            max_steps=args.max_steps,
+            render=args.render or needs_images,
+        ),
+    )
 
     episodes = None
     if args.policy == "replay":

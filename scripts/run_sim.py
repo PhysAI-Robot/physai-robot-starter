@@ -16,7 +16,7 @@ import _bootstrap  # noqa: F401
 import numpy as np
 
 from physai.contracts import Action, Twist
-from physai.policy import ConstantPolicy, ScriptedPickPlace
+from physai.policy import ConstantPolicy, LeRobotPolicy, ScriptedPickPlace
 from physai.robots import available_robots, create_robot
 from physai.robots.turtlebot import TurtleBot4Config
 from physai.sim import EnvConfig, SceneConfig
@@ -79,7 +79,11 @@ class ConstantTwistPolicy:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--robot", default="so101", choices=available_robots())
-    ap.add_argument("--policy", default="scripted", choices=["scripted", "constant"])
+    # "lerobot" belongs here: build_policy() handles it and the module
+    # docstring documents it, but dropping it from choices made argparse
+    # reject the documented command before it ever got there.
+    ap.add_argument("--policy", default="scripted",
+                    choices=["scripted", "constant", "lerobot"])
     ap.add_argument("--episodes", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--max-steps", type=int, default=600)
@@ -106,8 +110,14 @@ def main() -> int:
         ))
         camera_name = "free"
     else:
+        # --camera-size must actually reach SceneConfig; hardcoding 640x480
+        # here makes the documented flag a no-op. Non-square still degrades
+        # gracefully (LeRobotPolicy._resize centre-crops), but a policy trained
+        # on square frames should be able to be given square frames.
+        cam_w, cam_h = ((args.camera_size, args.camera_size) if args.camera_size
+                        else (640, 480))
         env = create_robot(args.robot, config=EnvConfig(
-            scene=SceneConfig(camera_width=640, camera_height=480),
+            scene=SceneConfig(camera_width=cam_w, camera_height=cam_h),
             seed=args.seed, max_steps=args.max_steps, render=True,
         ))
         camera_name = args.camera
