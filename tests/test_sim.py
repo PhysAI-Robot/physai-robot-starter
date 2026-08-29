@@ -89,6 +89,35 @@ def test_ik_pinch_puts_the_object_between_the_jaws_not_on_the_site(env):
 
 
 @requires_assets
+def test_sorting_scene_has_three_colored_cubes():
+    import mujoco
+
+    from physai.sim import SceneConfig, build_model
+
+    model, _ = build_model(SceneConfig(num_cubes=3))
+    names = {mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, i) for i in range(model.nbody)}
+    assert {"cube_red", "cube_blue", "cube_yellow"} <= names
+    assert "cube" not in names
+
+
+@requires_assets
+def test_sorting_env_exposes_target_color_and_all_cube_positions():
+    from physai.sim import EnvConfig, SceneConfig, SO101PickPlaceEnv
+
+    e = SO101PickPlaceEnv(EnvConfig(
+        scene=SceneConfig(num_cubes=3), task="sorting", render=False, max_steps=200,
+    ))
+    try:
+        e.reset(seed=3)
+        assert e.target_color in {"red", "blue", "yellow"}
+        positions = e.cube_positions
+        assert set(positions) == {"red", "blue", "yellow"}
+        np.testing.assert_allclose(e.cube_pos, positions[e.target_color])
+    finally:
+        e.close()
+
+
+@requires_assets
 def test_top_down_approach_is_unreachable_high_above_the_table(env):
     """Documents a real limit of this 5-DoF arm rather than a solver bug."""
     from physai.robots.so101.kinematics import TOP_DOWN
