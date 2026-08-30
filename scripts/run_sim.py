@@ -23,6 +23,7 @@ from physai.robots import available_robots, create_robot
 from physai.robots.so101 import EnvConfig
 from physai.robots.turtlebot import TurtleBot4Config
 from physai.sim import SceneConfig
+from physai.tasks import TaskRuntime, create_task
 
 
 def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
@@ -145,9 +146,17 @@ def main() -> int:
         ))
         camera_name = "free"
     else:
-        env = create_robot(args.robot, config=build_so101_config(
+        robot = create_robot(args.robot, config=build_so101_config(
             args, task_config, seed, max_steps, render=not args.no_video,
         ))
+        env = TaskRuntime(
+            robot,
+            create_task(
+                task_config.task if task_config else "pick_place",
+                success_xy_tol=task_config.success_xy_tol if task_config else 0.04,
+            ),
+            success_hold_steps=task_config.success_hold_steps if task_config else 10,
+        )
         camera_name = args.camera
     args.out.mkdir(parents=True, exist_ok=True)
     successes = 0

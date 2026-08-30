@@ -123,10 +123,12 @@ def test_sorting_scene_has_three_colored_cubes():
 def test_sorting_env_exposes_target_color_and_all_cube_positions():
     from physai.robots.so101 import EnvConfig, SO101Env
     from physai.sim import SceneConfig
+    from physai.tasks import TaskRuntime, create_task
 
-    e = SO101Env(EnvConfig(
-        scene=SceneConfig(num_cubes=3), task="sorting", render=False, max_steps=200,
+    robot = SO101Env(EnvConfig(
+        scene=SceneConfig(num_cubes=3), render=False, max_steps=200,
     ))
+    e = TaskRuntime(robot, create_task("sorting"))
     try:
         e.reset(seed=3)
         assert e.target_color in {"red", "blue", "yellow"}

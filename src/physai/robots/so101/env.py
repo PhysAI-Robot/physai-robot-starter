@@ -21,7 +21,6 @@ from ...contracts import (
 from ...robots.base import RobotSpec
 from ...sim.core import MuJoCoSimulationCore
 from ...sim.scene import SceneConfig, build_model
-from ...tasks import create_task
 from .kinematics import ArmKinematics
 
 HOME_QPOS = np.array([0.0, -1.05, 1.25, 0.75, 0.0], dtype=np.float64)
@@ -29,22 +28,19 @@ HOME_QPOS = np.array([0.0, -1.05, 1.25, 0.75, 0.0], dtype=np.float64)
 
 @dataclass
 class EnvConfig:
-    """SO-101-specific simulation, task, and observation settings."""
+    """SO-101-specific simulation and observation settings."""
 
     scene: SceneConfig = field(default_factory=SceneConfig)
     control_hz: float = 25.0
     render: bool = True
     cameras: tuple[str, ...] = ("front", "wrist")
     max_steps: int = 400
-    task: str = "pick_place"
     randomize_cube: bool = True
     cube_x_range: tuple[float, float] = (0.20, 0.24)
     cube_y_range: tuple[float, float] = (0.05, 0.13)
     randomize_target: bool = False
     target_x_range: tuple[float, float] = (0.16, 0.26)
     target_y_range: tuple[float, float] = (-0.13, -0.04)
-    success_xy_tol: float = 0.04
-    success_hold_steps: int = 10
     seed: int | None = None
 
 
@@ -53,7 +49,6 @@ class SO101Env(MuJoCoSimulationCore):
 
     def __init__(self, cfg: EnvConfig | None = None) -> None:
         self.cfg = cfg or EnvConfig()
-        self.task = create_task(self.cfg.task, success_xy_tol=self.cfg.success_xy_tol)
         self.model, self.spec = build_model(self.cfg.scene)
         super().__init__(
             self.model,
@@ -112,7 +107,6 @@ class SO101Env(MuJoCoSimulationCore):
             self.model, mujoco.mjtObj.mjOBJ_SITE, "target_site"
         )
         self.kin = ArmKinematics(self.model, ee_site=self.cfg.scene.ee_site)
-        self._success_streak = 0
         self._last_action = Action(joint_position=HOME_QPOS.copy())
 
     @property
@@ -186,8 +180,6 @@ class SO101Env(MuJoCoSimulationCore):
         self.data.ctrl[self.arm_act_ids] = HOME_QPOS
         self.data.ctrl[self.grip_act_id] = self.gripper_to_joint(1.0)
         mujoco.mj_forward(self.model, self.data)
-        self.task.reset(self, self.rng)
-        self._success_streak = 0
         self._last_action = Action(
             joint_position=HOME_QPOS.copy(),
             gripper=GripperCommand(position=1.0),
@@ -214,11 +206,9 @@ class SO101Env(MuJoCoSimulationCore):
         self.step_simulation()
         self._last_action = action
         observation = self.observe()
-        info = self.task_state()
-        reward = self.reward(info)
-        self._success_streak = self._success_streak + 1 if info["at_target"] else 0
-        info["success"] = self._success_streak >= self.cfg.success_hold_steps
-        terminated = bool(info["success"]) or bool(info["cube_dropped"])
+        info: dict = {}
+        reward = 0.0
+        terminated = False
         truncated = self.step_count >= self.cfg.max_steps
         return observation, reward, terminated, truncated, info
 
@@ -297,9 +287,3 @@ class SO101Env(MuJoCoSimulationCore):
     @property
     def cube_half(self) -> float:
         return self.cfg.scene.cube_half
-
-    def task_state(self) -> dict:
-        return self.task.evaluate(self)
-
-    def reward(self, info: dict | None = None) -> float:
-        return self.task.reward(self, info)
