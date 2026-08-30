@@ -15,10 +15,13 @@ def make_so101(
     adapter: str = "direct_mujoco",
     transport: Any = None,
     hardware: RobotPort | None = None,
+    codec: Any = None,
     **kwargs: Any,
 ) -> RobotPort:
     """Build the SO-101 through the selected robot port adapter."""
     if config is not None and kwargs:
         raise TypeError("pass either config or EnvConfig keyword fields, not both")
     direct = SO101Env(config or EnvConfig(**kwargs))
-    return select_adapter(adapter, direct, transport=transport, hardware=hardware)
+    return select_adapter(
+        adapter, direct, transport=transport, hardware=hardware, codec=codec
+    )

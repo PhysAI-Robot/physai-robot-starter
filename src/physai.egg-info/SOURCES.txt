@@ -8,6 +8,7 @@ src/physai.egg-info/dependency_links.txt
 src/physai.egg-info/requires.txt
 src/physai.egg-info/top_level.txt
 src/physai/bridge/__init__.py
+src/physai/bridge/messages.py
 src/physai/bridge/ros2_contract.py
 src/physai/control/__init__.py
 src/physai/control/resolver.py

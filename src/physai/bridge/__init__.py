@@ -1,4 +1,5 @@
 from .adapters import ROS2HardwareAdapter, ROS2MuJoCoAdapter, ROS2Transport
+from .messages import ContractMessageCodec, MessageCodec, ROS2MessageCodec
 from .ros2_contract import (
     ALL_ENDPOINTS,
     EXTERNAL_INPUTS,
@@ -18,6 +19,9 @@ __all__ = [
     "ROS2HardwareAdapter",
     "ROS2MuJoCoAdapter",
     "ROS2Transport",
+    "ContractMessageCodec",
+    "MessageCodec",
+    "ROS2MessageCodec",
     "Direction",
     "Endpoint",
     "PLANNER_ENDPOINTS",

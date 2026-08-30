@@ -15,10 +15,13 @@ def make_turtlebot4(
     adapter: str = "direct_mujoco",
     transport: Any = None,
     hardware: RobotPort | None = None,
+    codec: Any = None,
     **kwargs: Any,
 ) -> RobotPort:
     """Build TurtleBot4 through the selected robot port adapter."""
     if config is not None and kwargs:
         raise TypeError("pass either config or TurtleBot4Config keyword fields, not both")
     direct = TurtleBot4Env(config or TurtleBot4Config(**kwargs))
-    return select_adapter(adapter, direct, transport=transport, hardware=hardware)
+    return select_adapter(
+        adapter, direct, transport=transport, hardware=hardware, codec=codec
+    )
