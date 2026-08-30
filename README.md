@@ -74,6 +74,32 @@ python scripts/workspace_map.py
 python scripts/show_ros2_contract.py
 ```
 
+For library code, `physai.runtime.create_runtime` is the P0 composition entry
+point. It validates the selected task against robot capabilities and applies a
+safety check before each command:
+
+```python
+from physai.runtime import create_runtime
+
+runtime = create_runtime("so101", task_name="pick_place")
+observation = runtime.reset(seed=0)
+try:
+    # Supply actions from a policy or planner/resolver here.
+    pass
+finally:
+    runtime.close()
+```
+
+Select the sorting scene explicitly when composing a multi-object workflow:
+
+```python
+runtime = create_runtime(
+    "so101",
+    scene_name="sorting_minimal",
+    task_name="sorting",
+)
+```
+
 The planner commands are SO-101-specific. `scripted` needs no API key or model
 download. SmolVLM reads simulated camera images and proposes sub-goals; it is
 not the low-level motor policy.

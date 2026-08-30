@@ -1,13 +1,36 @@
+class RecordingTransport:
+    def __init__(self):
+        self.messages = []
+        self.closed = False
+
+    def publish(self, topic, message):
+        self.messages.append((topic, message))
+
+    def subscribe(self, topic, callback):
+        del topic, callback
+
+    def close(self):
+        self.closed = True
+
+
 def test_so101_is_registered():
-    from physai.robots import available_robots, create_robot
+    from physai.robots import DirectMuJoCoAdapter, available_robots, create_robot
 
     assert "so101" in available_robots()
     env = create_robot("so101", render=False)
     try:
+        assert isinstance(env, DirectMuJoCoAdapter)
         assert env.robot_spec.name == "so101"
         assert env.robot_spec.kind == "fixed_base_manipulator"
     finally:
         env.close()
+
+
+def test_so101_environment_is_owned_by_robot_package():
+    from physai.robots.so101.env import SO101PickPlaceEnv
+    from physai.sim.env import SO101PickPlaceEnv as LegacySO101PickPlaceEnv
+
+    assert LegacySO101PickPlaceEnv is SO101PickPlaceEnv
 
 
 def test_turtlebot4_is_registered_and_uses_twist_control():
@@ -42,6 +65,53 @@ def test_unknown_robot_lists_available_robots():
 
     with pytest.raises(ValueError, match="so101"):
         create_robot("does-not-exist")
+
+
+def test_robot_spec_validates_action_mode_shape_and_values():
+    import numpy as np
+    import pytest
+
+    from physai.contracts import Action, Twist
+    from physai.robots import RobotSpec
+
+    spec = RobotSpec(
+        name="test_arm",
+        kind="manipulator",
+        action_joint_names=("joint_a", "joint_b"),
+        action_modes=("joint_position",),
+    )
+    with pytest.raises(ValueError, match="expects 2 joint targets"):
+        spec.validate_action(Action(joint_position=np.zeros(1)))
+    with pytest.raises(ValueError, match="does not support action mode 'twist'"):
+        spec.validate_action(Action(ee_twist=Twist()))
+    with pytest.raises(ValueError, match="non-finite"):
+        spec.validate_action(Action(joint_position=np.array([0.0, np.nan])))
+
+
+def test_so101_ros2_mujoco_adapter_publishes_contract_topics():
+    from physai.robots import create_robot
+
+    transport = RecordingTransport()
+    env = create_robot("so101", adapter="ros2_mujoco", transport=transport,
+                       render=False)
+    try:
+        env.reset(seed=0)
+        topics = [topic for topic, _ in transport.messages]
+        assert "/joint_states" in topics
+        assert "/camera/front/image_raw" not in topics
+        assert env.robot_spec.name == "so101"
+    finally:
+        env.close()
+    assert transport.closed
+
+
+def test_ros2_adapter_requires_transport():
+    import pytest
+
+    from physai.robots import create_robot
+
+    with pytest.raises(ValueError, match="requires a ROS2 transport"):
+        create_robot("so101", adapter="ros2_mujoco", render=False)
 
 
 def test_builtin_planners_are_discoverable():

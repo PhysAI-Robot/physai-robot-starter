@@ -22,6 +22,25 @@ def test_scene_has_the_task_objects_and_cameras():
 
 
 @requires_assets
+def test_task_specific_scene_configs_have_separate_object_layouts():
+    import mujoco
+
+    from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig, build_model
+
+    pick_model, _ = build_model(PickPlaceMinimalSceneConfig())
+    sorting_model, _ = build_model(SortingMinimalSceneConfig())
+    body_names = lambda model: {
+        mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, index)
+        for index in range(model.nbody)
+    }
+
+    assert "cube" in body_names(pick_model)
+    assert not {"cube_red", "cube_blue", "cube_yellow"} & body_names(pick_model)
+    assert {"cube_red", "cube_blue", "cube_yellow"} <= body_names(sorting_model)
+    assert "cube" not in body_names(sorting_model)
+
+
+@requires_assets
 def test_table_does_not_intersect_the_robot_base():
     # An overlapping slab silently jams shoulder_pan against its force limit,
     # which looks like a broken IK solver rather than a broken scene.

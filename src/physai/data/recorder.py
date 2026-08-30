@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ..contracts import Action, Observation
+from ..contracts import Action, GripperCommand, Observation
 from ..robots.base import RobotSpec
 
 
@@ -85,7 +85,8 @@ class EpisodeRecorder:
 
         self._buf.state.append(observation.joint_state.position.astype(np.float32))
         if action.joint_position is not None:
-            grip = gripper_joint if gripper_joint is not None else action.gripper.clipped()
+            grip = (gripper_joint if gripper_joint is not None
+                else (action.gripper or GripperCommand()).clipped())
             action_values = np.concatenate([action_values, [grip]])
         self._buf.action.append(action_values.astype(np.float32))
         self._buf.reward.append(float(reward))
