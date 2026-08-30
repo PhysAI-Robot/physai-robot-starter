@@ -3,7 +3,7 @@
 Same success geometry as PickPlaceTask, but the target cube is picked by
 color out of several on the table instead of being the only cube present.
 backend.cube_pos already resolves to the target-colored cube's position (see
-SO101PickPlaceEnv.cube_pos), so evaluate() only has to expose which color was
+backend's cube_pos property, so evaluate() only has to expose which color was
 asked for.
 """
 

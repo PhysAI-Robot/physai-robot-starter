@@ -3,7 +3,8 @@ from pathlib import Path
 
 def test_load_minimal_pick_place_config():
     from physai.config import load_task_config
-    from physai.sim import EnvConfig, PickPlaceMinimalSceneConfig
+    from physai.robots.so101 import EnvConfig
+    from physai.sim import PickPlaceMinimalSceneConfig
 
     root = Path(__file__).resolve().parents[1]
     config = load_task_config(root / "configs" / "task_pick_place.yaml")

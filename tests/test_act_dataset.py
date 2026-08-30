@@ -15,9 +15,9 @@ requires_torch = pytest.mark.skipif(not HAS_TORCH, reason="torch not installed")
 
 
 def _render_env():
-    from physai.sim import EnvConfig, SO101PickPlaceEnv
+    from physai.robots.so101 import EnvConfig, SO101Env
 
-    return SO101PickPlaceEnv(EnvConfig(seed=0, render=True, max_steps=200))
+    return SO101Env(EnvConfig(seed=0, render=True, max_steps=200))
 
 
 @requires_assets

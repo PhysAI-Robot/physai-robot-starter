@@ -6,7 +6,7 @@ from typing import Any
 
 from ..adapters import select_adapter
 from ..base import RobotPort
-from .env import EnvConfig, SO101PickPlaceEnv
+from .env import EnvConfig, SO101Env
 
 
 def make_so101(
@@ -20,5 +20,5 @@ def make_so101(
     """Build the SO-101 through the selected robot port adapter."""
     if config is not None and kwargs:
         raise TypeError("pass either config or EnvConfig keyword fields, not both")
-    direct = SO101PickPlaceEnv(config or EnvConfig(**kwargs))
+    direct = SO101Env(config or EnvConfig(**kwargs))
     return select_adapter(adapter, direct, transport=transport, hardware=hardware)

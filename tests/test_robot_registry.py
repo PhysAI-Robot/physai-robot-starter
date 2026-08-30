@@ -27,10 +27,11 @@ def test_so101_is_registered():
 
 
 def test_so101_environment_is_owned_by_robot_package():
-    from physai.robots.so101.env import SO101PickPlaceEnv
-    from physai.sim.env import SO101PickPlaceEnv as LegacySO101PickPlaceEnv
+    from physai.robots.so101 import SO101Env
+    import physai.sim as sim
 
-    assert LegacySO101PickPlaceEnv is SO101PickPlaceEnv
+    assert SO101Env.__module__ == "physai.robots.so101.env"
+    assert not hasattr(sim, "SO101Env")
 
 
 def test_turtlebot4_is_registered_and_uses_twist_control():

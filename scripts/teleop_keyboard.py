@@ -20,7 +20,7 @@ import numpy as np
 
 from physai.contracts import GripperCommand, Twist, Vector3
 from physai.control import TwistToJointResolver
-from physai.sim import EnvConfig, SO101PickPlaceEnv
+from physai.robots.so101 import EnvConfig, SO101Env
 
 KEYMAP = {
     ord("W"): ("lin", 0, +1.0), ord("S"): ("lin", 0, -1.0),
@@ -37,7 +37,7 @@ def main() -> int:
 
     import mujoco.viewer
 
-    env = SO101PickPlaceEnv(EnvConfig(seed=args.seed, render=False, max_steps=10**9))
+    env = SO101Env(EnvConfig(seed=args.seed, render=False, max_steps=10**9))
     obs = env.reset()
     resolver = TwistToJointResolver(env.kin, env.data, dt=env.control_dt)
 

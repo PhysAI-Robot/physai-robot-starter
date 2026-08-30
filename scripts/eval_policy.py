@@ -19,7 +19,8 @@ import numpy as np
 from physai.data import load_episode
 from physai.policy import available_policies, create_policy
 from physai.robots import available_robots, create_robot
-from physai.sim import EnvConfig, SceneConfig
+from physai.robots.so101 import EnvConfig
+from physai.sim import SceneConfig
 
 
 def main() -> int:
