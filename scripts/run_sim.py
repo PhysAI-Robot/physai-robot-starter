@@ -20,8 +20,9 @@ import numpy as np
 from physai.config import TaskConfig, load_task_config
 from physai.policy import available_policies, create_policy
 from physai.robots import available_robots, create_robot
+from physai.robots.so101 import EnvConfig
 from physai.robots.turtlebot import TurtleBot4Config
-from physai.sim import EnvConfig, SceneConfig
+from physai.sim import SceneConfig
 
 
 def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:

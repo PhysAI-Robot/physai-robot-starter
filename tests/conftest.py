@@ -17,8 +17,8 @@ requires_assets = pytest.mark.skipif(
 
 @pytest.fixture(scope="session")
 def env():
-    from physai.sim import EnvConfig, SO101PickPlaceEnv
+    from physai.robots.so101 import EnvConfig, SO101Env
 
-    e = SO101PickPlaceEnv(EnvConfig(seed=0, render=False, max_steps=200))
+    e = SO101Env(EnvConfig(seed=0, render=False, max_steps=200))
     yield e
     e.close()

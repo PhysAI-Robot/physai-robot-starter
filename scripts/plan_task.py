@@ -26,7 +26,8 @@ import numpy as np
 from physai.planner import available_planners, create_planner
 from physai.policy.plan_runner import PlanRunner
 from physai.robots import available_robots, create_robot
-from physai.sim import EnvConfig, SceneConfig
+from physai.robots.so101 import EnvConfig
+from physai.sim import SceneConfig
 
 
 def main() -> int:

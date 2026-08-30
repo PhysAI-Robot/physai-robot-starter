@@ -17,7 +17,8 @@ import _bootstrap  # noqa: F401
 from physai.data import EpisodeRecorder
 from physai.policy import ScriptedPickPlace
 from physai.robots import available_robots, create_robot
-from physai.sim import EnvConfig, SceneConfig
+from physai.robots.so101 import EnvConfig
+from physai.sim import SceneConfig
 
 
 def main() -> int:

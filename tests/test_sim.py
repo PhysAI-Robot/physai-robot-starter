@@ -121,9 +121,10 @@ def test_sorting_scene_has_three_colored_cubes():
 
 @requires_assets
 def test_sorting_env_exposes_target_color_and_all_cube_positions():
-    from physai.sim import EnvConfig, SceneConfig, SO101PickPlaceEnv
+    from physai.robots.so101 import EnvConfig, SO101Env
+    from physai.sim import SceneConfig
 
-    e = SO101PickPlaceEnv(EnvConfig(
+    e = SO101Env(EnvConfig(
         scene=SceneConfig(num_cubes=3), task="sorting", render=False, max_steps=200,
     ))
     try:

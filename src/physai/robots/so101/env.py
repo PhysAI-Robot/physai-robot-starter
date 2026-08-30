@@ -48,8 +48,8 @@ class EnvConfig:
     seed: int | None = None
 
 
-class SO101PickPlaceEnv(MuJoCoSimulationCore):
-    """SO-101 embodiment adapter for pick-place and sorting tasks."""
+class SO101Env(MuJoCoSimulationCore):
+    """SO-101 embodiment environment for registered task scenes."""
 
     def __init__(self, cfg: EnvConfig | None = None) -> None:
         self.cfg = cfg or EnvConfig()

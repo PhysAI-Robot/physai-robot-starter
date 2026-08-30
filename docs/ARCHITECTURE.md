@@ -292,7 +292,7 @@ paths are deployment paths.
 Future compositions such as
 `turtlebot4 + navigation + Nav2 policy` or
 `mobile_manipulator + mobile_pick_place + VLA` should add adapters, tasks, and
-registrations. They should not route TurtleBot4 through `SO101PickPlaceEnv`,
+registrations. They should not route TurtleBot4 through an SO-101 environment,
 SO-101 kinematics, or `PickPlaceTask`.
 
 ## Capabilities and kinematics
