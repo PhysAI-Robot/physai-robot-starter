@@ -48,6 +48,7 @@ def select_adapter(
     *,
     transport: Any = None,
     hardware: RobotPort | None = None,
+    codec: Any = None,
 ) -> RobotPort:
     """Select a robot adapter without changing policy or task code."""
     if name == "direct_mujoco":
@@ -57,7 +58,7 @@ def select_adapter(
             raise ValueError("adapter='ros2_mujoco' requires a ROS2 transport")
         from ..bridge.adapters import ROS2MuJoCoAdapter
 
-        return ROS2MuJoCoAdapter(direct, transport)
+        return ROS2MuJoCoAdapter(direct, transport, codec=codec)
     if name == "ros2_hardware":
         if transport is None:
             raise ValueError("adapter='ros2_hardware' requires a ROS2 transport")
@@ -65,6 +66,6 @@ def select_adapter(
             raise ValueError("adapter='ros2_hardware' requires a hardware port")
         from ..bridge.adapters import ROS2HardwareAdapter
 
-        return ROS2HardwareAdapter(hardware, transport)
+        return ROS2HardwareAdapter(hardware, transport, codec=codec)
     choices = ", ".join(ADAPTER_NAMES)
     raise ValueError(f"unknown adapter {name!r}; available: {choices}")

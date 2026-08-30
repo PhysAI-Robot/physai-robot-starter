@@ -362,11 +362,22 @@ The ROS2 boundary has two interchangeable adapter roles:
      embodiment's motor and camera interfaces and publishes measured state.
 
 Both adapters have embodiment-specific implementations. The SO-101 is one
-such implementation, not part of the generic adapter contract.
+such implementation, not part of the generic adapter contract. Each adapter
+subscribes to the joint trajectory and gripper command endpoints, decodes
+those messages into the shared `Action` contract, and exposes the latest
+complete command through its synchronous tick API. It publishes canonical
+joint states and camera frames through an injected `MessageCodec`; the
+default `ContractMessageCodec` is used by Phase 0 tests, while
+`ROS2MessageCodec` can construct real ROS2 message instances without adding
+`rclpy` as a core dependency.
 
 Both adapters must make unit conversion, joint ordering, timestamps, frame
-names, command freshness, and command rate explicit. The ROS2 contract file is
-the source of truth for those external interfaces; it is not itself an adapter.
+names, command freshness, and command rate explicit. Joint order and value
+shape are validated at decode time against `RobotSpec`. CameraInfo and TF
+publication still require extending `Observation` with calibrated camera and
+frame data; the current adapter publishes only the image portion represented
+by that contract. The ROS2 contract file is the source of truth for those
+external interfaces; it is not itself an adapter.
 
 ### Required validation gates
 

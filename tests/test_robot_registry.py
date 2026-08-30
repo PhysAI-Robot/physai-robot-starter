@@ -1,13 +1,14 @@
 class RecordingTransport:
     def __init__(self):
         self.messages = []
+        self.subscriptions = {}
         self.closed = False
 
     def publish(self, topic, message):
         self.messages.append((topic, message))
 
     def subscribe(self, topic, callback):
-        del topic, callback
+        self.subscriptions[topic] = callback
 
     def close(self):
         self.closed = True
@@ -109,6 +110,83 @@ def test_so101_ros2_mujoco_adapter_publishes_contract_topics():
     finally:
         env.close()
     assert transport.closed
+
+
+def test_ros2_mujoco_adapter_subscribes_and_assembles_commands():
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from physai.robots import create_robot
+
+    transport = RecordingTransport()
+    env = create_robot("so101", adapter="ros2_mujoco", transport=transport,
+                       render=False)
+    try:
+        assert {
+            "/arm_controller/joint_trajectory",
+            "/gripper_controller/gripper_cmd",
+        } <= set(transport.subscriptions)
+        trajectory = SimpleNamespace(
+            joint_names=("shoulder_pan", "shoulder_lift", "elbow_flex",
+                         "wrist_flex", "wrist_roll"),
+            points=[SimpleNamespace(positions=[0.1, -0.9, 1.1, 0.7, 0.0])],
+        )
+        gripper = SimpleNamespace(
+            command=SimpleNamespace(position=0.3, max_effort=2.0)
+        )
+        transport.subscriptions["/arm_controller/joint_trajectory"](trajectory)
+        transport.subscriptions["/gripper_controller/gripper_cmd"](gripper)
+
+        action = env.pending_action()
+        assert action is not None
+        np.testing.assert_allclose(action.joint_position,
+                                   [0.1, -0.9, 1.1, 0.7, 0.0])
+        assert action.joint_names == trajectory.joint_names
+        assert action.gripper.position == 0.3
+    finally:
+        env.close()
+
+
+def test_ros2_message_codec_converts_observations():
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from physai.bridge import ROS2MessageCodec
+    from physai.contracts import Header, ImageFrame, JointState
+
+    class FakeTime:
+        sec = 0
+        nanosec = 0
+
+    class FakeJointState:
+        def __init__(self):
+            self.header = SimpleNamespace(stamp=FakeTime(), frame_id="")
+
+    class FakeImage:
+        pass
+
+    codec = ROS2MessageCodec(FakeJointState, FakeImage)
+    joints = codec.encode_joint_state(JointState(
+        name=("joint_a",),
+        position=[0.1],
+        velocity=[0.2],
+        effort=[0.3],
+        header=Header(stamp=12.25, frame_id="base"),
+    ))
+    image = codec.encode_image(ImageFrame(
+        data=np.zeros((2, 3, 3), dtype=np.uint8),
+        camera_name="front",
+        header=Header(stamp=12.25, frame_id="camera_front"),
+    ))
+
+    assert joints.name == ["joint_a"]
+    assert joints.position == [0.1]
+    assert joints.header.frame_id == "base"
+    assert (joints.header.stamp.sec, joints.header.stamp.nanosec) == (12, 250000000)
+    assert (image.height, image.width, image.encoding, image.step) == (2, 3, "rgb8", 9)
+    assert len(image.data) == 18
 
 
 def test_ros2_adapter_requires_transport():
