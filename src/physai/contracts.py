@@ -139,6 +139,7 @@ class Twist:
 
     linear: Vector3 = field(default_factory=Vector3)
     angular: Vector3 = field(default_factory=Vector3)
+    frame_id: str = "base"
 
     def as_array(self) -> np.ndarray:
         return np.concatenate([self.linear.as_array(), self.angular.as_array()])
@@ -204,11 +205,15 @@ class Action:
 
     joint_position: np.ndarray | None = None  # embodiment-defined joint targets
     ee_twist: Twist | None = None
-    gripper: GripperCommand = field(default_factory=GripperCommand)
+    gripper: GripperCommand | None = field(default_factory=GripperCommand)
+    joint_names: tuple[str, ...] | None = None
+    stamp: float | None = None
 
     def __post_init__(self) -> None:
         if self.joint_position is not None:
             self.joint_position = np.asarray(self.joint_position, dtype=np.float64).reshape(-1)
+            if self.joint_names is not None:
+                self.joint_names = tuple(self.joint_names)
 
     @property
     def mode(self) -> str | None:

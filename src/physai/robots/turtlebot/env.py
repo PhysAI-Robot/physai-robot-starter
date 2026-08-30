@@ -58,6 +58,7 @@ class TurtleBot4Env:
             name="turtlebot4",
             kind="mobile_base",
             joint_names=self._WHEEL_NAMES,
+            action_joint_names=(),
             action_modes=("twist",),
             observation_modalities=("state", "images", "ee_pose"),
             capabilities=("base_velocity", "odometry", "images", "imu", "lidar"),
@@ -77,12 +78,15 @@ class TurtleBot4Env:
         self.step_count = 0
         return self.observe()
 
-    def step(self, action: Action) -> tuple[Observation, float, bool, bool, dict]:
+    def send_action(self, action: Action) -> None:
         if action.ee_twist is None:
             raise ValueError("Action.ee_twist is required by the turtlebot4 env")
         twist: Twist = action.ee_twist
         self.data.ctrl[self._actuator_ids["forward"]] = float(twist.linear.x)
         self.data.ctrl[self._actuator_ids["turn"]] = float(twist.angular.z)
+
+    def step(self, action: Action) -> tuple[Observation, float, bool, bool, dict]:
+        self.send_action(action)
         for _ in range(self.n_substeps):
             mujoco.mj_step(self.model, self.data)
         self.step_count += 1

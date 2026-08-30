@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from .base import RobotEnv
+from .base import RobotPort
 
-RobotFactory = Callable[..., RobotEnv]
+RobotFactory = Callable[..., RobotPort]
 _FACTORIES: dict[str, RobotFactory] = {}
 
 
@@ -24,14 +24,15 @@ def available_robots() -> tuple[str, ...]:
     return tuple(sorted(_FACTORIES))
 
 
-def create_robot(name: str, **kwargs: Any) -> RobotEnv:
+def create_robot(name: str, *, adapter: str = "direct_mujoco", **kwargs: Any) -> RobotPort:
+    """Create a robot through the selected simulation or hardware adapter."""
     _load_builtins()
     try:
         factory = _FACTORIES[name]
     except KeyError as exc:
         choices = ", ".join(available_robots())
         raise ValueError(f"unknown robot {name!r}; available: {choices}") from exc
-    return factory(**kwargs)
+    return factory(adapter=adapter, **kwargs)
 
 
 def _load_builtins() -> None:
