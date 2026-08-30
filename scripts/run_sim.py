@@ -15,8 +15,7 @@ from pathlib import Path
 import _bootstrap  # noqa: F401
 import numpy as np
 
-from physai.contracts import Action, Twist
-from physai.policy import ConstantPolicy, LeRobotPolicy, ScriptedPickPlace
+from physai.policy import available_policies, create_policy
 from physai.robots import available_robots, create_robot
 from physai.robots.turtlebot import TurtleBot4Config
 from physai.sim import EnvConfig, SceneConfig
@@ -50,30 +49,10 @@ def build_policy(name: str, env, checkpoint: Path | None = None):
     if env.robot_spec.supports("base_velocity"):
         if name != "constant":
             raise ValueError("TurtleBot4 currently supports --policy constant only")
-        return ConstantTwistPolicy()
-    if name == "scripted":
-        return ScriptedPickPlace(env.kin, env)
-    if name == "constant":
-        return ConstantPolicy()
-    if name == "lerobot":
-        if checkpoint is None:
-            raise ValueError("--policy lerobot needs --checkpoint")
-        return LeRobotPolicy.from_checkpoint(env, checkpoint)
-    raise ValueError(f"unknown policy {name!r}")
-
-
-class ConstantTwistPolicy:
-    """Hold a mobile base still for the generic simulation smoke test."""
-
-    def reset(self, observation, goal=None, instruction=None) -> None:
-        pass
-
-    def act(self, observation) -> Action:
-        return Action(ee_twist=Twist())
-
-    @property
-    def done(self) -> bool:
-        return False
+        name = "constant_twist"
+    if name == "lerobot" and checkpoint is None:
+        raise ValueError("--policy lerobot needs --checkpoint")
+    return create_policy(name, env=env, checkpoint=checkpoint)
 
 
 def main() -> int:
@@ -82,8 +61,11 @@ def main() -> int:
     # "lerobot" belongs here: build_policy() handles it and the module
     # docstring documents it, but dropping it from choices made argparse
     # reject the documented command before it ever got there.
-    ap.add_argument("--policy", default="scripted",
-                    choices=["scripted", "constant", "lerobot"])
+    ap.add_argument(
+        "--policy",
+        default="scripted",
+        choices=[name for name in available_policies() if name != "replay"],
+    )
     ap.add_argument("--episodes", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--max-steps", type=int, default=600)

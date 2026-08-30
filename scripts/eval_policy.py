@@ -17,7 +17,7 @@ import _bootstrap  # noqa: F401
 import numpy as np
 
 from physai.data import load_episode
-from physai.policy import ConstantPolicy, LeRobotPolicy, ReplayPolicy, ScriptedPickPlace
+from physai.policy import available_policies, create_policy
 from physai.robots import available_robots, create_robot
 from physai.sim import EnvConfig, SceneConfig
 
@@ -26,8 +26,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--robot", default="so101", choices=["so101"],
                     help="eval_policy currently supports the SO-101 manipulation workflow")
-    ap.add_argument("--policy", default="scripted",
-                    choices=["scripted", "constant", "replay", "lerobot"])
+    ap.add_argument("--policy", default="scripted", choices=available_policies())
     ap.add_argument("--episodes", type=int, default=20)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--max-steps", type=int, default=600)
@@ -75,12 +74,12 @@ def main() -> int:
     # Built once outside the loop where possible — reloading the checkpoint
     # from disk per episode would dominate wall-clock time for no reason.
     reusable_policy = None
-    if args.policy == "scripted":
-        reusable_policy = ScriptedPickPlace(env.kin, env)
-    elif args.policy == "constant":
-        reusable_policy = ConstantPolicy()
-    elif args.policy == "lerobot":
-        reusable_policy = LeRobotPolicy.from_checkpoint(env, args.checkpoint)
+    if args.policy != "replay":
+        reusable_policy = create_policy(
+            args.policy,
+            env=env,
+            checkpoint=args.checkpoint,
+        )
 
     results = []
     for ep in range(args.episodes):
@@ -88,7 +87,7 @@ def main() -> int:
             entry = episodes[ep % len(episodes)]
             data = load_episode(args.dataset / entry["file"])
             seed = entry.get("seed", args.seed + ep)
-            policy = ReplayPolicy(env, data["action"])
+            policy = create_policy("replay", env=env, actions=data["action"])
         else:
             seed = args.seed + ep
             policy = reusable_policy
