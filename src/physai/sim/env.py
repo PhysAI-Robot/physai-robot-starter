@@ -97,10 +97,27 @@ class SO101PickPlaceEnv:
         self.arm_limits = self.model.jnt_range[self.arm_joint_ids].copy()
         self.grip_limits = self.model.jnt_range[self.gripper_joint_id].copy()
 
-        self.cube_bid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "cube")
-        self.cube_qadr = int(self.model.jnt_qposadr[
-            mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "cube_free")
-        ])
+        # Multi-cube (sorting) bookkeeping is additive: when num_cubes == 1 the
+        # scene has no "cube_red" etc. bodies, so self.sorting_cubes stays
+        # empty and every sorting-specific code path below is simply unused —
+        # the original single-cube "cube" body and its properties (cube_pos,
+        # cube_bid, ...) are untouched.
+        self.sorting_cubes: dict[str, tuple[int, int]] = {}  # color -> (body_id, qadr)
+        if self.cfg.scene.num_cubes == len(self.cfg.scene.sorting_cube_names):
+            for name in self.cfg.scene.sorting_cube_names:
+                color = name.removeprefix("cube_")
+                bid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, name)
+                qadr = int(self.model.jnt_qposadr[
+                    mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, f"{name}_free")
+                ])
+                self.sorting_cubes[color] = (bid, qadr)
+            self.cube_bid = self.cube_qadr = None
+        else:
+            self.cube_bid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "cube")
+            self.cube_qadr = int(self.model.jnt_qposadr[
+                mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "cube_free")
+            ])
+        self.target_color: str | None = None
         self.target_sid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SITE, "target_site")
 
         self.kin = ArmKinematics(self.model, ee_site=EE_SITE)
@@ -155,12 +172,33 @@ class SO101PickPlaceEnv:
         self.data.qpos[self.arm_qadr] = HOME_QPOS
         self.data.qpos[self.grip_qadr] = self.gripper_to_joint(1.0)
 
-        cube_pos = np.array(self.cfg.scene.cube_pos, dtype=np.float64)
-        if self.cfg.randomize_cube:
-            cube_pos[0] = self.rng.uniform(*self.cfg.cube_x_range)
-            cube_pos[1] = self.rng.uniform(*self.cfg.cube_y_range)
-        self.data.qpos[self.cube_qadr:self.cube_qadr + 3] = cube_pos
-        self.data.qpos[self.cube_qadr + 3:self.cube_qadr + 7] = [1, 0, 0, 0]
+        if self.sorting_cubes:
+            # Three non-overlapping y-bands at the historically-reliable grasp
+            # x-range, shuffled per episode so the expert/policy can't learn a
+            # fixed color->slot shortcut instead of actually looking.
+            base_z = self.cfg.scene.cube_pos[2]
+            y_bands = [(0.00, 0.02), (0.06, 0.08), (0.12, 0.14)]
+            colors = list(self.sorting_cubes.keys())
+            self.rng.shuffle(colors)
+            for color, (y_lo, y_hi) in zip(colors, y_bands):
+                bid, qadr = self.sorting_cubes[color]
+                pos = np.array([0.0, 0.0, base_z], dtype=np.float64)
+                if self.cfg.randomize_cube:
+                    pos[0] = self.rng.uniform(*self.cfg.cube_x_range)
+                    pos[1] = self.rng.uniform(y_lo, y_hi)
+                else:
+                    pos[0] = self.cfg.scene.cube_pos[0]
+                    pos[1] = (y_lo + y_hi) / 2
+                self.data.qpos[qadr:qadr + 3] = pos
+                self.data.qpos[qadr + 3:qadr + 7] = [1, 0, 0, 0]
+            self.target_color = self.rng.choice(list(self.sorting_cubes.keys()))
+        else:
+            cube_pos = np.array(self.cfg.scene.cube_pos, dtype=np.float64)
+            if self.cfg.randomize_cube:
+                cube_pos[0] = self.rng.uniform(*self.cfg.cube_x_range)
+                cube_pos[1] = self.rng.uniform(*self.cfg.cube_y_range)
+            self.data.qpos[self.cube_qadr:self.cube_qadr + 3] = cube_pos
+            self.data.qpos[self.cube_qadr + 3:self.cube_qadr + 7] = [1, 0, 0, 0]
 
         if self.cfg.randomize_target:
             tp = self.model.site_pos[self.target_sid].copy()
@@ -260,7 +298,15 @@ class SO101PickPlaceEnv:
     # ------------------------------------------------------------------
     @property
     def cube_pos(self) -> np.ndarray:
+        if self.sorting_cubes:
+            bid, _ = self.sorting_cubes[self.target_color]
+            return self.data.xpos[bid].copy()
         return self.data.xpos[self.cube_bid].copy()
+
+    @property
+    def cube_positions(self) -> dict[str, np.ndarray]:
+        """color -> world position, sorting mode only (empty dict otherwise)."""
+        return {color: self.data.xpos[bid].copy() for color, (bid, _) in self.sorting_cubes.items()}
 
     @property
     def target_pos(self) -> np.ndarray:

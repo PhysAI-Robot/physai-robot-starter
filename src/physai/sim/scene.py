@@ -43,6 +43,21 @@ class SceneConfig:
     cube_mass: float = 0.03
     cube_rgba: tuple[float, float, float, float] = (0.85, 0.25, 0.2, 1.0)
 
+    # num_cubes=1 (default) reproduces the original single-cube scene exactly
+    # — every existing test and dataset assumes that body is named "cube".
+    # num_cubes=3 swaps it for three independently-colored cubes (sorting
+    # task) named cube_red/cube_blue/cube_yellow instead; there is no
+    # "cube" body in that mode. Colors deliberately exclude green — the
+    # target pad is green, and "put the green cube on the green pad" reads
+    # as a bug report waiting to happen.
+    num_cubes: int = 1
+    sorting_cube_names: tuple[str, ...] = ("cube_red", "cube_blue", "cube_yellow")
+    sorting_cube_rgba: tuple[tuple[float, float, float, float], ...] = (
+        (0.85, 0.25, 0.2, 1.0),
+        (0.2, 0.35, 0.85, 1.0),
+        (0.9, 0.8, 0.15, 1.0),
+    )
+
     target_pos: tuple[float, float, float] = (0.20, -0.10, 0.021)
     target_radius: float = 0.035
 
@@ -178,20 +193,36 @@ def build_spec(cfg: SceneConfig | None = None) -> mujoco.MjSpec:
         rgba=[0.2, 0.9, 0.4, 0.9],
     )
 
-    # --- cube (the manipuland) ------------------------------------------
-    cube = world.add_body(name="cube", pos=list(cfg.cube_pos))
-    cube.add_freejoint(name="cube_free")
-    cube.add_geom(
-        name="cube_geom",
-        type=mujoco.mjtGeom.mjGEOM_BOX,
-        size=[cfg.cube_half] * 3,
-        rgba=list(cfg.cube_rgba),
-        mass=cfg.cube_mass,
-        friction=[1.2, 0.01, 0.0005],
-        condim=4,
-    )
-    cube.add_site(name="cube_site", pos=[0, 0, 0], size=[0.004] * 3,
-                  rgba=[1, 1, 0, 0.0])
+    # --- cube(s) (the manipuland) ----------------------------------------
+    def _add_cube(name: str, pos, rgba) -> None:
+        cube = world.add_body(name=name, pos=list(pos))
+        cube.add_freejoint(name=f"{name}_free")
+        cube.add_geom(
+            name=f"{name}_geom",
+            type=mujoco.mjtGeom.mjGEOM_BOX,
+            size=[cfg.cube_half] * 3,
+            rgba=list(rgba),
+            mass=cfg.cube_mass,
+            friction=[1.2, 0.01, 0.0005],
+            condim=4,
+        )
+        cube.add_site(name=f"{name}_site", pos=[0, 0, 0], size=[0.004] * 3,
+                      rgba=[1, 1, 0, 0.0])
+
+    if cfg.num_cubes == 1:
+        _add_cube("cube", cfg.cube_pos, cfg.cube_rgba)
+    elif cfg.num_cubes == len(cfg.sorting_cube_names):
+        # Initial positions here don't matter — env.reset() overwrites them
+        # every episode. Offset them apart only so a pre-reset compile/render
+        # (e.g. export_xml) doesn't show three cubes stacked on one spot.
+        for i, (name, rgba) in enumerate(zip(cfg.sorting_cube_names, cfg.sorting_cube_rgba)):
+            pos = (cfg.cube_pos[0], cfg.cube_pos[1] + 0.06 * i, cfg.cube_pos[2])
+            _add_cube(name, pos, rgba)
+    else:
+        raise ValueError(
+            f"num_cubes={cfg.num_cubes} not supported — use 1 (default) or "
+            f"{len(cfg.sorting_cube_names)} (sorting_cube_names)"
+        )
 
     # --- flat friction pads on both jaw faces ---------------------------
     quats = _pad_quats(cfg)
