@@ -57,3 +57,6 @@ class PickPlaceTask(Task):
         if info["cube_dropped"]:
             value -= 1.0
         return float(value)
+
+    def terminated(self, backend: PickPlaceBackend, info: dict) -> bool:
+        return bool(info.get("success") or info.get("cube_dropped"))

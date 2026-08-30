@@ -64,3 +64,6 @@ class SortingTask(Task):
         if info["cube_dropped"]:
             value -= 1.0
         return float(value)
+
+    def terminated(self, backend: SortingBackend, info: dict) -> bool:
+        return bool(info.get("success") or info.get("cube_dropped"))

@@ -20,6 +20,8 @@ class TaskConfig:
     task: str
     scene_name: str
     env: EnvConfig
+    success_xy_tol: float = 0.04
+    success_hold_steps: int = 10
 
 
 _SCENE_TUPLE_FIELDS = {
@@ -64,13 +66,17 @@ def load_task_config(path: str | Path) -> TaskConfig:
         raise ValueError(
             f"task mismatch: task.name={task_name!r}, env.task={configured_task!r}"
         )
+    success_xy_tol = env_data.pop("success_xy_tol", 0.04)
+    success_hold_steps = env_data.pop("success_hold_steps", 10)
     _convert_lists_to_tuples(env_data, _ENV_TUPLE_FIELDS)
-    env = EnvConfig(scene=scene, task=task_name, **env_data)
+    env = EnvConfig(scene=scene, **env_data)
     return TaskConfig(
         robot=robot,
         task=task_name,
         scene_name=scene_name,
         env=env,
+        success_xy_tol=success_xy_tol,
+        success_hold_steps=success_hold_steps,
     )
 
 

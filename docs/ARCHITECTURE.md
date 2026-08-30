@@ -239,8 +239,11 @@ contracts:
      must consume measured joint state and a calibrated kinematics model instead.
 
 `Policy`, `PlanRunner`, and task code should depend on these ports rather than
-on MuJoCo types. The direct MuJoCo adapter can still expose a convenience
-facade for the current synchronous test API.
+on MuJoCo types. `SO101Env` is a robot-owned backend that provides observation,
+action, lifecycle, and embodiment state; it does not create or evaluate a
+task. `TaskRuntime` composes a registered task around a robot port and owns
+task reset, metrics, reward, success hold, and termination for synchronous
+Phase 0 workflows.
 
 `Planner` maps an instruction and observation to `Plan`. A `Plan` contains
 language-grounded `SubGoal` values and optional `PoseStamped` waypoints.
@@ -248,9 +251,10 @@ language-grounded `SubGoal` values and optional `PoseStamped` waypoints.
 `Task` owns evaluation, reward, and termination around the backend state.
 
 `physai.runtime.create_runtime` is the P0 composition entry point. It validates
-the task's declared capabilities against the selected `RobotSpec`, creates an
-optional registered policy, and routes actions through `SafetyController`
-before forwarding them to the robot port.
+the task's declared capabilities against the selected `RobotSpec`, wraps the
+robot port with `TaskRuntime` when a task is selected, creates an optional
+registered policy, and routes actions through `SafetyController` before
+forwarding them to the robot port.
 
 Scene configs are selected through `physai.sim.scenes.create_scene` and the
 scene registry. Each registered scene declares supported robot kinds and task

@@ -13,8 +13,8 @@ from ..policy.registry import create_policy
 from ..robots.base import RobotPort
 from ..robots.registry import create_robot
 from ..sim.scenes import create_scene, get_scene_definition
+from ..tasks import TaskRuntime, create_task
 from ..tasks.base import Task
-from ..tasks.registry import create_task
 
 
 @dataclass
@@ -60,6 +60,8 @@ def create_runtime(
     robot_kwargs: dict[str, Any] | None = None,
     scene_name: str | None = None,
     scene_kwargs: dict[str, Any] | None = None,
+    task_kwargs: dict[str, Any] | None = None,
+    task_success_hold_steps: int = 10,
     adapter: str = "direct_mujoco",
     transport: Any = None,
     hardware: RobotPort | None = None,
@@ -73,9 +75,8 @@ def create_runtime(
 
     ``robot_config`` and ``robot_kwargs`` are kept separate so callers can
     pass either an existing typed config or factory fields, but not silently
-    merge both. The SO-101 factory receives ``task_name`` because its current
-    simulator owns the task backend; other robots may provide a task runtime
-    independently once they implement one.
+    merge both. Task semantics are composed around the robot port after the
+    robot is built.
     """
     if robot_config is not None and robot_kwargs:
         raise TypeError("pass either robot_config or robot_kwargs, not both")
@@ -116,18 +117,7 @@ def create_runtime(
     )
 
     try:
-        embedded_task = getattr(robot, "task", None)
-        if task_name is not None and embedded_task is not None:
-            if embedded_task.name != task_name:
-                raise ValueError(
-                    f"robot environment uses task {embedded_task.name!r}, "
-                    f"requested {task_name!r}"
-                )
-            task = embedded_task
-        elif task_name is not None:
-            task = create_task(task_name)
-        else:
-            task = embedded_task
+        task = create_task(task_name, **(task_kwargs or {})) if task_name is not None else None
 
         if task is not None:
             robot.robot_spec.validate_task(task)
@@ -143,12 +133,19 @@ def create_runtime(
 
         if policy is not None and policy_name is not None:
             raise TypeError("pass either policy or policy_name, not both")
+        runtime_robot = robot
+        if task is not None:
+            runtime_robot = TaskRuntime(
+                robot,
+                task,
+                success_hold_steps=task_success_hold_steps,
+            )
         if policy is None and policy_name is not None:
-            policy = create_policy(policy_name, env=robot, **policy_kwargs)
+            policy = create_policy(policy_name, env=runtime_robot, **policy_kwargs)
 
         safety = safety or SafetyController(robot.robot_spec)
         return RuntimeComposition(
-            robot=robot,
+            robot=runtime_robot,
             task=task,
             policy=policy,
             planner=planner,

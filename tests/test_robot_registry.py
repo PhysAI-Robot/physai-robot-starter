@@ -27,10 +27,15 @@ def test_so101_is_registered():
 
 
 def test_so101_environment_is_owned_by_robot_package():
-    from physai.robots.so101 import SO101Env
+    from physai.robots.so101 import EnvConfig, SO101Env
     import physai.sim as sim
 
-    assert SO101Env.__module__ == "physai.robots.so101.env"
+    env = SO101Env(EnvConfig(render=False))
+    try:
+        assert SO101Env.__module__ == "physai.robots.so101.env"
+        assert not hasattr(env, "task")
+    finally:
+        env.close()
     assert not hasattr(sim, "SO101Env")
 
 
