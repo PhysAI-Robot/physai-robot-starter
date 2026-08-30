@@ -10,6 +10,8 @@ Keep each document focused on one audience:
 - `README.md` is the user-facing setup and workflow guide.
 - `docs/ARCHITECTURE.md` is the internal design reference and the source of
   truth for module boundaries and contracts.
+- `CONTRIBUTING.md` is the contributor-facing source of truth for workflow and
+  commit message conventions.
 - `AGENTS.md` is the agent-facing workflow, validation, and repository hygiene
   guide.
 - `ROADMAP.md` records planned work and should not be treated as current
@@ -61,17 +63,9 @@ change must not claim a workflow that has not been verified in the repository.
 
 ## Commit messages
 
-When creating commits, use the format `[type] imperative summary` with one
-purpose per commit. Use the smallest accurate type:
-
-- `[feat]` for a new capability or modular boundary.
-- `[fix]` for a behavior correction.
-- `[docs]` for documentation-only changes.
-- `[test]` for test-only changes.
-- `[chore]` for maintenance that does not change behavior.
-
-Keep the summary concise and do not mix a roadmap or unrelated cleanup into a
-feature commit.
+Follow [CONTRIBUTING.md](CONTRIBUTING.md) for the shared commit message format
+and contribution workflow. Agents use the same convention as human
+contributors; do not create a second agent-only variant.
 
 ## Adding a component
 

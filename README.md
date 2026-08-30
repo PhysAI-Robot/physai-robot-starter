@@ -127,6 +127,8 @@ Generated files are intentionally kept out of the source tree's tracked code:
 
 - [Architecture](docs/ARCHITECTURE.md): runtime composition, module ownership,
   contracts, and extension boundaries.
+- [Contributing](CONTRIBUTING.md): contribution workflow and commit message
+    format.
 - [Agent guide](AGENTS.md): rules for coding agents working in this repository.
 - [Roadmap](ROADMAP.md): planned work and migration direction.
 
