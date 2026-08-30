@@ -122,7 +122,7 @@ def main() -> int:
     args = ap.parse_args()
 
     task_config = load_task_config(args.config) if args.config else None
-    configured_robot = task_config.robot if task_config else "so101"
+    configured_robot = task_config.robot if task_config else (args.robot or "so101")
     if args.robot and args.robot != configured_robot:
         ap.error(
             f"--robot {args.robot!r} does not match --config robot {configured_robot!r}"
@@ -142,7 +142,7 @@ def main() -> int:
 
     if args.robot == "turtlebot4":
         env = create_robot(args.robot, config=TurtleBot4Config(
-            max_steps=args.max_steps, render=not args.no_video,
+            max_steps=max_steps, render=not args.no_video,
         ))
         camera_name = "free"
     else:

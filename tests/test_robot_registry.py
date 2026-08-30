@@ -65,6 +65,13 @@ def test_turtlebot4_is_registered_and_uses_twist_control():
         env.close()
 
 
+def test_mujoco_robot_environments_share_simulation_lifecycle():
+    from physai.robots.turtlebot import TurtleBot4Env
+    from physai.sim import MuJoCoSimulationCore
+
+    assert issubclass(TurtleBot4Env, MuJoCoSimulationCore)
+
+
 def test_unknown_robot_lists_available_robots():
     import pytest
 

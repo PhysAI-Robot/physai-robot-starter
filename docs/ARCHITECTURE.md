@@ -115,7 +115,8 @@ The source tree follows this ownership map:
 src/physai/
 ├── contracts.py       shared message-shaped values
 ├── robots/            embodiment ports, adapters, and factories
-│   └── so101/         SO-101 environment and kinematics implementation
+│   ├── so101/         SO-101 environment and kinematics implementation
+│   └── turtlebot/     TurtleBot4 environment and differential-drive implementation
 ├── tasks/             task rules and registries
 ├── sim/               MuJoCo simulation core and scene/environment orchestration
 │   └── scenes/        shared world builder and task-specific scene variants

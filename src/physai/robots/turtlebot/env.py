@@ -10,6 +10,7 @@ import numpy as np
 
 from ...contracts import Action, Header, JointState, Observation, Pose, PoseStamped, Quaternion, Twist, Vector3
 from ..base import RobotSpec
+from ...sim.core import MuJoCoSimulationCore
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_MODEL = REPO_ROOT / "assets" / "turtlebot4" / "turtlebot4.xml"
@@ -26,7 +27,7 @@ class TurtleBot4Config:
     initial_pose: tuple[float, float, float] = (0.0, 0.0, 0.1)
 
 
-class TurtleBot4Env:
+class TurtleBot4Env(MuJoCoSimulationCore):
     """Gym-like wrapper around the credited TurtleBot4 MJCF model."""
 
     _WHEEL_NAMES = ("left_wheel", "right_wheel")
@@ -42,15 +43,15 @@ class TurtleBot4Env:
             )
         self.model = mujoco.MjModel.from_xml_path(str(self.cfg.model_path))
         self.model.opt.timestep = min(self.model.opt.timestep, 0.002)
-        self.data = mujoco.MjData(self.model)
-        self.n_substeps = max(1, round((1.0 / self.cfg.control_hz) / self.model.opt.timestep))
-        self.control_dt = self.n_substeps * self.model.opt.timestep
+        super().__init__(
+            self.model,
+            control_hz=self.cfg.control_hz,
+            render=self.cfg.render,
+            camera_width=640,
+            camera_height=480,
+        )
         self._actuator_ids = {self.model.actuator(i).name: i for i in range(self.model.nu)}
         self._base_body_id = self.model.body("base").id
-        self._renderer = None
-        if self.cfg.render:
-            self._renderer = mujoco.Renderer(self.model, height=480, width=640)
-        self.step_count = 0
 
     @property
     def robot_spec(self) -> RobotSpec:
@@ -67,7 +68,7 @@ class TurtleBot4Env:
 
     def reset(self, seed: int | None = None) -> Observation:
         del seed
-        mujoco.mj_resetData(self.model, self.data)
+        self.reset_simulation()
         x, y, z = self.cfg.initial_pose
         free_qadr = int(self.model.jnt_qposadr[self.model.joint("floating_base_joint").id])
         self.data.qpos[free_qadr:free_qadr + 7] = (x, y, z, 1.0, 0.0, 0.0, 0.0)
@@ -75,7 +76,6 @@ class TurtleBot4Env:
         if "lidar_spin" in self._actuator_ids:
             self.data.ctrl[self._actuator_ids["lidar_spin"]] = 0.05
         mujoco.mj_forward(self.model, self.data)
-        self.step_count = 0
         return self.observe()
 
     def send_action(self, action: Action) -> None:
@@ -87,16 +87,12 @@ class TurtleBot4Env:
 
     def step(self, action: Action) -> tuple[Observation, float, bool, bool, dict]:
         self.send_action(action)
-        for _ in range(self.n_substeps):
-            mujoco.mj_step(self.model, self.data)
-        self.step_count += 1
+        self.step_simulation()
         info = {"pose": self._pose_array()}
         return self.observe(), 0.0, False, self.step_count >= self.cfg.max_steps, info
 
     def close(self) -> None:
-        if self._renderer is not None:
-            self._renderer.close()
-            self._renderer = None
+        super().close()
 
     def joint_state(self) -> JointState:
         positions = np.array([self.data.joint(name).qpos[0] for name in ("left", "right")])
