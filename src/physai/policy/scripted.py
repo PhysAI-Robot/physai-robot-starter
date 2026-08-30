@@ -23,7 +23,8 @@ import numpy as np
 
 from ..contracts import Action, GripperCommand, Observation, PoseStamped
 from ..control.resolver import JointRateLimiter
-from ..robots.so101.kinematics import TOP_DOWN, ArmKinematics
+from ..robots.base import KinematicsPort
+from ..robots.so101.kinematics import TOP_DOWN
 from .base import Policy
 
 
@@ -68,7 +69,7 @@ class ExpertConfig:
 class ScriptedPickPlace(Policy):
     name = "scripted_pick_place"
 
-    def __init__(self, kin: ArmKinematics, env, cfg: ExpertConfig | None = None) -> None:
+    def __init__(self, kin: KinematicsPort, env, cfg: ExpertConfig | None = None) -> None:
         self.kin = kin
         self.env = env          # for privileged cube/target pose access
         self.cfg = cfg or ExpertConfig()

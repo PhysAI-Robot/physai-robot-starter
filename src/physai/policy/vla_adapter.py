@@ -20,11 +20,13 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from collections import deque
+from collections.abc import Callable
 
 import numpy as np
 
 from ..contracts import Action, GripperCommand, Observation, PoseStamped
 from ..model_store import resolve_local_model
+from ..robots.base import RobotPort
 from .base import Policy
 
 
@@ -41,15 +43,18 @@ class VLAPolicy(Policy):
 
     def __init__(
         self,
-        env,
+        robot: RobotPort,
         action_horizon: int = 1,
         instruction: str = "",
         image_keys: tuple[str, ...] = ("front", "wrist"),
+        action_decoder: Callable[[np.ndarray], Action] | None = None,
     ) -> None:
-        self.env = env
+        self.robot = robot
+        self.env = robot
         self.action_horizon = max(1, action_horizon)
         self.instruction = instruction
         self.image_keys = image_keys
+        self.action_decoder = action_decoder
         self._chunk: deque[np.ndarray] = deque()
 
     # -- to implement --------------------------------------------------
@@ -91,10 +96,25 @@ class VLAPolicy(Policy):
                 raise ValueError(f"expected (T, 6) actions, got {chunk.shape}")
             self._chunk.extend(chunk[: self.action_horizon])
 
-        a = self._chunk.popleft()
+        return self._decode_action(self._chunk.popleft())
+
+    def _decode_action(self, values: np.ndarray) -> Action:
+        if self.action_decoder is not None:
+            return self.action_decoder(values)
+        if values.size != 6:
+            raise ValueError(
+                "default VLA action decoder expects 5 joints and one gripper; "
+                "provide action_decoder for another robot"
+            )
+        try:
+            gripper_to_normalized = self.robot.joint_to_gripper
+        except AttributeError as exc:
+            raise ValueError(
+                "robot has no joint_to_gripper mapping; provide action_decoder"
+            ) from exc
         return Action(
-            joint_position=a[:5],
-            gripper=GripperCommand(position=self.env.joint_to_gripper(a[5])),
+            joint_position=values[:5],
+            gripper=GripperCommand(position=gripper_to_normalized(values[5])),
         )
 
 

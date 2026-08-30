@@ -17,7 +17,9 @@ import _bootstrap  # noqa: F401
 from physai.data import EpisodeRecorder
 from physai.policy import ScriptedPickPlace
 from physai.robots import available_robots, create_robot
-from physai.sim import EnvConfig, SceneConfig
+from physai.robots.so101 import EnvConfig
+from physai.sim import SceneConfig
+from physai.tasks import TaskRuntime, create_task
 
 
 def main() -> int:
@@ -45,9 +47,13 @@ def main() -> int:
     if args.sorting:
         scene_kwargs["num_cubes"] = 3
         env_kwargs["task"] = "sorting"
-    env = create_robot(args.robot, config=EnvConfig(
+    robot = create_robot(args.robot, config=EnvConfig(
         scene=SceneConfig(**scene_kwargs), **env_kwargs,
     ))
+    env = TaskRuntime(
+        robot,
+        create_task("sorting" if args.sorting else "pick_place"),
+    )
     rec = EpisodeRecorder(args.out, task=args.task, fps=env.cfg.control_hz,
                           store_images=not args.no_images)
 
