@@ -16,7 +16,7 @@ import argparse
 import _bootstrap  # noqa: F401
 import numpy as np
 
-from physai.sim import EnvConfig, SO101PickPlaceEnv
+from physai.robots.so101 import EnvConfig, SO101Env
 from physai.robots.so101.kinematics import TOP_DOWN
 
 
@@ -29,7 +29,7 @@ def main() -> int:
     ap.add_argument("--step", type=float, default=0.01)
     args = ap.parse_args()
 
-    env = SO101PickPlaceEnv(EnvConfig(seed=0, render=False))
+    env = SO101Env(EnvConfig(seed=0, render=False))
     q0 = env.reset().joint_state.position[:5]
 
     xs = np.arange(args.x_range[0], args.x_range[1] + 1e-9, args.step)

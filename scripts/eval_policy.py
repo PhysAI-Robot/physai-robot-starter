@@ -19,7 +19,9 @@ import numpy as np
 from physai.data import load_episode
 from physai.policy import available_policies, create_policy
 from physai.robots import available_robots, create_robot
-from physai.sim import EnvConfig, SceneConfig
+from physai.robots.so101 import EnvConfig
+from physai.sim import SceneConfig
+from physai.tasks import TaskRuntime, create_task
 
 
 def main() -> int:
@@ -46,7 +48,7 @@ def main() -> int:
     # --render alone (so `--policy lerobot` died on an empty images dict) and
     # --camera-size stopped reaching SceneConfig entirely.
     needs_images = args.policy == "lerobot"
-    env = create_robot(
+    robot = create_robot(
         args.robot,
         config=EnvConfig(
             scene=SceneConfig(camera_width=args.camera_size,
@@ -55,6 +57,10 @@ def main() -> int:
             max_steps=args.max_steps,
             render=args.render or needs_images,
         ),
+    )
+    env = TaskRuntime(
+        robot,
+        create_task("pick_place"),
     )
 
     episodes = None

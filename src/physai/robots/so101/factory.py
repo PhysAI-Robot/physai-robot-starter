@@ -4,12 +4,24 @@ from __future__ import annotations
 
 from typing import Any
 
-from ...sim import SO101PickPlaceEnv
-from ...sim.env import EnvConfig
+from ..adapters import select_adapter
+from ..base import RobotPort
+from .env import EnvConfig, SO101Env
 
 
-def make_so101(config: EnvConfig | None = None, **kwargs: Any) -> SO101PickPlaceEnv:
-    """Build the current MuJoCo SO-101 pick-and-place environment."""
+def make_so101(
+    config: EnvConfig | None = None,
+    *,
+    adapter: str = "direct_mujoco",
+    transport: Any = None,
+    hardware: RobotPort | None = None,
+    codec: Any = None,
+    **kwargs: Any,
+) -> RobotPort:
+    """Build the SO-101 through the selected robot port adapter."""
     if config is not None and kwargs:
         raise TypeError("pass either config or EnvConfig keyword fields, not both")
-    return SO101PickPlaceEnv(config or EnvConfig(**kwargs))
+    direct = SO101Env(config or EnvConfig(**kwargs))
+    return select_adapter(
+        adapter, direct, transport=transport, hardware=hardware, codec=codec
+    )
