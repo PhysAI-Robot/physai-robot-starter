@@ -123,12 +123,24 @@ Generated files are intentionally kept out of the source tree's tracked code:
 - `models/`: local model snapshots
 - `outputs/`: videos, plans, and evaluation artifacts
 
+These directories are ignored by Git and Docker. Their contents retain the
+licenses of the upstream source that provided them.
+
+## License
+
+The PhysAI Robot Starter source code is licensed under the Apache License 2.0.
+Downloaded robot assets, model checkpoints, and Python dependencies retain
+their original licenses. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+before redistributing any downloaded artifact.
+
 ## Documentation map
 
 - [Architecture](docs/ARCHITECTURE.md): runtime composition, module ownership,
   contracts, and extension boundaries.
 - [Contributing](CONTRIBUTING.md): contribution workflow and commit message
     format.
+- [Third-party notices](THIRD_PARTY_NOTICES.md): asset and model sources,
+    attribution, and license status.
 - [Agent guide](AGENTS.md): rules for coding agents working in this repository.
 - [Roadmap](ROADMAP.md): planned work and migration direction.
 
