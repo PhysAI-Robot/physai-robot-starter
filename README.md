@@ -36,6 +36,15 @@ the MuJoCo viewer after the headless check succeeds:
 python scripts/run_sim.py --viewer
 ```
 
+Run the minimal pick-and-place task from its YAML configuration with:
+
+```bash
+python scripts/run_sim.py --config configs/task_pick_place.yaml
+```
+
+Command-line values such as `--seed`, `--max-steps`, and `--camera-size`
+override the values in the YAML file.
+
 Run the generic TurtleBot4 smoke test with:
 
 ```bash

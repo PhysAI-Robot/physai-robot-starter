@@ -1,6 +1,5 @@
-# Reference configuration for the minimal single-cube pick-and-place task.
-# The runtime selects the same components through RuntimeComposition; this
-# file is documentation only and is not loaded automatically.
+# Configuration for the minimal single-cube pick-and-place task.
+# Load it with `python scripts/run_sim.py --config configs/task_pick_place.yaml`.
 
 robot: so101
 
