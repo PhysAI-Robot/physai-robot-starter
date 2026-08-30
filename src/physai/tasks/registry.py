@@ -36,5 +36,7 @@ def _load_builtins() -> None:
     if _FACTORIES:
         return
     from .pick_place import PickPlaceTask
+    from .sorting import SortingTask
 
     register_task("pick_place", PickPlaceTask)
+    register_task("sorting", SortingTask)
