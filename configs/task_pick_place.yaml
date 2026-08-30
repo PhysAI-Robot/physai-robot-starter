@@ -1,77 +1,34 @@
-# Reference values for the Phase 0 pick-and-place task.
-#
-# These mirror the dataclass defaults in the code (SceneConfig, EnvConfig,
-# ExpertConfig). The code does not read this file — it is here so the numbers
-# that matter are in one readable place, with the reasoning attached.
-# Anything marked MEASURED was derived from the SO-101 meshes, not guessed.
+# Reference configuration for the minimal single-cube pick-and-place task.
+# The runtime selects the same components through RuntimeComposition; this
+# file is documentation only and is not loaded automatically.
+
+robot: so101
+
+task:
+  name: pick_place
+  scene: pick_place_minimal
 
 scene:
   robot_xml: assets/so101/so101_new_calib.xml
   timestep: 0.002
-
-  table:
-    # MUST start clear of the robot base at the origin. A slab overlapping the
-    # base jams shoulder_pan against its 2.94 N.m force limit, which presents
-    # as "IK is broken" rather than "the scene is wrong".
-    pos: [0.30, 0.0, 0.01]
-    half_size: [0.20, 0.25, 0.01]
-    top_z: 0.02
-
-  cube:
-    half: 0.014           # 28 mm across
-    mass: 0.03
-    rest_z: 0.034         # table_top + half
-
-  target:
-    pos: [0.20, -0.10, 0.021]
-    radius: 0.035
-
-  gripper_pads:
-    # MEASURED: nearest distal vertex pair of the two jaw meshes, gripper at 0.
-    # Flat plates, not spheres — a sphere pad squeezes a cube out sideways.
-    static_pos: [-0.0090, -0.0050, -0.0935]   # in body `gripper`
-    moving_pos: [-0.0117, -0.0700,  0.0228]   # in body `moving_jaw_so101_v1`
-    half_size: [0.011, 0.009, 0.0015]         # in the EE site frame
-    align_gripper_q: 0.25                     # faces made parallel at this angle
-    friction: [2.0, 0.02, 0.001]
-
-  cameras:
-    width: 320
-    height: 240
-    front: {pos: [0.62, 0.0, 0.38], fovy: 48}
-    wrist: {parent: gripper, pos: [0.0, -0.05, 0.03], fovy: 62}
-
-kinematics:
-  ee_site: gripperframe
-  # MEASURED from the site frame: +x points out of the jaws, +z is the closing
-  # direction. Full 6-DoF pose IK is over-constrained on 5 DoF, so the solver
-  # constrains the approach axis only.
-  approach_axis: x
-  pinch_axis: z
-  # MEASURED: site origin -> midpoint between the jaw faces, in site coords.
-  pinch_offset: [-0.0042, -0.0043, 0.0154]
+  table_pos: [0.30, 0.0, 0.01]
+  table_size: [0.20, 0.25, 0.01]
+  target_pos: [0.20, -0.10, 0.021]
+  target_radius: 0.035
+  cube_names: [cube]
+  cube_half: 0.014
+  cube_pos: [0.20, 0.08, 0.036]
+  cube_mass: 0.03
+  cube_rgba: [0.85, 0.25, 0.2, 1.0]
 
 env:
   control_hz: 25
-  max_steps: 600
+  render: true
+  cameras: [front, wrist]
+  max_steps: 400
   randomize_cube: true
-  cube_x_range: [0.16, 0.26]
-  cube_y_range: [0.04, 0.13]
+  cube_x_range: [0.20, 0.24]
+  cube_y_range: [0.05, 0.13]
+  randomize_target: false
   success_xy_tol: 0.04
   success_hold_steps: 10
-
-expert:
-  # Top-down grasps are only kinematically reachable within ~5 cm of the table
-  # on this arm (no shoulder roll), so hover low.
-  hover_height: 0.045
-  grasp_height: 0.0
-  lift_height: 0.055
-  place_height: 0.016
-  # Two-stage close. One-stage slams the jaws at ~5 rad/s and bats the cube
-  # away before contact captures it.
-  gripper_open: 0.55
-  gripper_touch: 0.21     # jaw gap ~30 mm, just wider than the cube
-  gripper_grip: 0.18      # a few mm of squeeze; this is the holding force
-  gripper_rate: 0.9       # normalised units/s
-  max_joint_rate: 1.2     # rad/s, coarse motion
-  approach_rate: 0.5      # rad/s, from DESCEND onwards
