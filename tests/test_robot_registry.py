@@ -155,6 +155,52 @@ def test_ros2_mujoco_adapter_subscribes_and_assembles_commands():
         env.close()
 
 
+def test_ros2_hardware_adapter_uses_shared_transport_boundary():
+    import numpy as np
+
+    from physai.bridge import ROS2HardwareAdapter
+    from physai.contracts import JointState, Observation
+    from physai.robots import RobotSpec
+
+    class FakeHardware:
+        robot_spec = RobotSpec(
+            name="hardware",
+            kind="fixed_base_manipulator",
+            joint_names=("joint",),
+            action_joint_names=("joint",),
+        )
+
+        def __init__(self):
+            self.observation = Observation(
+                joint_state=JointState(name=("joint",), position=np.zeros(1))
+            )
+
+        def reset(self, seed=None):
+            del seed
+            return self.observation
+
+        def observe(self):
+            return self.observation
+
+        def send_action(self, action):
+            self.robot_spec.validate_action(action)
+
+        def step(self, action):
+            self.send_action(action)
+            return self.observation, 0.0, False, False, {}
+
+        def close(self):
+            pass
+
+    transport = RecordingTransport()
+    adapter = ROS2HardwareAdapter(FakeHardware(), transport)
+    adapter.reset()
+    adapter.close()
+
+    assert any(topic == "/joint_states" for topic, _ in transport.messages)
+    assert transport.closed
+
+
 def test_ros2_message_codec_converts_observations():
     from types import SimpleNamespace
 
