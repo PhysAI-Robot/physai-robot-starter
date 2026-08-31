@@ -124,25 +124,3 @@ def test_runtime_composes_task_around_robot(monkeypatch):
         assert runtime.task.name == "pick_place"
     finally:
         runtime.close()
-
-
-def test_runtime_composes_task_around_robot(monkeypatch):
-    from physai.runtime import composition
-    from physai.tasks import TaskRuntime
-
-    spec = RobotSpec(
-        name="arm",
-        kind="manipulator",
-        action_joint_names=("a",),
-        action_modes=("joint_position",),
-        capabilities=("arm_kinematics", "gripper"),
-    )
-    fake = FakeRobot(spec)
-    monkeypatch.setattr(composition, "create_robot", lambda *args, **kwargs: fake)
-
-    runtime = composition.create_runtime("arm", task_name="pick_place")
-    try:
-        assert isinstance(runtime.robot, TaskRuntime)
-        assert runtime.task.name == "pick_place"
-    finally:
-        runtime.close()
