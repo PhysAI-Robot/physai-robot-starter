@@ -37,9 +37,9 @@ python -m pip install -e .
 ```
 
 The base install contains MuJoCo, NumPy, image/video support, and YAML
-configuration. The broader `requirements.txt` bundle also installs local model
-and VLA dependencies; use the optional extras below when those features are
-needed instead of downloading them for the baseline.
+configuration. `requirements.txt` mirrors this Phase 1 baseline and does not
+install ROS2, VLM, or VLA dependencies. Use the optional extras below when
+those later-phase features are needed.
 
 Install development tools and run the test suite with:
 
@@ -71,6 +71,9 @@ python scripts/run_sim.py --config configs/task_pick_place.yaml
 ```
 
 Use `--seed`, `--max-steps`, and `--camera-size` to override configuration.
+The shared simulation seed and domain-randomization switch come from
+`configs/sim_config.yaml`, selected by `--sim-config` and defaulting to that
+file. Randomization must remain disabled until its Phase 1E engine is added.
 For image-conditioned policies, keep `--camera-size` square and match the
 training resolution, such as `128` or `224`.
 
@@ -261,6 +264,13 @@ running:
 ```bash
 python scripts/show_ros2_contract.py
 ```
+
+The first synchronous MuJoCo bridge core is available as
+`physai.bridge.MuJoCoROSBridge`. It uses an injected transport, publishes
+joint states and rendered camera images, accepts joint trajectory and gripper
+commands, and applies the shared safety gate. A real `rclpy` node can be
+adapted with `RclpyTransport`; TF, CameraInfo, and TurtleBot4 mobile-base
+topics remain Phase 1 work.
 
 ## Docker
 
