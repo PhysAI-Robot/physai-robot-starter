@@ -56,6 +56,47 @@ def test_action_reports_generic_mode_and_rejects_ambiguous_commands():
         Action(joint_position=[0], ee_twist=Twist()).mode
 
 
+def test_joint_state_rejects_mismatched_arrays():
+    with pytest.raises(ValueError, match="same size"):
+        JointState(
+            name=("joint",),
+            position=[0.0],
+            velocity=[0.0, 0.0],
+            effort=[0.0],
+        )
+
+
+def test_observation_validates_camera_name_frame_and_timestamp():
+    from physai.contracts import Header, ImageFrame, Observation
+
+    observation = Observation(
+        joint_state=JointState(
+            name=("joint",),
+            position=[0.0],
+            velocity=[0.0],
+            effort=[0.0],
+            header=Header(stamp=1.0, frame_id="base"),
+        ),
+        images={
+            "front": ImageFrame(
+                data=np.zeros((2, 2, 3), dtype=np.uint8),
+                camera_name="front",
+                header=Header(stamp=1.0, frame_id="camera_front"),
+            )
+        },
+        sim_time=1.0,
+    )
+    observation.validate(
+        expected_joint_names=("joint",),
+        expected_joint_frame="base",
+        expected_camera_frames={"front": "camera_front"},
+    )
+
+    observation.images["front"].header.frame_id = "wrong_frame"
+    with pytest.raises(ValueError, match="expects frame"):
+        observation.validate(expected_camera_frames={"front": "camera_front"})
+
+
 def test_model_store_requires_a_local_model(tmp_path, monkeypatch):
     from physai import model_store
 

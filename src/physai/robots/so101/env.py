@@ -125,6 +125,8 @@ class SO101Env(MuJoCoSimulationCore):
             },
             max_joint_delta={name: 0.5 for name in ARM_JOINT_NAMES},
             metadata={"control_hz": self.cfg.control_hz},
+            joint_state_frame="base",
+            camera_frames={"front": "camera_front", "wrist": "camera_wrist"},
         )
 
     def gripper_to_joint(self, normalized: float) -> float:
@@ -248,7 +250,10 @@ class SO101Env(MuJoCoSimulationCore):
                 images[camera] = ImageFrame(
                     data=self.render_camera(camera),
                     camera_name=camera,
-                    header=Header(stamp=float(self.data.time), frame_id=camera),
+                    header=Header(
+                        stamp=float(self.data.time),
+                        frame_id=f"camera_{camera}",
+                    ),
                 )
         return Observation(
             joint_state=self.joint_state(),

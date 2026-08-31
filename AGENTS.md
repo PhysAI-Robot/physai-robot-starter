@@ -47,6 +47,17 @@ boundaries merely to make a local test pass.
   generated plans.
 - Never add credentials, API keys, or real secrets to source, tests, or docs.
 
+## Design principles
+
+- Apply KISS: choose the simplest design that satisfies the existing contract;
+  do not add abstractions, indirection, or configuration without a concrete
+  need.
+- Follow SRP: give each module, class, and function one clear responsibility;
+  keep behavior in the owning component described by the architecture map.
+- Apply DRY: reuse shared contracts and helpers when behavior is genuinely
+  shared, but do not force unrelated concepts into one abstraction merely to
+  remove a small duplication.
+
 ## Validation
 
 After the first substantive edit, run the narrowest relevant check immediately.

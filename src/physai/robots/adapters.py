@@ -21,10 +21,14 @@ class DirectMuJoCoAdapter:
         return self._environment.robot_spec
 
     def reset(self, seed: int | None = None) -> Observation:
-        return self._environment.reset(seed=seed)
+        observation = self._environment.reset(seed=seed)
+        self.robot_spec.validate_observation(observation)
+        return observation
 
     def observe(self) -> Observation:
-        return self._environment.observe()
+        observation = self._environment.observe()
+        self.robot_spec.validate_observation(observation)
+        return observation
 
     def send_action(self, action: Action) -> None:
         self.robot_spec.validate_action(action)
@@ -32,7 +36,9 @@ class DirectMuJoCoAdapter:
 
     def step(self, action: Action) -> tuple[Observation, float, bool, bool, dict]:
         self.robot_spec.validate_action(action)
-        return self._environment.step(action)
+        result = self._environment.step(action)
+        self.robot_spec.validate_observation(result[0])
+        return result
 
     def close(self) -> None:
         self._environment.close()
@@ -44,7 +50,7 @@ class DirectMuJoCoAdapter:
 
 def select_adapter(
     name: str,
-    direct: RobotPort,
+    direct: RobotPort | None,
     *,
     transport: Any = None,
     hardware: RobotPort | None = None,
@@ -52,10 +58,14 @@ def select_adapter(
 ) -> RobotPort:
     """Select a robot adapter without changing policy or task code."""
     if name == "direct_mujoco":
+        if direct is None:
+            raise ValueError("adapter='direct_mujoco' requires a MuJoCo port")
         return DirectMuJoCoAdapter(direct)
     if name == "ros2_mujoco":
         if transport is None:
             raise ValueError("adapter='ros2_mujoco' requires a ROS2 transport")
+        if direct is None:
+            raise ValueError("adapter='ros2_mujoco' requires a MuJoCo port")
         from ..bridge.adapters import ROS2MuJoCoAdapter
 
         return ROS2MuJoCoAdapter(direct, transport, codec=codec)

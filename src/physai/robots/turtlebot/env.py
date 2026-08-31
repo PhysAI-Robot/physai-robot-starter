@@ -8,7 +8,18 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
-from ...contracts import Action, Header, JointState, Observation, Pose, PoseStamped, Quaternion, Twist, Vector3
+from ...contracts import (
+    Action,
+    Header,
+    ImageFrame,
+    JointState,
+    Observation,
+    Pose,
+    PoseStamped,
+    Quaternion,
+    Twist,
+    Vector3,
+)
 from ..base import RobotSpec
 from ...sim.core import MuJoCoSimulationCore
 
@@ -25,6 +36,7 @@ class TurtleBot4Config:
     max_steps: int = 500
     render: bool = False
     initial_pose: tuple[float, float, float] = (0.0, 0.0, 0.1)
+    seed: int | None = None
 
 
 class TurtleBot4Env(MuJoCoSimulationCore):
@@ -50,6 +62,7 @@ class TurtleBot4Env(MuJoCoSimulationCore):
             camera_width=640,
             camera_height=480,
         )
+        self.rng = np.random.default_rng(self.cfg.seed)
         self._actuator_ids = {self.model.actuator(i).name: i for i in range(self.model.nu)}
         self._base_body_id = self.model.body("base").id
 
@@ -64,10 +77,14 @@ class TurtleBot4Env(MuJoCoSimulationCore):
             observation_modalities=("state", "images", "ee_pose"),
             capabilities=("base_velocity", "odometry", "images", "imu", "lidar"),
             metadata={"drive": "differential", "model": str(self.cfg.model_path)},
+            joint_state_frame="base_link",
+            action_frame="base",
+            camera_frames={"free": "base_link"},
         )
 
     def reset(self, seed: int | None = None) -> Observation:
-        del seed
+        if seed is not None:
+            self.rng = np.random.default_rng(seed)
         self.reset_simulation()
         x, y, z = self.cfg.initial_pose
         free_qadr = int(self.model.jnt_qposadr[self.model.joint("floating_base_joint").id])
@@ -114,7 +131,11 @@ class TurtleBot4Env(MuJoCoSimulationCore):
     def observe(self) -> Observation:
         images = {}
         if self._renderer is not None:
-            images["free"] = self.render_camera()
+            images["free"] = ImageFrame(
+                data=self.render_camera(),
+                camera_name="free",
+                header=Header(stamp=float(self.data.time), frame_id="base_link"),
+            )
         return Observation(
             joint_state=self.joint_state(),
             images=images,

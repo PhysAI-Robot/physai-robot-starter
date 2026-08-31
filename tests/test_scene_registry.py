@@ -17,7 +17,12 @@ class FakeRobot:
         )
         self.closed = False
         self.observation = Observation(
-            joint_state=JointState(name=("joint",), position=np.zeros(1))
+            joint_state=JointState(
+                name=("joint",),
+                position=np.zeros(1),
+                velocity=np.zeros(1),
+                effort=np.zeros(1),
+            )
         )
 
     def reset(self, seed=None):
