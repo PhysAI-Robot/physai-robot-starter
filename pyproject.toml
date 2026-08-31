@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "physai"
 version = "0.0.1"
 description = "Phase 0 starter: SO-101 arm in MuJoCo with VLM planner + VLA policy seams"
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.13"
 license = { file = "LICENSE" }
 dependencies = [
     "mujoco>=3.2",
