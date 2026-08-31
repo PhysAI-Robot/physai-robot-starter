@@ -49,11 +49,13 @@ class _ROS2RobotAdapter:
 
     def reset(self, seed: int | None = None) -> Observation:
         observation = self._robot.reset(seed=seed)
+        self.robot_spec.validate_observation(observation)
         self.publish_observation(observation)
         return observation
 
     def observe(self) -> Observation:
         observation = self._robot.observe()
+        self.robot_spec.validate_observation(observation)
         self.publish_observation(observation)
         return observation
 
@@ -93,6 +95,7 @@ class _ROS2RobotAdapter:
     def step(self, action: Action) -> tuple[Observation, float, bool, bool, dict]:
         self.robot_spec.validate_action(action)
         result = self._robot.step(action)
+        self.robot_spec.validate_observation(result[0])
         self.publish_observation(result[0])
         return result
 

@@ -44,6 +44,12 @@ class Header:
     stamp: float = field(default_factory=_now)
     frame_id: str = ""
 
+    def validate(self, *, require_frame: bool = False) -> None:
+        if not np.isfinite(self.stamp):
+            raise ValueError("header timestamp must be finite")
+        if require_frame and not self.frame_id:
+            raise ValueError("header frame_id must not be empty")
+
 
 @dataclass
 class JointState:
@@ -56,9 +62,35 @@ class JointState:
     header: Header = field(default_factory=Header)
 
     def __post_init__(self) -> None:
+        self.name = tuple(self.name)
         self.position = np.asarray(self.position, dtype=np.float64)
         self.velocity = np.asarray(self.velocity, dtype=np.float64)
         self.effort = np.asarray(self.effort, dtype=np.float64)
+        sizes = {self.position.size, self.velocity.size, self.effort.size}
+        if len(sizes) != 1 or self.position.size != len(self.name):
+            raise ValueError("joint names and state arrays must have the same size")
+        if len(set(self.name)) != len(self.name):
+            raise ValueError("joint names must be unique")
+        if not all(np.isfinite(values).all()
+                   for values in (self.position, self.velocity, self.effort)):
+            raise ValueError("joint state contains non-finite values")
+
+    def validate(
+        self,
+        *,
+        expected_names: tuple[str, ...] | None = None,
+        expected_frame: str | None = None,
+    ) -> None:
+        self.header.validate(require_frame=expected_frame is not None)
+        if expected_names is not None and self.name != expected_names:
+            raise ValueError(
+                f"joint state expects names {expected_names}, got {self.name}"
+            )
+        if expected_frame is not None and self.header.frame_id != expected_frame:
+            raise ValueError(
+                f"joint state expects frame {expected_frame!r}, "
+                f"got {self.header.frame_id!r}"
+            )
 
     def get(self, joint: str) -> float:
         return float(self.position[self.name.index(joint)])
@@ -183,6 +215,36 @@ class ImageFrame:
 
     encoding: str = "rgb8"
 
+    def __post_init__(self) -> None:
+        self.data = np.asarray(self.data)
+        if self.data.ndim != 3 or self.data.shape[2] != 3:
+            raise ValueError("image data must have shape (height, width, 3)")
+        if self.data.dtype != np.uint8:
+            raise ValueError("image data must use uint8 values")
+        self.data = np.ascontiguousarray(self.data)
+        if not self.camera_name:
+            raise ValueError("image camera_name must not be empty")
+
+    def validate(
+        self,
+        *,
+        expected_camera: str | None = None,
+        expected_frame: str | None = None,
+    ) -> None:
+        self.header.validate(require_frame=True)
+        if self.encoding != "rgb8":
+            raise ValueError(f"unsupported image encoding {self.encoding!r}")
+        if expected_camera is not None and self.camera_name != expected_camera:
+            raise ValueError(
+                f"image expects camera {expected_camera!r}, "
+                f"got {self.camera_name!r}"
+            )
+        if expected_frame is not None and self.header.frame_id != expected_frame:
+            raise ValueError(
+                f"image {self.camera_name!r} expects frame {expected_frame!r}, "
+                f"got {self.header.frame_id!r}"
+            )
+
 
 @dataclass
 class Observation:
@@ -193,6 +255,32 @@ class Observation:
     ee_pose: PoseStamped | None = None
     step: int = 0
     sim_time: float = 0.0
+
+    def validate(
+        self,
+        *,
+        expected_joint_names: tuple[str, ...] | None = None,
+        expected_joint_frame: str | None = None,
+        expected_camera_frames: dict[str, str] | None = None,
+    ) -> None:
+        self.joint_state.validate(
+            expected_names=expected_joint_names,
+            expected_frame=expected_joint_frame,
+        )
+        if not isinstance(self.step, int) or self.step < 0:
+            raise ValueError("observation step must be a non-negative integer")
+        if not np.isfinite(self.sim_time) or self.sim_time < 0:
+            raise ValueError("observation sim_time must be finite and non-negative")
+        camera_frames = expected_camera_frames or {}
+        for name, frame in self.images.items():
+            if not isinstance(frame, ImageFrame):
+                raise ValueError(f"observation image {name!r} is not an ImageFrame")
+            frame.validate(
+                expected_camera=name,
+                expected_frame=camera_frames.get(name),
+            )
+        if self.ee_pose is not None:
+            self.ee_pose.header.validate(require_frame=True)
 
 
 @dataclass
