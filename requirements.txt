@@ -1,3 +1,6 @@
+# Supported environment: Ubuntu 24.04 LTS with Python 3.12.
+# ROS2 Jazzy is installed with apt or through docker/Dockerfile, not pip.
+
 setuptools>=68
 mujoco>=3.2
 numpy>=1.26
