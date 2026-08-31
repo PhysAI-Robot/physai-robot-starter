@@ -16,3 +16,13 @@ def test_load_minimal_pick_place_config():
     assert isinstance(config.env.scene, PickPlaceMinimalSceneConfig)
     assert config.env.scene.cube_names == ("cube",)
     assert config.env.max_steps == 400
+
+
+def test_load_sim_config_keeps_randomization_disabled():
+    from physai.config import load_sim_config
+
+    root = Path(__file__).resolve().parents[1]
+    config = load_sim_config(root / "configs" / "sim_config.yaml")
+
+    assert config.seed == 0
+    assert not config.domain_randomization.enabled

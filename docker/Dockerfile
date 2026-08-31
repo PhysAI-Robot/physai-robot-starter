@@ -55,8 +55,7 @@ COPY requirements.txt pyproject.toml ./
 RUN python3 -m pip install --no-cache-dir --break-system-packages -r requirements.txt
 
 COPY . .
-RUN python3 -m pip install --no-cache-dir --break-system-packages --ignore-installed pluggy pytest \
-    && python3 -m pip install --no-cache-dir --break-system-packages -e ".[dev]"
+RUN python3 -m pip install --no-cache-dir --break-system-packages -e ".[dev]"
 
 ENV MUJOCO_GL=osmesa
 ENV PYTEST_DISABLE_PLUGIN_AUTOLOAD=1

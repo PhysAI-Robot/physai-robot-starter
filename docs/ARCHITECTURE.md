@@ -97,6 +97,7 @@ errors.
 | Module | Owns | Must not own |
 | --- | --- | --- |
 | `physai.contracts` | Shared `Observation`, `Action`, and ROS2-shaped value types | Robot-specific ordering or task rules |
+| `physai.config` | Typed YAML configuration for shared simulation and task runtime settings | Simulation behavior, robot construction, or task evaluation |
 | `physai.robots` | Embodiment discovery, `RobotSpec`, robot ports, factories, environments, and robot-specific adapters | Task reward, planner decisions, or model SDKs |
 | `physai.tasks` | Task state, reset rules, reward, metrics, and termination | Robot internals or action generation |
 | `physai.sim` | MuJoCo simulation core, generic scene primitives, task-specific scene builders, rendering, and simulation time | Robot-specific environment logic, ROS2 transport, QoS, or callbacks |
@@ -114,6 +115,7 @@ The source tree follows this ownership map:
 ```text
 src/physai/
 ├── contracts.py       shared message-shaped values
+├── config.py          typed YAML runtime configuration
 ├── robots/            embodiment ports, adapters, and factories
 │   ├── so101/         SO-101 environment and kinematics implementation
 │   └── turtlebot/     TurtleBot4 environment and differential-drive implementation
@@ -124,7 +126,7 @@ src/physai/
 ├── policy/            control and model adapters
 ├── control/           action resolution and rate limiting
 ├── data/              episode recording and loading
-├── bridge/            ROS2 transport, message mapping, and ROS2 adapters
+├── bridge/            ROS2 transport, message mapping, adapters, and tick loop
 └── runtime/           robot-task-policy composition and safety orchestration
 ```
 
@@ -147,6 +149,13 @@ This split keeps ROS2 optional for fast MuJoCo tests and prevents transport
 concerns from leaking into the simulator. `scripts/` selects the adapter in
 the composition root; policy and task code depend only on shared contracts and
 capabilities, not on a robot name or transport implementation.
+
+`MuJoCoROSBridge` owns the synchronous control tick around
+`ROS2MuJoCoAdapter`. `RclpyTransport` adapts an existing `rclpy` node to the
+transport port without importing ROS2 from the core package. The current bridge
+publishes joint states and available camera images and accepts joint trajectory
+and gripper commands; TF, CameraInfo, and mobile-base endpoints remain later
+Phase 1 work.
 
 ### Task-specific scenes
 
@@ -353,12 +362,14 @@ Dataset recording and loading belong to `physai.data`; task semantics do not.
 Phase 0 runs in one process without ROS2. The message-shaped values in
 `src/physai/contracts.py` intentionally match the planned ROS2 types, while
 the topic mapping is documented in `src/physai/bridge/ros2_contract.py`.
-The intended next integration target is ROS2 Jazzy on Ubuntu 24.04.
+The first synchronous bridge core is available in
+`src/physai/bridge/mujoco_ros_bridge.py`; the integration target is ROS2 Jazzy
+on Ubuntu 24.04.
 
 The ROS2 boundary has two interchangeable adapter roles:
 
 - `ROS2MuJoCoAdapter` translates the ROS2 topics into MuJoCo control and
-     publishes simulated joint state, camera frames, and TF.
+     publishes simulated joint state and available camera frames.
 - `ROS2HardwareAdapter` translates the same ROS2 topics into the selected
      embodiment's motor and camera interfaces and publishes measured state.
 
@@ -374,11 +385,11 @@ default `ContractMessageCodec` is used by Phase 0 tests, while
 
 Both adapters must make unit conversion, joint ordering, timestamps, frame
 names, command freshness, and command rate explicit. Joint order and value
-shape are validated at decode time against `RobotSpec`. CameraInfo and TF
-publication still require extending `Observation` with calibrated camera and
-frame data; the current adapter publishes only the image portion represented
-by that contract. The ROS2 contract file is the source of truth for those
-external interfaces; it is not itself an adapter.
+shape are validated at decode time against `RobotSpec`. The current adapter
+publishes only the observation fields represented by the Phase 0 contract;
+CameraInfo, TF, and mobile-base endpoint publication require the remaining
+Phase 1 integration work. The ROS2 contract file is the source of truth for
+those external interfaces; it is not itself an adapter.
 
 ### Required validation gates
 

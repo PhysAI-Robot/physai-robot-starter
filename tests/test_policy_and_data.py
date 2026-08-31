@@ -80,8 +80,12 @@ def test_recorder_accepts_twist_actions(tmp_path):
     from physai.data import EpisodeRecorder, load_episode
 
     observation = Observation(
-        joint_state=JointState(name=("left_wheel", "right_wheel"),
-                               position=np.zeros(2)),
+        joint_state=JointState(
+            name=("left_wheel", "right_wheel"),
+            position=np.zeros(2),
+            velocity=np.zeros(2),
+            effort=np.zeros(2),
+        ),
     )
     action = Action(ee_twist=Twist(linear=Vector3(x=0.2)))
     recorder = EpisodeRecorder(tmp_path, robot_type="turtlebot4",
