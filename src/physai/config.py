@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +10,23 @@ import yaml
 
 from .robots.so101.env import EnvConfig
 from .sim.scenes import create_scene, get_scene_definition
+
+
+@dataclass(frozen=True)
+class DomainRandomizationConfig:
+    """Phase 1E controls; randomization stays disabled in the baseline."""
+
+    enabled: bool = False
+
+
+@dataclass(frozen=True)
+class SimulationConfig:
+    """Settings shared by robot environments and simulation entry points."""
+
+    seed: int = 0
+    domain_randomization: DomainRandomizationConfig = field(
+        default_factory=DomainRandomizationConfig
+    )
 
 
 @dataclass(frozen=True)
@@ -22,6 +39,7 @@ class TaskConfig:
     env: EnvConfig
     success_xy_tol: float = 0.04
     success_hold_steps: int = 10
+    simulation: SimulationConfig = field(default_factory=SimulationConfig)
 
 
 _SCENE_TUPLE_FIELDS = {
@@ -34,6 +52,37 @@ _SCENE_TUPLE_FIELDS = {
 _ENV_TUPLE_FIELDS = {"cameras", "cube_x_range", "cube_y_range"}
 
 
+def load_sim_config(path: str | Path) -> SimulationConfig:
+    """Load shared simulation settings from a YAML mapping."""
+    config_path = Path(path).resolve()
+    with config_path.open(encoding="utf-8") as stream:
+        data = yaml.safe_load(stream)
+    if not isinstance(data, dict):
+        raise ValueError(f"configuration root must be a mapping: {config_path}")
+
+    return _parse_simulation_config(data, config_path)
+
+
+def _parse_simulation_config(
+    data: dict[str, Any], source: Path | str,
+) -> SimulationConfig:
+    seed = data.get("seed", 0)
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise ValueError(f"{source}: simulation seed must be an integer")
+    randomization_data = data.get("domain_randomization", {})
+    if not isinstance(randomization_data, dict):
+        raise ValueError(f"{source}: domain_randomization must be a mapping")
+    enabled = randomization_data.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ValueError(
+            f"{source}: domain_randomization.enabled must be a boolean"
+        )
+    return SimulationConfig(
+        seed=seed,
+        domain_randomization=DomainRandomizationConfig(enabled=enabled),
+    )
+
+
 def load_task_config(path: str | Path) -> TaskConfig:
     """Load a task YAML file and construct its typed scene and env configs."""
     config_path = Path(path).resolve()
@@ -41,6 +90,11 @@ def load_task_config(path: str | Path) -> TaskConfig:
         data = yaml.safe_load(stream)
     if not isinstance(data, dict):
         raise ValueError(f"configuration root must be a mapping: {config_path}")
+
+    simulation_data = data.get("simulation", {})
+    if not isinstance(simulation_data, dict):
+        raise ValueError("configuration field 'simulation' must be a mapping")
+    simulation = _parse_simulation_config(simulation_data, config_path)
 
     robot = _required_string(data, "robot")
     task_data = _required_mapping(data, "task")
@@ -75,6 +129,7 @@ def load_task_config(path: str | Path) -> TaskConfig:
         task=task_name,
         scene_name=scene_name,
         env=env,
+        simulation=simulation,
         success_xy_tol=success_xy_tol,
         success_hold_steps=success_hold_steps,
     )
@@ -112,4 +167,10 @@ def _convert_lists_to_tuples(data: dict[str, Any], keys: set[str]) -> None:
             data[key] = tuple(data[key])
 
 
-__all__ = ["TaskConfig", "load_task_config"]
+__all__ = [
+    "DomainRandomizationConfig",
+    "SimulationConfig",
+    "TaskConfig",
+    "load_sim_config",
+    "load_task_config",
+]

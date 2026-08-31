@@ -10,7 +10,12 @@ class FakeRobot:
         self.robot_spec = spec
         self.closed = False
         self.observation = Observation(
-            joint_state=JointState(name=spec.joint_names, position=np.zeros(len(spec.joint_names)))
+            joint_state=JointState(
+                name=spec.joint_names,
+                position=np.zeros(len(spec.joint_names)),
+                velocity=np.zeros(len(spec.joint_names)),
+                effort=np.zeros(len(spec.joint_names)),
+            )
         )
 
     def reset(self, seed=None):
@@ -54,7 +59,11 @@ def test_safety_rejects_stale_and_out_of_limit_actions():
         joint_limits={"a": (-1.0, 1.0)},
     )
     safety = SafetyController(spec, max_action_age=0.5)
-    observation = Observation(joint_state=JointState(name=("a",), position=[0.0]))
+    observation = Observation(
+        joint_state=JointState(
+            name=("a",), position=[0.0], velocity=[0.0], effort=[0.0]
+        )
+    )
 
     with pytest.raises(ValueError, match="stale"):
         safety.validate(observation, Action(joint_position=[0.0], stamp=9.0), now=10.0)

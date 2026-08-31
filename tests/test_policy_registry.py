@@ -20,7 +20,14 @@ def test_constant_twist_policy_emits_twist_action():
     from physai.contracts import JointState, Observation
     from physai.policy import create_policy
 
-    observation = Observation(joint_state=JointState(position=np.zeros(2)))
+    observation = Observation(
+        joint_state=JointState(
+            name=("left_wheel", "right_wheel"),
+            position=np.zeros(2),
+            velocity=np.zeros(2),
+            effort=np.zeros(2),
+        )
+    )
 
     action = create_policy("constant_twist").act(observation)
 

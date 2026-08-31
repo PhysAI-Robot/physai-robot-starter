@@ -17,7 +17,7 @@ from pathlib import Path
 import _bootstrap  # noqa: F401
 import numpy as np
 
-from physai.config import TaskConfig, load_task_config
+from physai.config import TaskConfig, load_sim_config, load_task_config
 from physai.policy import available_policies, create_policy
 from physai.robots import available_robots, create_robot
 from physai.robots.so101 import EnvConfig
@@ -90,6 +90,9 @@ def build_so101_config(
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--sim-config", type=Path,
+                    default=Path("configs/sim_config.yaml"),
+                    help="shared simulation configuration")
     ap.add_argument("--config", type=Path,
                     help="YAML task configuration (for example configs/task_pick_place.yaml)")
     ap.add_argument("--robot", choices=available_robots(),
@@ -121,6 +124,12 @@ def main() -> int:
                     help="open the interactive viewer instead of writing a video")
     args = ap.parse_args()
 
+    sim_config = load_sim_config(args.sim_config)
+    if sim_config.domain_randomization.enabled:
+        ap.error(
+            "domain randomization is not implemented yet; "
+            "set domain_randomization.enabled to false"
+        )
     task_config = load_task_config(args.config) if args.config else None
     configured_robot = task_config.robot if task_config else (args.robot or "so101")
     if args.robot and args.robot != configured_robot:
@@ -131,7 +140,8 @@ def main() -> int:
     if task_config and args.robot != "so101":
         ap.error("--config currently supports the SO-101 pick-and-place workflow only")
     seed = args.seed if args.seed is not None else (
-        task_config.env.seed if task_config and task_config.env.seed is not None else 0
+        task_config.env.seed if task_config and task_config.env.seed is not None
+        else sim_config.seed
     )
     max_steps = args.max_steps if args.max_steps is not None else (
         task_config.env.max_steps if task_config else 600
