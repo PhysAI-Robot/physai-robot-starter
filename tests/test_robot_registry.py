@@ -1,3 +1,6 @@
+import pytest
+
+
 class RecordingTransport:
     def __init__(self):
         self.messages = []
@@ -368,6 +371,21 @@ def test_hardware_factory_does_not_construct_a_mujoco_environment(monkeypatch):
     adapter.close()
 
     assert transport.closed
+
+
+def test_turtlebot4_rejects_the_arm_hardware_adapter(monkeypatch):
+    from physai.robots.turtlebot import factory
+
+    def fail_if_constructed(*args, **kwargs):
+        raise AssertionError("unsupported adapter must not construct MuJoCo")
+
+    monkeypatch.setattr(factory, "TurtleBot4Env", fail_if_constructed)
+    with pytest.raises(ValueError, match="not supported for turtlebot4"):
+        factory.make_turtlebot4(
+            adapter="ros2_hardware",
+            transport=RecordingTransport(),
+            hardware=object(),
+        )
 
 
 def test_ros2_message_codec_converts_observations():

@@ -19,17 +19,13 @@ def make_turtlebot4(
     **kwargs: Any,
 ) -> RobotPort:
     """Build TurtleBot4 through the selected robot port adapter."""
+    if adapter == "ros2_hardware":
+        raise ValueError(
+            "adapter='ros2_hardware' is not supported for turtlebot4; "
+            "the mobile-base ROS2 adapter for cmd_vel, odometry, and TF is not implemented"
+        )
     if config is not None and kwargs:
         raise TypeError("pass either config or TurtleBot4Config keyword fields, not both")
-    if adapter == "ros2_hardware":
-        if config is not None or kwargs:
-            raise TypeError(
-                "robot config is not used by adapter='ros2_hardware'; "
-                "configure the hardware port instead"
-            )
-        return select_adapter(
-            adapter, None, transport=transport, hardware=hardware, codec=codec
-        )
     direct = TurtleBot4Env(config or TurtleBot4Config(**kwargs))
     return select_adapter(
         adapter, direct, transport=transport, hardware=hardware, codec=codec
