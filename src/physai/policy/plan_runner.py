@@ -12,7 +12,8 @@ import numpy as np
 from ..contracts import Action, GripperCommand, Observation, PoseStamped
 from ..control.resolver import JointRateLimiter
 from ..planner.base import Plan
-from ..robots.so101.kinematics import TOP_DOWN, ArmKinematics
+from ..robots.base import KinematicsPort
+from ..robots.so101.kinematics import TOP_DOWN
 from .base import Policy
 
 
@@ -21,7 +22,7 @@ class PlanRunner(Policy):
 
     def __init__(
         self,
-        kin: ArmKinematics,
+        kin: KinematicsPort,
         plan: Plan,
         *,
         pos_tol: float = 0.015,

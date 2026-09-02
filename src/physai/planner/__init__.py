@@ -1,8 +1,8 @@
-from .base import Plan, Planner, ScriptedPlanner, SubGoal
+from .base import Plan, Planner, ScriptedPlanner, SortingPlanner, SubGoal
 from .registry import available_planners, create_planner, register_planner
 
 __all__ = [
-    "Plan", "Planner", "ScriptedPlanner", "SubGoal", "ClaudePlanner",
+    "Plan", "Planner", "ScriptedPlanner", "SortingPlanner", "SubGoal", "ClaudePlanner",
     "SmolVLMPlanner", "available_planners", "create_planner", "register_planner",
 ]
 

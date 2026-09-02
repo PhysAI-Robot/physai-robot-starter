@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from ..contracts import Action, Observation, PoseStamped
+from ..contracts import Action, Observation, PoseStamped, Twist
 
 
 class Policy(ABC):
@@ -47,3 +47,12 @@ class ConstantPolicy(Policy):
 
         q = self._q if self._q is not None else observation.joint_state.position[:5]
         return Action(joint_position=q, gripper=GripperCommand(position=1.0))
+
+
+class ConstantTwistPolicy(Policy):
+    """Hold a mobile base still for a generic simulation smoke test."""
+
+    name = "constant_twist"
+
+    def act(self, observation: Observation) -> Action:
+        return Action(ee_twist=Twist())

@@ -26,13 +26,16 @@ import numpy as np
 from physai.planner import available_planners, create_planner
 from physai.policy.plan_runner import PlanRunner
 from physai.robots import available_robots, create_robot
-from physai.sim import EnvConfig, SceneConfig
+from physai.robots.so101 import EnvConfig
+from physai.sim import SceneConfig
+from physai.tasks import TaskRuntime, create_task
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--instruction", default="put the red cube on the green pad")
-    ap.add_argument("--robot", default="so101", choices=available_robots())
+    ap.add_argument("--robot", default="so101", choices=["so101"],
+                    help="plan_task currently supports the SO-101 manipulation workflow")
     ap.add_argument("--planner", default="smolvlm", choices=available_planners())
     ap.add_argument("--model")
     ap.add_argument("--device")
@@ -46,10 +49,14 @@ def main() -> int:
                     help="write the images sent to the planner, for debugging")
     args = ap.parse_args()
 
-    env = create_robot(args.robot, config=EnvConfig(
+    robot = create_robot(args.robot, config=EnvConfig(
         scene=SceneConfig(camera_width=512, camera_height=384),
         seed=args.seed, max_steps=args.max_steps, render=True,
     ))
+    env = TaskRuntime(
+        robot,
+        create_task("pick_place"),
+    )
     obs = env.reset(seed=args.seed)
 
     if args.save_frames:

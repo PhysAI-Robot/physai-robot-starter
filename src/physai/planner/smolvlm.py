@@ -8,6 +8,7 @@ import re
 import numpy as np
 
 from ..contracts import Observation
+from ..model_store import resolve_local_model
 from .base import Plan, Planner
 from .claude_vlm import PLAN_SCHEMA, SYSTEM_PROMPT, ClaudePlanner
 
@@ -41,9 +42,14 @@ class SmolVLMPlanner(Planner):
                 "pip install -e '.[smolvlm]'"
             ) from exc
 
+        local_model = resolve_local_model(model, model_name="smolvlm")
         self._torch = torch
-        self.processor = AutoProcessor.from_pretrained(model)
-        self.model = AutoModelForVision2Seq.from_pretrained(model)
+        self.processor = AutoProcessor.from_pretrained(
+            local_model, local_files_only=True
+        )
+        self.model = AutoModelForVision2Seq.from_pretrained(
+            local_model, local_files_only=True
+        )
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device).eval()
         self.max_new_tokens = max_new_tokens

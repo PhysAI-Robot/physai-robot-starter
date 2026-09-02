@@ -1,6 +1,9 @@
 .git
 .gitignore
-assets/so101/
+
+# Downloaded runtime artifacts; keep them out of Docker build contexts.
+assets/
+models/
 data/
 outputs/
 *.mp4

@@ -1,5 +1,6 @@
 # downloaded robot description (fetched by scripts/fetch_assets.py)
-assets/so101/
+assets/
+models/
 
 # recorded data / rollouts
 data/
@@ -19,9 +20,6 @@ venv/
 
 # secrets
 .env
-
-# workspace
-.vscode/
 
 # container mode recorded by docker/container.py
 docker/.mode

@@ -1,230 +1,388 @@
 # PhysAI Robot Starter
 
-Simulation-first starter project for an SO-101 robot arm. It lets you test a
-pick-and-place workflow in MuJoCo before connecting a real robot or ROS2.
+Open-source starter kit for embodied AI and robotics. It connects classical
+robot control, MuJoCo simulation, ROS2 interfaces, and later data-driven
+policies through stable robot, task, observation, and action contracts.
 
-## What this project does
+The project is currently in **Phase 1: Classical Foundation and ROS2
+Contract**. The supported foundation is an SO-101 arm and a TurtleBot4
+differential-drive base in MuJoCo. The immediate goal is reliable deterministic
+control and the first ROS2 integration, not a completed VLM or VLA stack.
 
-- Simulates an SO-101 arm, table, cube, and target pad.
-- Runs a scripted pick-and-place policy without an API key.
-- Collects demonstrations as `.npz` files.
-- Replays demonstrations to check the data and action format.
-- Uses SmolVLM to turn camera images and a task instruction into robot
-  sub-goals.
-- Keeps the interfaces ready for a future VLA policy and ROS2 integration.
+The shortest Phase 1 path is model-free: run the scripted SO-101
+pick-and-place baseline, inspect the contracts, then validate the ROS2 bridge
+when that integration is available.
+
+<p align="center">
+  <img src="docs/media/so101_pick_place.gif" width="420"
+       alt="SO-101 arm picking up a red cube and placing it on a green pad in MuJoCo">
+</p>
+
+<p align="center">
+  <em>The Phase 1 baseline: <code>python scripts/run_sim.py</code>, one scripted
+  pick-and-place episode, no model or API key involved.</em>
+</p>
+
+Every clip and screenshot below is a real simulator rollout at a fixed seed.
+Regenerate them all with `python scripts/render_docs_media.py`.
 
 ## Requirements
 
-- Python 3.10 or newer
-- Linux or macOS
-- A working virtual environment named `.venv`
+- Ubuntu 24.04 LTS
+- Python 3.12
+- ROS2 Jazzy for ROS2 integration and hardware workflows
+- A virtual environment
 
-The simulation runs on CPU. SmolVLM downloads its model on first use and may
-need additional memory. A GPU is helpful but not required.
+Ubuntu 24.04 and Python 3.12 are the supported baseline because ROS2 Jazzy
+targets that platform. The direct MuJoCo simulator can run without a ROS2
+installation, but the Docker workflow includes ROS2 Jazzy for integration
+testing. VLM and VLA workflows need more memory; CUDA is optional.
 
-## Getting started
+## Install
 
-Follow these steps in order the first time. You do **not** need Claude or
-SmolVLM to get the simulator running.
-
-### 1. Set up the environment
-
-From the project directory:
+Create the environment and install the base package from the project root:
 
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements.txt
-python scripts/fetch_assets.py
+python -m pip install --upgrade pip
+python -m pip install -e .
 ```
 
-### 2. Run the first simulation
+The base install contains MuJoCo, NumPy, image/video support, and YAML
+configuration. `requirements.txt` mirrors this Phase 1 baseline and does not
+install ROS2, VLM, or VLA dependencies. Use the optional extras below when
+those later-phase features are needed.
 
-This runs one headless episode using the scripted policy. It is the quickest
-way to check that the installation works:
-
-```bash
-python scripts/run_sim.py
-```
-
-The video is written to `outputs/`. The current built-in robot is `so101`:
-
-```bash
-python scripts/run_sim.py --robot so101
-```
-
-### 3. Open the simulator GUI (optional)
-
-After the headless run works, open the MuJoCo viewer:
-
-```bash
-python scripts/run_sim.py --viewer
-```
-
-Close the MuJoCo window to stop it.
-
-### 4. Run the tests (optional)
-
-Install the development tools and run the test suite:
+Install development tools and run the test suite with:
 
 ```bash
 python -m pip install -e ".[dev]"
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/ -q
 ```
 
-`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` avoids an unrelated ROS2 pytest plugin when
-ROS2 is installed system-wide. It is not needed in an environment without
-that plugin.
+## Quick start
 
-## Run in Docker
+Fetch the SO-101 description and run one scripted pick-and-place episode:
 
 ```bash
-python docker/container.py build    # build the image
-python docker/container.py start    # run the container in the background
-python docker/container.py shell    # open a shell inside the running container
-python docker/container.py stop     # stop and remove the container
+python scripts/fetch_assets.py --robot so101
+python scripts/run_sim.py
 ```
 
-Flags:
+The command writes a video and evaluation output to `outputs/`. Open the
+interactive MuJoCo viewer after the headless run succeeds:
 
 ```bash
---gpu         # force the CUDA image and pass the GPU through
---cpu         # force the CPU-only image, needed on a MacBook
---no-cache    # rebuild without the layer cache
+python scripts/run_sim.py --viewer
 ```
 
-Without `--gpu` or `--cpu`, the GPU is used when Docker has the NVIDIA runtime
-and the CPU image is used otherwise.
+Run the same task from the checked-in YAML configuration:
 
-## Choose your next workflow
+```bash
+python scripts/run_sim.py --config configs/task_pick_place.yaml
+```
 
-The commands below are independent options. Pick the one that matches what
-you want to try; you do not need to run all of them.
+Use `--seed`, `--max-steps`, and `--camera-size` to override configuration.
+The shared simulation seed and domain-randomization switch come from
+`configs/sim_config.yaml`, selected by `--sim-config` and defaulting to that
+file. Randomization must remain disabled until its Phase 1E engine is added.
+For image-conditioned policies, keep `--camera-size` square and match the
+training resolution, such as `128` or `224`.
 
-### Inspect the scripted policy baseline
+## Current Phase 1 scope
+
+Two embodiments are supported, and they do not share an action space: the arm
+takes joint positions, the base takes a twist.
+
+| SO-101 | TurtleBot4 |
+| --- | --- |
+| <img src="docs/media/so101_pick_place.gif" width="330" alt="SO-101 arm performing scripted pick-and-place"> | <img src="docs/media/turtlebot4_drive.gif" width="330" alt="TurtleBot4 driving an arc across a checkered floor"> |
+| Scripted pick-and-place, joint-position control | Constant forward and yaw twist, differential drive |
+
+| Robot | Current baseline | Phase 1 direction |
+| --- | --- | --- |
+| SO-101 | Deterministic MuJoCo pick-and-place with scripted control | ROS2 joint, gripper, camera, and TF bridge |
+| TurtleBot4 | Deterministic MuJoCo base-velocity smoke test | ROS2 `/cmd_vel`, odometry, TF, and Nav2 foundation |
+
+The TurtleBot4 path is currently a generic control smoke test, which is what
+its clip above shows; navigation is a Phase 1 deliverable and is not
+implemented yet. The SO-101 ROS2 bridge, TurtleBot4 navigation path, and
+controlled domain randomization are also part of the active Phase 1 roadmap.
+Direct MuJoCo remains the fast local path and does not replace ROS2
+integration validation.
+
+The planned progression is:
+
+```text
+Phase 1  Classical foundation + ROS2 contract
+    -> Phase 2  Vision-based motor skills with LeRobot
+    -> Phase 3  High-level VLM orchestration
+    -> Phase 4  End-to-end VLA policy
+```
+
+Phase 2 and later are future direction. Their current scripts and adapters are
+experimental seams around the Phase 1 contracts, not completion claims for
+those phases. See [Roadmap](ROADMAP.md) for the scope and definition of done
+for each phase.
+
+## Phase 1 workflows
+
+### What a policy observes
+
+The SO-101 publishes two camera views per step alongside joint state. Both are
+recorded into every demonstration and are the only inputs an image-conditioned
+policy receives; the scripted expert ignores them and reads cube pose straight
+from the simulator instead.
+
+| `front` | `wrist` |
+| --- | --- |
+| <img src="docs/media/so101_camera_front.png" width="300" alt="Front camera view of the arm, red cube, and green target pad"> | <img src="docs/media/so101_camera_wrist.png" width="300" alt="Wrist camera view looking down at the jaws closing on the red cube"> |
+| Fixed world view: arm, cube, and target pad | Gripper-mounted, looking down the approach axis |
+
+Both frames come from `observation.images` on the same timestep, captured here
+as the jaws close on the cube.
+
+### Evaluate and replay
+
+Evaluate the scripted expert over multiple seeds:
 
 ```bash
 python scripts/eval_policy.py --policy scripted --episodes 20
 ```
 
-This is the privileged SO-101 expert path. It is useful for inspecting rollout
-metrics; the planner-to-`PlanRunner` path is the currently validated
-pick-and-place execution baseline.
-
-### Collect demonstrations
+Record successful demonstrations, then replay their actions through the
+simulator:
 
 ```bash
 python scripts/collect_demos.py --episodes 50 --out data/pickplace_v1
+python scripts/eval_policy.py --policy replay --dataset data/pickplace_v1
 ```
 
-### Replay demonstrations
+The sorting variant records three cubes and chooses a target color per episode:
 
 ```bash
-python scripts/eval_policy.py \
-  --policy replay \
-  --dataset data/pickplace_v1
+python scripts/collect_demos.py --sorting --episodes 50 --out data/sorting_v1
 ```
 
-### Try SmolVLM planning
+<p align="center">
+  <img src="docs/media/sorting/sorting_scripted.gif" width="360"
+       alt="SO-101 arm selecting the blue cube from three colored cubes and placing it on the pad">
+</p>
 
-This is the first workflow that uses a model. SmolVLM reads the simulated
-camera images and instruction, then proposes robot sub-goals. The first run downloads
-`HuggingFaceTB/SmolVLM-500M-Instruct`.
+The scripted expert reaches roughly 72% on this variant against about 95% on
+the single-cube task, because three cubes on the same table leave less grasp
+clearance.
 
-Install its optional dependencies first:
+Failed demonstrations are discarded by default. Add `--keep-failures` when
+you are analyzing failure cases.
+
+### Development inspection
 
 ```bash
-python -m pip install -e ".[smolvlm]"
+python scripts/workspace_map.py
+python scripts/show_ros2_contract.py
+python scripts/teleop_keyboard.py
+python scripts/export_scene.py --out outputs/scene_pick_place.xml
+python scripts/render_docs_media.py --only so101
 ```
+
+`teleop_keyboard.py` opens the MuJoCo viewer and exercises Cartesian jogging.
+`export_scene.py` writes a composed MJCF file; its relative mesh paths resolve
+from the SO-101 asset directory. `render_docs_media.py` re-renders the clips
+and screenshots this README embeds, which is also a quick way to eyeball
+whether a scene or camera change looks right.
+
+## Later-phase experiments
+
+The repository contains early data and model workflows so they can be tested
+against the shared contracts. They belong to the roadmap's later phases and
+are not required for the current Phase 1 baseline.
+
+### Phase 2: LeRobot and ACT
+
+Collect demonstrations and fine-tune an ACT policy after installing the VLA
+extra:
 
 ```bash
-python scripts/plan_task.py --planner smolvlm --dry-run
+python -m pip install -e ".[vla]"
+python scripts/train_act.py --dataset data/pickplace_v1 --steps 4000
+python scripts/eval_policy.py --policy lerobot \
+  --checkpoint outputs/act_ckpt --camera-size 128
 ```
 
-Use a different checkpoint or device:
+The training script stores the checkpoint and metadata under
+`outputs/act_ckpt` by default. Use the same square image size during training
+and evaluation to avoid an image distribution mismatch.
 
-```bash
-python scripts/plan_task.py \
-  --planner smolvlm \
-  --model HuggingFaceTB/SmolVLM-500M-Instruct \
-  --device cpu \
-  --dry-run
-```
+### Phase 3: VLM planning
 
-Use `--dry-run` first to inspect the generated sub-goals. Remove `--dry-run`
-to execute the plan in MuJoCo.
-
-### Check planner plumbing without a model
-
-This needs no model download and is useful for checking the planner-to-sim
-plumbing:
+Check the planner-to-simulator path without a model or API key:
 
 ```bash
 python scripts/plan_task.py --planner scripted --dry-run
 ```
 
-### Other tools
+SmolVLM produces visual sub-goals from simulated camera images. Install its
+extra and download the model before running it:
 
 ```bash
-python scripts/workspace_map.py
-python scripts/teleop_keyboard.py
-python scripts/show_ros2_contract.py
+python -m pip install -e ".[smolvlm]"
+python scripts/download_models.py --model smolvlm
+python scripts/plan_task.py --planner smolvlm --dry-run
 ```
 
-## Claude planner (optional)
+Use `--instruction`, `--save-plan`, and `--save-frames` to customize or
+inspect a planning run. A planner proposes sub-goals; it is not the low-level
+motor policy.
 
-Claude is still available as an alternative cloud planner:
+The distinction is visible on the sorting scene. Both runs below start from an
+identical cube layout and differ only in the instruction text, and the planner
+grounds the color word onto a different cube each time:
+
+| "put the **red** cube on the pad" | "put the **blue** cube on the pad" |
+| --- | --- |
+| <img src="docs/media/sorting/sorting_planner_red.gif" width="300" alt="Planner directing the arm to the red cube"> | <img src="docs/media/sorting/sorting_planner_blue.gif" width="300" alt="Planner directing the arm to the blue cube from the same starting layout"> |
+
+Sub-goal selection is where language grounding belongs in this architecture.
+The ACT policy in Phase 2 has no text input at all, so the same instruction
+swap leaves its behavior byte-for-byte identical.
+
+## Python API
+
+`physai.runtime.create_runtime` composes a registered robot, task, policy, and
+safety boundary:
+
+```python
+from physai.runtime import create_runtime
+
+runtime = create_runtime("so101", task_name="pick_place")
+observation = runtime.reset(seed=0)
+try:
+    # Pass actions from a policy or resolver here.
+    pass
+finally:
+    runtime.close()
+```
+
+For the multi-object sorting task, select the matching scene explicitly:
+
+```python
+runtime = create_runtime(
+    "so101",
+    scene_name="sorting_minimal",
+    task_name="sorting",
+)
+```
+
+## Optional models and APIs
+
+Model snapshots are downloaded into the ignored local `models/` directory.
+Install the extra for the workflow you intend to use:
 
 ```bash
+# SmolVLM planner
+python -m pip install -e ".[smolvlm]"
+python scripts/download_models.py --model smolvlm
+
+# LeRobot/VLA support
+python -m pip install -e ".[vla]"
+python scripts/download_models.py --model smolvla
+python scripts/download_models.py --model turbovla
+```
+
+The downloader also accepts a custom Hugging Face repository:
+
+```bash
+python -m pip install huggingface-hub
+python scripts/download_models.py --repo org/model --name my_model
+```
+
+Copy `.env.example` to `.env` when using gated or private Hugging Face models,
+or when the anonymous download limit is reached. Claude is an optional cloud
+planner; install its extra and provide `ANTHROPIC_API_KEY` in the environment:
+
+```bash
+python -m pip install -e ".[vlm]"
 export ANTHROPIC_API_KEY="your-key"
 python scripts/plan_task.py --planner claude --dry-run
 ```
 
-SmolVLM and Claude are planners. They produce sub-goals; they are not the
-low-level motor policy. See [docs/architecture.md](docs/architecture.md) for
-the model roles, data format, ROS2 contract, and experiment notes.
+Do not commit `.env`, credentials, checkpoints, or downloaded assets.
 
-## Adding a new approach
+## ROS2 Jazzy
 
-Keep robot-specific code behind a robot factory and model-specific code behind
-a planner or policy adapter. The built-in SO-101 is registered in
-`src/physai/robots/registry.py`; planner backends are registered in
-`src/physai/planner/registry.py`.
+ROS2 integration targets Jazzy on Ubuntu 24.04. The repository's Docker image
+installs `ros-jazzy-ros-base`, `ros-jazzy-rviz2`, `ros-jazzy-ros2-control`, and
+`ros-jazzy-ros2-controllers`, then sources `/opt/ros/jazzy/setup.bash` when the
+container starts.
 
-For a new robot, implement the common `Observation`/`Action` environment
-surface, add a `RobotSpec`, and register its factory. For a new task, implement
-the `Task` interface and register it independently of the robot. For a new VLM,
-implement
-`Planner.plan()`, register the factory, and reuse the existing `Plan` contract.
-For a new action model, implement `Policy.act()` or extend the generic
-`LeRobotPolicy` adapter. The simulation scripts can then select the registered
-name with `--robot` or `--planner`; runtime code composes a registered task
-without changing robot code.
+For a host installation, follow the official
+[ROS2 Jazzy Ubuntu installation guide](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)
+before using ROS2 tools. Inspect the message-shaped contract without ROS2 by
+running:
 
-The detailed boundaries and migration guidance are in
-[docs/architecture.md](docs/architecture.md).
-
-## Project layout
-
-```text
-src/physai/     robot contracts, simulation, planners, policies, and control
-scripts/        commands for simulation, demos, evaluation, and inspection
-configs/        task and simulation configuration
-tests/          unit and simulation tests
-docs/           architecture and research notes
-assets/         downloaded robot files (ignored by Git)
-data/           recorded demonstrations (ignored by Git)
-outputs/        videos and generated plans (ignored by Git)
+```bash
+python scripts/show_ros2_contract.py
 ```
+
+The first synchronous MuJoCo bridge core is available as
+`physai.bridge.MuJoCoROSBridge`. It uses an injected transport, publishes
+joint states and rendered camera images, accepts joint trajectory and gripper
+commands, and applies the shared safety gate. A real `rclpy` node can be
+adapted with `RclpyTransport`; TF, CameraInfo, and TurtleBot4 mobile-base
+topics remain Phase 1 work.
+
+## Docker
+
+The helper chooses the GPU image by default. Select CPU mode while building on
+machines without the NVIDIA runtime:
+
+```bash
+python docker/container.py build --cpu
+python docker/container.py start
+python docker/container.py shell
+python docker/container.py stop
+```
+
+Use `build --gpu` for the CUDA image and `build --no-cache` to rebuild without
+cached layers. Rebuild to switch between GPU and CPU modes.
+
+## Generated files and licenses
+
+The following local directories are ignored by Git and Docker:
+
+- `assets/`: downloaded robot descriptions and meshes
+- `data/`: recorded demonstrations
+- `models/`: local model snapshots
+- `outputs/`: videos, plans, checkpoints, and evaluation artifacts
+
+The PhysAI Robot Starter source code is licensed under the Apache License 2.0.
+Downloaded robot assets, model checkpoints, and Python dependencies retain
+their original licenses. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+before redistributing downloaded artifacts. The TurtleBot4 model attribution
+is also documented there.
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md): runtime composition, module ownership,
+  contracts, and extension boundaries.
+- [Contributing](CONTRIBUTING.md): contribution workflow and commit format.
+- [Third-party notices](THIRD_PARTY_NOTICES.md): asset and model sources,
+  attribution, and license status.
+- [Agent guide](AGENTS.md): rules for coding agents working in this repository.
+- [Roadmap](ROADMAP.md): planned work and migration direction.
 
 ## Troubleshooting
 
-If Python cannot find the project package, activate `.venv` and run commands
-from the project root. If the simulator reports missing robot files, run:
+Run commands from the project root with `.venv` activated. If robot files are
+missing, fetch them again:
 
 ```bash
 python scripts/fetch_assets.py
 ```
 
-If you only want to test the simulator, use `--planner scripted`; it does not
-need SmolVLM, Claude, or an API key.
+For a simulator-only check, use `--policy constant` or the default scripted
+SO-101 policy. Neither requires SmolVLM, Claude, a model download, or an API
+key. If video encoding is unavailable, the simulator falls back to a GIF;
+installing `imageio-ffmpeg` enables MP4 output.
