@@ -7,6 +7,8 @@ operating guide, not a description of the runtime architecture.
 
 Keep each document focused on one audience:
 
+- All repository documentation must be written in English.
+
 - `README.md` is the user-facing setup and workflow guide.
 - `docs/ARCHITECTURE.md` is the internal design reference and the source of
   truth for module boundaries and contracts.
