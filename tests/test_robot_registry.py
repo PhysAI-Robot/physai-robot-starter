@@ -90,6 +90,58 @@ def test_turtlebot4_reset_is_deterministic_for_a_given_seed():
         env.close()
 
 
+def test_turtlebot4_stays_on_the_ground_while_driving():
+    """The upstream MJCF has no floor geom, so the base used to free-fall.
+
+    A single step still reports a positive height, which is why the original
+    smoke test passed while the robot was already falling. Drive it long
+    enough for the failure to be unambiguous.
+    """
+    from physai.contracts import Action, Twist, Vector3
+    from physai.robots import create_robot
+
+    env = create_robot("turtlebot4", render=False)
+    try:
+        env.reset(seed=0)
+        start_height = env.data.xpos[env._base_body_id][2]
+        action = Action(ee_twist=Twist(linear=Vector3(x=0.4), angular=Vector3(z=0.4)))
+        for _ in range(200):
+            env.step(action)
+        position = env.data.xpos[env._base_body_id]
+        assert abs(position[2] - start_height) < 0.1, (
+            f"base left the ground plane: z={position[2]}"
+        )
+        assert float(position[0] ** 2 + position[1] ** 2) ** 0.5 > 0.5, (
+            "commanded base velocity did not move the robot"
+        )
+    finally:
+        env.close()
+
+
+def test_turtlebot4_published_image_is_not_blank():
+    """`images` is an advertised capability, so it must carry actual pixels.
+
+    The model ships without lights or cameras, and MuJoCo's free camera does
+    not follow the base, so the published frame was uniformly black once the
+    robot drove away from the origin.
+    """
+    import numpy as np
+
+    from physai.contracts import Action, Twist, Vector3
+    from physai.robots import create_robot
+
+    env = create_robot("turtlebot4", render=True)
+    try:
+        env.reset(seed=0)
+        assert env.robot_spec.supports("images")
+        for _ in range(60):
+            env.step(Action(ee_twist=Twist(linear=Vector3(x=0.4), angular=Vector3(z=0.4))))
+        frame = env.observe().images["free"].data.astype(float)
+        assert frame.std() > 1.0, f"published frame is nearly uniform (std={frame.std()})"
+    finally:
+        env.close()
+
+
 def test_mujoco_robot_environments_share_simulation_lifecycle():
     from physai.robots.turtlebot import TurtleBot4Env
     from physai.sim import MuJoCoSimulationCore
