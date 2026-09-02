@@ -10,7 +10,7 @@ requires-python = ">=3.12,<3.13"
 license = { file = "LICENSE" }
 dependencies = [
     "mujoco>=3.2",
-    "numpy>=1.26",
+    "numpy>=2.5.2",
     "imageio>=2.34",
     "imageio-ffmpeg>=0.4.9",
     "PyYAML>=6.0",
