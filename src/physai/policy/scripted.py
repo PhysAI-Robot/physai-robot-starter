@@ -79,7 +79,8 @@ class ScriptedPickPlace(Policy):
         self._q_cmd: np.ndarray | None = None
         self._grip = self.cfg.gripper_open
         self._grasp_xy: np.ndarray | None = None
-        self._dt = getattr(env, "control_dt", 0.04)
+        control_hz = float(env.robot_spec.metadata.get("control_hz", 25.0))
+        self._dt = 1.0 / control_hz
         self._limiter = JointRateLimiter(self.cfg.max_joint_rate, self._dt)
 
     # -- lifecycle -----------------------------------------------------
@@ -103,6 +104,8 @@ class ScriptedPickPlace(Policy):
         """Waypoints address the *pinch centre*, not the EE site — the object
         must end up between the jaws, not on top of the fixed one."""
         res = self.kin.ik_pinch(target_xyz, TOP_DOWN, q_init=self._q_cmd)
+        if not res.converged:
+            return self._q_cmd
         return res.qpos
 
     def _waypoint(self) -> tuple[np.ndarray, float]:
@@ -185,7 +188,7 @@ class ScriptedPickPlace(Policy):
                 self._settle += 1
             if self._settle >= self.cfg.settle_steps:
                 self._advance()
-        elif reached or self._phase_steps >= self.cfg.max_phase_steps:
+        elif reached:
             self._advance()
 
         return Action(joint_position=self._q_cmd,

@@ -71,7 +71,7 @@ complete task and kinematics support.
 - [x] `src/physai/bridge/mujoco_ros_bridge.py`: Synchronous runtime MuJoCo bridge that publishes joint states and camera frames and accepts joint trajectory and gripper commands through an injected transport.
 - [ ] ROS 2 message adapters for `sensor_msgs/msg/JointState`, `sensor_msgs/msg/Image`, `trajectory_msgs/msg/JointTrajectory`, and the gripper command interface. **Partial:** codec and `RclpyTransport` adapters exist; a real ROS 2 node integration is still pending.
 - [ ] TF publication for the documented SO-101 frame tree.
-- [ ] Teleoperation path using a standard joint controller or equivalent test client.
+- [x] Teleoperation path using an equivalent ROS2-shaped joint and gripper test client; real `rclpy` node integration remains pending.
 - [x] Integration test for command-to-simulation and simulation-to-topic flow using the transport port and fake ROS 2 transport.
 
 #### Definition of Done
@@ -146,7 +146,7 @@ proven on the first two robots.
 
 ### Definition of Done (DoD)
 - [x] SO-101 and TurtleBot4 pass the deterministic contract, reset, and control regression suite. The current suite has 65 passing tests; task-level scripted success still needs stabilization.
-- [ ] SO-101 can be teleoperated through its ROS 2 joint and gripper interfaces.
+- [x] SO-101 can be teleoperated through its ROS 2-shaped joint and gripper interfaces; real `rclpy` node integration remains pending.
 - [ ] TurtleBot4 can navigate from Point A to Point B through the ROS 2/Nav2 path without collision in the deterministic test world.
 - [ ] SO-101 IK meets the documented position and orientation tolerances on reachable targets and rejects invalid targets safely.
 - [ ] Domain Randomization can be enabled or disabled through `configs/sim_config.yaml` without changing ROS 2 topic contracts.
