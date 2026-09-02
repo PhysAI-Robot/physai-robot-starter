@@ -45,8 +45,13 @@ class ManipulationSceneConfig(WorldSceneConfig):
     pad_align_gripper_q: float = 0.25
     static_pad_pos: tuple[float, float, float] = (-0.0090, -0.0050, -0.0935)
     moving_pad_pos: tuple[float, float, float] = (-0.0117, -0.0700, 0.0228)
-    wrist_cam_pos: tuple[float, float, float] = (0.0, -0.05, 0.03)
-    wrist_cam_xyaxes: tuple[float, ...] = (-1.0, 0.0, 0.0, 0.0, 0.7, 0.7)
+    # The wrist camera looks along -z of its own frame. With x = (-1, 0, 0) the
+    # derived view direction pointed backwards and up, away from the workspace,
+    # so this camera rendered a black frame for the whole episode. Negating the
+    # x axis flips the view onto the jaws and the object below them while
+    # keeping the original up vector, so the image is not also upside down.
+    wrist_cam_pos: tuple[float, float, float] = (0.0, -0.07, 0.05)
+    wrist_cam_xyaxes: tuple[float, ...] = (1.0, 0.0, 0.0, 0.0, 0.7, 0.7)
 
 
 # Compatibility name for callers from the original Phase 0 API. New code
