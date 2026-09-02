@@ -25,6 +25,8 @@ from ...sim.core import MuJoCoSimulationCore
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_MODEL = REPO_ROOT / "assets" / "turtlebot4" / "turtlebot4.xml"
+BASE_BODY = "base"
+CHASE_CAMERA = "physai_chase"
 
 
 @dataclass
@@ -37,6 +39,79 @@ class TurtleBot4Config:
     render: bool = False
     initial_pose: tuple[float, float, float] = (0.0, 0.0, 0.1)
     seed: int | None = None
+
+
+def _compile_scene(model_path: Path) -> mujoco.MjModel:
+    """Load the vendored TurtleBot4 MJCF and add what it needs to be usable.
+
+    The upstream model ships a worldbody containing only the robot: no floor
+    geom, no light, and no camera, while gravity stays enabled. Loaded as-is
+    the base free-falls forever (z reaches -1900 m within a few hundred steps)
+    and every rendered frame is black, so the advertised ``images`` capability
+    returns nothing. A smoke test that only checks "stepping does not raise"
+    does not catch either problem.
+
+    The asset is fetched into the git-ignored ``assets/`` directory, so these
+    additions are made here rather than by editing a third-party file that
+    re-fetching would overwrite. Each one is skipped when the upstream model
+    starts providing its own.
+    """
+    spec = mujoco.MjSpec.from_file(str(model_path))
+
+    has_plane = any(
+        geom.type == mujoco.mjtGeom.mjGEOM_PLANE
+        for body in spec.bodies
+        for geom in body.geoms
+    )
+    if not has_plane:
+        # A checker material, matching the SO-101 scene: on a uniform plane
+        # there is no visual reference, so a driving base looks stationary.
+        spec.add_texture(
+            name="physai_grid",
+            type=mujoco.mjtTexture.mjTEXTURE_2D,
+            builtin=mujoco.mjtBuiltin.mjBUILTIN_CHECKER,
+            rgb1=[0.22, 0.24, 0.28],
+            rgb2=[0.16, 0.18, 0.22],
+            width=300,
+            height=300,
+        )
+        spec.add_material(
+            name="physai_grid",
+            textures=["", "physai_grid"],
+            texuniform=True,
+            texrepeat=[6, 6],
+            reflectance=0.1,
+        )
+        spec.worldbody.add_geom(
+            name="physai_ground",
+            type=mujoco.mjtGeom.mjGEOM_PLANE,
+            size=[0, 0, 0.05],
+            pos=[0, 0, 0],
+            material="physai_grid",
+        )
+
+    if not spec.lights:
+        spec.worldbody.add_light(
+            name="physai_light",
+            pos=[0, 0, 3.0],
+            dir=[0, 0, -1],
+            type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL,
+            diffuse=[0.7, 0.7, 0.7],
+        )
+
+    if not spec.cameras:
+        # Position tracks the base centre of mass while the orientation stays
+        # fixed, so the robot stays framed wherever it drives.
+        spec.worldbody.add_camera(
+            name=CHASE_CAMERA,
+            mode=mujoco.mjtCamLight.mjCAMLIGHT_TRACKCOM,
+            targetbody=BASE_BODY,
+            pos=[-1.2, 0.0, 0.8],
+            xyaxes=[0.0, -1.0, 0.0, 0.482, 0.0, 0.876],
+            fovy=55,
+        )
+
+    return spec.compile()
 
 
 class TurtleBot4Env(MuJoCoSimulationCore):
@@ -53,7 +128,7 @@ class TurtleBot4Env(MuJoCoSimulationCore):
                 f"TurtleBot4 model missing: {self.cfg.model_path}. "
                 "Run `python scripts/fetch_assets.py --robot turtlebot4`."
             )
-        self.model = mujoco.MjModel.from_xml_path(str(self.cfg.model_path))
+        self.model = _compile_scene(self.cfg.model_path)
         self.model.opt.timestep = min(self.model.opt.timestep, 0.002)
         super().__init__(
             self.model,
@@ -64,7 +139,10 @@ class TurtleBot4Env(MuJoCoSimulationCore):
         )
         self.rng = np.random.default_rng(self.cfg.seed)
         self._actuator_ids = {self.model.actuator(i).name: i for i in range(self.model.nu)}
-        self._base_body_id = self.model.body("base").id
+        self._base_body_id = self.model.body(BASE_BODY).id
+        self._has_chase_camera = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_CAMERA, CHASE_CAMERA
+        ) >= 0
 
     @property
     def robot_spec(self) -> RobotSpec:
@@ -125,7 +203,14 @@ class TurtleBot4Env(MuJoCoSimulationCore):
     def render_camera(self, name: str = "free") -> np.ndarray:
         if self._renderer is None:
             raise RuntimeError("env constructed with render=False")
-        self._renderer.update_scene(self.data, camera=name if name != "free" else -1)
+        camera: str | int = name
+        if name == "free":
+            # MuJoCo's free camera is static, so the base drove out of frame
+            # within a couple of seconds and the published image went blank.
+            # `camera_frames` already declares this image to be in base_link,
+            # so resolve it to the base-tracking camera when one is available.
+            camera = CHASE_CAMERA if self._has_chase_camera else -1
+        self._renderer.update_scene(self.data, camera=camera)
         return self._renderer.render()
 
     def observe(self) -> Observation:
