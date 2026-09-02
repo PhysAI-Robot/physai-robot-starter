@@ -1,0 +1,15 @@
+{
+  "explorer.excludeGitIgnore": false,
+  "explorer.decorations.colors": true,
+  "explorer.decorations.badges": true,
+  "git.decorations.enabled": true,
+  "python.testing.pytestArgs": [
+    "tests",
+    "-p",
+    "no:launch_testing",
+    "-p",
+    "no:launch_ros"
+  ],
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true
+}
