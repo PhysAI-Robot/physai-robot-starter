@@ -1,13 +1,152 @@
+import pytest
+
+
+class RecordingTransport:
+    def __init__(self):
+        self.messages = []
+        self.subscriptions = {}
+        self.closed = False
+
+    def publish(self, topic, message):
+        self.messages.append((topic, message))
+
+    def subscribe(self, topic, callback):
+        self.subscriptions[topic] = callback
+
+    def close(self):
+        self.closed = True
+
+
 def test_so101_is_registered():
-    from physai.robots import available_robots, create_robot
+    from physai.robots import DirectMuJoCoAdapter, available_robots, create_robot
 
     assert "so101" in available_robots()
     env = create_robot("so101", render=False)
     try:
+        assert isinstance(env, DirectMuJoCoAdapter)
         assert env.robot_spec.name == "so101"
         assert env.robot_spec.kind == "fixed_base_manipulator"
     finally:
         env.close()
+
+
+def test_so101_environment_is_owned_by_robot_package():
+    from physai.robots.so101 import EnvConfig, SO101Env
+    import physai.sim as sim
+
+    env = SO101Env(EnvConfig(render=False))
+    try:
+        assert SO101Env.__module__ == "physai.robots.so101.env"
+        assert not hasattr(env, "task")
+    finally:
+        env.close()
+    assert not hasattr(sim, "SO101Env")
+
+
+def test_turtlebot4_is_registered_and_uses_twist_control():
+    import numpy as np
+
+    from physai.contracts import Action, Twist, Vector3
+    from physai.robots import available_robots, create_robot
+
+    assert "turtlebot4" in available_robots()
+    env = create_robot("turtlebot4", control_hz=10.0)
+    try:
+        obs = env.reset()
+        assert env.robot_spec.name == "turtlebot4"
+        assert env.robot_spec.kind == "mobile_base"
+        assert env.robot_spec.supports("base_velocity", "odometry")
+        assert not env.robot_spec.supports("arm_kinematics")
+        assert env.robot_spec.action_modes == ("twist",)
+        obs, _, _, _, _ = env.step(Action(ee_twist=Twist(linear=Vector3(x=0.2))))
+        assert obs.step == 1
+        assert env.model.nu == 3
+        assert obs.ee_pose.pose.position.z > 0.0
+        assert np.all(obs.joint_state.position > 0.0)
+        assert np.all(obs.joint_state.velocity > 0.0)
+    finally:
+        env.close()
+
+
+def test_turtlebot4_reset_is_deterministic_for_a_given_seed():
+    import numpy as np
+
+    from physai.robots import create_robot
+
+    env = create_robot("turtlebot4", render=False)
+    try:
+        first = env.reset(seed=7)
+        second = env.reset(seed=7)
+        np.testing.assert_allclose(
+            first.joint_state.position, second.joint_state.position
+        )
+        np.testing.assert_allclose(
+            first.ee_pose.pose.position.as_array(),
+            second.ee_pose.pose.position.as_array(),
+        )
+        assert first.step == second.step == 0
+        assert first.sim_time == second.sim_time == 0.0
+    finally:
+        env.close()
+
+
+def test_turtlebot4_stays_on_the_ground_while_driving():
+    """The upstream MJCF has no floor geom, so the base used to free-fall.
+
+    A single step still reports a positive height, which is why the original
+    smoke test passed while the robot was already falling. Drive it long
+    enough for the failure to be unambiguous.
+    """
+    from physai.contracts import Action, Twist, Vector3
+    from physai.robots import create_robot
+
+    env = create_robot("turtlebot4", render=False)
+    try:
+        env.reset(seed=0)
+        start_height = env.data.xpos[env._base_body_id][2]
+        action = Action(ee_twist=Twist(linear=Vector3(x=0.4), angular=Vector3(z=0.4)))
+        for _ in range(200):
+            env.step(action)
+        position = env.data.xpos[env._base_body_id]
+        assert abs(position[2] - start_height) < 0.1, (
+            f"base left the ground plane: z={position[2]}"
+        )
+        assert float(position[0] ** 2 + position[1] ** 2) ** 0.5 > 0.5, (
+            "commanded base velocity did not move the robot"
+        )
+    finally:
+        env.close()
+
+
+def test_turtlebot4_published_image_is_not_blank():
+    """`images` is an advertised capability, so it must carry actual pixels.
+
+    The model ships without lights or cameras, and MuJoCo's free camera does
+    not follow the base, so the published frame was uniformly black once the
+    robot drove away from the origin.
+    """
+    import numpy as np
+
+    from physai.contracts import Action, Twist, Vector3
+    from physai.robots import create_robot
+
+    env = create_robot("turtlebot4", render=True)
+    try:
+        env.reset(seed=0)
+        assert env.robot_spec.supports("images")
+        for _ in range(60):
+            env.step(Action(ee_twist=Twist(linear=Vector3(x=0.4), angular=Vector3(z=0.4))))
+        frame = env.observe().images["free"].data.astype(float)
+        assert frame.std() > 1.0, f"published frame is nearly uniform (std={frame.std()})"
+    finally:
+        env.close()
+
+
+def test_mujoco_robot_environments_share_simulation_lifecycle():
+    from physai.robots.turtlebot import TurtleBot4Env
+    from physai.sim import MuJoCoSimulationCore
+
+    assert issubclass(TurtleBot4Env, MuJoCoSimulationCore)
 
 
 def test_unknown_robot_lists_available_robots():
@@ -17,6 +156,381 @@ def test_unknown_robot_lists_available_robots():
 
     with pytest.raises(ValueError, match="so101"):
         create_robot("does-not-exist")
+
+
+def test_robot_spec_validates_action_mode_shape_and_values():
+    import numpy as np
+    import pytest
+
+    from physai.contracts import Action, Twist
+    from physai.robots import RobotSpec
+
+    spec = RobotSpec(
+        name="test_arm",
+        kind="manipulator",
+        action_joint_names=("joint_a", "joint_b"),
+        action_modes=("joint_position",),
+    )
+    with pytest.raises(ValueError, match="expects 2 joint targets"):
+        spec.validate_action(Action(joint_position=np.zeros(1)))
+    with pytest.raises(ValueError, match="does not support action mode 'twist'"):
+        spec.validate_action(Action(ee_twist=Twist()))
+    with pytest.raises(ValueError, match="non-finite"):
+        spec.validate_action(Action(joint_position=np.array([0.0, np.nan])))
+
+
+def test_so101_ros2_mujoco_adapter_publishes_contract_topics():
+    from physai.robots import create_robot
+
+    transport = RecordingTransport()
+    env = create_robot("so101", adapter="ros2_mujoco", transport=transport,
+                       render=False)
+    try:
+        env.reset(seed=0)
+        topics = [topic for topic, _ in transport.messages]
+        assert "/joint_states" in topics
+        assert "/camera/front/image_raw" not in topics
+        assert env.robot_spec.name == "so101"
+    finally:
+        env.close()
+    assert transport.closed
+
+
+def test_ros2_mujoco_adapter_subscribes_and_assembles_commands():
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from physai.robots import create_robot
+
+    transport = RecordingTransport()
+    env = create_robot("so101", adapter="ros2_mujoco", transport=transport,
+                       render=False)
+    try:
+        assert {
+            "/arm_controller/joint_trajectory",
+            "/gripper_controller/gripper_cmd",
+        } <= set(transport.subscriptions)
+        trajectory = SimpleNamespace(
+            joint_names=("shoulder_pan", "shoulder_lift", "elbow_flex",
+                         "wrist_flex", "wrist_roll"),
+            points=[SimpleNamespace(positions=[0.1, -0.9, 1.1, 0.7, 0.0])],
+        )
+        gripper = SimpleNamespace(
+            command=SimpleNamespace(position=0.3, max_effort=2.0)
+        )
+        transport.subscriptions["/arm_controller/joint_trajectory"](trajectory)
+        transport.subscriptions["/gripper_controller/gripper_cmd"](gripper)
+
+        action = env.pending_action()
+        assert action is not None
+        np.testing.assert_allclose(action.joint_position,
+                                   [0.1, -0.9, 1.1, 0.7, 0.0])
+        assert action.joint_names == trajectory.joint_names
+        assert action.gripper.position == 0.3
+    finally:
+        env.close()
+
+
+def test_ros2_mujoco_teleop_command_moves_so101():
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from physai.robots import create_robot
+
+    transport = RecordingTransport()
+    env = create_robot("so101", adapter="ros2_mujoco", transport=transport,
+                       render=False)
+    try:
+        observation = env.reset(seed=42)
+        initial_position = observation.joint_state.position[:5].copy()
+        initial_gripper = observation.joint_state.position[5]
+        trajectory = SimpleNamespace(
+            joint_names=("shoulder_pan", "shoulder_lift", "elbow_flex",
+                         "wrist_flex", "wrist_roll"),
+            points=[SimpleNamespace(positions=[0.2, -0.8, 1.0, 0.5, 0.1])],
+        )
+        gripper = SimpleNamespace(
+            command=SimpleNamespace(position=0.2, max_effort=2.0)
+        )
+        transport.subscriptions["/arm_controller/joint_trajectory"](trajectory)
+        transport.subscriptions["/gripper_controller/gripper_cmd"](gripper)
+
+        for _ in range(30):
+            action = env.pending_action()
+            assert action is not None
+            observation, *_ = env.step(action)
+
+        np.testing.assert_allclose(
+            observation.joint_state.position[:5],
+            trajectory.points[0].positions,
+            atol=0.05,
+        )
+        assert not np.allclose(
+            observation.joint_state.position[:5], initial_position
+        )
+        assert not np.isclose(observation.joint_state.position[5], initial_gripper)
+    finally:
+        env.close()
+
+
+def test_mujoco_ros_bridge_ticks_the_latest_ros2_command():
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from physai.bridge import MuJoCoROSBridge
+    from physai.contracts import Header, JointState, Observation
+    from physai.robots import RobotSpec
+
+    class FakeSimulation:
+        robot_spec = RobotSpec(
+            name="arm",
+            kind="fixed_base_manipulator",
+            joint_names=("joint",),
+            action_joint_names=("joint",),
+            metadata={"control_hz": 20.0},
+            joint_state_frame="base",
+        )
+
+        def __init__(self):
+            self.steps = 0
+            self.observation = Observation(
+                joint_state=JointState(
+                    name=("joint",),
+                    position=np.zeros(1),
+                    velocity=np.zeros(1),
+                    effort=np.zeros(1),
+                    header=Header(stamp=0.0, frame_id="base"),
+                )
+            )
+
+        def reset(self, seed=None):
+            del seed
+            return self.observation
+
+        def observe(self):
+            return self.observation
+
+        def send_action(self, action):
+            self.robot_spec.validate_action(action)
+
+        def step(self, action):
+            self.send_action(action)
+            self.steps += 1
+            return self.observation, 0.0, False, False, {}
+
+        def close(self):
+            pass
+
+    transport = RecordingTransport()
+    simulation = FakeSimulation()
+    bridge = MuJoCoROSBridge(simulation, transport)
+    try:
+        bridge.reset(seed=3)
+        trajectory = SimpleNamespace(
+            joint_names=("joint",),
+            points=[SimpleNamespace(positions=[0.25])],
+        )
+        transport.subscriptions["/arm_controller/joint_trajectory"](trajectory)
+
+        _, _, terminated, truncated, info = bridge.tick()
+
+        assert simulation.steps == 1
+        assert not terminated and not truncated
+        assert info == {}
+    finally:
+        bridge.close()
+
+
+def test_rclpy_transport_creates_and_cleans_up_ros_entities():
+    from physai.bridge import RclpyTransport
+
+    class Publisher:
+        def __init__(self):
+            self.messages = []
+
+        def publish(self, message):
+            self.messages.append(message)
+
+    class Node:
+        def __init__(self):
+            self.publishers = []
+            self.subscriptions = []
+            self.destroyed_publishers = []
+            self.destroyed_subscriptions = []
+
+        def create_publisher(self, message_type, topic, depth):
+            publisher = Publisher()
+            self.publishers.append((message_type, topic, depth, publisher))
+            return publisher
+
+        def create_subscription(self, message_type, topic, callback, depth):
+            subscription = (message_type, topic, callback, depth)
+            self.subscriptions.append(subscription)
+            return subscription
+
+        def destroy_publisher(self, publisher):
+            self.destroyed_publishers.append(publisher)
+
+        def destroy_subscription(self, subscription):
+            self.destroyed_subscriptions.append(subscription)
+
+    node = Node()
+    transport = RclpyTransport(node, {"/command": str})
+    transport.subscribe("/command", lambda _: None)
+    transport.publish("/state", 1)
+    transport.publish("/state", 2)
+    transport.close()
+
+    assert len(node.publishers) == 1
+    assert node.publishers[0][1] == "/state"
+    assert node.publishers[0][3].messages == [1, 2]
+    assert len(node.subscriptions) == 1
+    assert len(node.destroyed_publishers) == 1
+    assert len(node.destroyed_subscriptions) == 1
+
+
+def test_ros2_hardware_adapter_uses_shared_transport_boundary():
+    import numpy as np
+
+    from physai.bridge import ROS2HardwareAdapter
+    from physai.contracts import JointState, Observation
+    from physai.robots import RobotSpec
+
+    class FakeHardware:
+        robot_spec = RobotSpec(
+            name="hardware",
+            kind="fixed_base_manipulator",
+            joint_names=("joint",),
+            action_joint_names=("joint",),
+        )
+
+        def __init__(self):
+            self.observation = Observation(
+                joint_state=JointState(
+                    name=("joint",),
+                    position=np.zeros(1),
+                    velocity=np.zeros(1),
+                    effort=np.zeros(1),
+                )
+            )
+
+        def reset(self, seed=None):
+            del seed
+            return self.observation
+
+        def observe(self):
+            return self.observation
+
+        def send_action(self, action):
+            self.robot_spec.validate_action(action)
+
+        def step(self, action):
+            self.send_action(action)
+            return self.observation, 0.0, False, False, {}
+
+        def close(self):
+            pass
+
+    transport = RecordingTransport()
+    adapter = ROS2HardwareAdapter(FakeHardware(), transport)
+    adapter.reset()
+    adapter.close()
+
+    assert any(topic == "/joint_states" for topic, _ in transport.messages)
+    assert transport.closed
+
+
+def test_hardware_factory_does_not_construct_a_mujoco_environment(monkeypatch):
+    from physai.robots.so101 import factory
+    from physai.robots import RobotSpec
+
+    class FakeHardware:
+        robot_spec = RobotSpec(name="so101", kind="hardware")
+
+        def close(self):
+            pass
+
+    def fail_if_constructed(*args, **kwargs):
+        raise AssertionError("hardware adapter must not construct MuJoCo")
+
+    monkeypatch.setattr(factory, "SO101Env", fail_if_constructed)
+    transport = RecordingTransport()
+    adapter = factory.make_so101(
+        adapter="ros2_hardware",
+        transport=transport,
+        hardware=FakeHardware(),
+    )
+    adapter.close()
+
+    assert transport.closed
+
+
+def test_turtlebot4_rejects_the_arm_hardware_adapter(monkeypatch):
+    from physai.robots.turtlebot import factory
+
+    def fail_if_constructed(*args, **kwargs):
+        raise AssertionError("unsupported adapter must not construct MuJoCo")
+
+    monkeypatch.setattr(factory, "TurtleBot4Env", fail_if_constructed)
+    with pytest.raises(ValueError, match="not supported for turtlebot4"):
+        factory.make_turtlebot4(
+            adapter="ros2_hardware",
+            transport=RecordingTransport(),
+            hardware=object(),
+        )
+
+
+def test_ros2_message_codec_converts_observations():
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from physai.bridge import ROS2MessageCodec
+    from physai.contracts import Header, ImageFrame, JointState
+
+    class FakeTime:
+        sec = 0
+        nanosec = 0
+
+    class FakeJointState:
+        def __init__(self):
+            self.header = SimpleNamespace(stamp=FakeTime(), frame_id="")
+
+    class FakeImage:
+        pass
+
+    codec = ROS2MessageCodec(FakeJointState, FakeImage)
+    joints = codec.encode_joint_state(JointState(
+        name=("joint_a",),
+        position=[0.1],
+        velocity=[0.2],
+        effort=[0.3],
+        header=Header(stamp=12.25, frame_id="base"),
+    ))
+    image = codec.encode_image(ImageFrame(
+        data=np.zeros((2, 3, 3), dtype=np.uint8),
+        camera_name="front",
+        header=Header(stamp=12.25, frame_id="camera_front"),
+    ))
+
+    assert joints.name == ["joint_a"]
+    assert joints.position == [0.1]
+    assert joints.header.frame_id == "base"
+    assert (joints.header.stamp.sec, joints.header.stamp.nanosec) == (12, 250000000)
+    assert (image.height, image.width, image.encoding, image.step) == (2, 3, "rgb8", 9)
+    assert len(image.data) == 18
+
+
+def test_ros2_adapter_requires_transport():
+    import pytest
+
+    from physai.robots import create_robot
+
+    with pytest.raises(ValueError, match="requires a ROS2 transport"):
+        create_robot("so101", adapter="ros2_mujoco", render=False)
 
 
 def test_builtin_planners_are_discoverable():

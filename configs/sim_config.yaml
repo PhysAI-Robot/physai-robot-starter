@@ -1,0 +1,6 @@
+# Shared simulation defaults for the Phase 1 deterministic baseline.
+seed: 0
+
+domain_randomization:
+  # Keep the baseline reproducible until Phase 1E is implemented.
+  enabled: false

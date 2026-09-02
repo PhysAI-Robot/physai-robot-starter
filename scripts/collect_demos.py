@@ -17,12 +17,15 @@ import _bootstrap  # noqa: F401
 from physai.data import EpisodeRecorder
 from physai.policy import ScriptedPickPlace
 from physai.robots import available_robots, create_robot
-from physai.sim import EnvConfig, SceneConfig
+from physai.robots.so101 import EnvConfig
+from physai.sim import SceneConfig
+from physai.tasks import TaskRuntime, create_task
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--robot", default="so101", choices=available_robots())
+    ap.add_argument("--robot", default="so101", choices=["so101"],
+                    help="collect_demos currently supports the SO-101 manipulation workflow")
     ap.add_argument("--episodes", type=int, default=20)
     ap.add_argument("--out", type=Path, default=Path("data/pickplace_v1"))
     ap.add_argument("--seed", type=int, default=0)
@@ -33,12 +36,26 @@ def main() -> int:
     ap.add_argument("--no-images", action="store_true",
                     help="record state/action only (much smaller files)")
     ap.add_argument("--task", default="put the red cube on the green pad")
+    ap.add_argument("--sorting", action="store_true",
+                    help="3-cube color sorting variant. --task becomes a "
+                         "per-episode instruction naming the randomly chosen "
+                         "target color, e.g. 'put the blue cube on the green pad'.")
     args = ap.parse_args()
 
-    env = create_robot(args.robot, config=EnvConfig(
-        scene=SceneConfig(camera_width=args.width, camera_height=args.height),
-        seed=args.seed, max_steps=args.max_steps, render=not args.no_images,
+    scene_kwargs = {"camera_width": args.width, "camera_height": args.height}
+    env_kwargs = {"seed": args.seed, "max_steps": args.max_steps, "render": not args.no_images}
+    if args.sorting:
+        # Task selection moved onto TaskRuntime below; EnvConfig no longer
+        # carries a `task` field, so setting one here raised a TypeError and
+        # made --sorting unusable.
+        scene_kwargs["num_cubes"] = 3
+    robot = create_robot(args.robot, config=EnvConfig(
+        scene=SceneConfig(**scene_kwargs), **env_kwargs,
     ))
+    env = TaskRuntime(
+        robot,
+        create_task("sorting" if args.sorting else "pick_place"),
+    )
     rec = EpisodeRecorder(args.out, task=args.task, fps=env.cfg.control_hz,
                           store_images=not args.no_images)
 
@@ -47,6 +64,8 @@ def main() -> int:
         seed = args.seed + attempted
         attempted += 1
         obs = env.reset(seed=seed)
+        if args.sorting:
+            rec.task = f"put the {env.target_color} cube on the green pad"
         policy = ScriptedPickPlace(env.kin, env)
         policy.reset(obs)
         rec.start_episode()

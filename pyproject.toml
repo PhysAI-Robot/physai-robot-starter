@@ -6,7 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "physai"
 version = "0.0.1"
 description = "Phase 0 starter: SO-101 arm in MuJoCo with VLM planner + VLA policy seams"
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.13"
+license = { file = "LICENSE" }
 dependencies = [
     "mujoco>=3.2",
     "numpy>=1.26",
@@ -17,9 +18,9 @@ dependencies = [
 
 [project.optional-dependencies]
 vlm = ["anthropic>=0.40"]
-smolvlm = ["torch>=2.4", "transformers>=4.45", "Pillow>=10.0"]
+smolvlm = ["torch>=2.4", "transformers>=4.45", "Pillow>=10.0", "huggingface-hub>=0.24"]
 vla = ["torch>=2.4", "lerobot"]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "lark>=1.2"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

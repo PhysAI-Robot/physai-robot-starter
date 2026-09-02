@@ -86,11 +86,19 @@ def main() -> int:
     # would silently clobber this one. Learned by having it happen: the
     # loader read the ACTConfig dump instead, image_size came back None, and
     # LeRobotPolicy._resize() quietly skipped resizing for every inference call.
+    # The training seeds are recorded so evaluation can tell whether it is
+    # measuring generalisation or reciting the training set. Without this a
+    # sorting run was evaluated on seeds 0-19 while training had consumed
+    # 0-65, and the resulting 70% was mostly memorised layouts.
+    train_seeds = sorted(
+        e["seed"] for e in meta.get("episodes", []) if e.get("seed") is not None
+    )
     with (args.out / "training_meta.json").open("w", encoding="utf-8") as f:
         json.dump({
             "chunk_size": args.chunk_size, "image_size": args.image_size,
             "task": task, "steps": args.steps, "batch_size": args.batch_size,
             "lr": args.lr, "device": args.device,
+            "dataset": str(args.dataset), "train_seeds": train_seeds,
         }, f, indent=2)
 
     preprocessor, postprocessor = make_act_pre_post_processors(cfg, dataset_stats=stats.per_key)

@@ -13,10 +13,13 @@ same type regardless of which layer produced the command.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 
 from ..contracts import Action, GripperCommand, JointState, PoseStamped, Twist
-from ..robots.so101.kinematics import TOP_DOWN, ArmKinematics
+from ..robots.base import KinematicsPort
+from ..robots.so101.kinematics import TOP_DOWN
 
 
 class JointRateLimiter:
@@ -49,7 +52,7 @@ class WaypointResolver:
 
     def __init__(
         self,
-        kin: ArmKinematics,
+        kin: KinematicsPort,
         rate_limiter: JointRateLimiter | None = None,
         approach_dir=TOP_DOWN,
     ) -> None:
@@ -84,14 +87,17 @@ class TwistToJointResolver:
 
     def __init__(
         self,
-        kin: ArmKinematics,
-        data,
+        kin: KinematicsPort,
+        data=None,
         dt: float = 0.04,
         damping: float = 0.08,
         max_joint_step: float = 0.08,
+        state_provider: Callable[[], object] | None = None,
     ) -> None:
+        if data is None and state_provider is None:
+            raise ValueError("provide data or state_provider for Jacobian evaluation")
         self.kin = kin
-        self.data = data
+        self._state_provider = state_provider or (lambda: data)
         self.dt = dt
         self.damping = damping
         self.max_joint_step = max_joint_step
@@ -102,7 +108,7 @@ class TwistToJointResolver:
         joint_state: JointState,
         gripper: GripperCommand | None = None,
     ) -> Action:
-        J = self.kin.site_jacobian(self.data)          # (6, 5)
+        J = self.kin.site_jacobian(self._state_provider())
         v = twist.as_array()                           # (6,)
         JJt = J @ J.T + (self.damping ** 2) * np.eye(6)
         dq = J.T @ np.linalg.solve(JJt, v) * self.dt

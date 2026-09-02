@@ -22,6 +22,25 @@ def test_scene_has_the_task_objects_and_cameras():
 
 
 @requires_assets
+def test_task_specific_scene_configs_have_separate_object_layouts():
+    import mujoco
+
+    from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig, build_model
+
+    pick_model, _ = build_model(PickPlaceMinimalSceneConfig())
+    sorting_model, _ = build_model(SortingMinimalSceneConfig())
+    body_names = lambda model: {
+        mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, index)
+        for index in range(model.nbody)
+    }
+
+    assert "cube" in body_names(pick_model)
+    assert not {"cube_red", "cube_blue", "cube_yellow"} & body_names(pick_model)
+    assert {"cube_red", "cube_blue", "cube_yellow"} <= body_names(sorting_model)
+    assert "cube" not in body_names(sorting_model)
+
+
+@requires_assets
 def test_table_does_not_intersect_the_robot_base():
     # An overlapping slab silently jams shoulder_pan against its force limit,
     # which looks like a broken IK solver rather than a broken scene.
@@ -86,6 +105,86 @@ def test_ik_pinch_puts_the_object_between_the_jaws_not_on_the_site(env):
     assert np.linalg.norm(pinch - target) < 0.015
     # The site itself must NOT be on the object, or the fixed jaw is inside it.
     assert np.linalg.norm(site - target) > 0.008
+
+
+@requires_assets
+def test_sorting_scene_has_three_colored_cubes():
+    import mujoco
+
+    from physai.sim import SceneConfig, build_model
+
+    model, _ = build_model(SceneConfig(num_cubes=3))
+    names = {mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, i) for i in range(model.nbody)}
+    assert {"cube_red", "cube_blue", "cube_yellow"} <= names
+    assert "cube" not in names
+
+
+@requires_assets
+def test_sorting_env_exposes_target_color_and_all_cube_positions():
+    from physai.robots.so101 import EnvConfig, SO101Env
+    from physai.sim import SceneConfig
+    from physai.tasks import TaskRuntime, create_task
+
+    robot = SO101Env(EnvConfig(
+        scene=SceneConfig(num_cubes=3), render=False, max_steps=200,
+    ))
+    e = TaskRuntime(robot, create_task("sorting"))
+    try:
+        e.reset(seed=3)
+        assert e.target_color in {"red", "blue", "yellow"}
+        positions = e.cube_positions
+        assert set(positions) == {"red", "blue", "yellow"}
+        np.testing.assert_allclose(e.cube_pos, positions[e.target_color])
+    finally:
+        e.close()
+
+
+@requires_assets
+def test_both_observation_cameras_carry_signal():
+    """The wrist camera used to point away from the workspace.
+
+    It rendered a pure black frame for the whole episode, so every recorded
+    demonstration carried one informative view and one blank one while the
+    dataset still advertised two cameras.
+    """
+    from physai.robots.so101 import EnvConfig, SO101Env
+    from physai.sim import SceneConfig
+
+    robot = SO101Env(EnvConfig(
+        scene=SceneConfig(camera_width=128, camera_height=128),
+        seed=0, render=True, max_steps=200,
+    ))
+    try:
+        robot.reset(seed=0)
+        for name in ("front", "wrist"):
+            frame = robot.render_camera(name).astype(float)
+            # At this pose the misaimed wrist camera measured std 6.4 against
+            # 84.5 once aimed correctly, and the front camera sits at 74.8.
+            assert frame.std() > 20.0, f"{name} camera is nearly uniform (std={frame.std()})"
+    finally:
+        robot.close()
+
+
+@requires_assets
+def test_wrist_camera_looks_toward_the_object_it_is_grasping():
+    """Guards the sign error directly: the view axis pointed 180 degrees off."""
+    import mujoco
+
+    from physai.robots.so101 import EnvConfig, SO101Env
+    from physai.tasks import TaskRuntime, create_task
+
+    robot = SO101Env(EnvConfig(seed=0, render=False, max_steps=200))
+    e = TaskRuntime(robot, create_task("pick_place"))
+    try:
+        e.reset(seed=0)
+        cam = mujoco.mj_name2id(robot.model, mujoco.mjtObj.mjOBJ_CAMERA, "wrist")
+        # A MuJoCo camera looks along the negative z axis of its own frame.
+        view = -robot.data.cam_xmat[cam].reshape(3, 3)[:, 2]
+        to_cube = e.cube_pos - robot.data.cam_xpos[cam]
+        to_cube /= np.linalg.norm(to_cube)
+        assert float(view @ to_cube) > 0.5, "wrist camera faces away from the cube"
+    finally:
+        e.close()
 
 
 @requires_assets

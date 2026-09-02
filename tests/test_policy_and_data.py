@@ -75,6 +75,32 @@ def test_recorder_writes_lerobot_shaped_arrays(env, tmp_path):
     assert np.abs(data["action"]).max() < 4.0
 
 
+def test_recorder_accepts_twist_actions(tmp_path):
+    from physai.contracts import Action, JointState, Observation, Twist, Vector3
+    from physai.data import EpisodeRecorder, load_episode
+
+    observation = Observation(
+        joint_state=JointState(
+            name=("left_wheel", "right_wheel"),
+            position=np.zeros(2),
+            velocity=np.zeros(2),
+            effort=np.zeros(2),
+        ),
+    )
+    action = Action(ee_twist=Twist(linear=Vector3(x=0.2)))
+    recorder = EpisodeRecorder(tmp_path, robot_type="turtlebot4",
+                               store_images=False)
+    recorder.start_episode()
+    recorder.record(observation, action)
+    path = recorder.end_episode(success=False)
+    recorder.write_meta()
+
+    data = load_episode(path)
+    assert data["observation.state"].shape == (1, 2)
+    assert data["action"].shape == (1, 6)
+    assert '"robot_type": "turtlebot4"' in (tmp_path / "meta.json").read_text()
+
+
 @requires_assets
 def test_replay_policy_reproduces_recorded_actions(env):
     from physai.policy import ReplayPolicy

@@ -17,16 +17,18 @@ import _bootstrap  # noqa: F401
 import numpy as np
 
 from physai.data import load_episode
-from physai.policy import ConstantPolicy, ReplayPolicy, ScriptedPickPlace
+from physai.policy import available_policies, create_policy
 from physai.robots import available_robots, create_robot
-from physai.sim import EnvConfig
+from physai.robots.so101 import EnvConfig
+from physai.sim import SceneConfig
+from physai.tasks import TaskRuntime, create_task
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--robot", default="so101", choices=available_robots())
-    ap.add_argument("--policy", default="scripted",
-                    choices=["scripted", "constant", "replay", "lerobot"])
+    ap.add_argument("--robot", default="so101", choices=["so101"],
+                    help="eval_policy currently supports the SO-101 manipulation workflow")
+    ap.add_argument("--policy", default="scripted", choices=available_policies())
     ap.add_argument("--episodes", type=int, default=20)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--max-steps", type=int, default=600)
@@ -37,11 +39,34 @@ def main() -> int:
                          "checkpoint's training size internally)")
     ap.add_argument("--render", action="store_true",
                     help="render cameras (slower; needed for image-conditioned policies)")
+    ap.add_argument("--sorting", action="store_true",
+                    help="evaluate the three-cube sorting task instead of pick-and-place, "
+                         "matching `collect_demos.py --sorting`")
     ap.add_argument("--json-out", type=Path, help="write full per-episode results as JSON")
     args = ap.parse_args()
 
-    env = create_robot(args.robot, config=EnvConfig(seed=args.seed, max_steps=args.max_steps,
-                                                    render=args.render))
+    # An image-conditioned policy cannot run without rendered cameras, and it
+    # must see them at the resolution --camera-size asks for. Both were lost
+    # when env construction moved behind create_robot(): render defaulted to
+    # --render alone (so `--policy lerobot` died on an empty images dict) and
+    # --camera-size stopped reaching SceneConfig entirely.
+    needs_images = args.policy == "lerobot"
+    scene_kwargs = {"camera_width": args.camera_size, "camera_height": args.camera_size}
+    if args.sorting:
+        scene_kwargs["num_cubes"] = 3
+    robot = create_robot(
+        args.robot,
+        config=EnvConfig(
+            scene=SceneConfig(**scene_kwargs),
+            seed=args.seed,
+            max_steps=args.max_steps,
+            render=args.render or needs_images,
+        ),
+    )
+    env = TaskRuntime(
+        robot,
+        create_task("sorting" if args.sorting else "pick_place"),
+    )
 
     episodes = None
     if args.policy == "replay":
@@ -57,15 +82,36 @@ def main() -> int:
     if args.policy == "lerobot" and not args.checkpoint:
         ap.error("--policy lerobot needs --checkpoint")
 
+    # Evaluating on seeds the policy trained on measures recall, not
+    # generalisation, and the two can differ by a lot: a sorting checkpoint
+    # scored 70% on seeds that were 80% training layouts and 10% on held-out
+    # ones. Checkpoints written before train_seeds was recorded simply skip
+    # this check.
+    if args.policy == "lerobot":
+        import json
+
+        meta_path = args.checkpoint / "training_meta.json"
+        if meta_path.exists():
+            train_seeds = set(
+                json.loads(meta_path.read_text(encoding="utf-8")).get("train_seeds") or []
+            )
+            overlap = sorted(train_seeds & set(range(args.seed, args.seed + args.episodes)))
+            if overlap:
+                print(f"WARNING: {len(overlap)}/{args.episodes} evaluation seeds were in "
+                      f"this checkpoint's training set {overlap[:8]}"
+                      f"{'...' if len(overlap) > 8 else ''}\n"
+                      f"         This measures memorisation, not generalisation. "
+                      f"Pick a --seed beyond {max(train_seeds)}.")
+
     # Built once outside the loop where possible — reloading the checkpoint
     # from disk per episode would dominate wall-clock time for no reason.
     reusable_policy = None
-    if args.policy == "scripted":
-        reusable_policy = ScriptedPickPlace(env.kin, env)
-    elif args.policy == "constant":
-        reusable_policy = ConstantPolicy()
-    elif args.policy == "lerobot":
-        reusable_policy = LeRobotPolicy.from_checkpoint(env, args.checkpoint)
+    if args.policy != "replay":
+        reusable_policy = create_policy(
+            args.policy,
+            env=env,
+            checkpoint=args.checkpoint,
+        )
 
     results = []
     for ep in range(args.episodes):
@@ -73,7 +119,7 @@ def main() -> int:
             entry = episodes[ep % len(episodes)]
             data = load_episode(args.dataset / entry["file"])
             seed = entry.get("seed", args.seed + ep)
-            policy = ReplayPolicy(env, data["action"])
+            policy = create_policy("replay", env=env, actions=data["action"])
         else:
             seed = args.seed + ep
             policy = reusable_policy
@@ -93,6 +139,9 @@ def main() -> int:
             "steps": env.step_count,
             "return": total,
             "dist_cube_target": info["dist_cube_target"],
+            # Which cube the episode asked for, so a per-color breakdown is
+            # possible after the fact. ACT never receives this.
+            **({"target_color": info["target_color"]} if args.sorting else {}),
         })
         print(f"ep {ep:3d} seed={seed:<5d} success={results[-1]['success']!s:<5} "
               f"steps={env.step_count:<4d} return={total:7.2f} "
@@ -111,6 +160,7 @@ def main() -> int:
         args.json_out.parent.mkdir(parents=True, exist_ok=True)
         args.json_out.write_text(json.dumps({
             "policy": args.policy,
+            "task": "sorting" if args.sorting else "pick_place",
             "checkpoint": str(args.checkpoint) if args.checkpoint else None,
             "episodes": args.episodes,
             "seed": args.seed,
