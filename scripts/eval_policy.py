@@ -39,6 +39,9 @@ def main() -> int:
                          "checkpoint's training size internally)")
     ap.add_argument("--render", action="store_true",
                     help="render cameras (slower; needed for image-conditioned policies)")
+    ap.add_argument("--sorting", action="store_true",
+                    help="evaluate the three-cube sorting task instead of pick-and-place, "
+                         "matching `collect_demos.py --sorting`")
     ap.add_argument("--json-out", type=Path, help="write full per-episode results as JSON")
     args = ap.parse_args()
 
@@ -48,11 +51,13 @@ def main() -> int:
     # --render alone (so `--policy lerobot` died on an empty images dict) and
     # --camera-size stopped reaching SceneConfig entirely.
     needs_images = args.policy == "lerobot"
+    scene_kwargs = {"camera_width": args.camera_size, "camera_height": args.camera_size}
+    if args.sorting:
+        scene_kwargs["num_cubes"] = 3
     robot = create_robot(
         args.robot,
         config=EnvConfig(
-            scene=SceneConfig(camera_width=args.camera_size,
-                              camera_height=args.camera_size),
+            scene=SceneConfig(**scene_kwargs),
             seed=args.seed,
             max_steps=args.max_steps,
             render=args.render or needs_images,
@@ -60,7 +65,7 @@ def main() -> int:
     )
     env = TaskRuntime(
         robot,
-        create_task("pick_place"),
+        create_task("sorting" if args.sorting else "pick_place"),
     )
 
     episodes = None
@@ -113,6 +118,9 @@ def main() -> int:
             "steps": env.step_count,
             "return": total,
             "dist_cube_target": info["dist_cube_target"],
+            # Which cube the episode asked for, so a per-color breakdown is
+            # possible after the fact. ACT never receives this.
+            **({"target_color": info["target_color"]} if args.sorting else {}),
         })
         print(f"ep {ep:3d} seed={seed:<5d} success={results[-1]['success']!s:<5} "
               f"steps={env.step_count:<4d} return={total:7.2f} "
@@ -131,6 +139,7 @@ def main() -> int:
         args.json_out.parent.mkdir(parents=True, exist_ok=True)
         args.json_out.write_text(json.dumps({
             "policy": args.policy,
+            "task": "sorting" if args.sorting else "pick_place",
             "checkpoint": str(args.checkpoint) if args.checkpoint else None,
             "episodes": args.episodes,
             "seed": args.seed,

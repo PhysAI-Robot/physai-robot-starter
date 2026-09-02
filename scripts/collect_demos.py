@@ -45,8 +45,10 @@ def main() -> int:
     scene_kwargs = {"camera_width": args.width, "camera_height": args.height}
     env_kwargs = {"seed": args.seed, "max_steps": args.max_steps, "render": not args.no_images}
     if args.sorting:
+        # Task selection moved onto TaskRuntime below; EnvConfig no longer
+        # carries a `task` field, so setting one here raised a TypeError and
+        # made --sorting unusable.
         scene_kwargs["num_cubes"] = 3
-        env_kwargs["task"] = "sorting"
     robot = create_robot(args.robot, config=EnvConfig(
         scene=SceneConfig(**scene_kwargs), **env_kwargs,
     ))
