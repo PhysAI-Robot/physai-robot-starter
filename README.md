@@ -13,6 +13,19 @@ The shortest Phase 1 path is model-free: run the scripted SO-101
 pick-and-place baseline, inspect the contracts, then validate the ROS2 bridge
 when that integration is available.
 
+<p align="center">
+  <img src="docs/media/so101_pick_place.gif" width="420"
+       alt="SO-101 arm picking up a red cube and placing it on a green pad in MuJoCo">
+</p>
+
+<p align="center">
+  <em>The Phase 1 baseline: <code>python scripts/run_sim.py</code>, one scripted
+  pick-and-place episode, no model or API key involved.</em>
+</p>
+
+Every clip and screenshot below is a real simulator rollout at a fixed seed.
+Regenerate them all with `python scripts/render_docs_media.py`.
+
 ## Requirements
 
 - Ubuntu 24.04 LTS
@@ -79,16 +92,25 @@ training resolution, such as `128` or `224`.
 
 ## Current Phase 1 scope
 
+Two embodiments are supported, and they do not share an action space: the arm
+takes joint positions, the base takes a twist.
+
+| SO-101 | TurtleBot4 |
+| --- | --- |
+| <img src="docs/media/so101_pick_place.gif" width="330" alt="SO-101 arm performing scripted pick-and-place"> | <img src="docs/media/turtlebot4_drive.gif" width="330" alt="TurtleBot4 driving an arc across a checkered floor"> |
+| Scripted pick-and-place, joint-position control | Constant forward and yaw twist, differential drive |
+
 | Robot | Current baseline | Phase 1 direction |
 | --- | --- | --- |
 | SO-101 | Deterministic MuJoCo pick-and-place with scripted control | ROS2 joint, gripper, camera, and TF bridge |
 | TurtleBot4 | Deterministic MuJoCo base-velocity smoke test | ROS2 `/cmd_vel`, odometry, TF, and Nav2 foundation |
 
-The TurtleBot4 path is currently a generic control smoke test; navigation is a
-Phase 1 deliverable and is not implemented yet. The SO-101 ROS2 bridge,
-TurtleBot4 navigation path, and controlled domain randomization are also part
-of the active Phase 1 roadmap. Direct MuJoCo remains the fast local path and
-does not replace ROS2 integration validation.
+The TurtleBot4 path is currently a generic control smoke test, which is what
+its clip above shows; navigation is a Phase 1 deliverable and is not
+implemented yet. The SO-101 ROS2 bridge, TurtleBot4 navigation path, and
+controlled domain randomization are also part of the active Phase 1 roadmap.
+Direct MuJoCo remains the fast local path and does not replace ROS2
+integration validation.
 
 The planned progression is:
 
@@ -105,6 +127,21 @@ those phases. See [Roadmap](ROADMAP.md) for the scope and definition of done
 for each phase.
 
 ## Phase 1 workflows
+
+### What a policy observes
+
+The SO-101 publishes two camera views per step alongside joint state. Both are
+recorded into every demonstration and are the only inputs an image-conditioned
+policy receives; the scripted expert ignores them and reads cube pose straight
+from the simulator instead.
+
+| `front` | `wrist` |
+| --- | --- |
+| <img src="docs/media/so101_camera_front.png" width="300" alt="Front camera view of the arm, red cube, and green target pad"> | <img src="docs/media/so101_camera_wrist.png" width="300" alt="Wrist camera view looking down at the jaws closing on the red cube"> |
+| Fixed world view: arm, cube, and target pad | Gripper-mounted, looking down the approach axis |
+
+Both frames come from `observation.images` on the same timestep, captured here
+as the jaws close on the cube.
 
 ### Evaluate and replay
 
@@ -128,6 +165,15 @@ The sorting variant records three cubes and chooses a target color per episode:
 python scripts/collect_demos.py --sorting --episodes 50 --out data/sorting_v1
 ```
 
+<p align="center">
+  <img src="docs/media/sorting/sorting_scripted.gif" width="360"
+       alt="SO-101 arm selecting the blue cube from three colored cubes and placing it on the pad">
+</p>
+
+The scripted expert reaches roughly 72% on this variant against about 95% on
+the single-cube task, because three cubes on the same table leave less grasp
+clearance.
+
 Failed demonstrations are discarded by default. Add `--keep-failures` when
 you are analyzing failure cases.
 
@@ -138,11 +184,14 @@ python scripts/workspace_map.py
 python scripts/show_ros2_contract.py
 python scripts/teleop_keyboard.py
 python scripts/export_scene.py --out outputs/scene_pick_place.xml
+python scripts/render_docs_media.py --only so101
 ```
 
 `teleop_keyboard.py` opens the MuJoCo viewer and exercises Cartesian jogging.
 `export_scene.py` writes a composed MJCF file; its relative mesh paths resolve
-from the SO-101 asset directory.
+from the SO-101 asset directory. `render_docs_media.py` re-renders the clips
+and screenshots this README embeds, which is also a quick way to eyeball
+whether a scene or camera change looks right.
 
 ## Later-phase experiments
 
@@ -186,6 +235,18 @@ python scripts/plan_task.py --planner smolvlm --dry-run
 Use `--instruction`, `--save-plan`, and `--save-frames` to customize or
 inspect a planning run. A planner proposes sub-goals; it is not the low-level
 motor policy.
+
+The distinction is visible on the sorting scene. Both runs below start from an
+identical cube layout and differ only in the instruction text, and the planner
+grounds the color word onto a different cube each time:
+
+| "put the **red** cube on the pad" | "put the **blue** cube on the pad" |
+| --- | --- |
+| <img src="docs/media/sorting/sorting_planner_red.gif" width="300" alt="Planner directing the arm to the red cube"> | <img src="docs/media/sorting/sorting_planner_blue.gif" width="300" alt="Planner directing the arm to the blue cube from the same starting layout"> |
+
+Sub-goal selection is where language grounding belongs in this architecture.
+The ACT policy in Phase 2 has no text input at all, so the same instruction
+swap leaves its behavior byte-for-byte identical.
 
 ## Python API
 

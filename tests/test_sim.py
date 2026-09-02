@@ -140,6 +140,54 @@ def test_sorting_env_exposes_target_color_and_all_cube_positions():
 
 
 @requires_assets
+def test_both_observation_cameras_carry_signal():
+    """The wrist camera used to point away from the workspace.
+
+    It rendered a pure black frame for the whole episode, so every recorded
+    demonstration carried one informative view and one blank one while the
+    dataset still advertised two cameras.
+    """
+    from physai.robots.so101 import EnvConfig, SO101Env
+    from physai.sim import SceneConfig
+
+    robot = SO101Env(EnvConfig(
+        scene=SceneConfig(camera_width=128, camera_height=128),
+        seed=0, render=True, max_steps=200,
+    ))
+    try:
+        robot.reset(seed=0)
+        for name in ("front", "wrist"):
+            frame = robot.render_camera(name).astype(float)
+            # At this pose the misaimed wrist camera measured std 6.4 against
+            # 84.5 once aimed correctly, and the front camera sits at 74.8.
+            assert frame.std() > 20.0, f"{name} camera is nearly uniform (std={frame.std()})"
+    finally:
+        robot.close()
+
+
+@requires_assets
+def test_wrist_camera_looks_toward_the_object_it_is_grasping():
+    """Guards the sign error directly: the view axis pointed 180 degrees off."""
+    import mujoco
+
+    from physai.robots.so101 import EnvConfig, SO101Env
+    from physai.tasks import TaskRuntime, create_task
+
+    robot = SO101Env(EnvConfig(seed=0, render=False, max_steps=200))
+    e = TaskRuntime(robot, create_task("pick_place"))
+    try:
+        e.reset(seed=0)
+        cam = mujoco.mj_name2id(robot.model, mujoco.mjtObj.mjOBJ_CAMERA, "wrist")
+        # A MuJoCo camera looks along the negative z axis of its own frame.
+        view = -robot.data.cam_xmat[cam].reshape(3, 3)[:, 2]
+        to_cube = e.cube_pos - robot.data.cam_xpos[cam]
+        to_cube /= np.linalg.norm(to_cube)
+        assert float(view @ to_cube) > 0.5, "wrist camera faces away from the cube"
+    finally:
+        e.close()
+
+
+@requires_assets
 def test_top_down_approach_is_unreachable_high_above_the_table(env):
     """Documents a real limit of this 5-DoF arm rather than a solver bug."""
     from physai.robots.so101.kinematics import TOP_DOWN
