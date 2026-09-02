@@ -232,6 +232,49 @@ def test_ros2_mujoco_adapter_subscribes_and_assembles_commands():
         env.close()
 
 
+def test_ros2_mujoco_teleop_command_moves_so101():
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from physai.robots import create_robot
+
+    transport = RecordingTransport()
+    env = create_robot("so101", adapter="ros2_mujoco", transport=transport,
+                       render=False)
+    try:
+        observation = env.reset(seed=42)
+        initial_position = observation.joint_state.position[:5].copy()
+        initial_gripper = observation.joint_state.position[5]
+        trajectory = SimpleNamespace(
+            joint_names=("shoulder_pan", "shoulder_lift", "elbow_flex",
+                         "wrist_flex", "wrist_roll"),
+            points=[SimpleNamespace(positions=[0.2, -0.8, 1.0, 0.5, 0.1])],
+        )
+        gripper = SimpleNamespace(
+            command=SimpleNamespace(position=0.2, max_effort=2.0)
+        )
+        transport.subscriptions["/arm_controller/joint_trajectory"](trajectory)
+        transport.subscriptions["/gripper_controller/gripper_cmd"](gripper)
+
+        for _ in range(30):
+            action = env.pending_action()
+            assert action is not None
+            observation, *_ = env.step(action)
+
+        np.testing.assert_allclose(
+            observation.joint_state.position[:5],
+            trajectory.points[0].positions,
+            atol=0.05,
+        )
+        assert not np.allclose(
+            observation.joint_state.position[:5], initial_position
+        )
+        assert not np.isclose(observation.joint_state.position[5], initial_gripper)
+    finally:
+        env.close()
+
+
 def test_mujoco_ros_bridge_ticks_the_latest_ros2_command():
     from types import SimpleNamespace
 
