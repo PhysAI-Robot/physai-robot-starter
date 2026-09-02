@@ -5,5 +5,5 @@ setuptools>=68
 mujoco>=3.2
 numpy>=1.26
 imageio>=2.34
-imageio-ffmpeg>=0.4.9
+imageio-ffmpeg>=0.6.0
 PyYAML>=6.0
