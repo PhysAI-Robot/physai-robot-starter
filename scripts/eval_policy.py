@@ -82,6 +82,27 @@ def main() -> int:
     if args.policy == "lerobot" and not args.checkpoint:
         ap.error("--policy lerobot needs --checkpoint")
 
+    # Evaluating on seeds the policy trained on measures recall, not
+    # generalisation, and the two can differ by a lot: a sorting checkpoint
+    # scored 70% on seeds that were 80% training layouts and 10% on held-out
+    # ones. Checkpoints written before train_seeds was recorded simply skip
+    # this check.
+    if args.policy == "lerobot":
+        import json
+
+        meta_path = args.checkpoint / "training_meta.json"
+        if meta_path.exists():
+            train_seeds = set(
+                json.loads(meta_path.read_text(encoding="utf-8")).get("train_seeds") or []
+            )
+            overlap = sorted(train_seeds & set(range(args.seed, args.seed + args.episodes)))
+            if overlap:
+                print(f"WARNING: {len(overlap)}/{args.episodes} evaluation seeds were in "
+                      f"this checkpoint's training set {overlap[:8]}"
+                      f"{'...' if len(overlap) > 8 else ''}\n"
+                      f"         This measures memorisation, not generalisation. "
+                      f"Pick a --seed beyond {max(train_seeds)}.")
+
     # Built once outside the loop where possible — reloading the checkpoint
     # from disk per episode would dominate wall-clock time for no reason.
     reusable_policy = None
