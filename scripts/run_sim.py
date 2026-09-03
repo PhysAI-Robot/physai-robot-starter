@@ -46,7 +46,7 @@ def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
 
     gif = stem.with_suffix(".gif")
     iio.imwrite(gif, frames[::2], duration=2000 / fps, loop=0)
-    print("  (no H.264 encoder found — wrote a GIF; `pip install imageio-ffmpeg` for mp4)")
+    print("  (no H.264 encoder found — wrote a GIF; run `uv sync` for mp4 support)")
     return gif
 
 

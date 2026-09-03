@@ -23,7 +23,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
 
       - name: Install headless rendering support
         run: |
@@ -38,13 +42,11 @@ jobs:
 
       - name: Fetch robot assets
         run: |
-          python scripts/fetch_assets.py --robot so101
-          python scripts/fetch_assets.py --robot turtlebot4
+          uv run python scripts/fetch_assets.py --robot so101
+          uv run python scripts/fetch_assets.py --robot turtlebot4
 
       - name: Install project and test dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+        run: uv sync --locked --extra dev
 
       - name: Run test suite
-        run: python -m pytest tests/ -q
+        run: uv run python -m pytest tests/ -q
