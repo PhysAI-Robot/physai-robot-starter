@@ -22,6 +22,30 @@ def test_scene_has_the_task_objects_and_cameras():
 
 
 @requires_assets
+def test_calibrated_pads_replace_jaw_collision_meshes():
+    import mujoco
+
+    from physai.sim import build_model
+
+    model, _ = build_model()
+    jaw_bodies = {
+        mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+        for name in ("gripper", "moving_jaw_so101_v1")
+    }
+    for geom_id, body_id in enumerate(model.geom_bodyid):
+        if body_id not in jaw_bodies:
+            continue
+        if model.geom_type[geom_id] == mujoco.mjtGeom.mjGEOM_MESH:
+            assert model.geom_contype[geom_id] == 0
+            assert model.geom_conaffinity[geom_id] == 0
+
+    for name in ("pad_static", "pad_moving"):
+        geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+        assert model.geom_contype[geom_id] != 0
+        assert model.geom_conaffinity[geom_id] != 0
+
+
+@requires_assets
 def test_task_specific_scene_configs_have_separate_object_layouts():
     import mujoco
 

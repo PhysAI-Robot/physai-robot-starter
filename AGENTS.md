@@ -66,7 +66,7 @@ After the first substantive edit, run the narrowest relevant check immediately.
 For Python changes, the default full check is:
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/ -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 ```
 
 Use a focused test path first when one exists, then run the full suite for

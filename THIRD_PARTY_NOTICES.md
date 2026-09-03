@@ -58,7 +58,7 @@ revision before redistribution.
 
 ## Dependencies
 
-Python packages installed from `requirements.txt` and optional dependencies
+Python packages installed from the project lockfile and optional dependencies
 retain their own licenses. This notice does not replace the license notices
 provided by those packages.
 

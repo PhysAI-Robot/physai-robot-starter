@@ -1,7 +1,7 @@
 """Seam for dropping a real VLA checkpoint into the loop.
 
 Nothing here imports torch — Phase 0 runs without it. The point of this file is
-that when you `pip install lerobot` and load SmolVLA (or TurboVLA, or an ACT
+that when you `uv sync --extra vla` and load SmolVLA (or TurboVLA, or an ACT
 checkpoint you trained on the demos from `scripts/collect_demos.py`), the only
 thing you write is `_infer`. Everything else — observation packing, action
 chunk buffering, unit conversion — is already handled and matches the format

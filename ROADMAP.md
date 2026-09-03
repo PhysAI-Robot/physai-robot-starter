@@ -60,7 +60,7 @@ policy will consume.
 - [x] `available_robots()` reports SO-101 and TurtleBot4 without importing optional ROS 2 or ML dependencies.
 - [ ] Repeating an episode with the same seed produces the same initial state and task randomization. **Partial:** baseline reset behavior is covered; sorting randomization still needs a dedicated regression assertion.
 - [x] Invalid action modes, shapes, joint orders, and unsupported capabilities fail with clear errors.
-- [ ] The existing scripted SO-101 workflow and TurtleBot4 twist workflow remain runnable after contract changes. **Partial:** both commands run, but the scripted SO-101 task currently completes with `0/5` success in the reliability check.
+- [x] The existing scripted SO-101 workflow and TurtleBot4 twist workflow remain runnable after contract changes. **Verified:** the scripted SO-101 task completes `20/20` in the deterministic reliability check (`--episodes 20 --seed 0 --max-steps 600`). The result required fixing an unreachable `lift_height` (IK never converged, freezing the arm), calibrating `gripper_grip` and `gripper_force_limit`, placing the added pad geoms on the actual jaw contact surfaces, and disabling the original jaw collision meshes so contacts are not duplicated.
 
 ### Phase 1B: SO-101 Control and ROS 2 Bridge
 
@@ -145,7 +145,7 @@ be added after the shared contracts, bridge pattern, and acceptance tests are
 proven on the first two robots.
 
 ### Definition of Done (DoD)
-- [x] SO-101 and TurtleBot4 pass the deterministic contract, reset, and control regression suite. The current suite has 65 passing tests; task-level scripted success still needs stabilization.
+- [x] SO-101 and TurtleBot4 pass the deterministic contract, reset, and control regression suite. The current suite has 70 passing tests and 2 skipped; the scripted SO-101 pick-and-place reliability check is 20/20 with the calibrated pad setup.
 - [x] SO-101 can be teleoperated through its ROS 2-shaped joint and gripper interfaces; real `rclpy` node integration remains pending.
 - [ ] TurtleBot4 can navigate from Point A to Point B through the ROS 2/Nav2 path without collision in the deterministic test world.
 - [ ] SO-101 IK meets the documented position and orientation tolerances on reachable targets and rejects invalid targets safely.
