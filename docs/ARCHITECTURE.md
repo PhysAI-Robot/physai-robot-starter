@@ -176,10 +176,11 @@ sim/scenes/sorting_minimal.py
 
 Each scene builder owns model geometry and initial object layout. Generic world
 settings are separated from manipulation attachment settings; the built-in
-manipulation config supplies SO-101 defaults, while another arm should provide
-its own attachment config or builder. Robot model paths, end-effector anchors,
-and pad attachment bodies are configuration, not hardcoded task ownership. It must not
-own task reward, policy decisions, or ROS2 transport. The legacy `sim/scene.py`
+manipulation config supplies SO-101 defaults, including calibrated pad positions
+and replacement of the original jaw collision meshes, while another arm should
+provide its own attachment config or builder. Robot model paths, end-effector
+anchors, and pad attachment bodies are configuration, not hardcoded task
+ownership. It must not own task reward, policy decisions, or ROS2 transport. The legacy `sim/scene.py`
 facade may translate the old `SceneConfig(num_cubes=...)` API, but new code
 should select `PickPlaceMinimalSceneConfig` or `SortingMinimalSceneConfig`
 directly. This keeps task-specific object branches out of the shared scene

@@ -170,9 +170,9 @@ python scripts/collect_demos.py --sorting --episodes 50 --out data/sorting_v1
        alt="SO-101 arm selecting the blue cube from three colored cubes and placing it on the pad">
 </p>
 
-The scripted expert reaches roughly 72% on this variant against about 95% on
-the single-cube task, because three cubes on the same table leave less grasp
-clearance.
+The scripted expert reaches roughly 72% on this variant against 100% on the
+documented 20-seed single-cube check, because three cubes on the same table
+leave less grasp clearance.
 
 Failed demonstrations are discarded by default. Add `--keep-failures` when
 you are analyzing failure cases.
