@@ -42,8 +42,9 @@ class ManipulationSceneConfig(WorldSceneConfig):
     moving_pad_body: str = DEFAULT_MOVING_PAD_BODY
     pad_friction: tuple[float, float, float] = (2.0, 0.02, 0.001)
     pad_size: tuple[float, float, float] = (0.011, 0.009, 0.0015)
+    replace_jaw_collision: bool = True
     pad_align_gripper_q: float = 0.25
-    static_pad_pos: tuple[float, float, float] = (-0.0090, -0.0050, -0.0935)
+    static_pad_pos: tuple[float, float, float] = (-0.0090, -0.0050, -0.1000)
     moving_pad_pos: tuple[float, float, float] = (-0.0117, -0.0700, 0.0228)
     # The wrist camera looks along -z of its own frame. With x = (-1, 0, 0) the
     # derived view direction pointed backwards and up, away from the workspace,
@@ -88,6 +89,17 @@ def _pad_quats(cfg: ManipulationSceneConfig) -> dict[str, np.ndarray]:
     return quaternions
 
 
+def _replace_jaw_collision(spec: mujoco.MjSpec, cfg: ManipulationSceneConfig) -> None:
+    if not cfg.replace_jaw_collision:
+        return
+    for body_name in (cfg.static_pad_body, cfg.moving_pad_body):
+        body = _find_body(spec, body_name)
+        for geom in body.geoms:
+            if geom.type == mujoco.mjtGeom.mjGEOM_MESH and geom.group == 3:
+                geom.contype = 0
+                geom.conaffinity = 0
+
+
 def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
     """Build a manipulation world with configurable robot attachments."""
     if cfg.robot_xml is None or not Path(cfg.robot_xml).exists():
@@ -97,6 +109,7 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
 
     spec = mujoco.MjSpec.from_file(str(cfg.robot_xml))
     spec.option.timestep = cfg.timestep
+    _replace_jaw_collision(spec, cfg)
     world = spec.worldbody
 
     spec.add_texture(
