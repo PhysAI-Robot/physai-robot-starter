@@ -18,8 +18,8 @@ dependencies = [
 
 [project.optional-dependencies]
 vlm = ["anthropic>=0.40"]
-smolvlm = ["torch>=2.4", "transformers>=4.45", "Pillow>=10.0", "huggingface-hub>=0.24"]
-vla = ["torch>=2.4", "lerobot"]
+smolvlm = ["torch>=2.13.0", "transformers>=4.45", "Pillow>=10.0", "huggingface-hub>=0.24"]
+vla = ["torch>=2.13.0", "lerobot"]
 dev = ["pytest>=9.1.1", "lark>=1.2"]
 
 [tool.setuptools.packages.find]
