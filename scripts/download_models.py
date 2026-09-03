@@ -52,7 +52,7 @@ def main() -> int:
     try:
         from huggingface_hub import snapshot_download
     except ImportError:
-        print("Model download needs huggingface-hub: pip install huggingface-hub",
+        print("Model download needs huggingface-hub: uv run --with huggingface-hub ...",
               file=sys.stderr)
         return 1
 

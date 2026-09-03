@@ -1,6 +1,6 @@
 # Phase 1 Runbook
 
-This guide explains how to run the Phase 1 baseline through `.venv`, reproduce the test results, evaluate the scripted SO-101 workflow, and edit the most relevant parameters.
+This guide explains how to run the Phase 1 baseline through `uv`, reproduce the test results, evaluate the scripted SO-101 workflow, and edit the most relevant parameters.
 
 This document reflects the current state of branch `feat/phase1-foundation-ci`:
 
@@ -24,46 +24,30 @@ Run all commands below from the repository root:
 cd /path/to/physai-robot-starter
 ```
 
-## 2. Create or Activate `.venv`
+## 2. Set Up the uv Environment
 
-If `.venv` does not exist:
-
-```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e .
-python -m pip install -e ".[dev]"
-```
-
-For a new shell, activate the environment again:
+Synchronize the project and development dependencies:
 
 ```bash
-source .venv/bin/activate
+uv sync --locked --extra dev
 ```
 
-Confirm that the correct interpreter is active:
+Run commands through the project environment:
 
 ```bash
-which python
-python --version
-python -m pytest --version
+uv run python --version
+uv run python -m pytest --version
 ```
 
-`which python` should point to the repository's `.venv/bin/python`, and the Python version should be `3.12.x`.
-
-An alternative is to call the interpreter explicitly without `source`:
-
-```bash
-.venv/bin/python -m pytest tests/ -q
-```
+The project requires Python `3.12.x`. `uv` creates and manages `.venv`
+automatically; it does not need to be activated manually.
 
 ## 3. Baseline Tests
 
 Run the full regression suite before and after editing code:
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/ -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 ```
 
 Expected result on this branch:
@@ -77,7 +61,7 @@ If the test count changes, focus on the exit code and failure details, not only 
 The most relevant tests for current Phase 1 work are:
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest \
   tests/test_sim.py tests/test_tasks.py \
   tests/test_robot_registry.py::test_ros2_mujoco_teleop_command_moves_so101 -q
 ```
@@ -87,7 +71,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
 Fetch the robot asset if it is not already available:
 
 ```bash
-python scripts/fetch_assets.py --robot so101
+uv run python scripts/fetch_assets.py --robot so101
 ```
 
 Assets are placed under `assets/so101/`. Do not use this folder for model snapshots or generated experiment output that should be committed.
@@ -97,19 +81,19 @@ Assets are placed under `assets/so101/`. Do not use this folder for model snapsh
 Run quickly without video, which is useful for debugging:
 
 ```bash
-python scripts/run_sim.py --no-video --seed 0 --max-steps 500
+uv run python scripts/run_sim.py --no-video --seed 0 --max-steps 500
 ```
 
 Run with video output under `outputs/`:
 
 ```bash
-python scripts/run_sim.py --seed 0 --max-steps 500
+uv run python scripts/run_sim.py --seed 0 --max-steps 500
 ```
 
 Run using the checked-in task configuration:
 
 ```bash
-python scripts/run_sim.py \
+uv run python scripts/run_sim.py \
   --config configs/task_pick_place.yaml \
   --no-video \
   --seed 0 \
@@ -119,7 +103,7 @@ python scripts/run_sim.py \
 Open the interactive viewer only when you want to watch the simulation directly:
 
 ```bash
-python scripts/run_sim.py --viewer --seed 0
+uv run python scripts/run_sim.py --viewer --seed 0
 ```
 
 Do not use `--viewer` in headless or CI workflows.
@@ -129,7 +113,7 @@ Do not use `--viewer` in headless or CI workflows.
 Repeat the first five seeds:
 
 ```bash
-python scripts/eval_policy.py \
+uv run python scripts/eval_policy.py \
   --policy scripted \
   --episodes 5 \
   --seed 0 \
@@ -139,7 +123,7 @@ python scripts/eval_policy.py \
 Run a longer evaluation:
 
 ```bash
-python scripts/eval_policy.py \
+uv run python scripts/eval_policy.py \
   --policy scripted \
   --episodes 20 \
   --seed 0 \
@@ -177,7 +161,7 @@ The currently tested path uses `RecordingTransport`, so it does not require a RO
 Run the acceptance test:
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest \
   tests/test_robot_registry.py::test_ros2_mujoco_teleop_command_moves_so101 -q
 ```
 
@@ -192,7 +176,7 @@ The test verifies that:
 Print the ROS2-shaped endpoint list with:
 
 ```bash
-python scripts/show_ros2_contract.py
+uv run python scripts/show_ros2_contract.py
 ```
 
 The repository does not yet provide an executable real `rclpy` teleoperation node and does not yet publish TF. Do not treat the fake transport as proof of ROS2 QoS, serialization, executor behavior, or hardware connectivity.
@@ -235,7 +219,7 @@ Parameters suitable for experiments:
 After changing the scene or cube position, validate with a fixed seed:
 
 ```bash
-python scripts/run_sim.py \
+uv run python scripts/run_sim.py \
   --config configs/task_pick_place.yaml \
   --no-video \
   --seed 0 \
@@ -321,17 +305,17 @@ git diff --stat
 Example validation after changing SO-101 policy code:
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest \
   tests/test_sim.py tests/test_tasks.py \
   tests/test_robot_registry.py::test_ros2_mujoco_teleop_command_moves_so101 -q
 
-python scripts/eval_policy.py \
+uv run python scripts/eval_policy.py \
   --policy scripted \
   --episodes 5 \
   --seed 0 \
   --max-steps 500
 
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/ -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 ```
 
 ## 10. Current Phase 1 Boundaries
