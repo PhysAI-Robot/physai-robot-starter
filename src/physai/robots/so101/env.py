@@ -42,6 +42,14 @@ class EnvConfig:
     target_x_range: tuple[float, float] = (0.16, 0.26)
     target_y_range: tuple[float, float] = (-0.13, -0.04)
     seed: int | None = None
+    # The XML's default actuator forcerange (+/-3.35 N*m) is a per-servo torque
+    # rating, not a sane grip-force budget: lifting a 0.03 kg cube only needs a
+    # few mN*m, but a fixed-position squeeze target can drive the actuator to
+    # its full rating against a rigid object, which loads the pad-cube contact
+    # to 20-50x the cube's weight and makes it chatter and pop loose mid-carry.
+    # Capping it here emulates a current-limited real servo and keeps the
+    # squeeze in the contact solver's stable range.
+    gripper_force_limit: float = 0.3
 
 
 class SO101Env(MuJoCoSimulationCore):
@@ -81,6 +89,9 @@ class SO101Env(MuJoCoSimulationCore):
         self.grip_act_id = aid(GRIPPER_JOINT_NAME)
         self.arm_limits = self.model.jnt_range[self.arm_joint_ids].copy()
         self.grip_limits = self.model.jnt_range[self.gripper_joint_id].copy()
+        if self.cfg.gripper_force_limit is not None:
+            limit = float(self.cfg.gripper_force_limit)
+            self.model.actuator_forcerange[self.grip_act_id] = [-limit, limit]
 
         scene_cube_names = self.cfg.scene.cube_names
         self.sorting_cubes: dict[str, tuple[int, int]] = {}

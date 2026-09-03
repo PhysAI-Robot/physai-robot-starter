@@ -45,7 +45,12 @@ class Phase(Enum):
 class ExpertConfig:
     hover_height: float = 0.045     # above the cube centre, top-down reachable
     grasp_height: float = 0.000     # pinch centre level with the cube centre
-    lift_height: float = 0.055
+    # Above ~0.045 the carry pose falls outside the top-down IK envelope for
+    # cube positions near the far edge of `cube_y_range`: IK stops converging,
+    # `_solve()` then returns the frozen qpos, and the arm never advances past
+    # LIFT. 0.035 stays inside the reachable envelope with margin for the few
+    # millimetres of cube drift that happen while the jaws close.
+    lift_height: float = 0.035
     place_height: float = 0.016
     # Closing happens in two stages. Slamming straight to `gripper_grip` sweeps
     # the free cube out of the jaws before they capture it; stopping at
@@ -53,7 +58,11 @@ class ExpertConfig:
     # only then is it safe to squeeze down for real holding force.
     gripper_open: float = 0.55      # normalised aperture; > cube width
     gripper_touch: float = 0.21     # jaw gap ≈ 30 mm, just wider than the cube
-    gripper_grip: float = 0.18      # a few mm of squeeze; sets holding force
+    # Measured with mj_contactForce: default 0.18 loads the pad contact to
+    # 20-50x the cube's weight, which chatters and then loses contact outright
+    # mid-TRANSFER. 0.19 keeps enough squeeze to hold the cube without driving
+    # the contact into that unstable, overloaded regime.
+    gripper_grip: float = 0.19       # a few mm of squeeze; sets holding force
     pos_tol: float = 0.012
     settle_steps: int = 8           # ticks to hold at CLOSE / RELEASE
     max_phase_steps: int = 120
@@ -189,6 +198,11 @@ class ScriptedPickPlace(Policy):
             if self._settle >= self.cfg.settle_steps:
                 self._advance()
         elif reached:
+            self._advance()
+        elif self._phase_steps >= self.cfg.max_phase_steps:
+            # An unreachable IK target freezes `_q_cmd` in place forever, so
+            # `reached` never fires. Force progress instead of stalling the
+            # rest of the episode in a phase that can no longer converge.
             self._advance()
 
         return Action(joint_position=self._q_cmd,
