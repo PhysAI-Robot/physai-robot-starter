@@ -4,10 +4,10 @@ This guide explains how to run the Phase 1 baseline through `.venv`, reproduce t
 
 This document reflects the current state of branch `feat/phase1-foundation-ci`:
 
-- Test suite: 72 tests passing.
+- Test suite: 71 passed, 2 skipped.
 - SO-101 ROS2-shaped teleoperation through a fake transport: covered by an acceptance test.
 - Real `rclpy` node integration, TF publication, TurtleBot4 Nav2, and the domain-randomization engine: not complete.
-- Scripted SO-101 pick-and-place still needs reliability work. A green test suite does not mean that task success is 100%.
+- Scripted SO-101 pick-and-place reaches `success 20/20` over seeds 0-19 (`--episodes 20 --seed 0 --max-steps 600`) in the checked-in deterministic scene. The result depends on the calibrated pad geometry: the added pads are placed on the actual jaw contact surfaces and replace the original jaw collision meshes, so the mesh and pad do not compete for contact resolution. This is a deterministic baseline result, not a claim about domain-randomized or hardware runs.
 
 ## 1. Prerequisites
 
@@ -69,7 +69,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/ -q
 Expected result on this branch:
 
 ```text
-72 passed
+71 passed, 2 skipped
 ```
 
 If the test count changes, focus on the exit code and failure details, not only the test count.
@@ -150,7 +150,7 @@ Interpret the result as follows:
 
 - `success=True` means the task reached the target and held it for `success_hold_steps`.
 - `steps=500` or `steps=600` means the episode reached its time limit; inspect the policy phase and cube position.
-- `success 0/5` is not a pytest failure. It is a task-reliability failure that must be investigated separately.
+- `success 20/20` is the current verified deterministic baseline over seeds 0-19. Any lower rate is not a pytest failure; it is a task-reliability failure that must be investigated separately.
 - Use the same seed when comparing parameter changes.
 
 To save evaluation results as local JSON:
@@ -242,6 +242,23 @@ python scripts/run_sim.py \
   --max-steps 500
 ```
 
+File: `src/physai/robots/so101/env.py`, class `EnvConfig`.
+
+- `gripper_force_limit`: caps the gripper actuator's `forcerange` (N*m). The
+  XML default (+/-3.35) is a per-servo torque rating, not a grip-force budget,
+  and lets a fixed-position squeeze overload the pad-cube contact; the default
+  here (`0.3`) emulates a current-limited real servo.
+
+File: `src/physai/sim/scenes/common.py`, class `ManipulationSceneConfig`.
+
+- `static_pad_pos` and `moving_pad_pos`: local pad positions calibrated to the
+  actual jaw contact surfaces. The checked-in defaults are part of the
+  deterministic pick-and-place baseline.
+- `replace_jaw_collision`: when `true`, disables the original group-3 jaw mesh
+  collisions so the calibrated pad geoms are the only jaw contacts. Set it to
+  `false` only when supplying a replacement scene with its own collision
+  calibration.
+
 ### Scripted policy parameters
 
 File: `src/physai/policy/scripted.py`, class `ExpertConfig`.
@@ -326,4 +343,5 @@ The following items remain separate work and must not be considered complete onl
 - TurtleBot4 does not yet have a Nav2 goal workflow.
 - An IK benchmark with success rate, error, iterations, and runtime metrics is not available.
 - The domain-randomization engine is not available.
-- Scripted pick-and-place has not reached the reliability target on the first five seeds.
+- Scripted pick-and-place reaches the reliability target on the first five
+  seeds and on the documented 20-seed check with the calibrated pad setup.
