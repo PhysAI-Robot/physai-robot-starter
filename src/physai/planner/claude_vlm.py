@@ -120,7 +120,7 @@ class ClaudePlanner(Planner):
             import anthropic
         except ImportError as exc:  # pragma: no cover
             raise ImportError(
-                "The Claude planner needs the anthropic SDK: pip install anthropic"
+                "The Claude planner needs the anthropic SDK: uv sync --extra vlm"
             ) from exc
         if api_key is None and not os.environ.get("ANTHROPIC_API_KEY"):
             raise RuntimeError(

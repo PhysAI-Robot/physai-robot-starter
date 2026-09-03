@@ -1,5 +1,6 @@
 ARG BASE_IMAGE=nvidia/cuda:12.8.1-devel-ubuntu24.04
 FROM ${BASE_IMAGE}
+COPY --from=ghcr.io/astral-sh/uv:0.12.9 /uv /uvx /bin/
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=en_US.UTF-8 \
@@ -32,8 +33,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-ros2-control \
     ros-jazzy-ros2-controllers \
     ros-dev-tools \
-    python3-pip \
-    python3-venv \
     git \
     ffmpeg \
     libgl1 \
@@ -51,11 +50,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /workspace
 
-COPY requirements.txt pyproject.toml ./
-RUN python3 -m pip install --no-cache-dir --break-system-packages -r requirements.txt
-
 COPY . .
-RUN python3 -m pip install --no-cache-dir --break-system-packages -e ".[dev]"
+RUN uv sync --locked --extra dev
+ENV PATH="/workspace/.venv/bin:${PATH}"
 
 ENV MUJOCO_GL=osmesa
 ENV PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
