@@ -17,13 +17,17 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-          cache: pip
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
 
       - name: Install headless rendering support
         run: |
@@ -31,20 +35,18 @@ jobs:
           sudo apt-get install --yes --no-install-recommends libosmesa6-dev
 
       - name: Cache robot assets
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: assets
           key: robot-assets-${{ runner.os }}-${{ hashFiles('scripts/fetch_assets.py') }}
 
       - name: Fetch robot assets
         run: |
-          python scripts/fetch_assets.py --robot so101
-          python scripts/fetch_assets.py --robot turtlebot4
+          uv run python scripts/fetch_assets.py --robot so101
+          uv run python scripts/fetch_assets.py --robot turtlebot4
 
       - name: Install project and test dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+        run: uv sync --locked --extra dev
 
       - name: Run test suite
-        run: python -m pytest tests/ -q
+        run: uv run python -m pytest tests/ -q

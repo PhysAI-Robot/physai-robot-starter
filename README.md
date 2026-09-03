@@ -40,25 +40,28 @@ testing. VLM and VLA workflows need more memory; CUDA is optional.
 
 ## Install
 
-Create the environment and install the base package from the project root:
+Install `uv` using the instructions for your platform, then create the
+environment and install the base package from the project root:
 
 ```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e .
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv sync
+```
+
+```bash
+uv sync
 ```
 
 The base install contains MuJoCo, NumPy, image/video support, and YAML
-configuration. `requirements.txt` mirrors this Phase 1 baseline and does not
-install ROS2, VLM, or VLA dependencies. Use the optional extras below when
+configuration. It does not install ROS2, VLM, or VLA dependencies. Use the
+optional extras below when
 those later-phase features are needed.
 
 Install development tools and run the test suite with:
 
 ```bash
-python -m pip install -e ".[dev]"
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/ -q
+uv sync --extra dev
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 ```
 
 ## Quick start
@@ -66,21 +69,21 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/ -q
 Fetch the SO-101 description and run one scripted pick-and-place episode:
 
 ```bash
-python scripts/fetch_assets.py --robot so101
-python scripts/run_sim.py
+uv run python scripts/fetch_assets.py --robot so101
+uv run python scripts/run_sim.py
 ```
 
 The command writes a video and evaluation output to `outputs/`. Open the
 interactive MuJoCo viewer after the headless run succeeds:
 
 ```bash
-python scripts/run_sim.py --viewer
+uv run python scripts/run_sim.py --viewer
 ```
 
 Run the same task from the checked-in YAML configuration:
 
 ```bash
-python scripts/run_sim.py --config configs/task_pick_place.yaml
+uv run python scripts/run_sim.py --config configs/task_pick_place.yaml
 ```
 
 Use `--seed`, `--max-steps`, and `--camera-size` to override configuration.
@@ -148,21 +151,21 @@ as the jaws close on the cube.
 Evaluate the scripted expert over multiple seeds:
 
 ```bash
-python scripts/eval_policy.py --policy scripted --episodes 20
+uv run python scripts/eval_policy.py --policy scripted --episodes 20
 ```
 
 Record successful demonstrations, then replay their actions through the
 simulator:
 
 ```bash
-python scripts/collect_demos.py --episodes 50 --out data/pickplace_v1
-python scripts/eval_policy.py --policy replay --dataset data/pickplace_v1
+uv run python scripts/collect_demos.py --episodes 50 --out data/pickplace_v1
+uv run python scripts/eval_policy.py --policy replay --dataset data/pickplace_v1
 ```
 
 The sorting variant records three cubes and chooses a target color per episode:
 
 ```bash
-python scripts/collect_demos.py --sorting --episodes 50 --out data/sorting_v1
+uv run python scripts/collect_demos.py --sorting --episodes 50 --out data/sorting_v1
 ```
 
 <p align="center">
@@ -170,9 +173,9 @@ python scripts/collect_demos.py --sorting --episodes 50 --out data/sorting_v1
        alt="SO-101 arm selecting the blue cube from three colored cubes and placing it on the pad">
 </p>
 
-The scripted expert reaches roughly 72% on this variant against about 95% on
-the single-cube task, because three cubes on the same table leave less grasp
-clearance.
+The scripted expert reaches roughly 72% on this variant against 100% on the
+documented 20-seed single-cube check, because three cubes on the same table
+leave less grasp clearance.
 
 Failed demonstrations are discarded by default. Add `--keep-failures` when
 you are analyzing failure cases.
@@ -180,11 +183,11 @@ you are analyzing failure cases.
 ### Development inspection
 
 ```bash
-python scripts/workspace_map.py
-python scripts/show_ros2_contract.py
-python scripts/teleop_keyboard.py
-python scripts/export_scene.py --out outputs/scene_pick_place.xml
-python scripts/render_docs_media.py --only so101
+uv run python scripts/workspace_map.py
+uv run python scripts/show_ros2_contract.py
+uv run python scripts/teleop_keyboard.py
+uv run python scripts/export_scene.py --out outputs/scene_pick_place.xml
+uv run python scripts/render_docs_media.py --only so101
 ```
 
 `teleop_keyboard.py` opens the MuJoCo viewer and exercises Cartesian jogging.
@@ -205,9 +208,9 @@ Collect demonstrations and fine-tune an ACT policy after installing the VLA
 extra:
 
 ```bash
-python -m pip install -e ".[vla]"
-python scripts/train_act.py --dataset data/pickplace_v1 --steps 4000
-python scripts/eval_policy.py --policy lerobot \
+uv sync --extra vla
+uv run python scripts/train_act.py --dataset data/pickplace_v1 --steps 4000
+uv run python scripts/eval_policy.py --policy lerobot \
   --checkpoint outputs/act_ckpt --camera-size 128
 ```
 
@@ -220,16 +223,16 @@ and evaluation to avoid an image distribution mismatch.
 Check the planner-to-simulator path without a model or API key:
 
 ```bash
-python scripts/plan_task.py --planner scripted --dry-run
+uv run python scripts/plan_task.py --planner scripted --dry-run
 ```
 
 SmolVLM produces visual sub-goals from simulated camera images. Install its
 extra and download the model before running it:
 
 ```bash
-python -m pip install -e ".[smolvlm]"
-python scripts/download_models.py --model smolvlm
-python scripts/plan_task.py --planner smolvlm --dry-run
+uv sync --extra smolvlm
+uv run python scripts/download_models.py --model smolvlm
+uv run python scripts/plan_task.py --planner smolvlm --dry-run
 ```
 
 Use `--instruction`, `--save-plan`, and `--save-frames` to customize or
@@ -282,20 +285,20 @@ Install the extra for the workflow you intend to use:
 
 ```bash
 # SmolVLM planner
-python -m pip install -e ".[smolvlm]"
-python scripts/download_models.py --model smolvlm
+uv sync --extra smolvlm
+uv run python scripts/download_models.py --model smolvlm
 
 # LeRobot/VLA support
-python -m pip install -e ".[vla]"
-python scripts/download_models.py --model smolvla
-python scripts/download_models.py --model turbovla
+uv sync --extra vla
+uv run python scripts/download_models.py --model smolvla
+uv run python scripts/download_models.py --model turbovla
 ```
 
 The downloader also accepts a custom Hugging Face repository:
 
 ```bash
-python -m pip install huggingface-hub
-python scripts/download_models.py --repo org/model --name my_model
+uv run --with huggingface-hub python scripts/download_models.py \
+  --repo org/model --name my_model
 ```
 
 Copy `.env.example` to `.env` when using gated or private Hugging Face models,
@@ -303,9 +306,9 @@ or when the anonymous download limit is reached. Claude is an optional cloud
 planner; install its extra and provide `ANTHROPIC_API_KEY` in the environment:
 
 ```bash
-python -m pip install -e ".[vlm]"
+uv sync --extra vlm
 export ANTHROPIC_API_KEY="your-key"
-python scripts/plan_task.py --planner claude --dry-run
+uv run python scripts/plan_task.py --planner claude --dry-run
 ```
 
 Do not commit `.env`, credentials, checkpoints, or downloaded assets.
@@ -323,7 +326,7 @@ before using ROS2 tools. Inspect the message-shaped contract without ROS2 by
 running:
 
 ```bash
-python scripts/show_ros2_contract.py
+uv run python scripts/show_ros2_contract.py
 ```
 
 The first synchronous MuJoCo bridge core is available as
@@ -375,11 +378,11 @@ is also documented there.
 
 ## Troubleshooting
 
-Run commands from the project root with `.venv` activated. If robot files are
+Run commands from the project root with `uv run`. If robot files are
 missing, fetch them again:
 
 ```bash
-python scripts/fetch_assets.py
+uv run python scripts/fetch_assets.py
 ```
 
 For a simulator-only check, use `--policy constant` or the default scripted

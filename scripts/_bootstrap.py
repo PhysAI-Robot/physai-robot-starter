@@ -1,6 +1,6 @@
 """Make `physai` importable when running scripts from a source checkout.
 
-Avoids forcing `pip install -e .` before the first run.
+Avoids forcing `uv sync` before the first run.
 """
 
 import sys
