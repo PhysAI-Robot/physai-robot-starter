@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import time
 from dataclasses import replace
 from pathlib import Path
 
@@ -226,12 +227,20 @@ def run_viewer(
 
     print("Viewer open. Close the window to exit.")
     with mujoco.viewer.launch_passive(env.model, env.data) as viewer:
+        next_tick = time.perf_counter()
+        control_period = 1.0 / env.cfg.control_hz
         while viewer.is_running():
             obs, _, terminated, truncated, _ = env.step(policy.act(obs))
             viewer.sync()
             if terminated or truncated:
                 obs = env.reset()
                 policy.reset(obs)
+            next_tick += control_period
+            remaining = next_tick - time.perf_counter()
+            if remaining > 0:
+                time.sleep(remaining)
+            else:
+                next_tick = time.perf_counter()
     return 0
 
 
