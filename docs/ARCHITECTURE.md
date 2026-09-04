@@ -153,9 +153,9 @@ capabilities, not on a robot name or transport implementation.
 `MuJoCoROSBridge` owns the synchronous control tick around
 `ROS2MuJoCoAdapter`. `RclpyTransport` adapts an existing `rclpy` node to the
 transport port without importing ROS2 from the core package. The current bridge
-publishes joint states and available camera images and accepts joint trajectory
-and gripper commands; TF, CameraInfo, and mobile-base endpoints remain later
-Phase 1 work.
+publishes joint states, available camera images, CameraInfo, and SO-101 TF, and
+accepts joint trajectory and gripper commands. Mobile-base endpoints remain
+later Phase 1 work.
 
 ### Task-specific scenes
 
@@ -387,8 +387,8 @@ default `ContractMessageCodec` is used by Phase 0 tests, while
 Both adapters must make unit conversion, joint ordering, timestamps, frame
 names, command freshness, and command rate explicit. Joint order and value
 shape are validated at decode time against `RobotSpec`. The current adapter
-publishes only the observation fields represented by the Phase 0 contract;
-CameraInfo, TF, and mobile-base endpoint publication require the remaining
+publishes the observation fields represented by the Phase 0 contract plus
+CameraInfo and TF; mobile-base endpoint publication requires the remaining
 Phase 1 integration work. The ROS2 contract file is the source of truth for
 those external interfaces; it is not itself an adapter.
 
