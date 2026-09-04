@@ -4,9 +4,9 @@ This guide explains how to run the Phase 1 baseline through `uv`, reproduce the 
 
 This document reflects the current state of branch `feat/phase1-foundation-ci`:
 
-- Test suite: 71 passed, 2 skipped.
-- SO-101 ROS2-shaped teleoperation through a fake transport: covered by an acceptance test.
-- Real `rclpy` node integration, TF publication, TurtleBot4 Nav2, and the domain-randomization engine: not complete.
+- Test suite: 71 passed, 3 skipped on a host without `control_msgs` or PyTorch.
+- SO-101 ROS2 teleoperation through fake transport and a real `rclpy` node: covered by acceptance tests when Jazzy message packages are installed.
+- TurtleBot4 Nav2 and the domain-randomization engine: not complete.
 - Scripted SO-101 pick-and-place reaches `success 20/20` over seeds 0-19 (`--episodes 20 --seed 0 --max-steps 600`) in the checked-in deterministic scene. The result depends on the calibrated pad geometry: the added pads are placed on the actual jaw contact surfaces and replace the original jaw collision meshes, so the mesh and pad do not compete for contact resolution. This is a deterministic baseline result, not a claim about domain-randomized or hardware runs.
 
 ## 1. Prerequisites
@@ -50,11 +50,14 @@ Run the full regression suite before and after editing code:
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 ```
 
-Expected result on this branch:
+Expected result on this host:
 
 ```text
-71 passed, 2 skipped
+71 passed, 3 skipped
 ```
+
+With `ros-jazzy-control-msgs` installed, the ROS2 acceptance test runs and the
+result becomes `72 passed, 2 skipped`.
 
 If the test count changes, focus on the exit code and failure details, not only the test count.
 
@@ -78,19 +81,30 @@ Assets are placed under `assets/so101/`. Do not use this folder for model snapsh
 
 ## 5. Run SO-101 Direct MuJoCo
 
-Run quickly without video, which is useful for debugging:
+The `--config` argument is optional. Without it, `run_sim.py` uses its built-in
+SO-101 defaults. Add `--no-video` when you only want the simulation result and
+do not want frames written under `outputs/`.
+
+Run quickly without video using the built-in defaults, which is useful for debugging:
 
 ```bash
-uv run python scripts/run_sim.py --no-video --seed 0 --max-steps 500
+uv run python scripts/run_sim.py \
+  --robot so101 \
+  --no-video \
+  --seed 0 \
+  --max-steps 500
 ```
 
-Run with video output under `outputs/`:
+Run with video output under `outputs/` using the built-in defaults:
 
 ```bash
-uv run python scripts/run_sim.py --seed 0 --max-steps 500
+uv run python scripts/run_sim.py \
+  --robot so101 \
+  --seed 0 \
+  --max-steps 500
 ```
 
-Run using the checked-in task configuration:
+Run without video using the checked-in task configuration:
 
 ```bash
 uv run python scripts/run_sim.py \
@@ -100,10 +114,24 @@ uv run python scripts/run_sim.py \
   --max-steps 500
 ```
 
-Open the interactive viewer only when you want to watch the simulation directly:
+Open the interactive viewer using the built-in defaults. The viewer does not
+write a video file:
 
 ```bash
-uv run python scripts/run_sim.py --viewer --seed 0
+uv run python scripts/run_sim.py \
+  --robot so101 \
+  --viewer \
+  --seed 0
+```
+
+To open the viewer with the checked-in task configuration, include the config
+explicitly:
+
+```bash
+uv run python scripts/run_sim.py \
+  --config configs/task_pick_place.yaml \
+  --viewer \
+  --seed 0
 ```
 
 Do not use `--viewer` in headless or CI workflows.
@@ -179,7 +207,34 @@ Print the ROS2-shaped endpoint list with:
 uv run python scripts/show_ros2_contract.py
 ```
 
-The repository does not yet provide an executable real `rclpy` teleoperation node and does not yet publish TF. Do not treat the fake transport as proof of ROS2 QoS, serialization, executor behavior, or hardware connectivity.
+The fake-transport path does not prove ROS2 QoS, serialization, executor
+behavior, or hardware connectivity. Use the real node and acceptance test
+below for the ROS2 message and executor path.
+
+The repository also provides a real ROS2 SO-101 MuJoCo node. It requires a
+sourced ROS2 Jazzy environment and the `control_msgs` package:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+ros2 run --help >/dev/null
+uv run python scripts/run_ros2_sim.py \
+  --config configs/task_pick_place.yaml \
+  --seed 0
+```
+
+The node subscribes to the trajectory and gripper topics, publishes joint
+states and camera images, publishes matching `CameraInfo`, and broadcasts the
+MuJoCo body and camera frames on `/tf`. Run the real-message acceptance test
+in the same ROS2 environment:
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest \
+  tests/test_ros2_node.py -q
+```
+
+The Docker image installs `ros-jazzy-control-msgs`. On a host installation,
+install that package with the system ROS2 package manager before running the
+node or acceptance test.
 
 ## 8. Parameters to Edit
 

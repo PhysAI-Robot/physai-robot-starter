@@ -101,7 +101,11 @@ def _header_stamp(header: Any) -> float | None:
     stamp = header.stamp
     if isinstance(stamp, (int, float)):
         return float(stamp)
-    return float(getattr(stamp, "sec", 0)) + float(getattr(stamp, "nanosec", 0)) * 1e-9
+    seconds = float(getattr(stamp, "sec", 0))
+    nanoseconds = float(getattr(stamp, "nanosec", 0))
+    if seconds == 0.0 and nanoseconds == 0.0:
+        return None
+    return seconds + nanoseconds * 1e-9
 
 
 def _copy_header(message: Any, source: Any) -> None:
