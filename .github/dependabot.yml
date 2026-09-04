@@ -12,6 +12,8 @@ updates:
           - version-update:semver-major
     groups:
       minor-and-patch:
+        patterns:
+          - "*"
         update-types:
           - minor
           - patch
