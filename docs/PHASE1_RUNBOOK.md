@@ -222,6 +222,20 @@ uv run python scripts/run_ros2_sim.py \
   --seed 0
 ```
 
+The command runs continuously until ROS2 is shut down. For a real-time
+headless control loop, disable camera rendering and optionally bound the run:
+
+```bash
+MUJOCO_GL=osmesa uv run python scripts/run_ros2_sim.py \
+  --config configs/task_pick_place.yaml \
+  --seed 0 \
+  --no-camera \
+  --max-ticks 500
+```
+
+Camera rendering is useful for image-topic consumers but is substantially more
+expensive than the MuJoCo control tick on software-rendered hosts.
+
 The node subscribes to the trajectory and gripper topics, publishes joint
 states and camera images, publishes matching `CameraInfo`, and broadcasts the
 MuJoCo body and camera frames on `/tf`. Run the real-message acceptance test
