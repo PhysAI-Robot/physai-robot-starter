@@ -88,16 +88,16 @@ more complex planners.
 
 #### Deliverables
 - [x] TurtleBot4 ROS 2 MuJoCo bridge for `/cmd_vel`, wheel state, `/odom`, and TF.
-- [ ] `configs/nav2/`: Minimal Nav2 configuration and launch assets for the TurtleBot4 test world.
-- [ ] Waypoint or Point A to Point B scenario with known start and goal poses.
-- [ ] RPP controller as the initial baseline; evaluate MPPI separately if the simulator timing supports it.
+- [x] `configs/nav2/nav2_params.yaml`: Initial Nav2 controller and costmap parameters; launch wiring and sensor integration remain open.
+- [x] Direct MuJoCo Point A to Point B scenario with known start and goal poses.
+- [x] TurtleBot-owned RPP controller as the initial direct-simulation baseline; evaluate the Nav2 controller separately when Nav2 is installed.
 - [ ] Obstacle and collision regression scenarios.
 
 #### Definition of Done
 - [x] TurtleBot4 accepts a standard `geometry_msgs/msg/Twist` command and reports wheel state, odometry, and `odom` to `base_link` TF through the real `rclpy` acceptance test.
-- [ ] Nav2 reaches a goal in the deterministic test world without collision.
-- [ ] The result is reproducible across repeated runs with the same seed.
-- [ ] Navigation failures report useful termination and timeout information.
+- [ ] Nav2 reaches a goal in the deterministic test world without collision. **Partial:** the direct MuJoCo RPP baseline reaches `(1.0, -1.0)` with zero non-ground contacts; Nav2 runtime is not installed in the current ROS2 environment.
+- [x] The direct MuJoCo navigation result is reproducible across repeated runs with the same seed.
+- [x] Direct navigation failures report a timeout reason and collision count; Nav2 action failure reporting remains open.
 
 ### Phase 1D: Per-Robot Kinematics and Manipulation Control
 
