@@ -124,6 +124,29 @@ def test_turtlebot4_stays_on_the_ground_while_driving():
         env.close()
 
 
+def test_turtlebot4_rpp_reaches_deterministic_goal():
+    from physai.robots.turtlebot import NavigationGoal, navigate_to_goal
+
+    result = navigate_to_goal(NavigationGoal(x=1.0, y=-1.0), seed=0)
+
+    assert result.reached
+    assert result.steps < 100
+    assert result.position_error <= 0.10
+    assert result.heading_error <= 0.15
+    assert result.collision_count == 0
+    assert result.failure_reason is None
+
+
+def test_turtlebot4_rpp_goal_result_is_reproducible():
+    from physai.robots.turtlebot import NavigationGoal, navigate_to_goal
+
+    goal = NavigationGoal(x=1.0, y=-1.0)
+    first = navigate_to_goal(goal, seed=7)
+    second = navigate_to_goal(goal, seed=7)
+
+    assert first == second
+
+
 def test_turtlebot4_published_image_is_not_blank():
     """`images` is an advertised capability, so it must carry actual pixels.
 
