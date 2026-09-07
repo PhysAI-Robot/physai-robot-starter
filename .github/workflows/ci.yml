@@ -50,3 +50,24 @@ jobs:
 
       - name: Run test suite
         run: uv run python -m pytest tests/ -q
+
+  ros2-acceptance:
+    name: ROS2 Jazzy SO-101 acceptance
+    runs-on: ubuntu-24.04
+    env:
+      MUJOCO_GL: osmesa
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Build ROS2 test image
+        run: docker build --tag physai-ros2-test --file docker/Dockerfile .
+
+      - name: Run real rclpy acceptance test
+        run: |
+          docker run --rm \
+            --env MUJOCO_GL=osmesa \
+            physai-ros2-test \
+            bash -lc 'source /opt/ros/jazzy/setup.bash && uv run python -m pytest tests/robots/so101/test_ros2_node.py tests/robots/turtlebot/test_ros2_node.py -q'
