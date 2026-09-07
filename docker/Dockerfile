@@ -33,6 +33,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-ros2-control \
     ros-jazzy-ros2-controllers \
     ros-jazzy-control-msgs \
+    ros-jazzy-navigation2 \
+    ros-jazzy-nav2-bringup \
     ros-dev-tools \
     git \
     ffmpeg \
