@@ -19,8 +19,9 @@ def test_real_ros2_trajectory_and_gripper_move_mujoco():
     from tf2_msgs.msg import TFMessage
     from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
-    from physai.bridge import SO101ROS2Node
+    from physai.bridge.ros2_contract import TF_FRAMES
     from physai.robots.so101 import EnvConfig
+    from physai.robots.so101.ros2_node import SO101ROS2Node
 
     rclpy.init(args=[])
     node = rclpy.create_node("test_so101_ros2_node")
@@ -55,7 +56,8 @@ def test_real_ros2_trajectory_and_gripper_move_mujoco():
         gripper_publisher.publish(gripper)
 
         driver.run(max_ticks=30)
-        rclpy.spin_once(node, timeout_sec=0.1)
+        for _ in range(3):
+            rclpy.spin_once(node, timeout_sec=0.1)
         final = driver.bridge.observation.joint_state.position
 
         np.testing.assert_allclose(final[:5], point.positions, atol=0.05)
@@ -64,9 +66,36 @@ def test_real_ros2_trajectory_and_gripper_move_mujoco():
         assert published_camera_info
         assert published_camera_info[-1].width > 0
         assert published_tf
-        assert "gripper_frame" in {
-            transform.child_frame_id for transform in published_tf[-1].transforms
+        transforms = published_tf[-1].transforms
+        assert {transform.child_frame_id for transform in transforms} == set(TF_FRAMES) - {"world"}
+        assert [(transform.header.frame_id, transform.child_frame_id) for transform in transforms] == [
+            ("world", "base"),
+            ("base", "shoulder"),
+            ("shoulder", "upper_arm"),
+            ("upper_arm", "lower_arm"),
+            ("lower_arm", "wrist"),
+            ("wrist", "gripper"),
+            ("gripper", "gripper_frame"),
+            ("world", "camera_front"),
+            ("gripper_frame", "camera_wrist"),
+        ]
+        joint_state_stamps = {
+            (message.header.stamp.sec, message.header.stamp.nanosec)
+            for message in published_joint_states
         }
+        for transform in transforms:
+            quaternion = transform.transform.rotation
+            norm = (
+                quaternion.x**2
+                + quaternion.y**2
+                + quaternion.z**2
+                + quaternion.w**2
+            ) ** 0.5
+            assert norm == pytest.approx(1.0, abs=1e-6)
+            assert (
+                transform.header.stamp.sec,
+                transform.header.stamp.nanosec,
+            ) in joint_state_stamps
     finally:
         driver.close()
         node.destroy_node()
