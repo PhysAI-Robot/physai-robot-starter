@@ -69,13 +69,13 @@ complete task and kinematics support.
 
 #### Deliverables
 - [x] `src/physai/bridge/mujoco_ros_bridge.py`: Synchronous runtime MuJoCo bridge that publishes joint states and camera frames and accepts joint trajectory and gripper commands through an injected transport.
-- [ ] ROS 2 message adapters for `sensor_msgs/msg/JointState`, `sensor_msgs/msg/Image`, `trajectory_msgs/msg/JointTrajectory`, and the gripper command interface. **Partial:** codec and `RclpyTransport` adapters exist; a real ROS 2 node integration is still pending.
-- [ ] TF publication for the documented SO-101 frame tree.
-- [x] Teleoperation path using an equivalent ROS2-shaped joint and gripper test client; real `rclpy` node integration remains pending.
+- [x] ROS 2 message adapters for `sensor_msgs/msg/JointState`, `sensor_msgs/msg/Image`, `trajectory_msgs/msg/JointTrajectory`, and the gripper command interface, with real `rclpy` node acceptance coverage.
+- [x] TF publication for the documented SO-101 frame tree, including camera and gripper frames.
+- [x] Teleoperation path through a real `rclpy` node and ROS2 joint and gripper topics.
 - [x] Integration test for command-to-simulation and simulation-to-topic flow using the transport port and fake ROS 2 transport.
 
 #### Definition of Done
-- [ ] A joint trajectory command moves the SO-101 in MuJoCo at the configured control rate. **Partial:** the bridge tick and command routing are tested with a fake robot; an end-to-end SO-101 ROS 2 test is still pending.
+- [x] A joint trajectory command moves the SO-101 in MuJoCo at the configured control rate through a real `rclpy` node.
 - [x] Published joint names, radians, timestamps, camera encoding, and frame IDs match the ROS 2 contract for the fields currently represented by `Observation`.
 - [x] Gripper commands are converted consistently between normalized aperture and simulator joint units.
 - [x] The bridge can run with rendering disabled and does not require ML packages.
@@ -87,14 +87,14 @@ Start with a small deterministic world and a simple controller before adding
 more complex planners.
 
 #### Deliverables
-- [ ] TurtleBot4 ROS 2 bridge for `/cmd_vel`, wheel state, `/odom`, and TF.
+- [x] TurtleBot4 ROS 2 MuJoCo bridge for `/cmd_vel`, wheel state, `/odom`, and TF.
 - [ ] `configs/nav2/`: Minimal Nav2 configuration and launch assets for the TurtleBot4 test world.
 - [ ] Waypoint or Point A to Point B scenario with known start and goal poses.
 - [ ] RPP controller as the initial baseline; evaluate MPPI separately if the simulator timing supports it.
 - [ ] Obstacle and collision regression scenarios.
 
 #### Definition of Done
-- [ ] TurtleBot4 accepts a standard `geometry_msgs/msg/Twist` command and reports consistent odometry.
+- [x] TurtleBot4 accepts a standard `geometry_msgs/msg/Twist` command and reports wheel state, odometry, and `odom` to `base_link` TF through the real `rclpy` acceptance test.
 - [ ] Nav2 reaches a goal in the deterministic test world without collision.
 - [ ] The result is reproducible across repeated runs with the same seed.
 - [ ] Navigation failures report useful termination and timeout information.
@@ -145,8 +145,8 @@ be added after the shared contracts, bridge pattern, and acceptance tests are
 proven on the first two robots.
 
 ### Definition of Done (DoD)
-- [x] SO-101 and TurtleBot4 pass the deterministic contract, reset, and control regression suite. The current suite has 70 passing tests and 2 skipped; the scripted SO-101 pick-and-place reliability check is 20/20 with the calibrated pad setup.
-- [x] SO-101 can be teleoperated through its ROS 2-shaped joint and gripper interfaces; real `rclpy` node integration remains pending.
+- [x] SO-101 and TurtleBot4 pass the deterministic contract, reset, and control regression suite. The current suite has 74 passing tests and 2 skipped in the ROS2 Jazzy environment; the scripted SO-101 pick-and-place reliability check is 20/20 with the calibrated pad setup.
+- [x] SO-101 can be teleoperated through a real `rclpy` node using its ROS 2 joint, gripper, camera, and TF interfaces.
 - [ ] TurtleBot4 can navigate from Point A to Point B through the ROS 2/Nav2 path without collision in the deterministic test world.
 - [ ] SO-101 IK meets the documented position and orientation tolerances on reachable targets and rejects invalid targets safely.
 - [ ] Domain Randomization can be enabled or disabled through `configs/sim_config.yaml` without changing ROS 2 topic contracts.
