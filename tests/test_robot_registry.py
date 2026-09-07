@@ -30,6 +30,12 @@ def test_so101_is_registered():
         env.close()
 
 
+def test_ros2_nodes_are_registered_for_supported_robots():
+    from physai.robots import available_ros2_robots
+
+    assert available_ros2_robots() == ("so101", "turtlebot4")
+
+
 def test_so101_environment_is_owned_by_robot_package():
     from physai.robots.so101 import EnvConfig, SO101Env
     import physai.sim as sim
