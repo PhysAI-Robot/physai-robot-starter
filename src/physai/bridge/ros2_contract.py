@@ -57,6 +57,15 @@ ROBOT_ENDPOINTS: tuple[Endpoint, ...] = (
              "control_msgs/msg/GripperCommand",
              Direction.SUBSCRIBE, 25.0, "so101_driver",
              "normalised aperture 0..1"),
+    Endpoint("/cmd_vel", "geometry_msgs/msg/Twist",
+             Direction.SUBSCRIBE, 10.0, "turtlebot4_driver",
+             "base-frame linear and angular velocity"),
+    Endpoint("/odom", "nav_msgs/msg/Odometry",
+             Direction.PUBLISH, 10.0, "turtlebot4_driver",
+             "odom to base_link pose and twist"),
+    Endpoint("/tf", "tf2_msgs/msg/TFMessage",
+             Direction.PUBLISH, 10.0, "turtlebot4_driver",
+             "odom to base_link"),
 )
 
 #: Node that runs the VLA policy at the control rate.
@@ -86,7 +95,7 @@ POLICY_ENDPOINTS: tuple[Endpoint, ...] = (
 
 #: Topics fed from outside the robot stack (an operator UI, a bag, a test
 #: script). Nothing in this graph publishes them, and that is correct.
-EXTERNAL_INPUTS: frozenset[str] = frozenset({"/task/instruction"})
+EXTERNAL_INPUTS: frozenset[str] = frozenset({"/cmd_vel", "/task/instruction"})
 
 #: Node that runs the VLM planner. Slow, and allowed to be.
 PLANNER_ENDPOINTS: tuple[Endpoint, ...] = (
@@ -107,6 +116,8 @@ TF_FRAMES: tuple[str, ...] = (
     "world", "base", "shoulder", "upper_arm", "lower_arm", "wrist",
     "gripper", "gripper_frame", "camera_front", "camera_wrist",
 )
+
+TURTLEBOT_TF_FRAMES: tuple[str, ...] = ("odom", "base_link")
 
 RECOMMENDED_DISTRO = "jazzy"
 
