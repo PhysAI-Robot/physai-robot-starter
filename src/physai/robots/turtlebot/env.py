@@ -189,6 +189,19 @@ class TurtleBot4Env(MuJoCoSimulationCore):
     def close(self) -> None:
         super().close()
 
+    def non_ground_contact_count(self) -> int:
+        """Count contacts that are not expected contact with the ground plane."""
+        count = 0
+        for index in range(self.data.ncon):
+            contact = self.data.contact[index]
+            names = (
+                self.model.geom(contact.geom[0]).name,
+                self.model.geom(contact.geom[1]).name,
+            )
+            if "physai_ground" not in names:
+                count += 1
+        return count
+
     def joint_state(self) -> JointState:
         positions = np.array([self.data.joint(name).qpos[0] for name in ("left", "right")])
         velocities = np.array([self.data.joint(name).qvel[0] for name in ("left", "right")])
