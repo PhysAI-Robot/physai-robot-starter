@@ -4,8 +4,8 @@ This guide explains how to run the Phase 1 baseline through `uv`, reproduce the 
 
 This document reflects the current state of branch `feat/phase1-foundation-ci`:
 
-- Test suite: 71 passed, 3 skipped on a host without `control_msgs` or PyTorch.
-- SO-101 ROS2 teleoperation through fake transport and a real `rclpy` node: covered by acceptance tests when Jazzy message packages are installed.
+- Test suite: 74 passed, 2 skipped when run in the ROS2 Jazzy environment used for acceptance testing.
+- SO-101 ROS2 teleoperation through fake transport and a real `rclpy` node: covered by the ROS2 Jazzy acceptance job and `tests/robots/so101/test_ros2_node.py`.
 - TurtleBot4 Nav2 and the domain-randomization engine: not complete.
 - Scripted SO-101 pick-and-place reaches `success 20/20` over seeds 0-19 (`--episodes 20 --seed 0 --max-steps 600`) in the checked-in deterministic scene. The result depends on the calibrated pad geometry: the added pads are placed on the actual jaw contact surfaces and replace the original jaw collision meshes, so the mesh and pad do not compete for contact resolution. This is a deterministic baseline result, not a claim about domain-randomized or hardware runs.
 
@@ -42,6 +42,16 @@ uv run python -m pytest --version
 The project requires Python `3.12.x`. `uv` creates and manages `.venv`
 automatically; it does not need to be activated manually.
 
+Fetch the robot assets before running simulation tests or workflows:
+
+```bash
+uv run python scripts/fetch_assets.py --robot so101
+uv run python scripts/fetch_assets.py --robot turtlebot4
+```
+
+Assets are placed under `assets/`. Do not use this folder for model snapshots
+or generated experiment output that should be committed.
+
 ## 3. Baseline Tests
 
 Run the full regression suite before and after editing code:
@@ -50,14 +60,10 @@ Run the full regression suite before and after editing code:
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 ```
 
-Expected result on this host:
-
-```text
-71 passed, 3 skipped
-```
-
-With `ros-jazzy-control-msgs` installed, the ROS2 acceptance test runs and the
-result becomes `72 passed, 2 skipped`.
+The exact count depends on optional ROS2 and ML packages. The verified ROS2
+Jazzy environment reports `74 passed, 2 skipped`; the standard Python
+environment skips the ROS2 acceptance tests. Treat a non-zero exit code as a
+failure and inspect the failing test rather than relying on a fixed count.
 
 If the test count changes, focus on the exit code and failure details, not only the test count.
 
@@ -69,17 +75,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest \
   tests/test_robot_registry.py::test_ros2_mujoco_teleop_command_moves_so101 -q
 ```
 
-## 4. Fetch SO-101 Assets
-
-Fetch the robot asset if it is not already available:
-
-```bash
-uv run python scripts/fetch_assets.py --robot so101
-```
-
-Assets are placed under `assets/so101/`. Do not use this folder for model snapshots or generated experiment output that should be committed.
-
-## 5. Run SO-101 Direct MuJoCo
+## 4. Run SO-101 Direct MuJoCo
 
 The `--config` argument is optional. Without it, `run_sim.py` uses its built-in
 SO-101 defaults. Add `--no-video` when you only want the simulation result and
@@ -136,7 +132,7 @@ uv run python scripts/run_sim.py \
 
 Do not use `--viewer` in headless or CI workflows.
 
-## 6. Evaluate Scripted Pick-and-Place
+## 5. Evaluate Scripted Pick-and-Place
 
 Repeat the first five seeds:
 
@@ -179,7 +175,7 @@ python scripts/eval_policy.py \
 
 The `outputs/` directory and local evaluation results do not need to be committed.
 
-## 7. Reproduce ROS2-Shaped SO-101 Teleoperation
+## 6. Reproduce ROS2 SO-101 and TurtleBot4 Nodes
 
 The currently tested path uses `RecordingTransport`, so it does not require a ROS2 installation. The test sends both commands through the same endpoints used by the ROS2 contract:
 
@@ -208,11 +204,11 @@ uv run python scripts/show_ros2_contract.py
 ```
 
 The fake-transport path does not prove ROS2 QoS, serialization, executor
-behavior, or hardware connectivity. Use the real node and acceptance test
-below for the ROS2 message and executor path.
+behavior, or hardware connectivity. The real node acceptance test exercises
+the ROS2 message and executor path, including the complete SO-101 TF tree.
 
-The repository also provides a real ROS2 SO-101 MuJoCo node. It requires a
-sourced ROS2 Jazzy environment and the `control_msgs` package:
+The repository also provides real ROS2 MuJoCo nodes. They require a sourced
+ROS2 Jazzy environment and the ROS2 message packages:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
@@ -222,14 +218,13 @@ uv run python scripts/run_ros2_sim.py \
   --seed 0
 ```
 
-The command runs continuously until ROS2 is shut down. For a real-time
-headless control loop, disable camera rendering and optionally bound the run:
+The command runs continuously until ROS2 is shut down. Bound the run for a
+repeatable smoke test with `--max-ticks`:
 
 ```bash
 MUJOCO_GL=osmesa uv run python scripts/run_ros2_sim.py \
   --config configs/task_pick_place.yaml \
   --seed 0 \
-  --no-camera \
   --max-ticks 500
 ```
 
@@ -243,14 +238,32 @@ in the same ROS2 environment:
 
 ```bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest \
-  tests/test_ros2_node.py -q
+  tests/robots/so101/test_ros2_node.py -q
 ```
+
+Run the TurtleBot4 ROS2 acceptance test with:
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest \
+  tests/robots/turtlebot/test_ros2_node.py -q
+```
+
+Run the TurtleBot4 ROS2 bridge for a bounded smoke test with:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+uv run python scripts/run_ros2_sim.py --robot turtlebot4 --max-ticks 100
+```
+
+The TurtleBot4 node subscribes to `/cmd_vel` and publishes `/joint_states`,
+`/odom`, and `odom` to `base_link` TF. Nav2 goal execution is still a later
+Phase 1 step.
 
 The Docker image installs `ros-jazzy-control-msgs`. On a host installation,
 install that package with the system ROS2 package manager before running the
 node or acceptance test.
 
-## 8. Parameters to Edit
+## 7. Parameters to Edit
 
 ### Global simulation parameters
 
@@ -352,7 +365,7 @@ File: `src/physai/bridge/mujoco_ros_bridge.py`
 - `MuJoCoROSBridge.run()` runs a loop using `control_hz` from `RobotSpec` or an override.
 - `RclpyTransport` is only a transport adapter; the calling application remains responsible for importing and configuring `rclpy`.
 
-## 9. Edit and Validation Workflow
+## 8. Edit and Validation Workflow
 
 Use this sequence when changing parameters or code:
 
@@ -387,12 +400,11 @@ uv run python scripts/eval_policy.py \
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 ```
 
-## 10. Current Phase 1 Boundaries
+## 9. Current Phase 1 Boundaries
 
 The following items remain separate work and must not be considered complete only because the commands above pass:
 
-- The SO-101 TF tree is not published.
-- Real `rclpy` node integration is not tested.
+- Hardware connectivity and controller QoS behavior are not tested.
 - TurtleBot4 does not yet have a Nav2 goal workflow.
 - An IK benchmark with success rate, error, iterations, and runtime metrics is not available.
 - The domain-randomization engine is not available.

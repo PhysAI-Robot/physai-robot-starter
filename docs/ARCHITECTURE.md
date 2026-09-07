@@ -152,10 +152,12 @@ capabilities, not on a robot name or transport implementation.
 
 `MuJoCoROSBridge` owns the synchronous control tick around
 `ROS2MuJoCoAdapter`. `RclpyTransport` adapts an existing `rclpy` node to the
-transport port without importing ROS2 from the core package. The current bridge
-publishes joint states, available camera images, CameraInfo, and SO-101 TF, and
-accepts joint trajectory and gripper commands. Mobile-base endpoints remain
-later Phase 1 work.
+transport port without importing ROS2 from the core package. Embodiment-owned
+ROS2 nodes under `physai.robots` compose these generic pieces: the SO-101 node
+publishes joint states, camera images, CameraInfo, and TF while accepting joint
+trajectory and gripper commands; the TurtleBot4 node accepts `/cmd_vel` and
+publishes wheel state, `/odom`, and `odom` to `base_link` TF. Nav2 orchestration
+remains later Phase 1 work.
 
 ### Task-specific scenes
 
@@ -386,11 +388,8 @@ default `ContractMessageCodec` is used by Phase 0 tests, while
 
 Both adapters must make unit conversion, joint ordering, timestamps, frame
 names, command freshness, and command rate explicit. Joint order and value
-shape are validated at decode time against `RobotSpec`. The current adapter
-publishes the observation fields represented by the Phase 0 contract plus
-CameraInfo and TF; mobile-base endpoint publication requires the remaining
-Phase 1 integration work. The ROS2 contract file is the source of truth for
-those external interfaces; it is not itself an adapter.
+shape are validated at decode time against `RobotSpec`. The ROS2 contract file
+is the source of truth for external interfaces; it is not itself an adapter.
 
 ### Required validation gates
 
