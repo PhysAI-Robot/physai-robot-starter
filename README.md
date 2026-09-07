@@ -80,6 +80,37 @@ interactive MuJoCo viewer after the headless run succeeds:
 uv run python scripts/run_sim.py --viewer
 ```
 
+### Optional WSL2 viewer performance
+
+This section is only for users running the viewer inside WSL2. Native Ubuntu
+users can skip it. On WSL2, MuJoCo can fall back to the CPU software renderer
+(`llvmpipe`), which makes the interactive viewer look choppy even when
+`nvidia-smi` can see the NVIDIA GPU. If that happens, enable the WSLg D3D12
+renderer for the shell before opening the viewer:
+
+```bash
+export GALLIUM_DRIVER=d3d12
+uv run python scripts/run_sim.py --viewer
+```
+
+To apply this automatically to future Bash sessions, add the setting once:
+
+```bash
+printf '\nexport GALLIUM_DRIVER=d3d12\n' >> ~/.bashrc
+source ~/.bashrc
+```
+
+Verify that OpenGL is accelerated and reports the NVIDIA GPU:
+
+```bash
+glxinfo -B | grep -Ei 'vendor|renderer|accelerated'
+```
+
+The renderer should mention `D3D12` and the NVIDIA GPU, not `llvmpipe` or
+`Accelerated: no`. WSL2 GPU support requires a current NVIDIA driver on the
+Windows host and WSLg; do not install the Linux NVIDIA display driver inside
+WSL with `sudo apt install nvidia-driver`.
+
 Run the same task from the checked-in YAML configuration:
 
 ```bash
