@@ -1,4 +1,4 @@
-"""Executable ROS2 boundary for the SO-101 MuJoCo simulation."""
+"""ROS2 node adapter for the SO-101 MuJoCo backend."""
 
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ from typing import Any
 import mujoco
 import numpy as np
 
-from ..robots.so101 import EnvConfig, SO101Env
-from .messages import ROS2MessageCodec
-from .mujoco_ros_bridge import MuJoCoROSBridge, RclpyTransport
+from ...bridge.messages import ROS2MessageCodec
+from ...bridge.mujoco_ros_bridge import MuJoCoROSBridge, RclpyTransport
+from .env import EnvConfig, SO101Env
 
 
 def _quaternion_from_rotation(rotation: np.ndarray) -> tuple[float, float, float, float]:
@@ -114,9 +114,7 @@ class SO101ROS2Node:
             parent = child
         world_positions["gripper_frame"] = world_positions["gripper"]
         world_rotations["gripper_frame"] = world_rotations["gripper"]
-        transforms.append(self._transform(
-            "gripper", "gripper_frame", world_positions, world_rotations, observation
-        ))
+        transforms.append(self._transform("gripper", "gripper_frame", world_positions, world_rotations, observation))
         for camera_name, frame_name, parent in (
             ("front", "camera_front", "world"),
             ("wrist", "camera_wrist", "gripper_frame"),
