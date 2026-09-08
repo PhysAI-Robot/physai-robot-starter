@@ -29,6 +29,8 @@ def generate_launch_description() -> LaunchDescription:
                     "scripts/run_ros2_sim.py",
                     "--robot",
                     "turtlebot4",
+                    "--max-ticks",
+                    "5000",
                 ],
                 cwd=str(REPO_ROOT),
                 output="screen",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 from typing import Any
 
@@ -50,6 +51,13 @@ class TurtleBot4ROS2Node:
             frame_id="base",
         )
 
+    def _ros_orientation(self, pose: Any) -> tuple[float, float, float, float]:
+        yaw = 2.0 * math.atan2(float(pose.orientation.z), float(pose.orientation.w))
+        return 0.0, 0.0, math.sin(yaw / 2.0), math.cos(yaw / 2.0)
+
+    def _ros_position(self, position: Any) -> tuple[float, float, float]:
+        return -float(position.y), float(position.x), float(position.z)
+
     def _stamp(self, header: Any, value: float) -> None:
         seconds = max(0.0, float(value))
         header.stamp.sec = int(seconds)
@@ -71,13 +79,15 @@ class TurtleBot4ROS2Node:
         message.header.frame_id = "odom"
         message.child_frame_id = "base_link"
         self._stamp(message.header, observation.sim_time)
-        message.pose.pose.position.x = pose.position.x
-        message.pose.pose.position.y = pose.position.y
-        message.pose.pose.position.z = pose.position.z
-        message.pose.pose.orientation.x = pose.orientation.x
-        message.pose.pose.orientation.y = pose.orientation.y
-        message.pose.pose.orientation.z = pose.orientation.z
-        message.pose.pose.orientation.w = pose.orientation.w
+        position = self._ros_position(pose.position)
+        message.pose.pose.position.x = position[0]
+        message.pose.pose.position.y = position[1]
+        message.pose.pose.position.z = position[2]
+        orientation = self._ros_orientation(pose)
+        message.pose.pose.orientation.x = orientation[0]
+        message.pose.pose.orientation.y = orientation[1]
+        message.pose.pose.orientation.z = orientation[2]
+        message.pose.pose.orientation.w = orientation[3]
         message.twist.twist.linear.x = self._command.linear.x
         message.twist.twist.linear.y = self._command.linear.y
         message.twist.twist.angular.z = self._command.angular.z
@@ -89,13 +99,15 @@ class TurtleBot4ROS2Node:
         transform.header.frame_id = "odom"
         transform.child_frame_id = "base_link"
         self._stamp(transform.header, observation.sim_time)
-        transform.transform.translation.x = pose.position.x
-        transform.transform.translation.y = pose.position.y
-        transform.transform.translation.z = pose.position.z
-        transform.transform.rotation.x = pose.orientation.x
-        transform.transform.rotation.y = pose.orientation.y
-        transform.transform.rotation.z = pose.orientation.z
-        transform.transform.rotation.w = pose.orientation.w
+        position = self._ros_position(pose.position)
+        transform.transform.translation.x = position[0]
+        transform.transform.translation.y = position[1]
+        transform.transform.translation.z = position[2]
+        orientation = self._ros_orientation(pose)
+        transform.transform.rotation.x = orientation[0]
+        transform.transform.rotation.y = orientation[1]
+        transform.transform.rotation.z = orientation[2]
+        transform.transform.rotation.w = orientation[3]
         message = self._tf_message_type()
         message.transforms = [transform]
         return message
