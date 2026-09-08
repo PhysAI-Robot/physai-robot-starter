@@ -97,7 +97,7 @@ errors.
 | Module | Owns | Must not own |
 | --- | --- | --- |
 | `physai.contracts` | Shared `Observation`, `Action`, and ROS2-shaped value types | Robot-specific ordering or task rules |
-| `physai.config` | Typed YAML configuration for shared simulation and task runtime settings | Simulation behavior, robot construction, or task evaluation |
+| `physai.config` | Typed YAML configuration parsing delegated to robot-owned config factories | Simulation behavior, robot construction, or task evaluation |
 | `physai.robots` | Embodiment discovery, `RobotSpec`, robot ports, factories, environments, and robot-specific adapters | Task reward, planner decisions, or model SDKs |
 | `physai.tasks` | Task state, reset rules, reward, metrics, and termination | Robot internals or action generation |
 | `physai.sim` | MuJoCo simulation core, generic scene primitives, task-specific scene builders, rendering, and simulation time | Robot-specific environment logic, ROS2 transport, QoS, or callbacks |
@@ -107,7 +107,8 @@ errors.
 | `physai.data` | Episode recording and dataset loading | Simulation decisions or model inference |
 | `physai.bridge` | ROS2 transport, topic/message mapping, timing, and ROS2-backed adapters | Physics implementation, task semantics, or model inference |
 | `physai.runtime` | Runtime composition, compatibility checks, and safety orchestration | Robot-specific physics, task reward, or model inference |
-| `scripts/` | CLI argument parsing and runtime composition | IK, reward calculation, or SDK-specific implementation |
+| `scripts/` | Generic CLI argument parsing and runtime composition | IK, reward calculation, or SDK-specific implementation |
+| `launch/` | Generic ROS2 launch composition and launch arguments | Robot physics, transport callbacks, or task rules |
 | `tests/` | Executable behavior and contract coverage | New runtime ownership |
 
 The source tree follows this ownership map:
@@ -156,8 +157,9 @@ transport port without importing ROS2 from the core package. Embodiment-owned
 ROS2 nodes under `physai.robots` compose these generic pieces: the SO-101 node
 publishes joint states, camera images, CameraInfo, and TF while accepting joint
 trajectory and gripper commands; the TurtleBot4 node accepts `/cmd_vel` and
-publishes wheel state, `/odom`, and `odom` to `base_link` TF. Nav2 orchestration
-remains later Phase 1 work.
+publishes wheel state, `/odom`, and `odom` to `base_link` TF. The generic
+`launch/` composition starts the currently supported Nav2 profile; robot-owned
+Nav2 parameters and maps live under `configs/nav2/<robot>/`.
 
 ### Task-specific scenes
 

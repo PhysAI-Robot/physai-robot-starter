@@ -69,7 +69,8 @@ the `odom` to `base_link` TF transform.
 Run the first Point A to Point B scenario directly in MuJoCo:
 
 ```bash
-uv run python scripts/eval_turtlebot_navigation.py \
+uv run python scripts/eval_navigation.py \
+  --robot turtlebot4 \
   --goal-x 1.0 \
   --goal-y -1.0 \
   --goal-yaw 0.0 \
@@ -85,10 +86,10 @@ pure-pursuit baseline.
 
 The first Nav2 integration uses a standard static map instead of SLAM:
 
-- `configs/nav2/dummy_map.yaml`: map metadata, resolution, and origin.
-- `configs/nav2/dummy_map.pgm`: open 4 m by 4 m map with a border wall.
-- `configs/nav2/nav2_params.yaml`: map, planner, controller, and costmaps.
-- `configs/nav2/turtlebot4_nav2.launch.py`: driver, map server, TF, and Nav2.
+- `configs/nav2/turtlebot4/map.yaml`: map metadata, resolution, and origin.
+- `configs/nav2/turtlebot4/map.pgm`: open 4 m by 4 m map with a border wall.
+- `configs/nav2/turtlebot4/params.yaml`: TurtleBot4 map, planner, controller, and costmaps.
+- `launch/nav2.launch.py`: generic driver, map server, TF, and Nav2 composition.
 
 Check that Nav2 is installed:
 
@@ -110,14 +111,15 @@ docker compose -f docker/docker-compose.yml run --rm physai \
 Start the map-based smoke test when the package is available:
 
 ```bash
-ros2 launch configs/nav2/turtlebot4_nav2.launch.py
+ros2 launch launch/nav2.launch.py robot:=turtlebot4
 ```
 
 In a second terminal, send the deterministic open-space goal:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-uv run python scripts/send_turtlebot_nav_goal.py \
+uv run python scripts/send_nav_goal.py \
+  --robot turtlebot4 \
   --x 1.0 \
   --y 0.0 \
   --yaw 0.0
@@ -137,16 +139,12 @@ local costmap intentionally has no obstacle layer yet.
 
 ## 6. Parameters and Open Work
 
-Navigation parameters are in `configs/nav2/nav2_params.yaml`. Keep the dummy
+Navigation parameters are in `configs/nav2/turtlebot4/params.yaml`. Keep the dummy
 map for the first Nav2 smoke test; replace it with a real map only after the
 map-frame and odometry-frame relationship is understood.
 
 Open navigation work is:
 
-- Publish a real simulated `LaserScan`.
-- Add obstacle geometry and obstacle-layer configuration.
-- Add collision and timeout regression scenarios.
-- Verify repeated Nav2 goals with the same seed.
 
 Later planner/VLM/VLA stages can target TurtleBot waypoints through the same
 shared plan and action contracts; they are not required for the first
