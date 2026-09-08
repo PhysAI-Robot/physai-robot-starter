@@ -1,4 +1,4 @@
-"""Evaluate the deterministic TurtleBot4 Point A to Point B baseline."""
+"""Evaluate the registered deterministic navigation baseline."""
 
 from __future__ import annotations
 
@@ -8,9 +8,8 @@ import _bootstrap  # noqa: F401
 
 
 def main() -> int:
-    from physai.robots.turtlebot import NavigationGoal, navigate_to_goal
-
     parser = argparse.ArgumentParser()
+    parser.add_argument("--robot", default="turtlebot4")
     parser.add_argument("--goal-x", type=float, default=1.0)
     parser.add_argument("--goal-y", type=float, default=-1.0)
     parser.add_argument("--goal-yaw", type=float, default=0.0)
@@ -18,13 +17,18 @@ def main() -> int:
     parser.add_argument("--max-steps", type=int, default=300)
     args = parser.parse_args()
 
-    result = navigate_to_goal(
-        NavigationGoal(args.goal_x, args.goal_y, args.goal_yaw),
+    from physai.robots import navigate
+
+    result = navigate(
+        args.robot,
+        goal_x=args.goal_x,
+        goal_y=args.goal_y,
+        goal_yaw=args.goal_yaw,
         seed=args.seed,
         max_steps=args.max_steps,
     )
     print(
-        f"reached={result.reached} steps={result.steps} "
+        f"robot={args.robot} reached={result.reached} steps={result.steps} "
         f"position_error={result.position_error:.4f} "
         f"heading_error={result.heading_error:.4f} "
         f"collisions={result.collision_count} "

@@ -74,6 +74,13 @@ def test_turtlebot4_is_registered_and_uses_twist_control():
         env.close()
 
 
+def test_navigation_capability_is_resolved_by_robot_registry():
+    from physai.robots import navigate
+
+    with pytest.raises(ValueError, match="has no registered navigation baseline"):
+        navigate("so101", goal_x=1.0, goal_y=0.0)
+
+
 def test_turtlebot4_reset_is_deterministic_for_a_given_seed():
     import numpy as np
 

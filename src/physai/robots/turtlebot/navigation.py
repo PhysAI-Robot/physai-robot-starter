@@ -141,10 +141,25 @@ def navigate_to_goal(
         env.close()
 
 
+def navigate_to_coordinates(
+    *,
+    goal_x: float,
+    goal_y: float,
+    goal_yaw: float = 0.0,
+    **kwargs: object,
+) -> NavigationResult:
+    """Adapt generic navigation coordinates to the TurtleBot goal contract."""
+    return navigate_to_goal(
+        NavigationGoal(goal_x, goal_y, goal_yaw),
+        **kwargs,
+    )
+
+
 __all__ = [
     "NavigationGoal",
     "NavigationResult",
     "RPPConfig",
     "RegulatedPurePursuit",
     "navigate_to_goal",
+    "navigate_to_coordinates",
 ]

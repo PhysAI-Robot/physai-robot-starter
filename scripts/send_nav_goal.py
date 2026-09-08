@@ -1,4 +1,4 @@
-"""Send one NavigateToPose goal to the TurtleBot4 Nav2 stack."""
+"""Send one NavigateToPose goal through the ROS2 navigation graph."""
 
 from __future__ import annotations
 
@@ -15,11 +15,11 @@ from rclpy.node import Node
 
 
 class NavigateToPoseClient(Node):
-    def __init__(self) -> None:
-        super().__init__("turtlebot4_nav_goal_client")
-        self.client = ActionClient(self, NavigateToPose, "navigate_to_pose")
+    def __init__(self, robot: str, action_name: str, odom_topic: str) -> None:
+        super().__init__(f"{robot}_navigation_client")
+        self.client = ActionClient(self, NavigateToPose, action_name)
         self.latest_odom: Odometry | None = None
-        self.create_subscription(Odometry, "/odom", self._receive_odom, 10)
+        self.create_subscription(Odometry, odom_topic, self._receive_odom, 10)
 
     def _receive_odom(self, message: Odometry) -> None:
         self.latest_odom = message
@@ -76,6 +76,9 @@ class NavigateToPoseClient(Node):
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--robot", default="turtlebot4")
+    parser.add_argument("--action", default="navigate_to_pose")
+    parser.add_argument("--odom-topic", default="/odom")
     parser.add_argument("--x", type=float, default=1.0)
     parser.add_argument("--y", type=float, default=0.0)
     parser.add_argument("--yaw", type=float, default=0.0)
@@ -83,7 +86,7 @@ def main() -> int:
     args = parser.parse_args()
 
     rclpy.init()
-    node = NavigateToPoseClient()
+    node = NavigateToPoseClient(args.robot, args.action, args.odom_topic)
     try:
         return node.send_goal(args.x, args.y, args.yaw, args.max_position_error)
     finally:

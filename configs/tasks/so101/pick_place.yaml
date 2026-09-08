@@ -1,5 +1,5 @@
 # Configuration for the minimal single-cube pick-and-place task.
-# Load it with `python scripts/run_sim.py --config configs/task_pick_place.yaml`.
+# Load it with `python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml`.
 
 robot: so101
 
