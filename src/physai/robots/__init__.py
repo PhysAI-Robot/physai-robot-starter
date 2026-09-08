@@ -7,7 +7,11 @@ from .registry import (
     available_ros2_robots,
     create_robot,
     create_ros2_node,
+    create_env_config,
+    navigate,
     register_robot,
+    register_env_config,
+    register_navigation,
     register_ros2_node,
 )
 
@@ -23,6 +27,10 @@ __all__ = [
     "available_ros2_robots",
     "create_robot",
     "create_ros2_node",
+    "create_env_config",
+    "navigate",
     "register_robot",
+    "register_env_config",
+    "register_navigation",
     "register_ros2_node",
 ]

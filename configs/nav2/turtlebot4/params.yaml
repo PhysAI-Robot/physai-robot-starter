@@ -9,7 +9,7 @@ bt_navigator:
 map_server:
   ros__parameters:
     use_sim_time: true
-    yaml_filename: dummy_map.yaml
+    yaml_filename: map.yaml
     frame_id: map
 
 map_saver:

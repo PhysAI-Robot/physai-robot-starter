@@ -1,7 +1,7 @@
 """Run one episode and write a video. The 30-second sanity check.
 
     python scripts/run_sim.py                      # scripted expert, 1 episode
-    python scripts/run_sim.py --config configs/task_pick_place.yaml
+    python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml
     python scripts/run_sim.py --episodes 5 --seed 0
     python scripts/run_sim.py --policy constant    # baseline: do nothing
     python scripts/run_sim.py --policy lerobot --checkpoint outputs/act_ckpt
@@ -95,7 +95,7 @@ def main() -> int:
                     default=Path("configs/sim_config.yaml"),
                     help="shared simulation configuration")
     ap.add_argument("--config", type=Path,
-                    help="YAML task configuration (for example configs/task_pick_place.yaml)")
+                    help="YAML task configuration (for example configs/tasks/so101/pick_place.yaml)")
     ap.add_argument("--robot", choices=available_robots(),
                     help="override the robot selected by --config")
     # "lerobot" belongs here: build_policy() handles it and the module

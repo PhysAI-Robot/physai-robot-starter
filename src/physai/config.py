@@ -8,7 +8,7 @@ from typing import Any
 
 import yaml
 
-from .robots.so101.env import EnvConfig
+from .robots import create_env_config
 from .sim.scenes import create_scene, get_scene_definition
 
 
@@ -36,7 +36,7 @@ class TaskConfig:
     robot: str
     task: str
     scene_name: str
-    env: EnvConfig
+    env: Any
     success_xy_tol: float = 0.04
     success_hold_steps: int = 10
     simulation: SimulationConfig = field(default_factory=SimulationConfig)
@@ -123,7 +123,7 @@ def load_task_config(path: str | Path) -> TaskConfig:
     success_xy_tol = env_data.pop("success_xy_tol", 0.04)
     success_hold_steps = env_data.pop("success_hold_steps", 10)
     _convert_lists_to_tuples(env_data, _ENV_TUPLE_FIELDS)
-    env = EnvConfig(scene=scene, **env_data)
+    env = create_env_config(robot, scene=scene, **env_data)
     return TaskConfig(
         robot=robot,
         task=task_name,

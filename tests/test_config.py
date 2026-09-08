@@ -7,7 +7,9 @@ def test_load_minimal_pick_place_config():
     from physai.sim import PickPlaceMinimalSceneConfig
 
     root = Path(__file__).resolve().parents[1]
-    config = load_task_config(root / "configs" / "task_pick_place.yaml")
+    config = load_task_config(
+        root / "configs" / "tasks" / "so101" / "pick_place.yaml"
+    )
 
     assert config.robot == "so101"
     assert config.task == "pick_place"
