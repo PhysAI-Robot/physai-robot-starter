@@ -132,10 +132,35 @@ Nav2 goal checker.
 
 The launch uses an identity `map` to `odom` transform and an open static map.
 It validates map loading, TF connectivity, planner startup, controller output,
-and an open-world `NavigateToPose` goal. It does not prove obstacle avoidance.
+and an open-world `NavigateToPose` goal.
 
-The current TurtleBot node does not publish `sensor_msgs/msg/LaserScan`, so the
-local costmap intentionally has no obstacle layer yet.
+To run the obstacle-aware scenario, use the robot-owned map and scenario:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+uv run python scripts/validate_nav2_obstacle.py
+```
+
+The acceptance runner starts and stops the complete Nav2 graph, waits for the
+navigation lifecycle nodes, checks that `/scan` sees the physical obstacle,
+and sends the deterministic goal automatically. To inspect the graph manually,
+the equivalent launch command is:
+
+```bash
+ros2 launch launch/nav2.launch.py \
+  robot:=turtlebot4 \
+  scenario:=obstacle_course \
+  map-file:=$PWD/configs/nav2/turtlebot4/obstacle_map.yaml
+```
+
+The obstacle scenario publishes a real `sensor_msgs/msg/LaserScan`, feeds the
+scan into the local Nav2 obstacle layer, and enables Collision Monitor slowdown
+and stop zones. The validated goal `(1.0, 0.0)` returned `SUCCEEDED` with a
+measured final position error of `0.021 m` around the physical obstacle; the
+acceptance runner also measured the obstacle at `0.400 m` in `/scan`. This
+demonstrates live obstacle-aware avoidance; the runner exits nonzero when scan
+detection or goal acceptance fails. Physical contact counting is still an
+acceptance-test gap.
 
 ## 6. Parameters and Open Work
 

@@ -88,14 +88,15 @@ more complex planners.
 
 #### Deliverables
 - [x] TurtleBot4 ROS 2 MuJoCo bridge for `/cmd_vel`, wheel state, `/odom`, and TF.
-- [x] `configs/nav2/turtlebot4/params.yaml`: Initial TurtleBot4 Nav2 controller and costmap parameters; launch wiring and sensor integration remain open.
+- [x] `configs/nav2/turtlebot4/params.yaml`: TurtleBot4 Nav2 controller, LaserScan obstacle layer, inflation, and Collision Monitor parameters.
 - [x] Direct MuJoCo Point A to Point B scenario with known start and goal poses.
 - [x] TurtleBot-owned RPP controller as the initial direct-simulation baseline; evaluate the Nav2 controller separately when Nav2 is installed.
-- [ ] Obstacle and collision regression scenarios.
+- [x] Deterministic TurtleBot4 obstacle scenario with a physical box, static map, LaserScan, and Collision Monitor.
+- [x] Automated obstacle-navigation acceptance runner in `scripts/validate_nav2_obstacle.py`; it validates lifecycle startup, scan detection, and `NavigateToPose` success.
 
 #### Definition of Done
 - [x] TurtleBot4 accepts a standard `geometry_msgs/msg/Twist` command and reports wheel state, odometry, and `odom` to `base_link` TF through the real `rclpy` acceptance test.
-- [ ] Nav2 reaches a goal in the deterministic test world without collision. **Partial:** the open-space `NavigateToPose` goal now succeeds through the real ROS2/Nav2 path with final pose validation; obstacle and collision regression remain open.
+- [ ] Nav2 reaches a goal in the deterministic test world without collision. **Partial:** the automated obstacle acceptance returns `SUCCEEDED` with a `0.021 m` final position error and detects the obstacle at `0.400 m`; MuJoCo contact counting is not yet wired into the live Nav2 acceptance path.
 - [x] The direct MuJoCo navigation result is reproducible across repeated runs with the same seed.
 - [x] Direct navigation failures report a timeout reason and collision count; Nav2 action failure reporting remains open.
 
@@ -145,9 +146,9 @@ be added after the shared contracts, bridge pattern, and acceptance tests are
 proven on the first two robots.
 
 ### Definition of Done (DoD)
-- [x] SO-101 and TurtleBot4 pass the deterministic contract, reset, and control regression suite. The current suite has 74 passing tests and 2 skipped in the ROS2 Jazzy environment; the scripted SO-101 pick-and-place reliability check is 20/20 with the calibrated pad setup.
+- [x] SO-101 and TurtleBot4 pass the deterministic contract, reset, and control regression suite. The current suite has 79 passing tests and 2 skipped in the ROS2 Jazzy environment; the scripted SO-101 pick-and-place reliability check is 20/20 with the calibrated pad setup.
 - [x] SO-101 can be teleoperated through a real `rclpy` node using its ROS 2 joint, gripper, camera, and TF interfaces.
-- [ ] TurtleBot4 can navigate from Point A to Point B through the ROS 2/Nav2 path without collision in the deterministic test world. **Partial:** open-space Nav2 goal acceptance is validated; LaserScan, obstacle layers, and collision regression remain open.
+- [ ] TurtleBot4 can navigate from Point A to Point B through the ROS 2/Nav2 path without collision in the deterministic test world. **Partial:** automated open-space and obstacle-aware acceptance are validated with LaserScan, Collision Monitor, and final pose checks; physical contact counting remains open.
 - [ ] SO-101 IK meets the documented position and orientation tolerances on reachable targets and rejects invalid targets safely.
 - [ ] Domain Randomization can be enabled or disabled through `configs/sim_config.yaml` without changing ROS 2 topic contracts.
 - [x] The bridge and simulator can run without Phase 2+ dependencies such as LeRobot, VLM, or VLA packages.
