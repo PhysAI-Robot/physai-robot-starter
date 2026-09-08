@@ -15,6 +15,7 @@ def main() -> int:
     parser.add_argument("--config", type=str)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--max-ticks", type=int)
+    parser.add_argument("--scenario", default=None)
     args = parser.parse_args()
 
     config = None
@@ -26,7 +27,10 @@ def main() -> int:
     node = rclpy.create_node(f"{args.robot}_mujoco_driver")
     driver = None
     try:
-        driver = create_ros2_node(args.robot, node, config=config)
+        node_kwargs = {"config": config}
+        if args.scenario is not None:
+            node_kwargs["scenario"] = args.scenario
+        driver = create_ros2_node(args.robot, node, **node_kwargs)
         node.get_logger().info(f"{args.robot} ROS2 MuJoCo driver started")
         driver.run(seed=args.seed, max_ticks=args.max_ticks)
     finally:

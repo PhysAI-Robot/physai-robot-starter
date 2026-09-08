@@ -39,9 +39,19 @@ class TurtleBot4Config:
     render: bool = False
     initial_pose: tuple[float, float, float] = (0.0, 0.0, 0.1)
     seed: int | None = None
+    lidar_angle_min: float = -np.pi
+    lidar_angle_max: float = np.pi
+    lidar_samples: int = 360
+    lidar_range_min: float = 0.05
+    lidar_range_max: float = 5.0
+    # (x, y, half_length_x, half_length_y, height) in MuJoCo world coordinates.
+    obstacles: tuple[tuple[float, float, float, float, float], ...] = ()
 
 
-def _compile_scene(model_path: Path) -> mujoco.MjModel:
+def _compile_scene(
+    model_path: Path,
+    obstacles: tuple[tuple[float, float, float, float, float], ...] = (),
+) -> mujoco.MjModel:
     """Load the vendored TurtleBot4 MJCF and add what it needs to be usable.
 
     The upstream model ships a worldbody containing only the robot: no floor
@@ -111,6 +121,16 @@ def _compile_scene(model_path: Path) -> mujoco.MjModel:
             fovy=55,
         )
 
+    for index, (x, y, half_x, half_y, height) in enumerate(obstacles):
+        obstacle = spec.worldbody.add_geom(
+            name=f"physai_obstacle_{index}",
+            type=mujoco.mjtGeom.mjGEOM_BOX,
+            pos=[x, y, height / 2.0],
+            size=[half_x, half_y, height / 2.0],
+            rgba=[0.65, 0.18, 0.12, 1.0],
+        )
+        obstacle.group = 5
+
     return spec.compile()
 
 
@@ -128,7 +148,7 @@ class TurtleBot4Env(MuJoCoSimulationCore):
                 f"TurtleBot4 model missing: {self.cfg.model_path}. "
                 "Run `python scripts/fetch_assets.py --robot turtlebot4`."
             )
-        self.model = _compile_scene(self.cfg.model_path)
+        self.model = _compile_scene(self.cfg.model_path, self.cfg.obstacles)
         self.model.opt.timestep = min(self.model.opt.timestep, 0.002)
         super().__init__(
             self.model,
@@ -201,6 +221,47 @@ class TurtleBot4Env(MuJoCoSimulationCore):
             if "physai_ground" not in names:
                 count += 1
         return count
+
+    def lidar_ranges(self) -> np.ndarray:
+        """Cast a planar scan in the ROS ``base_link`` frame."""
+        if self.cfg.lidar_samples < 2:
+            raise ValueError("lidar_samples must be at least 2")
+        angles = np.linspace(
+            self.cfg.lidar_angle_min,
+            self.cfg.lidar_angle_max,
+            self.cfg.lidar_samples,
+            endpoint=False,
+        )
+        body = self.data.body(self._base_body_id)
+        origin = np.asarray(body.xpos, dtype=np.float64).copy()
+        origin[2] += 0.16
+        rotation = np.asarray(body.xmat, dtype=np.float64).reshape(3, 3)
+        ranges = np.full(angles.shape, self.cfg.lidar_range_max, dtype=np.float32)
+        obstacle_group = np.zeros(6, dtype=np.uint8)
+        obstacle_group[5] = 1
+        for index, angle in enumerate(angles):
+            # ROS x is the MuJoCo -Y axis at zero yaw; ROS y is +MuJoCo X.
+            local_direction = np.array(
+                [np.sin(angle), -np.cos(angle), 0.0], dtype=np.float64
+            )
+            direction = rotation @ local_direction
+            direction /= np.linalg.norm(direction)
+            geom_id = np.full(1, -1, dtype=np.int32)
+            distance = mujoco.mj_ray(
+                self.model,
+                self.data,
+                origin,
+                direction,
+                obstacle_group,
+                True,
+                self._base_body_id,
+                geom_id,
+            )
+            if distance >= 0.0:
+                ranges[index] = np.clip(
+                    float(distance), self.cfg.lidar_range_min, self.cfg.lidar_range_max
+                )
+        return ranges
 
     def joint_state(self) -> JointState:
         positions = np.array([self.data.joint(name).qpos[0] for name in ("left", "right")])
