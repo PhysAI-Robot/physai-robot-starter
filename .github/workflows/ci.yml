@@ -62,6 +62,17 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
+      - name: Cache robot assets
+        uses: actions/cache@v5
+        with:
+          path: assets
+          key: robot-assets-${{ runner.os }}-${{ hashFiles('scripts/fetch_assets.py') }}
+
+      - name: Fetch robot assets
+        run: |
+          python scripts/fetch_assets.py --robot so101
+          python scripts/fetch_assets.py --robot turtlebot4
+
       - name: Build ROS2 test image
         run: docker build --tag physai-ros2-test --file docker/Dockerfile .
 
@@ -69,5 +80,6 @@ jobs:
         run: |
           docker run --rm \
             --env MUJOCO_GL=osmesa \
+            --volume "$GITHUB_WORKSPACE/assets:/workspace/assets:ro" \
             physai-ros2-test \
             bash -lc 'source /opt/ros/jazzy/setup.bash && uv run python -m pytest tests/robots/so101/test_ros2_node.py tests/robots/turtlebot/test_ros2_node.py -q'
