@@ -19,7 +19,14 @@ def generate_launch_description() -> LaunchDescription:
     params_file = LaunchConfiguration("params-file")
     map_file = LaunchConfiguration("map-file")
     max_ticks = LaunchConfiguration("max-ticks")
-    nav2_nodes = ["controller_server", "planner_server", "behavior_server", "bt_navigator"]
+    scenario = LaunchConfiguration("scenario")
+    nav2_nodes = [
+        "controller_server",
+        "planner_server",
+        "behavior_server",
+        "bt_navigator",
+        "collision_monitor",
+    ]
 
     return LaunchDescription(
         [
@@ -31,10 +38,12 @@ def generate_launch_description() -> LaunchDescription:
                 "map-file", default_value=str(DEFAULT_CONFIG_DIR / "map.yaml")
             ),
             DeclareLaunchArgument("max-ticks", default_value="5000"),
+            DeclareLaunchArgument("scenario", default_value="open_space"),
             ExecuteProcess(
                 cmd=[
                     "uv", "run", "python", "scripts/run_ros2_sim.py",
                     "--robot", robot, "--max-ticks", max_ticks,
+                    "--scenario", scenario,
                 ],
                 cwd=str(REPO_ROOT),
                 output="screen",
@@ -64,7 +73,7 @@ def generate_launch_description() -> LaunchDescription:
                 executable="controller_server",
                 name="controller_server",
                 parameters=[params_file],
-                remappings=[("cmd_vel", "/cmd_vel")],
+                remappings=[("cmd_vel", "/cmd_vel_nav")],
                 output="screen",
             ),
             Node(
@@ -79,7 +88,7 @@ def generate_launch_description() -> LaunchDescription:
                 executable="behavior_server",
                 name="behavior_server",
                 parameters=[params_file],
-                remappings=[("cmd_vel", "/cmd_vel")],
+                remappings=[("cmd_vel", "/cmd_vel_nav")],
                 output="screen",
             ),
             Node(
@@ -87,6 +96,17 @@ def generate_launch_description() -> LaunchDescription:
                 executable="bt_navigator",
                 name="bt_navigator",
                 parameters=[params_file],
+                output="screen",
+            ),
+            Node(
+                package="nav2_collision_monitor",
+                executable="collision_monitor",
+                name="collision_monitor",
+                parameters=[params_file],
+                remappings=[
+                    ("cmd_vel_in", "/cmd_vel_nav"),
+                    ("cmd_vel_out", "/cmd_vel"),
+                ],
                 output="screen",
             ),
             Node(

@@ -13,19 +13,35 @@ from .env import TurtleBot4Config, TurtleBot4Env
 class TurtleBot4ROS2Node:
     """Run TurtleBot4 through real ROS2 command and state topics."""
 
-    def __init__(self, node: Any, config: TurtleBot4Config | None = None) -> None:
+    def __init__(
+        self,
+        node: Any,
+        config: TurtleBot4Config | None = None,
+        scenario: str = "open_space",
+    ) -> None:
         from geometry_msgs.msg import TransformStamped
         from geometry_msgs.msg import Twist as ROSTwist
         from nav_msgs.msg import Odometry
-        from sensor_msgs.msg import JointState
+        from rosgraph_msgs.msg import Clock
+        from sensor_msgs.msg import JointState, LaserScan
         from tf2_msgs.msg import TFMessage
 
         self.node = node
+        if config is not None and scenario != "open_space":
+            raise ValueError("pass either config or a non-default TurtleBot4 scenario")
+        if config is None and scenario == "obstacle_course":
+            config = TurtleBot4Config(
+                obstacles=((0.0, -0.5, 0.4, 0.1, 0.4),),
+            )
+        elif config is None and scenario != "open_space":
+            raise ValueError(f"unknown TurtleBot4 scenario: {scenario}")
         self.simulation = TurtleBot4Env(config)
         self._odom_type = Odometry
         self._joint_state_type = JointState
         self._tf_message_type = TFMessage
         self._transform_type = TransformStamped
+        self._scan_type = LaserScan
+        self._clock_type = Clock
         self._command = Twist()
         self._cmd_subscription = node.create_subscription(
             ROSTwist, "/cmd_vel", self._receive_twist, 10
@@ -35,6 +51,8 @@ class TurtleBot4ROS2Node:
         )
         self._odom_publisher = node.create_publisher(Odometry, "/odom", 10)
         self._tf_publisher = node.create_publisher(TFMessage, "/tf", 10)
+        self._scan_publisher = node.create_publisher(LaserScan, "/scan", 10)
+        self._clock_publisher = node.create_publisher(Clock, "/clock", 10)
 
     def _receive_twist(self, message: Any) -> None:
         self._command = Twist(
@@ -60,8 +78,9 @@ class TurtleBot4ROS2Node:
 
     def _stamp(self, header: Any, value: float) -> None:
         seconds = max(0.0, float(value))
-        header.stamp.sec = int(seconds)
-        header.stamp.nanosec = int(round((seconds - header.stamp.sec) * 1e9))
+        stamp = header.stamp if hasattr(header, "stamp") else header
+        stamp.sec = int(seconds)
+        stamp.nanosec = int(round((seconds - stamp.sec) * 1e9))
 
     def _joint_state(self, observation: Any) -> Any:
         message = self._joint_state_type()
@@ -112,10 +131,32 @@ class TurtleBot4ROS2Node:
         message.transforms = [transform]
         return message
 
+    def _scan(self, observation: Any) -> Any:
+        message = self._scan_type()
+        cfg = self.simulation.cfg
+        message.header.frame_id = "base_link"
+        self._stamp(message.header, observation.sim_time)
+        message.angle_min = float(cfg.lidar_angle_min)
+        message.angle_max = float(cfg.lidar_angle_max)
+        message.angle_increment = 2.0 * math.pi / float(cfg.lidar_samples)
+        message.time_increment = 0.0
+        message.scan_time = 1.0 / float(cfg.control_hz)
+        message.range_min = float(cfg.lidar_range_min)
+        message.range_max = float(cfg.lidar_range_max)
+        message.ranges = self.simulation.lidar_ranges().tolist()
+        return message
+
+    def _clock(self, observation: Any) -> Any:
+        message = self._clock_type()
+        self._stamp(message.clock, observation.sim_time)
+        return message
+
     def publish_observation(self, observation: Any) -> None:
+        self._clock_publisher.publish(self._clock(observation))
         self._joint_state_publisher.publish(self._joint_state(observation))
         self._odom_publisher.publish(self._odom(observation))
         self._tf_publisher.publish(self._tf(observation))
+        self._scan_publisher.publish(self._scan(observation))
 
     def reset(self, seed: int | None = None) -> Any:
         observation = self.simulation.reset(seed=seed)
@@ -157,6 +198,8 @@ class TurtleBot4ROS2Node:
         self.node.destroy_publisher(self._joint_state_publisher)
         self.node.destroy_publisher(self._odom_publisher)
         self.node.destroy_publisher(self._tf_publisher)
+        self.node.destroy_publisher(self._scan_publisher)
+        self.node.destroy_publisher(self._clock_publisher)
 
 
 __all__ = ["TurtleBot4ROS2Node"]

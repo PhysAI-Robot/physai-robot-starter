@@ -103,6 +103,28 @@ def test_turtlebot4_reset_is_deterministic_for_a_given_seed():
         env.close()
 
 
+def test_turtlebot4_lidar_detects_configured_obstacle():
+    import numpy as np
+
+    from physai.robots.turtlebot import TurtleBot4Config, TurtleBot4Env
+
+    env = TurtleBot4Env(
+        TurtleBot4Config(
+            render=False,
+            obstacles=((0.0, -0.8, 0.3, 0.1, 0.4),),
+        )
+    )
+    try:
+        env.reset(seed=0)
+        ranges = env.lidar_ranges()
+        forward_index = int(round((0.0 - env.cfg.lidar_angle_min)
+                                  / (2.0 * np.pi)
+                                  * env.cfg.lidar_samples)) % env.cfg.lidar_samples
+        assert ranges[forward_index] < 0.8
+    finally:
+        env.close()
+
+
 def test_turtlebot4_stays_on_the_ground_while_driving():
     """The upstream MJCF has no floor geom, so the base used to free-fall.
 
