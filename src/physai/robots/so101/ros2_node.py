@@ -157,25 +157,30 @@ class SO101ROS2Node:
         return observation
 
     def run(self, *, seed: int | None = None, max_ticks: int | None = None) -> int:
-        import rclpy
+        from rclpy.executors import SingleThreadedExecutor
 
         observation = self.reset(seed=seed)
         period = 1.0 / float(self.simulation.cfg.control_hz)
         deadline = time.monotonic()
         ticks = 0
-        while rclpy.ok() and (max_ticks is None or ticks < max_ticks):
-            rclpy.spin_once(self.node, timeout_sec=0.0)
-            observation, _, terminated, truncated, _ = self.bridge.tick()
-            self.publish_extras(observation)
-            ticks += 1
-            if terminated or truncated:
-                break
-            deadline += period
-            delay = deadline - time.monotonic()
-            if delay > 0:
-                time.sleep(delay)
-            else:
-                deadline = time.monotonic()
+        executor = SingleThreadedExecutor(context=self.node.context)
+        executor.add_node(self.node)
+        try:
+            while self.node.context.ok() and (max_ticks is None or ticks < max_ticks):
+                executor.spin_once(timeout_sec=0.0)
+                observation, _, terminated, truncated, _ = self.bridge.tick()
+                self.publish_extras(observation)
+                ticks += 1
+                if terminated or truncated:
+                    break
+                deadline += period
+                delay = deadline - time.monotonic()
+                if delay > 0:
+                    time.sleep(delay)
+                else:
+                    deadline = time.monotonic()
+        finally:
+            executor.remove_node(self.node)
         return ticks
 
     def close(self) -> None:
