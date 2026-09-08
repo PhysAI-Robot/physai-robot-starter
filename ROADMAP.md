@@ -88,7 +88,7 @@ more complex planners.
 
 #### Deliverables
 - [x] TurtleBot4 ROS 2 MuJoCo bridge for `/cmd_vel`, wheel state, `/odom`, and TF.
-- [x] `configs/nav2/nav2_params.yaml`: Initial Nav2 controller and costmap parameters; launch wiring and sensor integration remain open.
+- [x] `configs/nav2/turtlebot4/params.yaml`: Initial TurtleBot4 Nav2 controller and costmap parameters; launch wiring and sensor integration remain open.
 - [x] Direct MuJoCo Point A to Point B scenario with known start and goal poses.
 - [x] TurtleBot-owned RPP controller as the initial direct-simulation baseline; evaluate the Nav2 controller separately when Nav2 is installed.
 - [ ] Obstacle and collision regression scenarios.

@@ -114,7 +114,7 @@ WSL with `sudo apt install nvidia-driver`.
 Run the same task from the checked-in YAML configuration:
 
 ```bash
-uv run python scripts/run_sim.py --config configs/task_pick_place.yaml
+uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml
 ```
 
 Use `--seed`, `--max-steps`, and `--camera-size` to override configuration.
@@ -142,7 +142,9 @@ takes joint positions, the base takes a twist.
 The TurtleBot4 path is currently a generic control smoke test, which is what
 its clip above shows; navigation is a Phase 1 deliverable and is not
 implemented yet. The SO-101 ROS2 bridge, TurtleBot4 navigation path, and
-controlled domain randomization are also part of the active Phase 1 roadmap.
+The TurtleBot4 path includes a deterministic ROS2 and open-space Nav2 smoke
+test. The SO-101 ROS2 bridge and controlled domain randomization remain part
+of the active Phase 1 roadmap.
 Direct MuJoCo remains the fast local path and does not replace ROS2
 integration validation.
 

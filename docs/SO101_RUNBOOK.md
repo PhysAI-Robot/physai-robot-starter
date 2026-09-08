@@ -23,7 +23,7 @@ Open the checked-in pick-and-place scene:
 
 ```bash
 uv run python scripts/run_sim.py \
-  --config configs/task_pick_place.yaml \
+  --config configs/tasks/so101/pick_place.yaml \
   --viewer \
   --seed 0
 ```
@@ -32,7 +32,7 @@ For headless execution:
 
 ```bash
 uv run python scripts/run_sim.py \
-  --config configs/task_pick_place.yaml \
+  --config configs/tasks/so101/pick_place.yaml \
   --no-video \
   --seed 0 \
   --max-steps 500
@@ -109,7 +109,7 @@ Run a bounded ROS2 MuJoCo smoke test:
 source /opt/ros/jazzy/setup.bash
 MUJOCO_GL=osmesa uv run python scripts/run_ros2_sim.py \
   --robot so101 \
-  --config configs/task_pick_place.yaml \
+  --config configs/tasks/so101/pick_place.yaml \
   --seed 0 \
   --max-ticks 500
 ```
@@ -154,7 +154,7 @@ pass robot capability and safety checks before producing commands.
 
 ## 7. Parameters and Open Work
 
-Main files are `configs/task_pick_place.yaml`,
+Main files are `configs/tasks/so101/pick_place.yaml`,
 `src/physai/robots/so101/env.py`, `src/physai/sim/scenes/common.py`, and
 `src/physai/policy/scripted.py`.
 
