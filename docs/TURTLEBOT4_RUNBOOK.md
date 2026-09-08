@@ -79,7 +79,7 @@ uv run python scripts/eval_turtlebot_navigation.py \
 
 Expected output includes `reached=True` and `collisions=0`. Repeat with the
 same seed to verify deterministic results. This is the robot-owned regulated
-pure-pursuit baseline, not yet a Nav2 acceptance test.
+pure-pursuit baseline.
 
 ## 5. Run Nav2 with the Dummy Map
 
@@ -113,9 +113,24 @@ Start the map-based smoke test when the package is available:
 ros2 launch configs/nav2/turtlebot4_nav2.launch.py
 ```
 
+In a second terminal, send the deterministic open-space goal:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+uv run python scripts/send_turtlebot_nav_goal.py \
+  --x 1.0 \
+  --y 0.0 \
+  --yaw 0.0
+```
+
+The command succeeds only when Nav2 returns `SUCCEEDED` and final odometry is
+within the configured position-error tolerance. The validated baseline reaches
+the goal with approximately `0.244 m` final position error under the default
+Nav2 goal checker.
+
 The launch uses an identity `map` to `odom` transform and an open static map.
 It validates map loading, TF connectivity, planner startup, controller output,
-and a first open-world goal. It does not prove obstacle avoidance.
+and an open-world `NavigateToPose` goal. It does not prove obstacle avoidance.
 
 The current TurtleBot node does not publish `sensor_msgs/msg/LaserScan`, so the
 local costmap intentionally has no obstacle layer yet.
@@ -128,7 +143,6 @@ map-frame and odometry-frame relationship is understood.
 
 Open navigation work is:
 
-- Install and run Nav2 in the ROS2 acceptance environment.
 - Publish a real simulated `LaserScan`.
 - Add obstacle geometry and obstacle-layer configuration.
 - Add collision and timeout regression scenarios.

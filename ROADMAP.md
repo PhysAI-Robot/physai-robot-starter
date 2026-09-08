@@ -95,7 +95,7 @@ more complex planners.
 
 #### Definition of Done
 - [x] TurtleBot4 accepts a standard `geometry_msgs/msg/Twist` command and reports wheel state, odometry, and `odom` to `base_link` TF through the real `rclpy` acceptance test.
-- [ ] Nav2 reaches a goal in the deterministic test world without collision. **Partial:** the direct MuJoCo RPP baseline reaches `(1.0, -1.0)` with zero non-ground contacts; Nav2 runtime is not installed in the current ROS2 environment.
+- [ ] Nav2 reaches a goal in the deterministic test world without collision. **Partial:** the open-space `NavigateToPose` goal now succeeds through the real ROS2/Nav2 path with final pose validation; obstacle and collision regression remain open.
 - [x] The direct MuJoCo navigation result is reproducible across repeated runs with the same seed.
 - [x] Direct navigation failures report a timeout reason and collision count; Nav2 action failure reporting remains open.
 
@@ -147,7 +147,7 @@ proven on the first two robots.
 ### Definition of Done (DoD)
 - [x] SO-101 and TurtleBot4 pass the deterministic contract, reset, and control regression suite. The current suite has 74 passing tests and 2 skipped in the ROS2 Jazzy environment; the scripted SO-101 pick-and-place reliability check is 20/20 with the calibrated pad setup.
 - [x] SO-101 can be teleoperated through a real `rclpy` node using its ROS 2 joint, gripper, camera, and TF interfaces.
-- [ ] TurtleBot4 can navigate from Point A to Point B through the ROS 2/Nav2 path without collision in the deterministic test world.
+- [ ] TurtleBot4 can navigate from Point A to Point B through the ROS 2/Nav2 path without collision in the deterministic test world. **Partial:** open-space Nav2 goal acceptance is validated; LaserScan, obstacle layers, and collision regression remain open.
 - [ ] SO-101 IK meets the documented position and orientation tolerances on reachable targets and rejects invalid targets safely.
 - [ ] Domain Randomization can be enabled or disabled through `configs/sim_config.yaml` without changing ROS 2 topic contracts.
 - [x] The bridge and simulator can run without Phase 2+ dependencies such as LeRobot, VLM, or VLA packages.
