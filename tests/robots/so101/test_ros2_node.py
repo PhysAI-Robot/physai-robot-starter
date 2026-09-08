@@ -23,8 +23,11 @@ def test_real_ros2_trajectory_and_gripper_move_mujoco():
     from physai.robots.so101 import EnvConfig
     from physai.robots.so101.ros2_node import SO101ROS2Node
 
-    rclpy.init(args=[])
-    node = rclpy.create_node("test_so101_ros2_node")
+    context = rclpy.context.Context()
+    rclpy.init(args=[], context=context)
+    node = rclpy.create_node("test_so101_ros2_node", context=context)
+    executor = rclpy.executors.SingleThreadedExecutor(context=context)
+    executor.add_node(node)
     driver = SO101ROS2Node(node, EnvConfig(render=True, cameras=("front",)))
     published_joint_states = []
     published_camera_info = []
@@ -54,10 +57,11 @@ def test_real_ros2_trajectory_and_gripper_move_mujoco():
         gripper = GripperCommand(position=0.2, max_effort=2.0)
         trajectory_publisher.publish(trajectory)
         gripper_publisher.publish(gripper)
+        executor.spin_once(timeout_sec=0.1)
 
         driver.run(max_ticks=30)
-        for _ in range(3):
-            rclpy.spin_once(node, timeout_sec=0.1)
+        for _ in range(10):
+            executor.spin_once(timeout_sec=0.1)
         final = driver.bridge.observation.joint_state.position
 
         np.testing.assert_allclose(final[:5], point.positions, atol=0.05)
@@ -98,5 +102,6 @@ def test_real_ros2_trajectory_and_gripper_move_mujoco():
             ) in joint_state_stamps
     finally:
         driver.close()
+        executor.remove_node(node)
         node.destroy_node()
-        rclpy.shutdown()
+        rclpy.shutdown(context=context)

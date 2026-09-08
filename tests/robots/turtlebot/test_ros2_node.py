@@ -20,8 +20,11 @@ def test_real_ros2_cmd_vel_publishes_turtlebot_state_and_tf():
 
     from physai.robots.turtlebot import TurtleBot4Config, TurtleBot4ROS2Node
 
-    rclpy.init(args=[])
-    node = rclpy.create_node("test_turtlebot4_ros2_node")
+    context = rclpy.context.Context()
+    rclpy.init(args=[], context=context)
+    node = rclpy.create_node("test_turtlebot4_ros2_node", context=context)
+    executor = rclpy.executors.SingleThreadedExecutor(context=context)
+    executor.add_node(node)
     driver = TurtleBot4ROS2Node(node, TurtleBot4Config(render=False))
     published_joint_states = []
     published_odom = []
@@ -36,9 +39,10 @@ def test_real_ros2_cmd_vel_publishes_turtlebot_state_and_tf():
         command.linear.x = 0.4
         command.angular.z = 0.2
         cmd_publisher.publish(command)
+        executor.spin_once(timeout_sec=0.1)
         driver.run(max_ticks=20)
         for _ in range(3):
-            rclpy.spin_once(node, timeout_sec=0.1)
+            executor.spin_once(timeout_sec=0.1)
 
         final_observation = driver.simulation.observe()
         assert final_observation.ee_pose is not None
@@ -54,5 +58,6 @@ def test_real_ros2_cmd_vel_publishes_turtlebot_state_and_tf():
         ]
     finally:
         driver.close()
+        executor.remove_node(node)
         node.destroy_node()
-        rclpy.shutdown()
+        rclpy.shutdown(context=context)
