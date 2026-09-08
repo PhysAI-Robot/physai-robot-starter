@@ -30,6 +30,7 @@ controller_server:
       min_lookahead_dist: 0.20
       max_lookahead_dist: 0.80
       use_velocity_scaled_lookahead_dist: true
+      use_rotate_to_heading: false
       use_regulated_linear_velocity_scaling: true
       use_cost_regulated_linear_velocity_scaling: false
       transform_tolerance: 0.2

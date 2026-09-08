@@ -35,7 +35,7 @@ class TurtleBot4Config:
 
     model_path: Path = DEFAULT_MODEL
     control_hz: float = 10.0
-    max_steps: int = 500
+    max_steps: int = 5000
     render: bool = False
     initial_pose: tuple[float, float, float] = (0.0, 0.0, 0.1)
     seed: int | None = None
