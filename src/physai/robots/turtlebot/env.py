@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import mujoco
@@ -22,6 +22,11 @@ from ...contracts import (
 )
 from ..base import RobotSpec
 from ...sim.core import MuJoCoSimulationCore
+from ...sim.domain_randomization import (
+    DomainRandomizationConfig,
+    DomainRandomizationEngine,
+    RandomizationMetadata,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_MODEL = REPO_ROOT / "assets" / "turtlebot4" / "turtlebot4.xml"
@@ -35,13 +40,26 @@ class TurtleBot4Config:
 
     model_path: Path = DEFAULT_MODEL
     control_hz: float = 10.0
-    max_steps: int = 500
+    max_steps: int = 5000
     render: bool = False
     initial_pose: tuple[float, float, float] = (0.0, 0.0, 0.1)
     seed: int | None = None
+    lidar_angle_min: float = -np.pi
+    lidar_angle_max: float = np.pi
+    lidar_samples: int = 360
+    lidar_range_min: float = 0.05
+    lidar_range_max: float = 5.0
+    domain_randomization: DomainRandomizationConfig = field(
+        default_factory=DomainRandomizationConfig
+    )
+    # (x, y, half_length_x, half_length_y, height) in MuJoCo world coordinates.
+    obstacles: tuple[tuple[float, float, float, float, float], ...] = ()
 
 
-def _compile_scene(model_path: Path) -> mujoco.MjModel:
+def _compile_scene(
+    model_path: Path,
+    obstacles: tuple[tuple[float, float, float, float, float], ...] = (),
+) -> mujoco.MjModel:
     """Load the vendored TurtleBot4 MJCF and add what it needs to be usable.
 
     The upstream model ships a worldbody containing only the robot: no floor
@@ -111,6 +129,16 @@ def _compile_scene(model_path: Path) -> mujoco.MjModel:
             fovy=55,
         )
 
+    for index, (x, y, half_x, half_y, height) in enumerate(obstacles):
+        obstacle = spec.worldbody.add_geom(
+            name=f"physai_obstacle_{index}",
+            type=mujoco.mjtGeom.mjGEOM_BOX,
+            pos=[x, y, height / 2.0],
+            size=[half_x, half_y, height / 2.0],
+            rgba=[0.65, 0.18, 0.12, 1.0],
+        )
+        obstacle.group = 5
+
     return spec.compile()
 
 
@@ -128,7 +156,10 @@ class TurtleBot4Env(MuJoCoSimulationCore):
                 f"TurtleBot4 model missing: {self.cfg.model_path}. "
                 "Run `python scripts/fetch_assets.py --robot turtlebot4`."
             )
-        self.model = _compile_scene(self.cfg.model_path)
+        self.model = _compile_scene(self.cfg.model_path, self.cfg.obstacles)
+        self.randomization = DomainRandomizationEngine(
+            self.model, self.cfg.domain_randomization
+        )
         self.model.opt.timestep = min(self.model.opt.timestep, 0.002)
         super().__init__(
             self.model,
@@ -138,6 +169,16 @@ class TurtleBot4Env(MuJoCoSimulationCore):
             camera_height=480,
         )
         self.rng = np.random.default_rng(self.cfg.seed)
+        self.collision_count = 0
+        self.randomization_metadata = RandomizationMetadata(
+            enabled=False,
+            seed=self.cfg.seed,
+            friction_scale=1.0,
+            mass_scale=1.0,
+            lighting_scale=1.0,
+            camera_position_offset={},
+            clutter_position={},
+        )
         self._actuator_ids = {self.model.actuator(i).name: i for i in range(self.model.nu)}
         self._base_body_id = self.model.body(BASE_BODY).id
         self._has_chase_camera = mujoco.mj_name2id(
@@ -158,12 +199,23 @@ class TurtleBot4Env(MuJoCoSimulationCore):
             joint_state_frame="base_link",
             action_frame="base",
             camera_frames={"free": "base_link"},
+            units={
+                "joint_position": "rad",
+                "joint_velocity": "rad/s",
+                "linear_velocity": "m/s",
+                "angular_velocity": "rad/s",
+                "position": "m",
+            },
         )
 
     def reset(self, seed: int | None = None) -> Observation:
         if seed is not None:
             self.rng = np.random.default_rng(seed)
         self.reset_simulation()
+        self.collision_count = 0
+        self.randomization_metadata = self.randomization.apply(
+            self.rng, seed=seed if seed is not None else self.cfg.seed
+        )
         x, y, z = self.cfg.initial_pose
         free_qadr = int(self.model.jnt_qposadr[self.model.joint("floating_base_joint").id])
         self.data.qpos[free_qadr:free_qadr + 7] = (x, y, z, 1.0, 0.0, 0.0, 0.0)
@@ -183,11 +235,70 @@ class TurtleBot4Env(MuJoCoSimulationCore):
     def step(self, action: Action) -> tuple[Observation, float, bool, bool, dict]:
         self.send_action(action)
         self.step_simulation()
+        contacts = self.non_ground_contact_count()
+        self.collision_count += contacts
         info = {"pose": self._pose_array()}
+        info["collision_contacts"] = contacts
+        info["collision_count"] = self.collision_count
+        info["randomization"] = self.randomization_metadata.as_dict()
         return self.observe(), 0.0, False, self.step_count >= self.cfg.max_steps, info
 
     def close(self) -> None:
         super().close()
+
+    def non_ground_contact_count(self) -> int:
+        """Count contacts that are not expected contact with the ground plane."""
+        count = 0
+        for index in range(self.data.ncon):
+            contact = self.data.contact[index]
+            names = (
+                self.model.geom(contact.geom[0]).name,
+                self.model.geom(contact.geom[1]).name,
+            )
+            if "physai_ground" not in names:
+                count += 1
+        return count
+
+    def lidar_ranges(self) -> np.ndarray:
+        """Cast a planar scan in the ROS ``base_link`` frame."""
+        if self.cfg.lidar_samples < 2:
+            raise ValueError("lidar_samples must be at least 2")
+        angles = np.linspace(
+            self.cfg.lidar_angle_min,
+            self.cfg.lidar_angle_max,
+            self.cfg.lidar_samples,
+            endpoint=False,
+        )
+        body = self.data.body(self._base_body_id)
+        origin = np.asarray(body.xpos, dtype=np.float64).copy()
+        origin[2] += 0.16
+        rotation = np.asarray(body.xmat, dtype=np.float64).reshape(3, 3)
+        ranges = np.full(angles.shape, self.cfg.lidar_range_max, dtype=np.float32)
+        obstacle_group = np.zeros(6, dtype=np.uint8)
+        obstacle_group[5] = 1
+        for index, angle in enumerate(angles):
+            # ROS x is the MuJoCo -Y axis at zero yaw; ROS y is +MuJoCo X.
+            local_direction = np.array(
+                [np.sin(angle), -np.cos(angle), 0.0], dtype=np.float64
+            )
+            direction = rotation @ local_direction
+            direction /= np.linalg.norm(direction)
+            geom_id = np.full(1, -1, dtype=np.int32)
+            distance = mujoco.mj_ray(
+                self.model,
+                self.data,
+                origin,
+                direction,
+                obstacle_group,
+                True,
+                self._base_body_id,
+                geom_id,
+            )
+            if distance >= 0.0:
+                ranges[index] = np.clip(
+                    float(distance), self.cfg.lidar_range_min, self.cfg.lidar_range_max
+                )
+        return ranges
 
     def joint_state(self) -> JointState:
         positions = np.array([self.data.joint(name).qpos[0] for name in ("left", "right")])

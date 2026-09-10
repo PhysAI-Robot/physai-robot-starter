@@ -37,22 +37,35 @@ class Endpoint:
 #: Node that wraps MuJoCo (Phase 0) or the real SO-101 follower (Phase 2).
 ROBOT_ENDPOINTS: tuple[Endpoint, ...] = (
     Endpoint("/joint_states", "sensor_msgs/msg/JointState",
-             Direction.PUBLISH, 100.0, "so101_driver",
+             Direction.PUBLISH, 25.0, "so101_driver",
              "5 arm joints + gripper, radians"),
     Endpoint("/camera/front/image_raw", "sensor_msgs/msg/Image",
-             Direction.PUBLISH, 30.0, "so101_driver", "rgb8"),
+             Direction.PUBLISH, 25.0, "so101_driver", "rgb8"),
     Endpoint("/camera/wrist/image_raw", "sensor_msgs/msg/Image",
-             Direction.PUBLISH, 30.0, "so101_driver", "rgb8"),
+             Direction.PUBLISH, 25.0, "so101_driver", "rgb8"),
     Endpoint("/camera/front/camera_info", "sensor_msgs/msg/CameraInfo",
-             Direction.PUBLISH, 30.0, "so101_driver"),
+             Direction.PUBLISH, 25.0, "so101_driver"),
+    Endpoint("/camera/wrist/camera_info", "sensor_msgs/msg/CameraInfo",
+             Direction.PUBLISH, 25.0, "so101_driver"),
+    Endpoint("/tf", "tf2_msgs/msg/TFMessage",
+             Direction.PUBLISH, 25.0, "so101_driver"),
     Endpoint("/arm_controller/joint_trajectory",
              "trajectory_msgs/msg/JointTrajectory",
              Direction.SUBSCRIBE, 25.0, "so101_driver",
              "absolute joint targets; what the VLA emits"),
     Endpoint("/gripper_controller/gripper_cmd",
-             "control_msgs/action/GripperCommand",
+             "control_msgs/msg/GripperCommand",
              Direction.SUBSCRIBE, 25.0, "so101_driver",
              "normalised aperture 0..1"),
+    Endpoint("/cmd_vel", "geometry_msgs/msg/Twist",
+             Direction.SUBSCRIBE, 10.0, "turtlebot4_driver",
+             "base-frame linear and angular velocity"),
+    Endpoint("/odom", "nav_msgs/msg/Odometry",
+             Direction.PUBLISH, 10.0, "turtlebot4_driver",
+             "odom to base_link pose and twist"),
+    Endpoint("/tf", "tf2_msgs/msg/TFMessage",
+             Direction.PUBLISH, 10.0, "turtlebot4_driver",
+             "odom to base_link"),
 )
 
 #: Node that runs the VLA policy at the control rate.
@@ -73,7 +86,7 @@ POLICY_ENDPOINTS: tuple[Endpoint, ...] = (
              "trajectory_msgs/msg/JointTrajectory",
              Direction.PUBLISH, 25.0, "vla_policy"),
     Endpoint("/gripper_controller/gripper_cmd",
-             "control_msgs/action/GripperCommand",
+             "control_msgs/msg/GripperCommand",
              Direction.PUBLISH, 25.0, "vla_policy"),
     Endpoint("/cmd_vel_ee", "geometry_msgs/msg/Twist",
              Direction.PUBLISH, 25.0, "vla_policy",
@@ -82,7 +95,7 @@ POLICY_ENDPOINTS: tuple[Endpoint, ...] = (
 
 #: Topics fed from outside the robot stack (an operator UI, a bag, a test
 #: script). Nothing in this graph publishes them, and that is correct.
-EXTERNAL_INPUTS: frozenset[str] = frozenset({"/task/instruction"})
+EXTERNAL_INPUTS: frozenset[str] = frozenset({"/cmd_vel", "/task/instruction"})
 
 #: Node that runs the VLM planner. Slow, and allowed to be.
 PLANNER_ENDPOINTS: tuple[Endpoint, ...] = (
@@ -103,6 +116,8 @@ TF_FRAMES: tuple[str, ...] = (
     "world", "base", "shoulder", "upper_arm", "lower_arm", "wrist",
     "gripper", "gripper_frame", "camera_front", "camera_wrist",
 )
+
+TURTLEBOT_TF_FRAMES: tuple[str, ...] = ("odom", "base_link")
 
 RECOMMENDED_DISTRO = "jazzy"
 

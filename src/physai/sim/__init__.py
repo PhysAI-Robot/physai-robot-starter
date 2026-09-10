@@ -1,4 +1,9 @@
 from .core import MuJoCoSimulationCore
+from .domain_randomization import (
+    DomainRandomizationConfig,
+    DomainRandomizationEngine,
+    RandomizationMetadata,
+)
 from .scene import SceneConfig, build_model, build_spec, export_xml
 from .scenes import (
     PickPlaceMinimalSceneConfig,
@@ -13,6 +18,9 @@ from .scenes import (
 
 __all__ = [
     "MuJoCoSimulationCore",
+    "DomainRandomizationConfig",
+    "DomainRandomizationEngine",
+    "RandomizationMetadata",
     "CommonSceneConfig",
     "WorldSceneConfig",
     "ManipulationSceneConfig",

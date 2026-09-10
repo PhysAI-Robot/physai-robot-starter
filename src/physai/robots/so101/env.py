@@ -20,6 +20,11 @@ from ...contracts import (
 )
 from ...robots.base import RobotSpec
 from ...sim.core import MuJoCoSimulationCore
+from ...sim.domain_randomization import (
+    DomainRandomizationConfig,
+    DomainRandomizationEngine,
+    RandomizationMetadata,
+)
 from ...sim.scene import SceneConfig, build_model
 from .kinematics import ArmKinematics
 
@@ -42,6 +47,9 @@ class EnvConfig:
     target_x_range: tuple[float, float] = (0.16, 0.26)
     target_y_range: tuple[float, float] = (-0.13, -0.04)
     seed: int | None = None
+    domain_randomization: DomainRandomizationConfig = field(
+        default_factory=DomainRandomizationConfig
+    )
     # The XML's default actuator forcerange (+/-3.35 N*m) is a per-servo torque
     # rating, not a sane grip-force budget: lifting a 0.03 kg cube only needs a
     # few mN*m, but a fixed-position squeeze target can drive the actuator to
@@ -58,6 +66,9 @@ class SO101Env(MuJoCoSimulationCore):
     def __init__(self, cfg: EnvConfig | None = None) -> None:
         self.cfg = cfg or EnvConfig()
         self.model, self.spec = build_model(self.cfg.scene)
+        self.randomization = DomainRandomizationEngine(
+            self.model, self.cfg.domain_randomization
+        )
         super().__init__(
             self.model,
             control_hz=self.cfg.control_hz,
@@ -118,6 +129,15 @@ class SO101Env(MuJoCoSimulationCore):
             self.model, mujoco.mjtObj.mjOBJ_SITE, "target_site"
         )
         self.kin = ArmKinematics(self.model, ee_site=self.cfg.scene.ee_site)
+        self.randomization_metadata = RandomizationMetadata(
+            enabled=False,
+            seed=self.cfg.seed,
+            friction_scale=1.0,
+            mass_scale=1.0,
+            lighting_scale=1.0,
+            camera_position_offset={},
+            clutter_position={},
+        )
         self._last_action = Action(joint_position=HOME_QPOS.copy())
 
     @property
@@ -138,6 +158,11 @@ class SO101Env(MuJoCoSimulationCore):
             metadata={"control_hz": self.cfg.control_hz},
             joint_state_frame="base",
             camera_frames={"front": "camera_front", "wrist": "camera_wrist"},
+            units={
+                "joint_position": "rad",
+                "joint_velocity": "rad/s",
+                "position": "m",
+            },
         )
 
     def gripper_to_joint(self, normalized: float) -> float:
@@ -190,6 +215,24 @@ class SO101Env(MuJoCoSimulationCore):
             )
             self.model.geom_pos[target_geom_id] = target_pos
 
+        protected_xy: list[tuple[float, float]] = [
+            tuple(float(value) for value in self.model.site_pos[self.target_sid][:2])
+        ]
+        if self.sorting_cubes:
+            protected_xy.extend(
+                tuple(float(value) for value in self.data.qpos[qadr:qadr + 2])
+                for _, qadr in self.sorting_cubes.values()
+            )
+        else:
+            protected_xy.append(
+                tuple(float(value) for value in self.data.qpos[self.cube_qadr:self.cube_qadr + 2])
+            )
+        self.randomization_metadata = self.randomization.apply(
+            self.rng,
+            seed=seed if seed is not None else self.cfg.seed,
+            protected_xy=tuple(protected_xy),
+        )
+
         self.data.ctrl[self.arm_act_ids] = HOME_QPOS
         self.data.ctrl[self.grip_act_id] = self.gripper_to_joint(1.0)
         mujoco.mj_forward(self.model, self.data)
@@ -223,6 +266,7 @@ class SO101Env(MuJoCoSimulationCore):
         reward = 0.0
         terminated = False
         truncated = self.step_count >= self.cfg.max_steps
+        info["randomization"] = self.randomization_metadata.as_dict()
         return observation, reward, terminated, truncated, info
 
     def close(self) -> None:
