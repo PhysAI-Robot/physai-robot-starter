@@ -12,17 +12,26 @@ from nav_msgs.msg import Odometry
 from nav2_msgs.action import NavigateToPose
 from rclpy.action import ActionClient
 from rclpy.node import Node
+from std_msgs.msg import UInt32
 
 
 class NavigateToPoseClient(Node):
-    def __init__(self, robot: str, action_name: str, odom_topic: str) -> None:
+    def __init__(self, robot: str, action_name: str, odom_topic: str,
+                 collision_topic: str) -> None:
         super().__init__(f"{robot}_navigation_client")
         self.client = ActionClient(self, NavigateToPose, action_name)
         self.latest_odom: Odometry | None = None
+        self.latest_collision_count: int | None = None
         self.create_subscription(Odometry, odom_topic, self._receive_odom, 10)
+        self.create_subscription(
+            UInt32, collision_topic, self._receive_collision_count, 10
+        )
 
     def _receive_odom(self, message: Odometry) -> None:
         self.latest_odom = message
+
+    def _receive_collision_count(self, message: UInt32) -> None:
+        self.latest_collision_count = int(message.data)
 
     def send_goal(self, x: float, y: float, yaw: float, max_position_error: float) -> int:
         if not self.client.wait_for_server(timeout_sec=10.0):
@@ -69,8 +78,15 @@ class NavigateToPoseClient(Node):
             f"Final odom: x={position.x:.3f}, y={position.y:.3f}, "
             f"position_error={error:.3f}"
         )
+        collision_count = self.latest_collision_count
+        self.get_logger().info(f"MuJoCo non-ground collision count: {collision_count}")
+        if collision_count is None:
+            self.get_logger().error("No MuJoCo collision count message received")
+            return 9
         if result.status != 4:
             return 5
+        if collision_count != 0:
+            return 10
         return 0 if error <= max_position_error else 8
 
 
@@ -79,6 +95,7 @@ def main() -> int:
     parser.add_argument("--robot", default="turtlebot4")
     parser.add_argument("--action", default="navigate_to_pose")
     parser.add_argument("--odom-topic", default="/odom")
+    parser.add_argument("--collision-topic", default="/simulation/collision_count")
     parser.add_argument("--x", type=float, default=1.0)
     parser.add_argument("--y", type=float, default=0.0)
     parser.add_argument("--yaw", type=float, default=0.0)
@@ -86,7 +103,9 @@ def main() -> int:
     args = parser.parse_args()
 
     rclpy.init()
-    node = NavigateToPoseClient(args.robot, args.action, args.odom_topic)
+    node = NavigateToPoseClient(
+        args.robot, args.action, args.odom_topic, args.collision_topic
+    )
     try:
         return node.send_goal(args.x, args.y, args.yaw, args.max_position_error)
     finally:

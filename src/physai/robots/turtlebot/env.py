@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import mujoco
@@ -22,6 +22,11 @@ from ...contracts import (
 )
 from ..base import RobotSpec
 from ...sim.core import MuJoCoSimulationCore
+from ...sim.domain_randomization import (
+    DomainRandomizationConfig,
+    DomainRandomizationEngine,
+    RandomizationMetadata,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_MODEL = REPO_ROOT / "assets" / "turtlebot4" / "turtlebot4.xml"
@@ -44,6 +49,9 @@ class TurtleBot4Config:
     lidar_samples: int = 360
     lidar_range_min: float = 0.05
     lidar_range_max: float = 5.0
+    domain_randomization: DomainRandomizationConfig = field(
+        default_factory=DomainRandomizationConfig
+    )
     # (x, y, half_length_x, half_length_y, height) in MuJoCo world coordinates.
     obstacles: tuple[tuple[float, float, float, float, float], ...] = ()
 
@@ -149,6 +157,9 @@ class TurtleBot4Env(MuJoCoSimulationCore):
                 "Run `python scripts/fetch_assets.py --robot turtlebot4`."
             )
         self.model = _compile_scene(self.cfg.model_path, self.cfg.obstacles)
+        self.randomization = DomainRandomizationEngine(
+            self.model, self.cfg.domain_randomization
+        )
         self.model.opt.timestep = min(self.model.opt.timestep, 0.002)
         super().__init__(
             self.model,
@@ -158,6 +169,16 @@ class TurtleBot4Env(MuJoCoSimulationCore):
             camera_height=480,
         )
         self.rng = np.random.default_rng(self.cfg.seed)
+        self.collision_count = 0
+        self.randomization_metadata = RandomizationMetadata(
+            enabled=False,
+            seed=self.cfg.seed,
+            friction_scale=1.0,
+            mass_scale=1.0,
+            lighting_scale=1.0,
+            camera_position_offset={},
+            clutter_position={},
+        )
         self._actuator_ids = {self.model.actuator(i).name: i for i in range(self.model.nu)}
         self._base_body_id = self.model.body(BASE_BODY).id
         self._has_chase_camera = mujoco.mj_name2id(
@@ -184,6 +205,10 @@ class TurtleBot4Env(MuJoCoSimulationCore):
         if seed is not None:
             self.rng = np.random.default_rng(seed)
         self.reset_simulation()
+        self.collision_count = 0
+        self.randomization_metadata = self.randomization.apply(
+            self.rng, seed=seed if seed is not None else self.cfg.seed
+        )
         x, y, z = self.cfg.initial_pose
         free_qadr = int(self.model.jnt_qposadr[self.model.joint("floating_base_joint").id])
         self.data.qpos[free_qadr:free_qadr + 7] = (x, y, z, 1.0, 0.0, 0.0, 0.0)
@@ -203,7 +228,12 @@ class TurtleBot4Env(MuJoCoSimulationCore):
     def step(self, action: Action) -> tuple[Observation, float, bool, bool, dict]:
         self.send_action(action)
         self.step_simulation()
+        contacts = self.non_ground_contact_count()
+        self.collision_count += contacts
         info = {"pose": self._pose_array()}
+        info["collision_contacts"] = contacts
+        info["collision_count"] = self.collision_count
+        info["randomization"] = self.randomization_metadata.as_dict()
         return self.observe(), 0.0, False, self.step_count >= self.cfg.max_steps, info
 
     def close(self) -> None:
