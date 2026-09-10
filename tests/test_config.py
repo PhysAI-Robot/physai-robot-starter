@@ -28,3 +28,6 @@ def test_load_sim_config_keeps_randomization_disabled():
 
     assert config.seed == 0
     assert not config.domain_randomization.enabled
+    assert config.domain_randomization.friction_scale == (0.9, 1.1)
+    assert config.domain_randomization.mass_scale == (0.95, 1.05)
+    assert config.domain_randomization.lighting_scale == (0.9, 1.1)

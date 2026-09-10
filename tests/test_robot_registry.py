@@ -125,6 +125,27 @@ def test_turtlebot4_lidar_detects_configured_obstacle():
         env.close()
 
 
+def test_turtlebot4_collision_counter_detects_obstacle_contact():
+    from physai.contracts import Action, Twist, Vector3
+    from physai.robots.turtlebot import TurtleBot4Config, TurtleBot4Env
+
+    env = TurtleBot4Env(
+        TurtleBot4Config(
+            render=False,
+            obstacles=((0.0, -0.5, 0.4, 0.1, 0.4),),
+        )
+    )
+    try:
+        env.reset(seed=0)
+        action = Action(ee_twist=Twist(linear=Vector3(x=0.4)))
+        for _ in range(400):
+            env.step(action)
+        assert env.collision_count > 0
+        assert env.non_ground_contact_count() > 0
+    finally:
+        env.close()
+
+
 def test_turtlebot4_stays_on_the_ground_while_driving():
     """The upstream MJCF has no floor geom, so the base used to free-fall.
 

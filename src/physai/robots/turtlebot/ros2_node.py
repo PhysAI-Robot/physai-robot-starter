@@ -24,6 +24,7 @@ class TurtleBot4ROS2Node:
         from nav_msgs.msg import Odometry
         from rosgraph_msgs.msg import Clock
         from sensor_msgs.msg import JointState, LaserScan
+        from std_msgs.msg import UInt32
         from tf2_msgs.msg import TFMessage
 
         self.node = node
@@ -42,6 +43,7 @@ class TurtleBot4ROS2Node:
         self._transform_type = TransformStamped
         self._scan_type = LaserScan
         self._clock_type = Clock
+        self._collision_type = UInt32
         self._command = Twist()
         self._cmd_subscription = node.create_subscription(
             ROSTwist, "/cmd_vel", self._receive_twist, 10
@@ -52,6 +54,9 @@ class TurtleBot4ROS2Node:
         self._odom_publisher = node.create_publisher(Odometry, "/odom", 10)
         self._tf_publisher = node.create_publisher(TFMessage, "/tf", 10)
         self._scan_publisher = node.create_publisher(LaserScan, "/scan", 10)
+        self._collision_publisher = node.create_publisher(
+            UInt32, "/simulation/collision_count", 10
+        )
         self._clock_publisher = node.create_publisher(Clock, "/clock", 10)
 
     def _receive_twist(self, message: Any) -> None:
@@ -151,12 +156,18 @@ class TurtleBot4ROS2Node:
         self._stamp(message.clock, observation.sim_time)
         return message
 
+    def _collision_count(self) -> Any:
+        message = self._collision_type()
+        message.data = int(self.simulation.collision_count)
+        return message
+
     def publish_observation(self, observation: Any) -> None:
         self._clock_publisher.publish(self._clock(observation))
         self._joint_state_publisher.publish(self._joint_state(observation))
         self._odom_publisher.publish(self._odom(observation))
         self._tf_publisher.publish(self._tf(observation))
         self._scan_publisher.publish(self._scan(observation))
+        self._collision_publisher.publish(self._collision_count())
 
     def reset(self, seed: int | None = None) -> Any:
         observation = self.simulation.reset(seed=seed)
@@ -199,6 +210,7 @@ class TurtleBot4ROS2Node:
         self.node.destroy_publisher(self._odom_publisher)
         self.node.destroy_publisher(self._tf_publisher)
         self.node.destroy_publisher(self._scan_publisher)
+        self.node.destroy_publisher(self._collision_publisher)
         self.node.destroy_publisher(self._clock_publisher)
 
 

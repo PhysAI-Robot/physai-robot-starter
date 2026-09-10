@@ -76,6 +76,35 @@ class ArmKinematics:
         mujoco.mj_jacSite(self.model, data, jacp, jacr, self.site_id)
         return np.vstack([jacp[:, self.dof_adr], jacr[:, self.dof_adr]])
 
+    def forbidden_contact_body_pairs(
+        self,
+        data: mujoco.MjData,
+        *,
+        allowed_body_pairs: tuple[tuple[str, str], ...] = (),
+    ) -> tuple[tuple[str, str], ...]:
+        """Return contacts not explicitly allowed by the caller.
+
+        Contact is evaluated against the caller's live data so object placement
+        and task-specific contacts are represented. Body names are used because
+        the imported robot collision meshes are not consistently named.
+        """
+        allowed = {frozenset(pair) for pair in allowed_body_pairs}
+        forbidden: list[tuple[str, str]] = []
+        for index in range(data.ncon):
+            contact = data.contact[index]
+            body_ids = (
+                int(self.model.geom_bodyid[contact.geom1]),
+                int(self.model.geom_bodyid[contact.geom2]),
+            )
+            pair = tuple(
+                mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, body_id)
+                or f"body_{body_id}"
+                for body_id in body_ids
+            )
+            if frozenset(pair) not in allowed:
+                forbidden.append(pair)
+        return tuple(forbidden)
+
     def ik(
         self,
         target_pos,
@@ -94,14 +123,30 @@ class ArmKinematics:
     ) -> IKResult:
         model, data = self.model, self._scratch
         target_pos = np.asarray(target_pos, dtype=np.float64).reshape(3)
+        if not np.isfinite(target_pos).all():
+            raise ValueError("IK target_pos must contain only finite values")
         axis_col = "xyz".index(approach_axis)
         if approach_dir is not None:
             approach_dir = np.asarray(approach_dir, dtype=np.float64).reshape(3)
-            approach_dir = approach_dir / np.linalg.norm(approach_dir)
+            norm = np.linalg.norm(approach_dir)
+            if not np.isfinite(norm) or norm <= 1e-12:
+                raise ValueError("IK approach_dir must be a finite non-zero vector")
+            approach_dir = approach_dir / norm
+
+        if q_init is not None:
+            q_init = np.asarray(q_init, dtype=np.float64).reshape(5)
+            if not np.isfinite(q_init).all():
+                raise ValueError("IK q_init must contain only finite values")
+        if target_quat_wxyz is not None:
+            target_quat_wxyz = np.asarray(target_quat_wxyz, dtype=np.float64).reshape(4)
+            quat_norm = np.linalg.norm(target_quat_wxyz)
+            if not np.isfinite(quat_norm) or quat_norm <= 1e-12:
+                raise ValueError("IK target_quat_wxyz must be a finite non-zero quaternion")
+            target_quat_wxyz = target_quat_wxyz / quat_norm
 
         mujoco.mj_resetData(model, data)
         if q_init is not None:
-            data.qpos[self.qpos_adr] = np.asarray(q_init, dtype=np.float64).reshape(5)
+            data.qpos[self.qpos_adr] = np.clip(q_init, self.limits[:, 0], self.limits[:, 1])
 
         error = np.zeros(6)
         position_error = rotation_error = np.inf

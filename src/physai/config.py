@@ -9,14 +9,8 @@ from typing import Any
 import yaml
 
 from .robots import create_env_config
+from .sim.domain_randomization import DomainRandomizationConfig
 from .sim.scenes import create_scene, get_scene_definition
-
-
-@dataclass(frozen=True)
-class DomainRandomizationConfig:
-    """Phase 1E controls; randomization stays disabled in the baseline."""
-
-    enabled: bool = False
 
 
 @dataclass(frozen=True)
@@ -73,13 +67,28 @@ def _parse_simulation_config(
     if not isinstance(randomization_data, dict):
         raise ValueError(f"{source}: domain_randomization must be a mapping")
     enabled = randomization_data.get("enabled", False)
-    if not isinstance(enabled, bool):
-        raise ValueError(
-            f"{source}: domain_randomization.enabled must be a boolean"
+    kwargs: dict[str, Any] = {"enabled": enabled}
+    for key in (
+        "friction_scale",
+        "mass_scale",
+        "lighting_scale",
+        "clutter_x_range",
+        "clutter_y_range",
+    ):
+        if key in randomization_data:
+            value = randomization_data[key]
+            if not isinstance(value, (list, tuple)) or len(value) != 2:
+                raise ValueError(f"{source}: domain_randomization.{key} must be a pair")
+            kwargs[key] = tuple(float(item) for item in value)
+    if "camera_position_jitter" in randomization_data:
+        kwargs["camera_position_jitter"] = float(
+            randomization_data["camera_position_jitter"]
         )
+    if "clutter_clearance" in randomization_data:
+        kwargs["clutter_clearance"] = float(randomization_data["clutter_clearance"])
     return SimulationConfig(
         seed=seed,
-        domain_randomization=DomainRandomizationConfig(enabled=enabled),
+        domain_randomization=DomainRandomizationConfig(**kwargs),
     )
 
 

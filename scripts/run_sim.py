@@ -18,7 +18,12 @@ from pathlib import Path
 import _bootstrap  # noqa: F401
 import numpy as np
 
-from physai.config import TaskConfig, load_sim_config, load_task_config
+from physai.config import (
+    DomainRandomizationConfig,
+    TaskConfig,
+    load_sim_config,
+    load_task_config,
+)
 from physai.policy import available_policies, create_policy
 from physai.robots import available_robots, create_robot
 from physai.robots.so101 import EnvConfig
@@ -67,6 +72,7 @@ def build_so101_config(
     seed: int,
     max_steps: int,
     render: bool,
+    domain_randomization: DomainRandomizationConfig,
 ) -> EnvConfig:
     if task_config is None:
         cam_w, cam_h = ((args.camera_size, args.camera_size) if args.camera_size
@@ -76,6 +82,7 @@ def build_so101_config(
             seed=seed,
             max_steps=max_steps,
             render=render,
+            domain_randomization=domain_randomization,
         )
 
     config = task_config.env
@@ -86,7 +93,14 @@ def build_so101_config(
             camera_width=args.camera_size,
             camera_height=args.camera_size,
         )
-    return replace(config, scene=scene, seed=seed, max_steps=max_steps, render=render)
+    return replace(
+        config,
+        scene=scene,
+        seed=seed,
+        max_steps=max_steps,
+        render=render,
+        domain_randomization=domain_randomization,
+    )
 
 
 def main() -> int:
@@ -126,11 +140,6 @@ def main() -> int:
     args = ap.parse_args()
 
     sim_config = load_sim_config(args.sim_config)
-    if sim_config.domain_randomization.enabled:
-        ap.error(
-            "domain randomization is not implemented yet; "
-            "set domain_randomization.enabled to false"
-        )
     task_config = load_task_config(args.config) if args.config else None
     configured_robot = task_config.robot if task_config else (args.robot or "so101")
     if args.robot and args.robot != configured_robot:
@@ -149,16 +158,20 @@ def main() -> int:
     )
 
     if args.viewer:
-        return run_viewer(args, task_config, seed, max_steps)
+        return run_viewer(
+            args, task_config, seed, max_steps, sim_config.domain_randomization
+        )
 
     if args.robot == "turtlebot4":
         env = create_robot(args.robot, config=TurtleBot4Config(
             max_steps=max_steps, render=not args.no_video,
+            domain_randomization=sim_config.domain_randomization,
         ))
         camera_name = "free"
     else:
         robot = create_robot(args.robot, config=build_so101_config(
             args, task_config, seed, max_steps, render=not args.no_video,
+            domain_randomization=sim_config.domain_randomization,
         ))
         env = TaskRuntime(
             robot,
@@ -178,6 +191,7 @@ def main() -> int:
     for ep in range(args.episodes):
         obs = env.reset(seed=seed + ep)
         policy.reset(obs)
+        print(f"  randomization={env.randomization_metadata.as_dict()}")
         frames, total_reward, info = [], 0.0, {}
 
         for _ in range(max_steps):
@@ -210,16 +224,19 @@ def run_viewer(
     task_config: TaskConfig | None,
     seed: int,
     max_steps: int,
+    domain_randomization: DomainRandomizationConfig,
 ) -> int:
     import mujoco.viewer
 
     if args.robot == "turtlebot4":
         env = create_robot(args.robot, config=TurtleBot4Config(
             max_steps=args.max_steps, render=False,
+            domain_randomization=domain_randomization,
         ))
     else:
         env = create_robot(args.robot, config=build_so101_config(
             args, task_config, seed, max_steps, render=False,
+            domain_randomization=domain_randomization,
         ))
     obs = env.reset()
     policy = build_policy(args.policy, env, args.checkpoint)

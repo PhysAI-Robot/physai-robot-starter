@@ -22,6 +22,82 @@ def test_scene_has_the_task_objects_and_cameras():
 
 
 @requires_assets
+def test_domain_randomization_is_seeded_bounded_and_restores_baseline():
+    from physai.sim import (
+        DomainRandomizationConfig,
+        DomainRandomizationEngine,
+        SceneConfig,
+        build_model,
+    )
+
+    model, _ = build_model(SceneConfig(clutter_count=2))
+    baseline_friction = model.geom_friction.copy()
+    baseline_mass = model.body_mass.copy()
+    baseline_lighting = model.light_diffuse.copy()
+    disabled = DomainRandomizationEngine(
+        model, DomainRandomizationConfig(enabled=False)
+    )
+    config = DomainRandomizationConfig(
+        enabled=True,
+        friction_scale=(0.8, 1.2),
+        mass_scale=(0.9, 1.1),
+        lighting_scale=(0.7, 1.3),
+        camera_position_jitter=0.01,
+    )
+    engine = DomainRandomizationEngine(model, config)
+    first = engine.apply(np.random.default_rng(12), seed=12)
+    first_friction = model.geom_friction.copy()
+    first_mass = model.body_mass.copy()
+    first_lighting = model.light_diffuse.copy()
+
+    second = engine.apply(np.random.default_rng(12), seed=12)
+    assert first.as_dict() == second.as_dict()
+    np.testing.assert_allclose(model.geom_friction, first_friction)
+    np.testing.assert_allclose(model.body_mass, first_mass)
+    np.testing.assert_allclose(model.light_diffuse, first_lighting)
+    assert config.friction_scale[0] <= first.friction_scale <= config.friction_scale[1]
+    assert config.mass_scale[0] <= first.mass_scale <= config.mass_scale[1]
+    assert config.lighting_scale[0] <= first.lighting_scale <= config.lighting_scale[1]
+    for offset in first.camera_position_offset.values():
+        assert np.max(np.abs(offset)) <= config.camera_position_jitter
+    assert set(first.clutter_position) == {"physai_clutter_0", "physai_clutter_1"}
+    for x, y in first.clutter_position.values():
+        assert config.clutter_x_range[0] <= x <= config.clutter_x_range[1]
+        assert config.clutter_y_range[0] <= y <= config.clutter_y_range[1]
+
+    metadata = disabled.apply(np.random.default_rng(99), seed=99)
+    assert not metadata.enabled
+    np.testing.assert_allclose(model.geom_friction, baseline_friction)
+    np.testing.assert_allclose(model.body_mass, baseline_mass)
+    np.testing.assert_allclose(model.light_diffuse, baseline_lighting)
+
+
+@requires_assets
+def test_domain_randomization_metadata_is_recorded_in_episode_info():
+    from physai.contracts import Action
+    from physai.robots.so101 import EnvConfig, SO101Env
+    from physai.sim import DomainRandomizationConfig
+
+    env = SO101Env(EnvConfig(
+        render=False,
+        domain_randomization=DomainRandomizationConfig(
+            enabled=True,
+            camera_position_jitter=0.005,
+        ),
+    ))
+    try:
+        observation = env.reset(seed=21)
+        _, _, _, _, info = env.step(
+            Action(joint_position=observation.joint_state.position[:5])
+        )
+        assert info["randomization"] == env.randomization_metadata.as_dict()
+        assert info["randomization"]["enabled"] is True
+        assert info["randomization"]["seed"] == 21
+    finally:
+        env.close()
+
+
+@requires_assets
 def test_calibrated_pads_replace_jaw_collision_meshes():
     import mujoco
 
@@ -114,6 +190,113 @@ def test_ik_reaches_a_point_on_the_table(env):
 
 
 @requires_assets
+@pytest.mark.parametrize("offset", [
+    (0.00, -0.03, 0.01),
+    (0.01, 0.04, 0.01),
+    (-0.02, 0.07, 0.01),
+])
+def test_ik_reaches_representative_targets_within_metrics(env, offset):
+    from physai.robots.so101.kinematics import TOP_DOWN
+
+    obs = env.reset(seed=0)
+    target = env.cube_pos + np.asarray(offset)
+    result = env.kin.ik(target, TOP_DOWN, q_init=obs.joint_state.position[:5])
+
+    assert result.converged
+    assert result.position_error <= 1e-3
+    assert result.orientation_error <= 3e-2
+    assert 0 < result.iterations <= 150
+    assert np.isfinite(result.qpos).all()
+    assert np.all(result.qpos >= env.kin.limits[:, 0])
+    assert np.all(result.qpos <= env.kin.limits[:, 1])
+
+
+@requires_assets
+def test_ik_accepts_strict_orientation_target(env):
+    from physai.robots.so101.kinematics import top_down_quat
+
+    obs = env.reset(seed=0)
+    result = env.kin.ik(
+        env.cube_pos + np.array([0.0, 0.0, 0.01]),
+        q_init=obs.joint_state.position[:5],
+        target_quat_wxyz=top_down_quat(),
+        pos_tol=1e-3,
+        rot_tol=3e-2,
+    )
+
+    assert result.converged
+    assert result.position_error <= 1e-3
+    assert result.orientation_error <= 3e-2
+
+
+@requires_assets
+def test_ik_rejects_unreachable_target_without_unsafe_joint_command(env):
+    from physai.robots.so101.kinematics import TOP_DOWN
+
+    obs = env.reset(seed=0)
+    result = env.kin.ik(
+        env.cube_pos + np.array([0.0, 0.0, 0.12]),
+        TOP_DOWN,
+        q_init=obs.joint_state.position[:5],
+    )
+
+    assert not result.converged
+    assert np.isfinite(result.qpos).all()
+    assert np.all(result.qpos >= env.kin.limits[:, 0])
+    assert np.all(result.qpos <= env.kin.limits[:, 1])
+
+
+@requires_assets
+def test_ik_collision_acceptance_allows_grasp_contact_but_rejects_table_contact(env):
+    import mujoco
+    from physai.robots.so101.kinematics import TOP_DOWN
+
+    obs = env.reset(seed=0)
+    safe_result = env.kin.ik(
+        env.cube_pos + np.array([0.0, 0.0, 0.01]),
+        TOP_DOWN,
+        q_init=obs.joint_state.position[:5],
+    )
+    env.data.qpos[env.arm_qadr] = safe_result.qpos
+    mujoco.mj_forward(env.model, env.data)
+    assert env.kin.forbidden_contact_body_pairs(
+        env.data,
+        allowed_body_pairs=(("gripper", "cube"),),
+    ) == ()
+
+    low_result = env.kin.ik(
+        [0.20, 0.02, env.table_top + 0.001],
+        TOP_DOWN,
+        q_init=obs.joint_state.position[:5],
+    )
+    assert low_result.converged
+    env.data.qpos[env.arm_qadr] = low_result.qpos
+    mujoco.mj_forward(env.model, env.data)
+    assert ("gripper", "table") in env.kin.forbidden_contact_body_pairs(
+        env.data,
+        allowed_body_pairs=(("gripper", "cube"),),
+    )
+
+
+@requires_assets
+@pytest.mark.parametrize("bad_value", [np.nan, np.inf])
+def test_ik_rejects_non_finite_inputs(env, bad_value):
+    obs = env.reset(seed=0)
+    with pytest.raises(ValueError, match="finite"):
+        env.kin.ik(
+            [bad_value, 0.0, env.table_top],
+            q_init=obs.joint_state.position[:5],
+        )
+
+    with pytest.raises(ValueError, match="finite"):
+        env.kin.ik(
+            env.cube_pos,
+            [bad_value, 0.0, 0.0],
+            q_init=obs.joint_state.position[:5],
+        )
+
+
+@requires_assets
 def test_ik_pinch_puts_the_object_between_the_jaws_not_on_the_site(env):
     from physai.contracts import Action, GripperCommand
     from physai.robots.so101.kinematics import TOP_DOWN
@@ -161,6 +344,36 @@ def test_sorting_env_exposes_target_color_and_all_cube_positions():
         np.testing.assert_allclose(e.cube_pos, positions[e.target_color])
     finally:
         e.close()
+
+
+@requires_assets
+def test_sorting_reset_is_deterministic_for_a_given_seed():
+    from physai.robots.so101 import EnvConfig, SO101Env
+    from physai.sim import SceneConfig
+
+    robot = SO101Env(EnvConfig(
+        scene=SceneConfig(num_cubes=3), render=False, max_steps=200,
+    ))
+    try:
+        first = robot.reset(seed=17)
+        first_positions = {
+            color: position.copy()
+            for color, position in robot.cube_positions.items()
+        }
+        first_target = robot.target_color
+
+        second = robot.reset(seed=17)
+        assert robot.target_color == first_target
+        assert set(robot.cube_positions) == set(first_positions)
+        for color, position in first_positions.items():
+            np.testing.assert_allclose(robot.cube_positions[color], position)
+        np.testing.assert_allclose(
+            second.joint_state.position,
+            first.joint_state.position,
+        )
+        assert second.sim_time == first.sim_time == 0.0
+    finally:
+        robot.close()
 
 
 @requires_assets
