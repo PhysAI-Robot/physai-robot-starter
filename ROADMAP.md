@@ -52,7 +52,7 @@ policy will consume.
 - [x] `configs/sim_config.yaml`: Centralized simulation configuration with `domain_randomization.enabled: false` by default.
 - [x] `src/physai/robots/registry.py`: Capability-aware robot discovery and factory API for the currently supported robots.
 - [x] Contract validation for action modes, joint names, camera names, timestamps, frame IDs, shapes, and finite values.
-- [ ] Explicit runtime validation for declared units such as radians, metres, and metres per second.
+- [x] Explicit runtime validation for declared units such as radians, metres, and metres per second through `RobotSpec` unit declarations.
 - [x] Deterministic reset and seed handling for SO-101 and TurtleBot4.
 - [x] Smoke and regression tests covering `reset()`, `step()`, action validation, and capability requirements.
 
@@ -98,7 +98,7 @@ more complex planners.
 - [x] TurtleBot4 accepts a standard `geometry_msgs/msg/Twist` command and reports wheel state, odometry, and `odom` to `base_link` TF through the real `rclpy` acceptance test.
 - [x] Nav2 reaches a goal in the deterministic test world without collision. The obstacle acceptance path checks `NavigateToPose` success, final position error, and the MuJoCo non-ground collision count; the latest direct acceptance result was `SUCCEEDED` with `0.041 m` final error and zero collisions.
 - [x] The direct MuJoCo navigation result is reproducible across repeated runs with the same seed.
-- [x] Direct navigation failures report a timeout reason and collision count; Nav2 action failure reporting remains open.
+- [x] Direct and Nav2 navigation failures report structured action status, timeout reason, final position error, and collision count; `scripts/send_nav_goal.py` can write a JSON report.
 
 ### Phase 1D: Per-Robot Kinematics and Manipulation Control
 
@@ -107,17 +107,17 @@ SO-101 implementation is numerical damped-least-squares IK, so analytical IK
 should not be a Phase 1 requirement unless a later robot specifically needs it.
 
 #### Deliverables
-- [ ] Benchmark the existing SO-101 FK, Jacobian, and numerical IK over a defined set of reachable targets.
-- [ ] Expose Cartesian targeting through a ROS 2 service or action after the local IK behavior is validated.
+- [x] Benchmark the existing SO-101 FK, Jacobian, and numerical IK over a defined set of reachable targets with `scripts/benchmark_ik.py`.
+- [x] Expose Cartesian targeting through the transport-neutral ROS 2 service/action contract in `src/physai/bridge/cartesian.py`; `SO101ROS2Node.handle_cartesian_target()` resolves pose requests through IK and safety validation.
 - [x] Validate reachable-target position error, convergence, joint limits, and gripper contact behavior in simulator tests.
 - [x] Complete orientation-error and collision/contact acceptance coverage with recorded simulator metrics; a broader kinematics benchmark remains open.
-- [ ] Add a separate kinematics adapter for each future arm embodiment instead of generalizing SO-101 assumptions.
+- [ ] Add a separate kinematics adapter for each future arm embodiment instead of generalizing SO-101 assumptions. **Foundation:** `src/physai/robots/kinematics_registry.py` now provides the registration boundary; concrete Franka and mobile-manipulator adapters remain future work.
 
 #### Definition of Done
 - [x] SO-101 IK reaches the documented test targets within the configured position and orientation tolerances.
 - [x] Unreachable targets fail explicitly and do not emit unsafe joint targets.
 - [x] Joint-limit and collision checks are included in the acceptance test, not only final end-effector position.
-- [ ] The benchmark records success rate, error, iterations, and runtime.
+- [x] The benchmark records success rate, position/orientation error, iterations, FK/Jacobian/IK runtime, and Jacobian shape.
 
 ### Phase 1E: Controlled Domain Randomization
 
@@ -146,7 +146,7 @@ be added after the shared contracts, bridge pattern, and acceptance tests are
 proven on the first two robots.
 
 ### Definition of Done (DoD)
-- [x] SO-101 and TurtleBot4 pass the deterministic contract, reset, and control regression suite. The current suite has 91 passing tests and 2 skipped in the ROS2 Jazzy environment; the scripted SO-101 pick-and-place reliability check is 20/20 with the calibrated pad setup.
+- [x] SO-101 and TurtleBot4 pass the deterministic contract, reset, and control regression suite. The current suite has 92 passing tests and 2 skipped in the ROS2 Jazzy environment; the scripted SO-101 pick-and-place reliability check is 20/20 with the calibrated pad setup.
 - [x] SO-101 can be teleoperated through a real `rclpy` node using its ROS 2 joint, gripper, camera, and TF interfaces.
 - [x] TurtleBot4 can navigate from Point A to Point B through the ROS 2/Nav2 path without collision in the deterministic test world. Automated acceptance validates LaserScan obstacle detection, Collision Monitor, final pose error, and zero MuJoCo contact count.
 - [x] SO-101 IK meets the documented position and orientation tolerances on reachable targets and rejects invalid targets safely; broader runtime benchmarking remains open.
