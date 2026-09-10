@@ -2,6 +2,11 @@
 
 from .adapters import ADAPTER_NAMES, DirectMuJoCoAdapter, select_adapter
 from .base import KinematicsPort, RobotEnv, RobotPort, RobotSpec
+from .kinematics_registry import (
+    available_kinematics_adapters,
+    create_kinematics_adapter,
+    register_kinematics_adapter,
+)
 from .registry import (
     available_robots,
     available_ros2_robots,
@@ -20,6 +25,9 @@ __all__ = [
     "RobotPort",
     "RobotSpec",
     "KinematicsPort",
+    "available_kinematics_adapters",
+    "create_kinematics_adapter",
+    "register_kinematics_adapter",
     "DirectMuJoCoAdapter",
     "ADAPTER_NAMES",
     "select_adapter",

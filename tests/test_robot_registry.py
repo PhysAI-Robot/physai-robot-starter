@@ -249,6 +249,7 @@ def test_robot_spec_validates_action_mode_shape_and_values():
         kind="manipulator",
         action_joint_names=("joint_a", "joint_b"),
         action_modes=("joint_position",),
+        units={"joint_position": "rad", "joint_velocity": "rad/s"},
     )
     with pytest.raises(ValueError, match="expects 2 joint targets"):
         spec.validate_action(Action(joint_position=np.zeros(1)))
@@ -256,6 +257,30 @@ def test_robot_spec_validates_action_mode_shape_and_values():
         spec.validate_action(Action(ee_twist=Twist()))
     with pytest.raises(ValueError, match="non-finite"):
         spec.validate_action(Action(joint_position=np.array([0.0, np.nan])))
+
+
+def test_robot_spec_exposes_and_validates_si_unit_declarations():
+    from physai.robots import RobotSpec
+
+    spec = RobotSpec(name="unitless", kind="mobile_base", action_modes=("twist",))
+    assert spec.units == {
+        "joint_position": "rad",
+        "joint_velocity": "rad/s",
+        "linear_velocity": "m/s",
+        "angular_velocity": "rad/s",
+    }
+    with pytest.raises(ValueError, match="invalid unit declarations"):
+        RobotSpec(
+            name="wrong_units",
+            kind="mobile_base",
+            action_modes=("twist",),
+            units={
+                "joint_position": "degrees",
+                "joint_velocity": "rad/s",
+                "linear_velocity": "m/s",
+                "angular_velocity": "rad/s",
+            },
+        )
 
 
 def test_so101_ros2_mujoco_adapter_publishes_contract_topics():
@@ -371,6 +396,7 @@ def test_mujoco_ros_bridge_ticks_the_latest_ros2_command():
             action_joint_names=("joint",),
             metadata={"control_hz": 20.0},
             joint_state_frame="base",
+            units={"joint_position": "rad", "joint_velocity": "rad/s"},
         )
 
         def __init__(self):
@@ -484,6 +510,7 @@ def test_ros2_hardware_adapter_uses_shared_transport_boundary():
             kind="fixed_base_manipulator",
             joint_names=("joint",),
             action_joint_names=("joint",),
+            units={"joint_position": "rad", "joint_velocity": "rad/s"},
         )
 
         def __init__(self):
@@ -527,7 +554,11 @@ def test_hardware_factory_does_not_construct_a_mujoco_environment(monkeypatch):
     from physai.robots import RobotSpec
 
     class FakeHardware:
-        robot_spec = RobotSpec(name="so101", kind="hardware")
+        robot_spec = RobotSpec(
+            name="so101",
+            kind="hardware",
+            units={"joint_position": "rad", "joint_velocity": "rad/s"},
+        )
 
         def close(self):
             pass

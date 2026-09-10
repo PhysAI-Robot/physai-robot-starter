@@ -10,6 +10,11 @@ import mujoco
 import numpy as np
 
 from ...bridge.messages import ROS2MessageCodec
+from ...bridge.cartesian import (
+    CartesianTargetRequest,
+    CartesianTargetResult,
+    CartesianTargetService,
+)
 from ...bridge.mujoco_ros_bridge import MuJoCoROSBridge, RclpyTransport
 from .env import EnvConfig, SO101Env
 
@@ -67,6 +72,10 @@ class SO101ROS2Node:
         })
         codec = ROS2MessageCodec(JointState, Image)
         self.bridge = MuJoCoROSBridge(self.simulation, transport, codec=codec)
+        self.cartesian_service = CartesianTargetService(
+            self.simulation.kin,
+            self.simulation.robot_spec,
+        )
         self._camera_info_type = CameraInfo
         self._transform_type = TransformStamped
         self._tf_message_type = TFMessage
@@ -155,6 +164,13 @@ class SO101ROS2Node:
         observation = self.bridge.reset(seed=seed)
         self.publish_extras(observation)
         return observation
+
+    def handle_cartesian_target(
+        self, request: CartesianTargetRequest
+    ) -> CartesianTargetResult:
+        """Handle a Cartesian service/action request against the live state."""
+        observation = self.bridge.observation or self.reset()
+        return self.cartesian_service.handle(request, observation.joint_state)
 
     def run(self, *, seed: int | None = None, max_ticks: int | None = None) -> int:
         from rclpy.executors import SingleThreadedExecutor
