@@ -41,6 +41,40 @@ class NavigationResult:
 
 
 @dataclass(frozen=True)
+class Nav2AcceptanceResult:
+    """Structured result for the live ROS2/Nav2 acceptance path."""
+
+    action_status: int | None
+    goal_accepted: bool
+    timed_out: bool
+    position_error: float | None
+    collision_count: int | None
+    failure_reason: str | None = None
+
+    @property
+    def succeeded(self) -> bool:
+        return (
+            self.action_status == 4
+            and self.goal_accepted
+            and not self.timed_out
+            and self.position_error is not None
+            and self.collision_count == 0
+            and self.failure_reason is None
+        )
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "action_status": self.action_status,
+            "goal_accepted": self.goal_accepted,
+            "timed_out": self.timed_out,
+            "position_error": self.position_error,
+            "collision_count": self.collision_count,
+            "failure_reason": self.failure_reason,
+            "succeeded": self.succeeded,
+        }
+
+
+@dataclass(frozen=True)
 class RPPConfig:
     """Small regulated-pure-pursuit parameter set shared with Nav2 defaults."""
 
@@ -158,6 +192,7 @@ def navigate_to_coordinates(
 __all__ = [
     "NavigationGoal",
     "NavigationResult",
+    "Nav2AcceptanceResult",
     "RPPConfig",
     "RegulatedPurePursuit",
     "navigate_to_goal",

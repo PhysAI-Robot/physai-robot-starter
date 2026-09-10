@@ -158,6 +158,11 @@ class SO101Env(MuJoCoSimulationCore):
             metadata={"control_hz": self.cfg.control_hz},
             joint_state_frame="base",
             camera_frames={"front": "camera_front", "wrist": "camera_wrist"},
+            units={
+                "joint_position": "rad",
+                "joint_velocity": "rad/s",
+                "position": "m",
+            },
         )
 
     def gripper_to_joint(self, normalized: float) -> float:

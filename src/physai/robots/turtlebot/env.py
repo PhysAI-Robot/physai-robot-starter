@@ -199,6 +199,13 @@ class TurtleBot4Env(MuJoCoSimulationCore):
             joint_state_frame="base_link",
             action_frame="base",
             camera_frames={"free": "base_link"},
+            units={
+                "joint_position": "rad",
+                "joint_velocity": "rad/s",
+                "linear_velocity": "m/s",
+                "angular_velocity": "rad/s",
+                "position": "m",
+            },
         )
 
     def reset(self, seed: int | None = None) -> Observation:

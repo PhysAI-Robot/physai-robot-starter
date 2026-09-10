@@ -27,6 +27,31 @@ class RobotSpec:
     joint_state_frame: str | None = None
     action_frame: str | None = None
     camera_frames: dict[str, str] = field(default_factory=dict)
+    units: dict[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        required_units = {
+            "joint_position": "rad",
+            "joint_velocity": "rad/s",
+        }
+        if "twist" in self.action_modes:
+            required_units.update(
+                linear_velocity="m/s",
+                angular_velocity="rad/s",
+            )
+        if "ee_pose" in self.observation_modalities:
+            required_units["position"] = "m"
+        object.__setattr__(self, "units", {**required_units, **self.units})
+        incorrect = [
+            f"{name}={self.units[name]!r} (expected {unit!r})"
+            for name, unit in required_units.items()
+            if self.units[name] != unit
+        ]
+        if incorrect:
+            raise ValueError(
+                f"robot {self.name!r} has invalid unit declarations: "
+                + ", ".join(incorrect)
+            )
 
     def supports(self, *capabilities: str) -> bool:
         """Return whether this embodiment provides every requested capability."""
