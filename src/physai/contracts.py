@@ -7,7 +7,7 @@ real message type with no changes to callers:
     JointState      -> sensor_msgs/msg/JointState
     Twist           -> geometry_msgs/msg/Twist
     PoseStamped     -> geometry_msgs/msg/PoseStamped
-    GripperCommand  -> control_msgs/action/GripperCommand (goal)
+    GripperCommand  -> control_msgs/msg/GripperCommand
     ImageFrame      -> sensor_msgs/msg/Image  (+ CameraInfo)
 
 Field names and units deliberately match the ROS2 definitions (SI, radians,
@@ -184,7 +184,7 @@ class Twist:
 
 @dataclass
 class GripperCommand:
-    """control_msgs/action/GripperCommand goal.
+    """control_msgs/msg/GripperCommand command.
 
     `position` is normalized aperture: 0.0 = fully closed, 1.0 = fully open.
     The env maps it onto the gripper joint's actual range.

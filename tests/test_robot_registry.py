@@ -30,6 +30,12 @@ def test_so101_is_registered():
         env.close()
 
 
+def test_ros2_nodes_are_registered_for_supported_robots():
+    from physai.robots import available_ros2_robots
+
+    assert available_ros2_robots() == ("so101", "turtlebot4")
+
+
 def test_so101_environment_is_owned_by_robot_package():
     from physai.robots.so101 import EnvConfig, SO101Env
     import physai.sim as sim
@@ -68,6 +74,13 @@ def test_turtlebot4_is_registered_and_uses_twist_control():
         env.close()
 
 
+def test_navigation_capability_is_resolved_by_robot_registry():
+    from physai.robots import navigate
+
+    with pytest.raises(ValueError, match="has no registered navigation baseline"):
+        navigate("so101", goal_x=1.0, goal_y=0.0)
+
+
 def test_turtlebot4_reset_is_deterministic_for_a_given_seed():
     import numpy as np
 
@@ -86,6 +99,49 @@ def test_turtlebot4_reset_is_deterministic_for_a_given_seed():
         )
         assert first.step == second.step == 0
         assert first.sim_time == second.sim_time == 0.0
+    finally:
+        env.close()
+
+
+def test_turtlebot4_lidar_detects_configured_obstacle():
+    import numpy as np
+
+    from physai.robots.turtlebot import TurtleBot4Config, TurtleBot4Env
+
+    env = TurtleBot4Env(
+        TurtleBot4Config(
+            render=False,
+            obstacles=((0.0, -0.8, 0.3, 0.1, 0.4),),
+        )
+    )
+    try:
+        env.reset(seed=0)
+        ranges = env.lidar_ranges()
+        forward_index = int(round((0.0 - env.cfg.lidar_angle_min)
+                                  / (2.0 * np.pi)
+                                  * env.cfg.lidar_samples)) % env.cfg.lidar_samples
+        assert ranges[forward_index] < 0.8
+    finally:
+        env.close()
+
+
+def test_turtlebot4_collision_counter_detects_obstacle_contact():
+    from physai.contracts import Action, Twist, Vector3
+    from physai.robots.turtlebot import TurtleBot4Config, TurtleBot4Env
+
+    env = TurtleBot4Env(
+        TurtleBot4Config(
+            render=False,
+            obstacles=((0.0, -0.5, 0.4, 0.1, 0.4),),
+        )
+    )
+    try:
+        env.reset(seed=0)
+        action = Action(ee_twist=Twist(linear=Vector3(x=0.4)))
+        for _ in range(400):
+            env.step(action)
+        assert env.collision_count > 0
+        assert env.non_ground_contact_count() > 0
     finally:
         env.close()
 
@@ -116,6 +172,29 @@ def test_turtlebot4_stays_on_the_ground_while_driving():
         )
     finally:
         env.close()
+
+
+def test_turtlebot4_rpp_reaches_deterministic_goal():
+    from physai.robots.turtlebot import NavigationGoal, navigate_to_goal
+
+    result = navigate_to_goal(NavigationGoal(x=1.0, y=-1.0), seed=0)
+
+    assert result.reached
+    assert result.steps < 100
+    assert result.position_error <= 0.10
+    assert result.heading_error <= 0.15
+    assert result.collision_count == 0
+    assert result.failure_reason is None
+
+
+def test_turtlebot4_rpp_goal_result_is_reproducible():
+    from physai.robots.turtlebot import NavigationGoal, navigate_to_goal
+
+    goal = NavigationGoal(x=1.0, y=-1.0)
+    first = navigate_to_goal(goal, seed=7)
+    second = navigate_to_goal(goal, seed=7)
+
+    assert first == second
 
 
 def test_turtlebot4_published_image_is_not_blank():
@@ -170,6 +249,7 @@ def test_robot_spec_validates_action_mode_shape_and_values():
         kind="manipulator",
         action_joint_names=("joint_a", "joint_b"),
         action_modes=("joint_position",),
+        units={"joint_position": "rad", "joint_velocity": "rad/s"},
     )
     with pytest.raises(ValueError, match="expects 2 joint targets"):
         spec.validate_action(Action(joint_position=np.zeros(1)))
@@ -177,6 +257,30 @@ def test_robot_spec_validates_action_mode_shape_and_values():
         spec.validate_action(Action(ee_twist=Twist()))
     with pytest.raises(ValueError, match="non-finite"):
         spec.validate_action(Action(joint_position=np.array([0.0, np.nan])))
+
+
+def test_robot_spec_exposes_and_validates_si_unit_declarations():
+    from physai.robots import RobotSpec
+
+    spec = RobotSpec(name="unitless", kind="mobile_base", action_modes=("twist",))
+    assert spec.units == {
+        "joint_position": "rad",
+        "joint_velocity": "rad/s",
+        "linear_velocity": "m/s",
+        "angular_velocity": "rad/s",
+    }
+    with pytest.raises(ValueError, match="invalid unit declarations"):
+        RobotSpec(
+            name="wrong_units",
+            kind="mobile_base",
+            action_modes=("twist",),
+            units={
+                "joint_position": "degrees",
+                "joint_velocity": "rad/s",
+                "linear_velocity": "m/s",
+                "angular_velocity": "rad/s",
+            },
+        )
 
 
 def test_so101_ros2_mujoco_adapter_publishes_contract_topics():
@@ -292,6 +396,7 @@ def test_mujoco_ros_bridge_ticks_the_latest_ros2_command():
             action_joint_names=("joint",),
             metadata={"control_hz": 20.0},
             joint_state_frame="base",
+            units={"joint_position": "rad", "joint_velocity": "rad/s"},
         )
 
         def __init__(self):
@@ -405,6 +510,7 @@ def test_ros2_hardware_adapter_uses_shared_transport_boundary():
             kind="fixed_base_manipulator",
             joint_names=("joint",),
             action_joint_names=("joint",),
+            units={"joint_position": "rad", "joint_velocity": "rad/s"},
         )
 
         def __init__(self):
@@ -448,7 +554,11 @@ def test_hardware_factory_does_not_construct_a_mujoco_environment(monkeypatch):
     from physai.robots import RobotSpec
 
     class FakeHardware:
-        robot_spec = RobotSpec(name="so101", kind="hardware")
+        robot_spec = RobotSpec(
+            name="so101",
+            kind="hardware",
+            units={"joint_position": "rad", "joint_velocity": "rad/s"},
+        )
 
         def close(self):
             pass

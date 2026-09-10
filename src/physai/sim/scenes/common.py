@@ -53,6 +53,8 @@ class ManipulationSceneConfig(WorldSceneConfig):
     # keeping the original up vector, so the image is not also upside down.
     wrist_cam_pos: tuple[float, float, float] = (0.0, -0.07, 0.05)
     wrist_cam_xyaxes: tuple[float, ...] = (1.0, 0.0, 0.0, 0.0, 0.7, 0.7)
+    clutter_count: int = 0
+    clutter_size: tuple[float, float, float] = (0.018, 0.018, 0.025)
 
 
 # Compatibility name for callers from the original Phase 0 API. New code
@@ -170,6 +172,17 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
         size=[0.006, 0.006, 0.006],
         rgba=[0.2, 0.9, 0.4, 0.9],
     )
+    if cfg.clutter_count < 0:
+        raise ValueError("clutter_count must be non-negative")
+    for index in range(cfg.clutter_count):
+        world.add_geom(
+            name=f"physai_clutter_{index}",
+            type=mujoco.mjtGeom.mjGEOM_BOX,
+            pos=[0.14 + 0.03 * index, -0.16 + 0.06 * index, cfg.clutter_size[2]],
+            size=list(cfg.clutter_size),
+            rgba=[0.35, 0.42, 0.48, 1.0],
+            friction=[0.8, 0.01, 0.0001],
+        )
 
     quaternions = _pad_quats(cfg)
 
