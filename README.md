@@ -11,7 +11,7 @@ control and the first ROS2 integration, not a completed VLM or VLA stack.
 
 The shortest Phase 1 path is model-free: run the scripted SO-101
 pick-and-place baseline, inspect the contracts, then validate the ROS2 bridge
-when that integration is available.
+and TurtleBot4 navigation acceptance path.
 
 <p align="center">
   <img src="docs/media/so101_pick_place.gif" width="420"
@@ -45,10 +45,6 @@ environment and install the base package from the project root:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync
-```
-
-```bash
 uv sync
 ```
 
@@ -120,7 +116,9 @@ uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml
 Use `--seed`, `--max-steps`, and `--camera-size` to override configuration.
 The shared simulation seed and domain-randomization switch come from
 `configs/sim_config.yaml`, selected by `--sim-config` and defaulting to that
-file. Randomization must remain disabled until its Phase 1E engine is added.
+file. Domain randomization can be enabled through that configuration; keep it
+disabled for the deterministic baseline and use
+`scripts/eval_randomization.py` to compare deterministic and randomized runs.
 For image-conditioned policies, keep `--camera-size` square and match the
 training resolution, such as `128` or `224`.
 
@@ -137,14 +135,13 @@ takes joint positions, the base takes a twist.
 | Robot | Current baseline | Phase 1 direction |
 | --- | --- | --- |
 | SO-101 | Deterministic MuJoCo pick-and-place with scripted control | ROS2 joint, gripper, camera, and TF bridge |
-| TurtleBot4 | Deterministic MuJoCo base-velocity smoke test | ROS2 `/cmd_vel`, odometry, TF, and Nav2 foundation |
+| TurtleBot4 | Deterministic MuJoCo navigation and ROS2/Nav2 acceptance path | Collision-aware Nav2 evaluation and future hardware integration |
 
-The TurtleBot4 path is currently a generic control smoke test, which is what
-its clip above shows; navigation is a Phase 1 deliverable and is not
-implemented yet. The SO-101 ROS2 bridge, TurtleBot4 navigation path, and
-The TurtleBot4 path includes a deterministic ROS2 and open-space Nav2 smoke
-test. The SO-101 ROS2 bridge and controlled domain randomization remain part
-of the active Phase 1 roadmap.
+The TurtleBot4 path includes a deterministic ROS2 interface, open-space Nav2
+smoke testing, obstacle-aware navigation, LaserScan validation, and MuJoCo
+collision telemetry. The SO-101 path includes the ROS2 joint, gripper, camera,
+and TF bridge. Controlled domain randomization is available behind the
+configuration toggle and remains disabled by default.
 Direct MuJoCo remains the fast local path and does not replace ROS2
 integration validation.
 

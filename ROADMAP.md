@@ -58,7 +58,7 @@ policy will consume.
 
 #### Definition of Done
 - [x] `available_robots()` reports SO-101 and TurtleBot4 without importing optional ROS 2 or ML dependencies.
-- [ ] Repeating an episode with the same seed produces the same initial state and task randomization. **Partial:** baseline reset behavior is covered; sorting randomization still needs a dedicated regression assertion.
+- [x] Repeating an episode with the same seed produces the same initial state and task randomization, including the three-cube sorting reset regression.
 - [x] Invalid action modes, shapes, joint orders, and unsupported capabilities fail with clear errors.
 - [x] The existing scripted SO-101 workflow and TurtleBot4 twist workflow remain runnable after contract changes. **Verified:** the scripted SO-101 task completes `20/20` in the deterministic reliability check (`--episodes 20 --seed 0 --max-steps 600`). The result required fixing an unreachable `lift_height` (IK never converged, freezing the arm), calibrating `gripper_grip` and `gripper_force_limit`, placing the added pad geoms on the actual jaw contact surfaces, and disabling the original jaw collision meshes so contacts are not duplicated.
 
@@ -96,7 +96,7 @@ more complex planners.
 
 #### Definition of Done
 - [x] TurtleBot4 accepts a standard `geometry_msgs/msg/Twist` command and reports wheel state, odometry, and `odom` to `base_link` TF through the real `rclpy` acceptance test.
-- [ ] Nav2 reaches a goal in the deterministic test world without collision. **Partial:** the automated obstacle acceptance returns `SUCCEEDED` with a `0.021 m` final position error and detects the obstacle at `0.400 m`; MuJoCo contact counting is not yet wired into the live Nav2 acceptance path.
+- [x] Nav2 reaches a goal in the deterministic test world without collision. The obstacle acceptance path checks `NavigateToPose` success, final position error, and the MuJoCo non-ground collision count; the latest direct acceptance result was `SUCCEEDED` with `0.041 m` final error and zero collisions.
 - [x] The direct MuJoCo navigation result is reproducible across repeated runs with the same seed.
 - [x] Direct navigation failures report a timeout reason and collision count; Nav2 action failure reporting remains open.
 
@@ -110,13 +110,13 @@ should not be a Phase 1 requirement unless a later robot specifically needs it.
 - [ ] Benchmark the existing SO-101 FK, Jacobian, and numerical IK over a defined set of reachable targets.
 - [ ] Expose Cartesian targeting through a ROS 2 service or action after the local IK behavior is validated.
 - [x] Validate reachable-target position error, convergence, joint limits, and gripper contact behavior in simulator tests.
-- [ ] Complete orientation-error and collision/contact acceptance coverage with recorded benchmark metrics.
+- [x] Complete orientation-error and collision/contact acceptance coverage with recorded simulator metrics; a broader kinematics benchmark remains open.
 - [ ] Add a separate kinematics adapter for each future arm embodiment instead of generalizing SO-101 assumptions.
 
 #### Definition of Done
-- [ ] SO-101 IK reaches the documented test targets within the configured position and orientation tolerances.
-- [ ] Unreachable targets fail explicitly and do not emit unsafe joint targets.
-- [ ] Joint-limit and collision checks are included in the acceptance test, not only final end-effector position.
+- [x] SO-101 IK reaches the documented test targets within the configured position and orientation tolerances.
+- [x] Unreachable targets fail explicitly and do not emit unsafe joint targets.
+- [x] Joint-limit and collision checks are included in the acceptance test, not only final end-effector position.
 - [ ] The benchmark records success rate, error, iterations, and runtime.
 
 ### Phase 1E: Controlled Domain Randomization
@@ -126,17 +126,17 @@ stable. Keep all randomization behind one configuration and seed so failures
 remain reproducible.
 
 #### Deliverables
-- [ ] `src/physai/sim/domain_randomization.py`: Engine for selected physics and visual parameters.
-- [ ] Configuration for friction, mass, lighting, camera pose, and clutter ranges with documented defaults.
+- [x] `src/physai/sim/domain_randomization.py`: Seeded engine for selected physics, visual, camera, and optional clutter parameters.
+- [x] Configuration for friction, mass, lighting, camera pose, clutter ranges, and protected-task-point clearance with documented defaults.
 - [x] Explicit `enabled: false` behavior that preserves the deterministic baseline.
-- [ ] Seeded randomization metadata recorded in episode or evaluation output.
-- [ ] Regression comparison between deterministic and randomized runs.
+- [x] Seeded randomization metadata recorded in episode and evaluation output.
+- [x] Regression comparison between deterministic and randomized runs in `scripts/eval_randomization.py`.
 
 #### Definition of Done
-- [ ] Switching `domain_randomization.enabled` between `false` and `true` does not change ROS 2 topic names or message schemas.
-- [ ] The same seed reproduces the same randomized parameters.
-- [ ] Randomized values stay within documented safe ranges and do not silently invalidate robot models.
-- [ ] Baseline control success and failure rates are reported separately for deterministic and randomized settings.
+- [x] Switching `domain_randomization.enabled` between `false` and `true` does not change ROS 2 topic names or message schemas.
+- [x] The same seed reproduces the same randomized parameters.
+- [x] Randomized values stay within documented safe ranges and clutter placement rejects task-critical positions instead of silently invalidating the scene.
+- [x] Baseline control success and failure rates are reported separately for deterministic and randomized settings.
 
 ### Phase 1 Scope Boundary
 
@@ -146,11 +146,11 @@ be added after the shared contracts, bridge pattern, and acceptance tests are
 proven on the first two robots.
 
 ### Definition of Done (DoD)
-- [x] SO-101 and TurtleBot4 pass the deterministic contract, reset, and control regression suite. The current suite has 79 passing tests and 2 skipped in the ROS2 Jazzy environment; the scripted SO-101 pick-and-place reliability check is 20/20 with the calibrated pad setup.
+- [x] SO-101 and TurtleBot4 pass the deterministic contract, reset, and control regression suite. The current suite has 91 passing tests and 2 skipped in the ROS2 Jazzy environment; the scripted SO-101 pick-and-place reliability check is 20/20 with the calibrated pad setup.
 - [x] SO-101 can be teleoperated through a real `rclpy` node using its ROS 2 joint, gripper, camera, and TF interfaces.
-- [ ] TurtleBot4 can navigate from Point A to Point B through the ROS 2/Nav2 path without collision in the deterministic test world. **Partial:** automated open-space and obstacle-aware acceptance are validated with LaserScan, Collision Monitor, and final pose checks; physical contact counting remains open.
-- [ ] SO-101 IK meets the documented position and orientation tolerances on reachable targets and rejects invalid targets safely.
-- [ ] Domain Randomization can be enabled or disabled through `configs/sim_config.yaml` without changing ROS 2 topic contracts.
+- [x] TurtleBot4 can navigate from Point A to Point B through the ROS 2/Nav2 path without collision in the deterministic test world. Automated acceptance validates LaserScan obstacle detection, Collision Monitor, final pose error, and zero MuJoCo contact count.
+- [x] SO-101 IK meets the documented position and orientation tolerances on reachable targets and rejects invalid targets safely; broader runtime benchmarking remains open.
+- [x] Domain Randomization can be enabled or disabled through `configs/sim_config.yaml` without changing ROS 2 topic contracts, with seeded metadata and deterministic-vs-randomized evaluation coverage.
 - [x] The bridge and simulator can run without Phase 2+ dependencies such as LeRobot, VLM, or VLA packages.
 
 ---
