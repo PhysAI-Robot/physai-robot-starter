@@ -158,5 +158,16 @@ Main files are `configs/tasks/so101/pick_place.yaml`,
 `src/physai/robots/so101/env.py`, `src/physai/sim/scenes/common.py`, and
 `src/physai/policy/scripted.py`.
 
-Open SO-101 work includes the IK benchmark with error, iterations, runtime, and
-unreachable-target safety metrics, plus controlled domain randomization.
+Run the reproducible FK, Jacobian, and IK benchmark with:
+
+```bash
+uv run python scripts/benchmark_ik.py --targets 20 --seed 0
+```
+
+The benchmark reports success rate, position/orientation error, iterations,
+FK/Jacobian/IK runtime, and Jacobian shape. Remaining SO-101 work is the
+broader future-robot adapter support. Cartesian requests are available through
+`SO101ROS2Node.handle_cartesian_target()` and return structured acceptance,
+IK error, iteration, and failure-reason fields for wiring into a ROS2 service
+or action interface. Controlled domain randomization is already available
+through the shared simulation configuration.
