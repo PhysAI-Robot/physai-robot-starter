@@ -57,7 +57,7 @@ class ManipulationSceneConfig(WorldSceneConfig):
     clutter_size: tuple[float, float, float] = (0.018, 0.018, 0.025)
 
 
-# Compatibility name for callers from the original Phase 0 API. New code
+# Compatibility name for callers of the original shared-scene API. New code
 # should choose WorldSceneConfig or ManipulationSceneConfig explicitly.
 CommonSceneConfig = ManipulationSceneConfig
 

@@ -1,8 +1,8 @@
-"""Conversions between internal contracts and ROS2-shaped messages.
+"""Conversions between internal contracts and ROS2 messages.
 
-The default codec keeps the Phase 0 dataclasses intact. A ROS2 node can inject
-a codec that constructs real ``sensor_msgs`` and ``trajectory_msgs`` values
-without making the core package depend on ``rclpy``.
+The default codec keeps transport-neutral dataclasses intact. A ROS2 node can
+inject a codec that constructs real ``sensor_msgs`` and ``trajectory_msgs``
+values without making the core package depend on ``rclpy``.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ class MessageCodec(Protocol):
 
 
 class ContractMessageCodec:
-    """Codec for Phase 0 contract objects and ROS2-shaped input objects."""
+    """Codec for internal contract objects and ROS2-shaped input objects."""
 
     def encode_joint_state(self, value: JointState) -> JointState:
         return value

@@ -1,4 +1,4 @@
-"""Print the Phase 1 ROS2 topic contract that Phase 0 code is written against.
+"""Print the ROS2 topic contract used by the supported robot adapters.
 
     python scripts/show_ros2_contract.py
 """

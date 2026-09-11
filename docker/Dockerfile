@@ -57,7 +57,7 @@ COPY . .
 RUN uv sync --locked --extra dev
 ENV PATH="/workspace/.venv/bin:${PATH}"
 
-ENV MUJOCO_GL=osmesa
+ENV MUJOCO_GL=egl
 ENV PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
 
 RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc

@@ -1,8 +1,9 @@
-"""ROS2-shaped message contracts.
+"""Shared application contracts and ROS2-compatible value types.
 
-Phase 0 runs without ROS2, but every interface boundary in this repo speaks
-these dataclasses instead of raw numpy. In Phase 1 each one is replaced by its
-real message type with no changes to callers:
+These dataclasses are the internal boundary between policies, tasks, robot
+ports, and adapters. Their fields and units mirror the corresponding ROS2
+messages, but they remain transport-neutral so direct MuJoCo execution does
+not require ROS2. The bridge converts them at the ROS2 boundary:
 
     JointState      -> sensor_msgs/msg/JointState
     Twist           -> geometry_msgs/msg/Twist

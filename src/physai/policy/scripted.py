@@ -1,4 +1,4 @@
-"""Scripted pick-and-place expert — the demonstration generator for Phase 0.
+"""Scripted pick-and-place expert and demonstration generator.
 
 This is a privileged policy: it reads the cube pose straight out of the sim
 instead of from pixels. That is exactly what you want for bootstrapping a VLA —

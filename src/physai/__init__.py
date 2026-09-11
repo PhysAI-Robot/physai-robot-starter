@@ -1,4 +1,4 @@
-"""physai — Phase 0 starter for SO-101 physical-AI research.
+"""physai — robotics contracts and adapters for physical-AI research.
 
 Layers, mirroring the architecture diagram:
 
@@ -6,10 +6,10 @@ Layers, mirroring the architecture diagram:
     policy/    VLA  — waypoint + images + joint state -> joint commands
     control/   IK / joint controller — Twist or PoseStamped -> joint targets
     sim/       MuJoCo — rigid body physics and contact
-    bridge/    ROS2 topic contract for Phase 1
+    bridge/    ROS2 transport, topic contracts, and adapters
 
-Phase 0 runs all of it in-process; Phase 1 splits the same interfaces across
-ROS2 nodes.
+Direct MuJoCo and ROS2-backed execution share the same application contracts;
+ROS2 message conversion remains at the bridge boundary.
 """
 
 __version__ = "0.0.1"

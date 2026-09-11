@@ -1,8 +1,9 @@
-"""Run one episode and write a video. The 30-second sanity check.
+"""Run one episode, optionally writing a video. The 30-second sanity check.
 
     python scripts/run_sim.py                      # scripted expert, 1 episode
     python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml
     python scripts/run_sim.py --episodes 5 --seed 0
+    python scripts/run_sim.py --video --episodes 5 --seed 0
     python scripts/run_sim.py --policy constant    # baseline: do nothing
     python scripts/run_sim.py --policy lerobot --checkpoint outputs/act_ckpt
     python scripts/run_sim.py --viewer             # interactive MuJoCo viewer
@@ -134,7 +135,9 @@ def main() -> int:
                          "you render non-square here — pass the training size "
                          "(e.g. 128) to avoid the mismatch.")
     ap.add_argument("--out", type=Path, default=Path("outputs"))
-    ap.add_argument("--no-video", action="store_true")
+    ap.add_argument("--video", action="store_true",
+                    help="render frames and write an episode video")
+    ap.add_argument("--no-video", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--viewer", action="store_true",
                     help="open the interactive viewer instead of writing a video")
     args = ap.parse_args()
@@ -164,13 +167,13 @@ def main() -> int:
 
     if args.robot == "turtlebot4":
         env = create_robot(args.robot, config=TurtleBot4Config(
-            max_steps=max_steps, render=not args.no_video,
+            max_steps=max_steps, render=args.video and not args.no_video,
             domain_randomization=sim_config.domain_randomization,
         ))
         camera_name = "free"
     else:
         robot = create_robot(args.robot, config=build_so101_config(
-            args, task_config, seed, max_steps, render=not args.no_video,
+            args, task_config, seed, max_steps, render=args.video and not args.no_video,
             domain_randomization=sim_config.domain_randomization,
         ))
         env = TaskRuntime(
@@ -195,7 +198,7 @@ def main() -> int:
         frames, total_reward, info = [], 0.0, {}
 
         for _ in range(max_steps):
-            if not args.no_video:
+            if args.video and not args.no_video:
                 frames.append(env.render_camera(camera_name))
             obs, reward, terminated, truncated, info = env.step(policy.act(obs))
             total_reward += reward
@@ -209,7 +212,7 @@ def main() -> int:
         print(f"episode {ep}: success={ok} steps={env.step_count} "
               f"return={total_reward:.2f}{suffix}")
 
-        if frames and not args.no_video:
+        if frames and args.video and not args.no_video:
             path = write_video(np.stack(frames), args.out / f"{args.policy}_ep{ep:03d}",
                                fps=int(env.cfg.control_hz))
             print(f"  video -> {path}")
