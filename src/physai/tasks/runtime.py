@@ -55,7 +55,7 @@ class TaskRuntime:
         self.robot.close()
 
     def __getattr__(self, name: str) -> Any:
-        """Expose robot-specific observation helpers to Phase 0 policies."""
+        """Expose robot-specific observation helpers to direct policies."""
         return getattr(self.robot, name)
 
 

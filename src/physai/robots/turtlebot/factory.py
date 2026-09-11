@@ -22,7 +22,7 @@ def make_turtlebot4(
     if adapter == "ros2_hardware":
         raise ValueError(
             "adapter='ros2_hardware' is not supported for turtlebot4; "
-            "the mobile-base ROS2 adapter for cmd_vel, odometry, and TF is not implemented"
+            "the hardware-specific mobile-base adapter is not implemented"
         )
     if config is not None and kwargs:
         raise TypeError("pass either config or TurtleBot4Config keyword fields, not both")

@@ -1,11 +1,11 @@
-"""The Phase 1 ROS2 interface, declared in Phase 0.
+"""The external ROS2 interface for the supported robot adapters.
 
 Nothing here imports rclpy. It is the single place where topic names, message
 types, and rates are written down, so that:
 
-* Phase 0 code can be checked against the contract it will have to meet.
-* Phase 1 is a mechanical port: each `Endpoint` becomes one publisher or
-  subscriber, and the callback body is the Phase 0 function you already tested.
+* direct MuJoCo code can be checked against the transport contract;
+* each `Endpoint` maps to one publisher or subscriber in the ROS2 adapters;
+* simulated and hardware adapters can expose the same external interface.
 
 Recommended ROS2 distro: **Jazzy Jalisco** (LTS, Ubuntu 24.04, supported to
 2029). Kilted Kaiju (May 2025) is non-LTS with a short support window, and
@@ -34,7 +34,7 @@ class Endpoint:
     note: str = ""
 
 
-#: Node that wraps MuJoCo (Phase 0) or the real SO-101 follower (Phase 2).
+#: Node that wraps MuJoCo or a future real SO-101 hardware follower.
 ROBOT_ENDPOINTS: tuple[Endpoint, ...] = (
     Endpoint("/joint_states", "sensor_msgs/msg/JointState",
              Direction.PUBLISH, 25.0, "so101_driver",

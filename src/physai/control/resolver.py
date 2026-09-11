@@ -82,7 +82,8 @@ class TwistToJointResolver:
 
     Integrates the commanded end-effector velocity for one control tick using a
     damped pseudo-inverse of the site Jacobian. `data` must be the live MjData
-    (Phase 1: replace with a KDL/pinocchio chain fed from /joint_states).
+    unless a hardware-oriented implementation supplies a state provider and
+    calibrated kinematics backend.
     """
 
     def __init__(

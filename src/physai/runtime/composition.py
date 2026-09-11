@@ -1,4 +1,4 @@
-"""Explicit runtime assembly for P0 workflows."""
+"""Explicit runtime assembly for direct and ROS2-backed workflows."""
 
 from __future__ import annotations
 
