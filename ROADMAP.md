@@ -1,11 +1,11 @@
 # 🗺️ Project Roadmap: physai-robot-starter
 
-`physai-robot-starter` is an open-source starter kit for Embodied AI & Robotics. It bridges classical ROS 2 control stacks with modern Data-Driven Motor Skills (LeRobot), High-Level VLM Planning (SmolVLM), and End-to-End VLA policies in MuJoCo.
+`physai-robot-starter` is an open-source starter kit for Embodied AI & Robotics. It bridges classical ROS 2 control stacks with visual control, learning-based motor skills, high-level vision-language planning, and end-to-end vision-language-action policies in MuJoCo.
 
 
 ```
 
-[Phase 1: Classical Foundation & ROS 2] ➔ [Phase 2: Vision Skills (LeRobot)] ➔ [Phase 3: VLM Orchestration] ➔ [Phase 4: End-to-End VLA]
+[Phase 1: Classical Foundation & ROS 2] ➔ [Phase 2: Learning-Based Motor Skills] ➔ [Phase 3: VLM Orchestration] ➔ [Phase 4: End-to-End VLA]
 
 ```
 
@@ -155,26 +155,99 @@ proven on the first two robots.
 
 ---
 
-## 🎯 Phase 2: Vision-Based Motor Skills (Imitation Learning via LeRobot)
+## Phase 1 to Phase 2 Bridge: Training Readiness
+
+Add the smallest training boundary on top of the completed Phase 1 contracts.
+This work must adapt the existing `Observation -> Action` interface for
+learning tools without moving training logic into robot environments or ROS 2
+adapters.
+
+### Bridging Deliverables
+- [ ] Define canonical `ObservationSpec` and `ActionSpec` schemas covering names, shapes, dtypes, units, ranges, camera layout, and normalization metadata.
+- [ ] Add a Gymnasium-compatible environment adapter for direct MuJoCo task training with seeded `reset()`, `step()`, spaces, render modes, and structured episode information.
+- [ ] Make the canonical SO-101 action layout explicit and consistent across policies, recorder output, replay, ROS 2 conversion, and training datasets.
+- [ ] Version dataset metadata with robot, task, contract schema, simulator configuration, camera configuration, seed, and train/validation/test split information.
+- [ ] Add checkpoint metadata and compatibility validation for robot, task, observation schema, action schema, normalization, and training configuration.
+- [ ] Add shared evaluation reports for success, collision, timeout, unsafe action, reward, and held-out seed performance.
+- [ ] Add a smoke test that runs one episode through the training adapter and confirms that the resulting action still passes the existing safety and robot validation gates.
+
+### Bridge Completion Gate
+The Phase 2A visual-servoing baseline and all learned policies must consume the
+same canonical observation and action schemas. A training framework may be
+changed later, but policies must remain evaluable through the repository's
+policy boundary without changing the robot adapter or ROS 2 contract.
+
+---
+
+## 🎯 Phase 2: Learning-Based Motor Skills
 
 ### Objective
-Transition from rigid, purely mathematical calculations (Phase 1 IK/Nav2) to data-driven, vision-based control. Utilize Hugging Face's **LeRobot** ecosystem to train local neural network policies that map raw camera observations directly to low-level motor actions.
+Build low-level motor skills on top of the stable Phase 1 contracts. Establish a
+classical visual-control baseline first, then add learned policies through
+imitation learning and deep reinforcement learning. All three tracks must
+produce the same `Observation -> Action` policy interface.
 
-### Key Deliverables & Directory Layout
+### Phase 2A: Visual Servoing Baselines
+
+Implement explicit camera-feedback controllers before training learned visual
+policies. The first targets are SO-101 wrist-camera alignment and object
+approach, followed by TurtleBot4 visual goal tracking where a suitable visual
+target is available.
+
+#### Key Deliverables
+- [ ] Visual feature or fiducial detection with documented camera-frame and robot-frame transforms.
+- [ ] Image-based or pose-based visual servo controller producing bounded `Action` values through the existing safety layer.
+- [ ] SO-101 visual alignment and approach acceptance test with position error, settling time, and failure reporting.
+- [ ] Deterministic replay and robustness evaluation under bounded camera and scene perturbations.
+
+#### Definition of Done
+1. A visual servo controller reaches and holds a documented image or pose target from multiple initial conditions.
+2. Commands respect the existing joint limits, action-step limits, and collision checks.
+3. Evaluation reports visual error, end-effector error, settling time, and failure reason separately from learned-policy metrics.
+
+### Phase 2B: Vision-Based Motor Skills (Imitation Learning via LeRobot)
+
+Transition from explicit visual control to data-driven policies. Use Hugging
+Face's **LeRobot** ecosystem to train local policies that map raw camera
+observations and robot state to low-level motor actions. The Phase 2A
+controller remains the interpretable baseline for comparison.
+
+#### Key Deliverables & Directory Layout
 - [ ] `scripts/collect_demos.py`: Automated trajectory recorder producing a LeRobot-shaped `.npz` and metadata layout for the SO-101. **Partial:** it does not yet export the standard `LeRobotDataset` format or support teleoperation/base odometry.
 - [ ] `docker/Dockerfile.lerobot`: Headless containerized environment for policy training and dependency isolation.
 - [ ] `scripts/train_policy.py`: Local GPU or cloud training pipeline for ACT (Action Chunking with Transformers) or Diffusion Policy models. **Partial:** the ACT-specific `scripts/train_act.py` exists; the planned unified entry point does not.
 - [ ] `scripts/eval_policy.py`: Closed-loop evaluation runner executing policies over the direct MuJoCo interface. **Partial:** scripted, replay, and LeRobot policies are supported; ROS 2 evaluation is not integrated.
 
-### Interface Contract
+#### Interface Contract
 * **Planned input observation:** `camera_wrist_rgb` ($224 \times 224$), `camera_top_rgb` ($224 \times 224$), `joint_states`
 * **Planned output action:** Predicted joint position target sequences / base action vectors ($N=100$ chunking horizon).
 * **Current prototype:** SO-101 `front` and `wrist` RGB frames, six-value joint state, and configurable ACT chunks (default `30`) in `src/physai/policy/act_dataset.py`.
 
-### Definition of Done (DoD)
+#### Definition of Done (DoD)
 1. Harvest 50–100 successful task episodes per manipulation skill exported cleanly to `LeRobotDataset`.
 2. Policy training finishes with converging loss curves inside the containerized environment.
 3. Closed-loop evaluation in `eval_policy.py` achieves **> 80% task success rate** over 20 randomized trials in MuJoCo, bypassing analytical solvers.
+
+### Phase 2C: Deep Reinforcement Learning
+
+Train policies directly against MuJoCo task rewards after the observation,
+action, safety, and evaluation paths are proven by the preceding baselines.
+Start with state-based control so reward design and dynamics can be debugged
+before adding pixel observations.
+
+#### Key Deliverables
+- [ ] `scripts/train_rl.py`: Reproducible PPO or SAC training entry point with checkpoint and metrics output.
+- [ ] `scripts/eval_rl.py` or equivalent policy integration in `scripts/eval_policy.py` for held-out seeds.
+- [ ] RL environment adapter exposing the existing `Observation`, `Action`, `RobotSpec`, and safety contracts.
+- [ ] SO-101 state-based pick-and-place or TurtleBot4 navigation benchmark before vision-based RL.
+- [ ] Seeded training, checkpoint metadata, deterministic evaluation, and domain-randomized evaluation reports.
+
+#### Definition of Done
+1. A PPO or SAC policy trains reproducibly from a fixed seed in MuJoCo.
+2. A trained checkpoint runs through the existing policy boundary without changing the robot adapter.
+3. The policy achieves at least 80% success over 20 held-out seeds on a documented task.
+4. Randomized evaluation reports success, collision, timeout, and unsafe-action failures separately.
+5. Vision-based RL is added only after the state-based benchmark passes.
 
 ---
 

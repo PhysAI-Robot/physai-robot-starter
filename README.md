@@ -69,7 +69,8 @@ uv run python scripts/fetch_assets.py --robot so101
 uv run python scripts/run_sim.py
 ```
 
-The command writes a video and evaluation output to `outputs/`. Open the
+The command runs headlessly by default and writes evaluation output to
+`outputs/`. Add `--video` when you want a recorded episode. Open the
 interactive MuJoCo viewer after the headless run succeeds:
 
 ```bash
@@ -149,7 +150,10 @@ The planned progression is:
 
 ```text
 Phase 1  Classical foundation + ROS2 contract
-    -> Phase 2  Vision-based motor skills with LeRobot
+        -> Phase 2  Learning-based motor skills
+          2A  Visual servoing baseline
+          2B  Imitation learning with LeRobot
+          2C  Deep reinforcement learning
     -> Phase 3  High-level VLM orchestration
     -> Phase 4  End-to-end VLA policy
 ```
@@ -232,7 +236,7 @@ The repository contains early data and model workflows so they can be tested
 against the shared contracts. They belong to the roadmap's later phases and
 are not required for the current Phase 1 baseline.
 
-### Phase 2: LeRobot and ACT
+### Phase 2B: LeRobot and ACT
 
 Collect demonstrations and fine-tune an ACT policy after installing the VLA
 extra:
@@ -362,9 +366,9 @@ uv run python scripts/show_ros2_contract.py
 The first synchronous MuJoCo bridge core is available as
 `physai.bridge.MuJoCoROSBridge`. It uses an injected transport, publishes
 joint states and rendered camera images, accepts joint trajectory and gripper
-commands, and applies the shared safety gate. A real `rclpy` node can be
-adapted with `RclpyTransport`; TF, CameraInfo, and TurtleBot4 mobile-base
-topics remain Phase 1 work.
+commands, and applies the shared safety gate. The real `rclpy` nodes also
+publish TF and CameraInfo for SO-101 and odometry, scans, and TF for
+TurtleBot4; the acceptance paths are documented in the robot runbooks.
 
 ## Docker
 

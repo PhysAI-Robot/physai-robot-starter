@@ -24,7 +24,6 @@ Run headless for repeatable checks:
 ```bash
 uv run python scripts/run_sim.py \
   --robot turtlebot4 \
-  --no-video \
   --seed 0 \
   --max-steps 300
 ```
