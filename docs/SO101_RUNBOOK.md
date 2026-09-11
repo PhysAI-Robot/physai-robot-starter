@@ -33,13 +33,12 @@ For headless execution:
 ```bash
 uv run python scripts/run_sim.py \
   --config configs/tasks/so101/pick_place.yaml \
-  --no-video \
   --seed 0 \
   --max-steps 500
 ```
 
-Do not use `--viewer` in CI or on a headless machine. Omit `--no-video` when
-you want the script to write video frames under `outputs/`.
+Video recording is opt-in. Add `--video` when you want frames written under
+`outputs/`; use `--viewer` only for interactive local runs.
 
 ## 2. Run the Basic Task
 
@@ -107,7 +106,7 @@ Run a bounded ROS2 MuJoCo smoke test:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-MUJOCO_GL=osmesa uv run python scripts/run_ros2_sim.py \
+MUJOCO_GL=egl uv run python scripts/run_ros2_sim.py \
   --robot so101 \
   --config configs/tasks/so101/pick_place.yaml \
   --seed 0 \

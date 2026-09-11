@@ -258,14 +258,14 @@ on MuJoCo types. `SO101Env` is a robot-owned backend that provides observation,
 action, lifecycle, and embodiment state; it does not create or evaluate a
 task. `TaskRuntime` composes a registered task around a robot port and owns
 task reset, metrics, reward, success hold, and termination for synchronous
-Phase 0 workflows.
+direct-MuJoCo workflows.
 
 `Planner` maps an instruction and observation to `Plan`. A `Plan` contains
 language-grounded `SubGoal` values and optional `PoseStamped` waypoints.
 `Policy` maps an observation and optional goal to one `Action` per control tick.
 `Task` owns evaluation, reward, and termination around the backend state.
 
-`physai.runtime.create_runtime` is the P0 composition entry point. It validates
+`physai.runtime.create_runtime` is the direct composition entry point. It validates
 the task's declared capabilities against the selected `RobotSpec`, wraps the
 robot port with `TaskRuntime` when a task is selected, creates an optional
 registered policy, and routes actions through `SafetyController` before
@@ -293,8 +293,8 @@ turtlebot4 + generic smoke test + constant twist policy + MuJoCo
 that belong in the generic adapter or policy contracts. `pick_place` is the
 registered manipulation task and requires arm and gripper capabilities, so the
 policy, demo, and planner workflows are currently SO-101-specific. TurtleBot4
-has a native MuJoCo model, differential-drive controls, wheel state, and base
-pose, but no navigation task yet.
+has a native MuJoCo model, differential-drive controls, wheel state, base pose,
+direct RPP navigation, and a ROS2/Nav2 obstacle acceptance path.
 
 The current pick-and-place and sorting implementations are intentionally
 minimal baselines for smoke tests and early experiments. They live in
@@ -364,12 +364,11 @@ Dataset recording and loading belong to `physai.data`; task semantics do not.
 
 ## ROS2 boundary
 
-Phase 0 runs in one process without ROS2. The message-shaped values in
-`src/physai/contracts.py` intentionally match the planned ROS2 types, while
-the topic mapping is documented in `src/physai/bridge/ros2_contract.py`.
-The first synchronous bridge core is available in
-`src/physai/bridge/mujoco_ros_bridge.py`; the integration target is ROS2 Jazzy
-on Ubuntu 24.04.
+Direct MuJoCo can run in one process without ROS2. The shared values in
+`src/physai/contracts.py` intentionally mirror the ROS2 types while remaining
+transport-neutral; topic mapping is documented in
+`src/physai/bridge/ros2_contract.py`. The synchronous bridge core and real
+`rclpy` nodes are available for ROS2 Jazzy on Ubuntu 24.04.
 
 The ROS2 boundary has two interchangeable adapter roles:
 
@@ -384,7 +383,7 @@ subscribes to the joint trajectory and gripper command endpoints, decodes
 those messages into the shared `Action` contract, and exposes the latest
 complete command through its synchronous tick API. It publishes canonical
 joint states and camera frames through an injected `MessageCodec`; the
-default `ContractMessageCodec` is used by Phase 0 tests, while
+default `ContractMessageCodec` is used by transport-neutral tests, while
 `ROS2MessageCodec` can construct real ROS2 message instances without adding
 `rclpy` as a core dependency.
 
