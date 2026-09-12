@@ -4,14 +4,14 @@ Open-source starter kit for embodied AI and robotics. It connects classical
 robot control, MuJoCo simulation, ROS2 interfaces, and later data-driven
 policies through stable robot, task, observation, and action contracts.
 
-The project is currently in **Phase 1: Classical Foundation and ROS2
-Contract**. The supported foundation is an SO-101 arm and a TurtleBot4
-differential-drive base in MuJoCo. The immediate goal is reliable deterministic
-control and the first ROS2 integration, not a completed VLM or VLA stack.
+**Phase 1, the Classical Foundation and ROS2 Contract, is complete** for the
+supported SO-101 arm and TurtleBot4 differential-drive base in MuJoCo. The next
+step is the Phase 1-to-Phase 2 training bridge; VLM and VLA remain later-phase
+work.
 
-The shortest Phase 1 path is model-free: run the scripted SO-101
-pick-and-place baseline, inspect the contracts, then validate the ROS2 bridge
-and TurtleBot4 navigation acceptance path.
+The shortest way to inspect the completed foundation is model-free: run the
+scripted SO-101 pick-and-place baseline, inspect the contracts, then validate
+the ROS2 bridge and TurtleBot4 navigation acceptance path.
 
 <p align="center">
   <img src="docs/media/so101_pick_place.gif" width="420"
@@ -133,10 +133,10 @@ takes joint positions, the base takes a twist.
 | <img src="docs/media/so101_pick_place.gif" width="330" alt="SO-101 arm performing scripted pick-and-place"> | <img src="docs/media/turtlebot4_drive.gif" width="330" alt="TurtleBot4 driving an arc across a checkered floor"> |
 | Scripted pick-and-place, joint-position control | Constant forward and yaw twist, differential drive |
 
-| Robot | Current baseline | Phase 1 direction |
+| Robot | Phase 1 result | Next extension |
 | --- | --- | --- |
-| SO-101 | Deterministic MuJoCo pick-and-place with scripted control | ROS2 joint, gripper, camera, and TF bridge |
-| TurtleBot4 | Deterministic MuJoCo navigation and ROS2/Nav2 acceptance path | Collision-aware Nav2 evaluation and future hardware integration |
+| SO-101 | Deterministic pick-and-place, ROS2 joint/gripper/camera/TF bridge, and IK safety validation | Visual servoing and learned manipulation |
+| TurtleBot4 | Deterministic navigation, ROS2/Nav2 acceptance path, obstacle detection, and collision telemetry | Visual goal tracking and future hardware integration |
 
 The TurtleBot4 path includes a deterministic ROS2 interface, open-space Nav2
 smoke testing, obstacle-aware navigation, LaserScan validation, and MuJoCo
@@ -162,6 +162,19 @@ Phase 2 and later are future direction. Their current scripts and adapters are
 experimental seams around the Phase 1 contracts, not completion claims for
 those phases. See [Roadmap](ROADMAP.md) for the scope and definition of done
 for each phase.
+
+The Phase 1-to-Phase 2 bridge now includes canonical `ObservationSpec` and
+`ActionSpec` schemas plus a Gymnasium adapter. Install the training extra when
+you need this boundary; the adapter still routes actions through the existing
+safety gate:
+
+```bash
+uv sync --extra training
+```
+
+The bridge is ready for training integration, but the canonical SO-101 action
+layout, dataset metadata, checkpoint compatibility, and shared evaluation
+report are still tracked as open roadmap work.
 
 ## Phase 1 workflows
 
@@ -234,7 +247,7 @@ whether a scene or camera change looks right.
 
 The repository contains early data and model workflows so they can be tested
 against the shared contracts. They belong to the roadmap's later phases and
-are not required for the current Phase 1 baseline.
+are not required for the completed Phase 1 baseline or its training bridge.
 
 ### Phase 2B: LeRobot and ACT
 
