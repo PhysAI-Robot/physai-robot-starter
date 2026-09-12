@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from typing import Any, Mapping
 
 import numpy as np
 
@@ -314,3 +315,169 @@ class Action:
         if self.ee_twist is not None:
             return "twist"
         return None
+
+
+@dataclass(frozen=True)
+class TensorSpec:
+    """Canonical metadata for one numeric observation or action value."""
+
+    name: str
+    shape: tuple[int, ...]
+    dtype: str
+    units: str = "unitless"
+    minimum: float | None = None
+    maximum: float | None = None
+    normalization: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("tensor spec name must not be empty")
+        if any(not isinstance(size, int) or size < 0 for size in self.shape):
+            raise ValueError("tensor spec shape must contain non-negative integers")
+        np.dtype(self.dtype)
+        if self.minimum is not None and not np.isfinite(self.minimum):
+            raise ValueError("tensor spec minimum must be finite")
+        if self.maximum is not None and not np.isfinite(self.maximum):
+            raise ValueError("tensor spec maximum must be finite")
+        if (
+            self.minimum is not None
+            and self.maximum is not None
+            and self.minimum > self.maximum
+        ):
+            raise ValueError("tensor spec minimum must not exceed maximum")
+
+    def validate(self, value: Any) -> np.ndarray:
+        array = np.asarray(value)
+        if array.shape != self.shape:
+            raise ValueError(
+                f"{self.name!r} expects shape {self.shape}, got {array.shape}"
+            )
+        if array.dtype != np.dtype(self.dtype):
+            raise ValueError(
+                f"{self.name!r} expects dtype {self.dtype!r}, got {array.dtype!s}"
+            )
+        if not np.issubdtype(array.dtype, np.number):
+            raise ValueError(f"{self.name!r} must use a numeric dtype")
+        if not np.isfinite(array).all():
+            raise ValueError(f"{self.name!r} contains non-finite values")
+        if self.minimum is not None and np.any(array < self.minimum):
+            raise ValueError(f"{self.name!r} contains values below its minimum")
+        if self.maximum is not None and np.any(array > self.maximum):
+            raise ValueError(f"{self.name!r} contains values above its maximum")
+        return array
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "shape": list(self.shape),
+            "dtype": self.dtype,
+            "units": self.units,
+            "minimum": self.minimum,
+            "maximum": self.maximum,
+            "normalization": dict(self.normalization),
+        }
+
+
+@dataclass(frozen=True)
+class CameraSpec:
+    """Canonical metadata for one image observation stream."""
+
+    name: str
+    shape: tuple[int, int, int]
+    dtype: str = "uint8"
+    encoding: str = "rgb8"
+    frame_id: str = ""
+    normalization: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("camera spec name must not be empty")
+        if len(self.shape) != 3 or any(size <= 0 for size in self.shape):
+            raise ValueError("camera spec shape must be (height, width, channels)")
+        np.dtype(self.dtype)
+        if not self.encoding:
+            raise ValueError("camera spec encoding must not be empty")
+
+    def validate(self, value: Any) -> np.ndarray:
+        array = np.asarray(value)
+        if array.shape != self.shape:
+            raise ValueError(
+                f"camera {self.name!r} expects shape {self.shape}, got {array.shape}"
+            )
+        if array.dtype != np.dtype(self.dtype):
+            raise ValueError(
+                f"camera {self.name!r} expects dtype {self.dtype!r}, got {array.dtype!s}"
+            )
+        return array
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "shape": list(self.shape),
+            "dtype": self.dtype,
+            "encoding": self.encoding,
+            "frame_id": self.frame_id,
+            "normalization": dict(self.normalization),
+        }
+
+
+@dataclass(frozen=True)
+class ObservationSpec:
+    """Canonical training schema for policy observations."""
+
+    fields: tuple[TensorSpec, ...] = ()
+    cameras: tuple[CameraSpec, ...] = ()
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        names = [spec.name for spec in (*self.fields, *self.cameras)]
+        if len(names) != len(set(names)):
+            raise ValueError("observation spec names must be unique")
+
+    def validate(self, values: Mapping[str, Any]) -> None:
+        expected = {spec.name for spec in (*self.fields, *self.cameras)}
+        missing = expected - values.keys()
+        extra = values.keys() - expected
+        if missing:
+            raise ValueError(f"observation is missing fields: {sorted(missing)}")
+        if extra:
+            raise ValueError(f"observation has unexpected fields: {sorted(extra)}")
+        for spec in (*self.fields, *self.cameras):
+            spec.validate(values[spec.name])
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "fields": [spec.to_dict() for spec in self.fields],
+            "cameras": [spec.to_dict() for spec in self.cameras],
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(frozen=True)
+class ActionSpec:
+    """Canonical training schema for policy actions."""
+
+    fields: tuple[TensorSpec, ...]
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        names = [spec.name for spec in self.fields]
+        if len(names) != len(set(names)):
+            raise ValueError("action spec names must be unique")
+
+    def validate(self, values: Mapping[str, Any]) -> None:
+        expected = {spec.name for spec in self.fields}
+        missing = expected - values.keys()
+        extra = values.keys() - expected
+        if missing:
+            raise ValueError(f"action is missing fields: {sorted(missing)}")
+        if extra:
+            raise ValueError(f"action has unexpected fields: {sorted(extra)}")
+        for spec in self.fields:
+            spec.validate(values[spec.name])
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "fields": [spec.to_dict() for spec in self.fields],
+            "metadata": dict(self.metadata),
+        }
