@@ -358,7 +358,9 @@ through an explicit local path. Model storage and path resolution are owned by
 
 ## Demonstration data
 
-SO-101 demonstrations use LeRobot-shaped arrays:
+Robot demonstrations use LeRobot-shaped arrays. The feature names, camera
+streams, action layout, and encoder belong to the selected robot's
+`RobotTrainingContract` in `src/physai/robots/<robot>/contracts.py`:
 
 ```text
 observation.images.front  (T, H, W, 3) uint8
@@ -370,10 +372,13 @@ action                    (T, 6) float32, absolute joint targets
 The six values are ordered as:
 `shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, gripper`.
 Dataset recording and loading belong to `physai.data`; task semantics do not.
+The recorder consumes the robot contract without importing a concrete robot.
 
 The canonical SO-101 schemas are `so101_observation_spec()` and
-`so101_action_spec()` in `physai.contracts`. Dataset metadata serializes those
-schemas rather than defining a second joint or camera layout. The current
+`so101_action_spec()` in `physai.robots.so101.contracts`; TurtleBot4 provides
+the corresponding twist and wheel-state schemas in
+`physai.robots.turtlebot.contracts`. Dataset metadata serializes these robot
+contracts rather than defining a second joint or camera layout. The current
 recorder writes a compact internal `.npz` format with LeRobot-shaped feature
 keys; a future standard `LeRobotDataset` exporter must consume the same
 metadata and must not introduce a parallel action contract.

@@ -11,6 +11,12 @@ from physai.contracts import (
     JointState,
     Observation,
 )
+from physai.data import (
+    CheckpointMetadata,
+    EpisodeRecorder,
+    EvaluationReport,
+    validate_checkpoint_compatibility,
+)
 from physai.robots.so101.contracts import (
     ALL_JOINT_NAMES,
     ARM_JOINT_NAMES,
@@ -20,13 +26,7 @@ from physai.robots.so101.contracts import (
     so101_observation_schema,
     so101_observation_spec,
 )
-from physai.data import (
-    CheckpointMetadata,
-    DatasetMetadata,
-    EpisodeRecorder,
-    EvaluationReport,
-    validate_checkpoint_compatibility,
-)
+from physai.robots.turtlebot.contracts import turtlebot4_training_contract
 
 
 def test_so101_action_layout_is_explicit_and_absolute():
@@ -41,6 +41,18 @@ def test_so101_action_layout_is_explicit_and_absolute():
     spec = so101_action_spec().to_dict()
     assert spec["metadata"]["joint_names"] == list(ALL_JOINT_NAMES)
     assert spec["metadata"]["absolute"] is True
+
+
+def test_robot_training_contracts_define_distinct_action_and_camera_layouts():
+    so101 = so101_action_spec()
+    turtlebot = turtlebot4_training_contract()
+
+    assert so101.metadata["schema"] == "so101.joint_position.v1"
+    assert turtlebot.action_spec.metadata["schema"] == "turtlebot4.twist.v1"
+    assert tuple(camera.name for camera in turtlebot.observation_spec.cameras) == (
+        "free",
+    )
+    assert turtlebot.action_decoder is not None
 
 
 def test_so101_observation_schema_is_canonical_and_dataset_shaped():

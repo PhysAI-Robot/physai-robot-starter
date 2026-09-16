@@ -2,12 +2,30 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 import numpy as np
 
-from ..contracts import Action, Observation, PoseStamped
+from ..contracts import Action, ActionSpec, Observation, ObservationSpec, PoseStamped
+
+TrainingActionEncoder = Callable[
+    [Action, float | None], tuple[np.ndarray, tuple[str, ...]]
+]
+TrainingActionDecoder = Callable[[np.ndarray], Action]
+
+
+@dataclass(frozen=True)
+class RobotTrainingContract:
+    """Robot-owned observation, action, and dataset encoding contract."""
+
+    observation_spec: ObservationSpec
+    action_spec: ActionSpec
+    action_encoder: TrainingActionEncoder
+    action_decoder: TrainingActionDecoder | None = None
+    action_schema: Mapping[str, Any] = field(default_factory=dict)
+    observation_schema: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -142,6 +160,9 @@ class RobotPort(Protocol):
     """Application boundary shared by simulation and hardware adapters."""
 
     robot_spec: RobotSpec
+
+    @property
+    def training_contract(self) -> RobotTrainingContract: ...
 
     def reset(self, seed: int | None = None) -> Observation: ...
 

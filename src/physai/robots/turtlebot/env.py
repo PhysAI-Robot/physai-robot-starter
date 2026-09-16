@@ -20,13 +20,14 @@ from ...contracts import (
     Twist,
     Vector3,
 )
-from ..base import RobotSpec
 from ...sim.core import MuJoCoSimulationCore
 from ...sim.domain_randomization import (
     DomainRandomizationConfig,
     DomainRandomizationEngine,
     RandomizationMetadata,
 )
+from ..base import RobotSpec, RobotTrainingContract
+from .contracts import turtlebot4_training_contract
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_MODEL = REPO_ROOT / "assets" / "turtlebot4" / "turtlebot4.xml"
@@ -209,6 +210,11 @@ class TurtleBot4Env(MuJoCoSimulationCore):
                 "position": "m",
             },
         )
+
+    @property
+    def training_contract(self) -> RobotTrainingContract:
+        """Return the TurtleBot4 contract for training adapters."""
+        return turtlebot4_training_contract()
 
     def reset(self, seed: int | None = None) -> Observation:
         if seed is not None:

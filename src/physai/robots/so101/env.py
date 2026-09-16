@@ -15,7 +15,7 @@ from ...contracts import (
     JointState,
     Observation,
 )
-from ...robots.base import RobotSpec
+from ...robots.base import RobotSpec, RobotTrainingContract
 from ...sim.core import MuJoCoSimulationCore
 from ...sim.domain_randomization import (
     DomainRandomizationConfig,
@@ -23,8 +23,13 @@ from ...sim.domain_randomization import (
     RandomizationMetadata,
 )
 from ...sim.scene import SceneConfig, build_model
+from .contracts import (
+    ALL_JOINT_NAMES,
+    ARM_JOINT_NAMES,
+    GRIPPER_JOINT_NAME,
+    so101_training_contract,
+)
 from .kinematics import ArmKinematics
-from .contracts import ALL_JOINT_NAMES, ARM_JOINT_NAMES, GRIPPER_JOINT_NAME
 from .scene import scene_defaults
 
 HOME_QPOS = np.array([0.0, -1.05, 1.25, 0.75, 0.0], dtype=np.float64)
@@ -178,6 +183,19 @@ class SO101Env(MuJoCoSimulationCore):
             },
         )
 
+    @property
+    def training_contract(self) -> RobotTrainingContract:
+        """Return the configured SO-101 contract for training adapters."""
+        camera_config = {
+            name: {
+                "width": self.cfg.scene.camera_width,
+                "height": self.cfg.scene.camera_height,
+                "encoding": "rgb8",
+            }
+            for name in self.cfg.cameras
+        }
+        return so101_training_contract(camera_config=camera_config)
+
     def gripper_to_joint(self, normalized: float) -> float:
         lo, hi = self.grip_limits
         return float(lo + np.clip(normalized, 0.0, 1.0) * (hi - lo))
@@ -199,7 +217,7 @@ class SO101Env(MuJoCoSimulationCore):
             colors = list(self.sorting_cubes.keys())
             self.rng.shuffle(colors)
             for color, (y_lo, y_hi) in zip(colors, y_bands):
-                body_id, qadr = self.sorting_cubes[color]
+                _body_id, qadr = self.sorting_cubes[color]
                 position = np.array([0.0, 0.0, base_z], dtype=np.float64)
                 if self.cfg.randomize_cube:
                     position[0] = self.rng.uniform(*self.cfg.cube_x_range)
