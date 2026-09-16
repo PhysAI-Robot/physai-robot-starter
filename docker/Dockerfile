@@ -54,7 +54,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /workspace
 
 COPY . .
-RUN uv sync --locked --extra dev
+RUN uv sync --locked --extra dev --extra training
 ENV PATH="/workspace/.venv/bin:${PATH}"
 
 ENV MUJOCO_GL=egl
