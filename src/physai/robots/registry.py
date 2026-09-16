@@ -11,18 +11,31 @@ RobotFactory = Callable[..., RobotPort]
 ROS2NodeFactory = Callable[..., Any]
 EnvConfigFactory = Callable[..., Any]
 NavigationFactory = Callable[..., Any]
+SceneDefaultsFactory = Callable[[], dict[str, Any]]
 _FACTORIES: dict[str, RobotFactory] = {}
+_KINDS: dict[str, str] = {}
 _ROS2_NODE_FACTORIES: dict[str, ROS2NodeFactory] = {}
 _ENV_CONFIG_FACTORIES: dict[str, EnvConfigFactory] = {}
 _NAVIGATION_FACTORIES: dict[str, NavigationFactory] = {}
+_SCENE_DEFAULT_FACTORIES: dict[str, SceneDefaultsFactory] = {}
 
 
-def register_robot(name: str, factory: RobotFactory) -> RobotFactory:
+def register_robot(
+    name: str, factory: RobotFactory, *, kind: str | None = None
+) -> RobotFactory:
     """Register a robot factory under a stable configuration name."""
     if name in _FACTORIES:
         raise ValueError(f"robot {name!r} is already registered")
     _FACTORIES[name] = factory
+    if kind is not None:
+        _KINDS[name] = kind
     return factory
+
+
+def robot_kind(name: str) -> str | None:
+    """Return the registered embodiment kind without constructing the robot."""
+    _load_builtins()
+    return _KINDS.get(name)
 
 
 def register_ros2_node(name: str, factory: ROS2NodeFactory) -> ROS2NodeFactory:
@@ -47,6 +60,23 @@ def register_navigation(name: str, factory: NavigationFactory) -> NavigationFact
         raise ValueError(f"navigation for robot {name!r} is already registered")
     _NAVIGATION_FACTORIES[name] = factory
     return factory
+
+
+def register_scene_defaults(
+    name: str, factory: SceneDefaultsFactory
+) -> SceneDefaultsFactory:
+    """Register embodiment-owned defaults for generic scene attachment fields."""
+    if name in _SCENE_DEFAULT_FACTORIES:
+        raise ValueError(f"scene defaults for robot {name!r} are already registered")
+    _SCENE_DEFAULT_FACTORIES[name] = factory
+    return factory
+
+
+def scene_defaults(name: str) -> dict[str, Any]:
+    """Return robot-owned defaults for generic scene attachment fields."""
+    _load_builtins()
+    factory = _SCENE_DEFAULT_FACTORIES.get(name)
+    return {} if factory is None else dict(factory())
 
 
 def available_robots() -> tuple[str, ...]:
@@ -112,7 +142,11 @@ def _load_builtins() -> None:
     if "so101" not in _FACTORIES:
         from .so101.factory import make_so101
 
-        register_robot("so101", make_so101)
+        register_robot("so101", make_so101, kind="fixed_base_manipulator")
+    if "so101" not in _SCENE_DEFAULT_FACTORIES:
+        from .so101.scene import scene_defaults as so101_scene_defaults
+
+        register_scene_defaults("so101", so101_scene_defaults)
     if "so101" not in _ENV_CONFIG_FACTORIES:
         from .so101.env import EnvConfig
 
@@ -120,7 +154,7 @@ def _load_builtins() -> None:
     if "turtlebot4" not in _FACTORIES:
         from .turtlebot.factory import make_turtlebot4
 
-        register_robot("turtlebot4", make_turtlebot4)
+        register_robot("turtlebot4", make_turtlebot4, kind="mobile_base")
     if "so101" not in _ROS2_NODE_FACTORIES:
         from .so101.ros2_node import SO101ROS2Node
 

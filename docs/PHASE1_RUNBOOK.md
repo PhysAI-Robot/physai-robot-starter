@@ -4,7 +4,8 @@ The architecture is robot-agnostic, but the operational workflow is easier to
 follow when each robot has its own runbook.
 
 Robot-owned task configurations follow `configs/tasks/<robot>/<task>.yaml`,
-and robot-owned Nav2 profiles follow `configs/nav2/<robot>/`.
+robot-owned Nav2 profiles follow `configs/nav2/<robot>/`, and reusable maps
+follow `configs/maps/<environment>/`.
 
 - [SO-101 Runbook](SO101_RUNBOOK.md): viewer, pick-and-place, ROS2, data
   collection, imitation learning, and planner/VLM/VLA continuation.

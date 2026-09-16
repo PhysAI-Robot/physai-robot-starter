@@ -1,3 +1,5 @@
+"""MuJoCo simulation core, scene builders, and simulation utilities."""
+
 from .core import MuJoCoSimulationCore
 from .domain_randomization import (
     DomainRandomizationConfig,

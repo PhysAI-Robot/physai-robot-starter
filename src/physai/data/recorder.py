@@ -6,17 +6,11 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from collections.abc import Callable
 
 import numpy as np
 
-from ..contracts import (
-    ALL_JOINT_NAMES,
-    SO101_ACTION_SCHEMA,
-    Action,
-    GripperCommand,
-    Observation,
-    so101_action_values,
-)
+from ..contracts import Action, Observation
 from .metadata import DatasetMetadata
 from ..robots.base import RobotSpec
 
@@ -34,22 +28,52 @@ class EpisodeBuffer:
         return len(self.state)
 
 
+ActionEncoder = Callable[[Action, float | None], tuple[np.ndarray, tuple[str, ...]]]
+
+
+def _generic_action_encoder(
+    action: Action, gripper_joint: float | None
+) -> tuple[np.ndarray, tuple[str, ...]]:
+    if action.joint_position is not None:
+        names = action.joint_names or tuple(
+            f"joint_{index}" for index in range(action.joint_position.size)
+        )
+        return action.joint_position, names
+    if action.ee_twist is not None:
+        return action.ee_twist.as_array(), (
+            "linear_x",
+            "linear_y",
+            "linear_z",
+            "angular_x",
+            "angular_y",
+            "angular_z",
+        )
+    raise ValueError("EpisodeRecorder requires joint-position or twist actions")
+
+
 class EpisodeRecorder:
     def __init__(
         self,
         root: str | Path,
         task: str = "put the red cube on the green pad",
+        task_name: str | None = None,
         fps: float = 25.0,
         store_images: bool = True,
-        robot_type: str = "so101",
+        robot_type: str = "generic",
         robot_spec: RobotSpec | None = None,
         simulator_config: dict | None = None,
         camera_config: dict | None = None,
         split: dict | None = None,
+        scene_name: str | None = None,
+        scene_config: dict | None = None,
+        action_encoder: ActionEncoder | None = None,
+        action_schema: dict | None = None,
+        observation_schema: dict | None = None,
     ) -> None:
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.task = task
+        self.task_name = task_name
         self.fps = fps
         self.store_images = store_images
         self.robot_spec = robot_spec
@@ -57,6 +81,11 @@ class EpisodeRecorder:
         self.simulator_config = simulator_config or {}
         self.camera_config = camera_config or {}
         self.split = split or {}
+        self.scene_name = scene_name
+        self.scene_config = scene_config or {}
+        self.action_encoder = action_encoder or _generic_action_encoder
+        self._action_schema = action_schema
+        self._observation_schema = observation_schema
         self._state_names: tuple[str, ...] | None = None
         self._action_names: tuple[str, ...] | None = None
         self.episodes: list[dict] = []
@@ -76,32 +105,7 @@ class EpisodeRecorder:
     ) -> None:
         if self._buf is None:
             raise RuntimeError("call start_episode() first")
-        if action.joint_position is not None:
-            if self.robot_type == "so101":
-                grip = (
-                    gripper_joint
-                    if gripper_joint is not None
-                    else (action.gripper or GripperCommand()).clipped()
-                )
-                action_values = so101_action_values(action, gripper_joint=grip)
-                action_names = ALL_JOINT_NAMES
-            else:
-                action_values = action.joint_position
-                action_names = tuple(
-                    f"joint_{index}" for index in range(action_values.size)
-                ) + ("gripper",)
-        elif action.ee_twist is not None:
-            action_values = action.ee_twist.as_array()
-            action_names = (
-                "linear_x",
-                "linear_y",
-                "linear_z",
-                "angular_x",
-                "angular_y",
-                "angular_z",
-            )
-        else:
-            raise ValueError("EpisodeRecorder requires joint-position or twist actions")
+        action_values, action_names = self.action_encoder(action, gripper_joint)
 
         self._state_names = self._state_names or observation.joint_state.name
         self._action_names = self._action_names or action_names
@@ -111,13 +115,6 @@ class EpisodeRecorder:
                 self._buf.images.setdefault(name, []).append(frame.data.copy())
 
         self._buf.state.append(observation.joint_state.position.astype(np.float32))
-        if action.joint_position is not None and self.robot_type != "so101":
-            grip = (
-                gripper_joint
-                if gripper_joint is not None
-                else (action.gripper or GripperCommand()).clipped()
-            )
-            action_values = np.concatenate([action_values, [grip]])
         self._buf.action.append(action_values.astype(np.float32))
         self._buf.reward.append(float(reward))
         self._buf.done.append(bool(done))
@@ -161,37 +158,27 @@ class EpisodeRecorder:
         action_names = list(self._action_names or ())
         if self.robot_spec is not None:
             state_names = list(self.robot_spec.joint_names)
-        if self.robot_type == "so101" and self.robot_spec is None:
-            state_names = [
-                "shoulder_pan",
-                "shoulder_lift",
-                "elbow_flex",
-                "wrist_flex",
-                "wrist_roll",
-                "gripper",
-            ]
-            action_names = state_names.copy()
-        action_schema = {
-            "schema": SO101_ACTION_SCHEMA
-            if self.robot_type == "so101"
-            else "generic.v1",
+        action_schema = self._action_schema or {
+            "schema": "generic.v1",
             "names": action_names,
             "dtype": "float32",
             "shape": [len(action_names)],
-            "units": "rad" if self.robot_type == "so101" else "task-defined",
-            "absolute": self.robot_type == "so101",
+            "units": "task-defined",
+            "absolute": False,
+        }
+        observation_schema = self._observation_schema or {
+            "observation.state": {
+                "dtype": "float32",
+                "shape": [len(state_names)],
+                "names": state_names,
+            }
         }
         metadata = DatasetMetadata(
             robot=self.robot_type,
             task=self.task,
+            task_name=self.task_name,
             contract_schema="physai.contracts.v1",
-            observation_schema={
-                "observation.state": {
-                    "dtype": "float32",
-                    "shape": [len(state_names)],
-                    "names": state_names,
-                },
-            },
+            observation_schema=observation_schema,
             action_schema=action_schema,
             simulator_config=self.simulator_config,
             camera_config=self.camera_config,
@@ -206,6 +193,8 @@ class EpisodeRecorder:
                 "validation": [],
                 "test": [],
             },
+            scene_name=self.scene_name,
+            scene_config=self.scene_config,
         )
         meta = {
             "codebase_version": "physai-0.0.1",

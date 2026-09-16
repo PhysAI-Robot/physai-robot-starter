@@ -9,10 +9,6 @@ import mujoco
 import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-DEFAULT_ROBOT_XML = REPO_ROOT / "assets" / "so101" / "so101_new_calib.xml"
-DEFAULT_STATIC_PAD_BODY = "gripper"
-DEFAULT_MOVING_PAD_BODY = "moving_jaw_so101_v1"
-DEFAULT_EE_SITE = "gripperframe"
 
 
 @dataclass
@@ -35,11 +31,11 @@ class WorldSceneConfig:
 class ManipulationSceneConfig(WorldSceneConfig):
     """World settings plus end-effector and gripper attachment details."""
 
-    robot_xml: Path = DEFAULT_ROBOT_XML
-    ee_site: str = DEFAULT_EE_SITE
-    gripper_joint: str = "gripper"
-    static_pad_body: str = DEFAULT_STATIC_PAD_BODY
-    moving_pad_body: str = DEFAULT_MOVING_PAD_BODY
+    robot_xml: Path | None = None
+    ee_site: str | None = None
+    gripper_joint: str | None = None
+    static_pad_body: str | None = None
+    moving_pad_body: str | None = None
     pad_friction: tuple[float, float, float] = (2.0, 0.02, 0.001)
     pad_size: tuple[float, float, float] = (0.011, 0.009, 0.0015)
     replace_jaw_collision: bool = True
@@ -70,6 +66,24 @@ def _find_body(spec: mujoco.MjSpec, name: str):
         f"body {name!r} not found in {spec.modelname!r}. "
         f"Available: {[body.name for body in spec.bodies]}"
     )
+
+
+def _validate_robot_attachment(cfg: ManipulationSceneConfig) -> None:
+    missing = [
+        name
+        for name in (
+            "robot_xml",
+            "ee_site",
+            "gripper_joint",
+            "static_pad_body",
+            "moving_pad_body",
+        )
+        if getattr(cfg, name) is None
+    ]
+    if missing:
+        raise ValueError(
+            "scene requires robot attachment configuration: " + ", ".join(missing)
+        )
 
 
 def _pad_quats(cfg: ManipulationSceneConfig) -> dict[str, np.ndarray]:
@@ -106,6 +120,7 @@ def _replace_jaw_collision(spec: mujoco.MjSpec, cfg: ManipulationSceneConfig) ->
 
 
 def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
+    _validate_robot_attachment(cfg)
     """Build a manipulation world with configurable robot attachments."""
     if cfg.robot_xml is None or not Path(cfg.robot_xml).exists():
         raise FileNotFoundError(

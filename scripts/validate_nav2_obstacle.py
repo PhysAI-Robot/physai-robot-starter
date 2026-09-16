@@ -69,7 +69,7 @@ def main() -> int:
         "launch/nav2.launch.py",
         "robot:=turtlebot4",
         "scenario:=obstacle_course",
-        f"map-file:={REPO_ROOT / 'configs/nav2/turtlebot4/obstacle_map.yaml'}",
+        f"map-file:={REPO_ROOT / 'configs/maps/obstacle_course/map.yaml'}",
     ]
     process = subprocess.Popen(
         launch_command,

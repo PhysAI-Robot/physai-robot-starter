@@ -7,10 +7,10 @@ pytestmark = pytest.mark.assets
 
 @requires_assets
 def test_expert_state_machine_reaches_the_end(env):
-    from physai.policy import Phase, ScriptedPickPlace
+    from physai.robots.so101.expert import Phase, SO101PickPlaceExpert
 
     obs = env.reset(seed=0)
-    policy = ScriptedPickPlace(env.kin, env)
+    policy = SO101PickPlaceExpert(env.kin, env)
     policy.reset(obs)
     seen = {policy.phase}
     for _ in range(env.cfg.max_steps):
@@ -26,10 +26,10 @@ def test_expert_actually_closes_on_the_cube(env):
     """The grasp must be a real contact, not the jaws shutting on empty air."""
     import mujoco
 
-    from physai.policy import Phase, ScriptedPickPlace
+    from physai.robots.so101.expert import Phase, SO101PickPlaceExpert
 
     obs = env.reset(seed=0)
-    policy = ScriptedPickPlace(env.kin, env)
+    policy = SO101PickPlaceExpert(env.kin, env)
     policy.reset(obs)
     pad_contact = False
     for _ in range(env.cfg.max_steps):

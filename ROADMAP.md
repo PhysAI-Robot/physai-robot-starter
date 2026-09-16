@@ -30,13 +30,14 @@ The simulation workspace explicitly decouples scene orchestration from physical 
 
 ## Current Status
 
-**Current phase: Phase 1 complete; Phase 1 to Phase 2 training bridge is next.**
+**Current phase: Phase 1 complete; Phase 1 to Phase 2 training bridge complete; Phase 2A preparation is next.**
 
 Phase 1 is complete for the SO-101 and TurtleBot4 scope. The next work is to
 make the stable contracts ready for visual-servoing and learning workflows.
 
 Phase 2 and later are future direction only. They should consume the stable
-contracts produced by Phase 1, not drive changes to those contracts ad hoc.
+contracts produced by Phase 1 and the completed training bridge, not drive
+changes to those contracts ad hoc.
 
 The roadmap tracks implementation evidence. `[x]` means the deliverable exists
 and has focused coverage; `[ ]` means it is planned, missing, or partial.
@@ -90,6 +91,11 @@ The Phase 2A visual-servoing baseline and all learned policies must consume the
 same canonical observation and action schemas. A training framework may be
 changed later, but policies must remain evaluable through the repository's
 policy boundary without changing the robot adapter or ROS 2 contract.
+
+The bridge is complete as a preparation milestone. The current `.npz` files
+are an internal, LeRobot-shaped prototype format; standard `LeRobotDataset`
+export, visual-servo baselines, and training framework containers remain Phase
+2 deliverables.
 
 ---
 

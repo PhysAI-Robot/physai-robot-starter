@@ -10,14 +10,20 @@ default — behaviour cloning on failures teaches failure.
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
 
 from physai.data import EpisodeRecorder
-from physai.policy import ScriptedPickPlace
+from physai.robots.so101.expert import SO101PickPlaceExpert
 from physai.robots import available_robots, create_robot
 from physai.robots.so101 import EnvConfig
+from physai.robots.so101.contracts import (
+    so101_action_encoder,
+    so101_action_schema,
+    so101_observation_schema,
+)
 from physai.sim import SceneConfig
 from physai.tasks import TaskRuntime, create_task
 
@@ -77,9 +83,25 @@ def main() -> int:
     rec = EpisodeRecorder(
         args.out,
         task=args.task,
+        task_name="sorting" if args.sorting else "pick_place",
         fps=env.cfg.control_hz,
         store_images=not args.no_images,
         robot_spec=robot.robot_spec,
+        action_encoder=lambda action, gripper_joint: so101_action_encoder(
+            action,
+            gripper_joint=(
+                gripper_joint
+                if gripper_joint is not None
+                else env.gripper_to_joint(action.gripper.clipped())
+            ),
+        ),
+        action_schema=so101_action_schema(),
+        observation_schema=so101_observation_schema(
+            camera_config={
+                name: {"width": args.width, "height": args.height, "encoding": "rgb8"}
+                for name in env.cfg.cameras
+            }
+        ),
         simulator_config={
             "control_hz": env.cfg.control_hz,
             "max_steps": env.cfg.max_steps,
@@ -90,6 +112,8 @@ def main() -> int:
             name: {"width": args.width, "height": args.height, "encoding": "rgb8"}
             for name in env.cfg.cameras
         },
+        scene_name="sorting_minimal" if args.sorting else "pick_place_minimal",
+        scene_config=asdict(env.cfg.scene),
     )
 
     attempted = kept = 0
@@ -99,7 +123,7 @@ def main() -> int:
         obs = env.reset(seed=seed)
         if args.sorting:
             rec.task = f"put the {env.target_color} cube on the green pad"
-        policy = ScriptedPickPlace(env.kin, env)
+        policy = SO101PickPlaceExpert(env.kin, env)
         policy.reset(obs)
         rec.start_episode()
         info: dict = {}

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
 
 import mujoco
@@ -46,10 +46,33 @@ class SceneConfig(ManipulationSceneConfig):
 
 
 def _common_kwargs(cfg: SceneConfig) -> dict:
-    return {
+    values = {
         field.name: getattr(cfg, field.name)
         for field in fields(ManipulationSceneConfig)
     }
+    if any(
+        values[name] is None
+        for name in (
+            "robot_xml",
+            "ee_site",
+            "gripper_joint",
+            "static_pad_body",
+            "moving_pad_body",
+        )
+    ):
+        # The legacy facade historically built the SO-101 baseline implicitly.
+        # Keep that compatibility at this composition boundary; the generic
+        # scene config itself has no embodiment defaults.
+        from ..robots.registry import scene_defaults
+
+        values.update(
+            {
+                key: value
+                for key, value in scene_defaults("so101").items()
+                if values.get(key) is None
+            }
+        )
+    return values
 
 
 def _pick_place_config(cfg: SceneConfig) -> PickPlaceMinimalSceneConfig:
@@ -73,6 +96,14 @@ def _sorting_config(cfg: SceneConfig) -> SortingMinimalSceneConfig:
     )
 
 
+def _with_legacy_robot_defaults(cfg):
+    defaults = _common_kwargs(SceneConfig())
+    missing = {
+        key: value for key, value in defaults.items() if getattr(cfg, key) is None
+    }
+    return replace(cfg, **missing) if missing else cfg
+
+
 def build_spec(
     cfg: SceneConfig
     | PickPlaceMinimalSceneConfig
@@ -82,9 +113,9 @@ def build_spec(
     """Build the selected minimal scene through the legacy config surface."""
     cfg = cfg or SceneConfig()
     if isinstance(cfg, PickPlaceMinimalSceneConfig):
-        return build_pick_place_spec(cfg)
+        return build_pick_place_spec(_with_legacy_robot_defaults(cfg))
     if isinstance(cfg, SortingMinimalSceneConfig):
-        return build_sorting_spec(cfg)
+        return build_sorting_spec(_with_legacy_robot_defaults(cfg))
     if cfg.num_cubes == 1:
         return build_pick_place_spec(_pick_place_config(cfg))
     if cfg.num_cubes == len(cfg.sorting_cube_names):

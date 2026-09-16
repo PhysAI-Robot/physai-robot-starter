@@ -6,14 +6,19 @@ import pytest
 pytestmark = pytest.mark.integration
 
 from physai.contracts import (
-    ALL_JOINT_NAMES,
-    ARM_JOINT_NAMES,
     Action,
     Header,
     JointState,
     Observation,
+)
+from physai.robots.so101.contracts import (
+    ALL_JOINT_NAMES,
+    ARM_JOINT_NAMES,
+    so101_action_schema,
     so101_action_spec,
     so101_action_values,
+    so101_observation_schema,
+    so101_observation_spec,
 )
 from physai.data import (
     CheckpointMetadata,
@@ -38,6 +43,19 @@ def test_so101_action_layout_is_explicit_and_absolute():
     assert spec["metadata"]["absolute"] is True
 
 
+def test_so101_observation_schema_is_canonical_and_dataset_shaped():
+    spec = so101_observation_spec(
+        camera_config={"front": {"width": 320, "height": 240}}
+    )
+    assert spec.metadata["schema"] == "so101.observation.v1"
+    assert spec.cameras[0].shape == (240, 320, 3)
+    schema = so101_observation_schema(
+        camera_config={"front": {"width": 320, "height": 240}}
+    )
+    assert schema["observation.state"]["shape"] == [6]
+    assert schema["observation.images.front"]["shape"] == [240, 320, 3]
+
+
 def test_recorder_writes_versioned_training_metadata(tmp_path):
     observation = Observation(
         joint_state=JointState(
@@ -51,9 +69,18 @@ def test_recorder_writes_versioned_training_metadata(tmp_path):
     recorder = EpisodeRecorder(
         tmp_path,
         store_images=False,
+        task_name="pick_place",
         simulator_config={"seed": 4},
         camera_config={"front": {"width": 224, "height": 224}},
         split={"train": [0]},
+        action_encoder=lambda action, gripper_joint: (
+            so101_action_values(action, gripper_joint=gripper_joint or 0.0),
+            ALL_JOINT_NAMES,
+        ),
+        action_schema=so101_action_schema(),
+        observation_schema=so101_observation_schema(
+            camera_config={"front": {"width": 224, "height": 224}}
+        ),
     )
     recorder.start_episode()
     recorder.record(
@@ -66,7 +93,20 @@ def test_recorder_writes_versioned_training_metadata(tmp_path):
     assert meta["schema_version"] == "physai.dataset.v1"
     assert meta["action_schema"]["names"] == list(ALL_JOINT_NAMES)
     assert meta["seeds"] == [4]
+    assert meta["task_name"] == "pick_place"
     assert meta["camera_config"]["front"]["width"] == 224
+
+
+def test_recorder_records_scene_identity(tmp_path):
+    recorder = EpisodeRecorder(
+        tmp_path,
+        store_images=False,
+        scene_name="pick_place_minimal",
+        scene_config={"cube_pos": [0.2, 0.0, 0.034]},
+    )
+    meta = json.loads(recorder.write_meta().read_text())
+    assert meta["scene_name"] == "pick_place_minimal"
+    assert meta["scene_config"]["cube_pos"] == [0.2, 0.0, 0.034]
 
 
 def test_checkpoint_compatibility_checks_nested_contract_fields():
@@ -87,6 +127,20 @@ def test_checkpoint_compatibility_checks_nested_contract_fields():
     )
     with pytest.raises(ValueError, match="robot"):
         validate_checkpoint_compatibility(checkpoint, {"robot": "turtlebot4"})
+
+
+def test_checkpoint_compatibility_rejects_unknown_schema_version():
+    checkpoint = CheckpointMetadata(
+        robot="so101",
+        task="pick_place",
+        observation_schema={"observation.state": {"shape": [6]}},
+        action_schema={"schema": "so101.joint_position.v1"},
+        normalization={},
+        training_config={},
+        schema_version="physai.checkpoint.v0",
+    )
+    with pytest.raises(ValueError, match="unsupported checkpoint metadata schema"):
+        validate_checkpoint_compatibility(checkpoint, {})
 
 
 def test_evaluation_report_separates_failure_modes():

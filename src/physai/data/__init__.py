@@ -1,3 +1,5 @@
+"""Dataset recording, metadata, evaluation, and Gym integration utilities."""
+
 from .gym_env import GymnasiumAdapter
 from .evaluation import EvaluationReport
 from .metadata import (

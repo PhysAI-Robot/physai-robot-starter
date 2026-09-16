@@ -2,7 +2,6 @@ import numpy as np
 import pytest
 
 from physai.contracts import (
-    ALL_JOINT_NAMES,
     Action,
     ActionSpec,
     CameraSpec,
@@ -17,10 +16,18 @@ from physai.contracts import (
 
 
 def test_joint_state_lookup_by_name():
-    js = JointState(position=np.arange(6, dtype=float))
+    names = (
+        "shoulder_pan",
+        "shoulder_lift",
+        "elbow_flex",
+        "wrist_flex",
+        "wrist_roll",
+        "gripper",
+    )
+    js = JointState(name=names, position=np.arange(6, dtype=float))
     assert js.get("shoulder_pan") == 0.0
     assert js.get("gripper") == 5.0
-    assert js.name == ALL_JOINT_NAMES
+    assert js.name == names
 
 
 def test_quaternion_ros_and_mujoco_orders_round_trip():

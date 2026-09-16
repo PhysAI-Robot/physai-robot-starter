@@ -134,7 +134,7 @@ class SortingPlanner(Planner):
     def __init__(
         self, env, place_xyz, colors: tuple[str, ...] = ("red", "blue", "yellow")
     ) -> None:
-        self.env = env  # privileged access to cube_positions, same pattern as ScriptedPickPlace
+        self.env = env  # privileged access to cube_positions for scripted baselines
         self.place_xyz = np.asarray(place_xyz, dtype=np.float64)
         self.colors = colors
 
