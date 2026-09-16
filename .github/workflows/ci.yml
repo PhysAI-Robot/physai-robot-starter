@@ -60,13 +60,13 @@ jobs:
           uv run python scripts/fetch_assets.py --robot turtlebot4
 
       - name: Install project and test dependencies
-        run: uv sync --locked --extra dev
+        run: uv sync --locked --extra dev --extra training
 
       - name: Run test suite
         run: uv run python -m pytest tests/ -q
 
   ros2-acceptance:
-    name: ROS2 Jazzy SO-101 acceptance
+    name: ROS2 Jazzy robot acceptance
     runs-on: ubuntu-24.04
     env:
       MUJOCO_GL: osmesa
@@ -90,10 +90,10 @@ jobs:
       - name: Build ROS2 test image
         run: docker build --tag physai-ros2-test --file docker/Dockerfile .
 
-      - name: Run real rclpy acceptance test
+      - name: Run ROS2 robot acceptance tests
         run: |
           docker run --rm \
             --env MUJOCO_GL=osmesa \
             --volume "$GITHUB_WORKSPACE/assets:/workspace/assets:ro" \
             physai-ros2-test \
-            bash -lc 'source /opt/ros/jazzy/setup.bash && uv run python -m pytest tests/robots/so101/test_ros2_node.py tests/robots/turtlebot/test_ros2_node.py -q'
+            bash -lc 'source /opt/ros/jazzy/setup.bash && uv run python -m pytest tests/robots/ -q'

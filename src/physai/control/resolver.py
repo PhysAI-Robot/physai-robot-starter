@@ -19,7 +19,6 @@ import numpy as np
 
 from ..contracts import Action, GripperCommand, JointState, PoseStamped, Twist
 from ..robots.base import KinematicsPort
-from ..robots.so101.kinematics import TOP_DOWN
 
 
 class JointRateLimiter:
@@ -54,7 +53,7 @@ class WaypointResolver:
         self,
         kin: KinematicsPort,
         rate_limiter: JointRateLimiter | None = None,
-        approach_dir=TOP_DOWN,
+        approach_dir=None,
     ) -> None:
         self.kin = kin
         self.limiter = rate_limiter
@@ -67,7 +66,8 @@ class WaypointResolver:
         gripper: GripperCommand | None = None,
     ) -> tuple[Action, float]:
         """Returns (action, position_error_metres)."""
-        q_now = joint_state.position[:5]
+        joint_count = len(getattr(self.kin, "joint_names", joint_state.name))
+        q_now = joint_state.position[:joint_count]
         res = self.kin.ik(
             waypoint.pose.position.as_array(),
             self.approach_dir,
@@ -116,5 +116,6 @@ class TwistToJointResolver:
         JJt = J @ J.T + (self.damping**2) * np.eye(6)
         dq = J.T @ np.linalg.solve(JJt, v) * self.dt
         dq = np.clip(dq, -self.max_joint_step, self.max_joint_step)
-        q = self.kin.clip_to_limits(joint_state.position[:5] + dq)
+        joint_count = len(getattr(self.kin, "joint_names", joint_state.name))
+        q = self.kin.clip_to_limits(joint_state.position[:joint_count] + dq)
         return Action(joint_position=q, gripper=gripper or GripperCommand())

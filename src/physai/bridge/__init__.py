@@ -1,3 +1,5 @@
+"""ROS2 transport, message conversion, and simulation bridge adapters."""
+
 from .adapters import ROS2HardwareAdapter, ROS2MuJoCoAdapter, ROS2Transport
 from .cartesian import (
     CartesianTargetRequest,

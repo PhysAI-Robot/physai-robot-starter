@@ -1,3 +1,5 @@
+"""Instruction-to-plan implementations and planner registry exports."""
+
 from .base import Plan, Planner, ScriptedPlanner, SortingPlanner, SubGoal
 from .registry import available_planners, create_planner, register_planner
 

@@ -12,6 +12,7 @@ from launch_ros.actions import Node
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_DIR = REPO_ROOT / "configs" / "nav2" / "turtlebot4"
+DEFAULT_MAP_FILE = REPO_ROOT / "configs" / "maps" / "open_space" / "map.yaml"
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -34,9 +35,7 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument(
                 "params-file", default_value=str(DEFAULT_CONFIG_DIR / "params.yaml")
             ),
-            DeclareLaunchArgument(
-                "map-file", default_value=str(DEFAULT_CONFIG_DIR / "map.yaml")
-            ),
+            DeclareLaunchArgument("map-file", default_value=str(DEFAULT_MAP_FILE)),
             DeclareLaunchArgument("max-ticks", default_value="5000"),
             DeclareLaunchArgument("scenario", default_value="open_space"),
             ExecuteProcess(

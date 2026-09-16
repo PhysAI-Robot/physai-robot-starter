@@ -85,8 +85,8 @@ pure-pursuit baseline.
 
 The first Nav2 integration uses a standard static map instead of SLAM:
 
-- `configs/nav2/turtlebot4/map.yaml`: map metadata, resolution, and origin.
-- `configs/nav2/turtlebot4/map.pgm`: open 4 m by 4 m map with a border wall.
+- `configs/maps/open_space/map.yaml`: map metadata, resolution, and origin.
+- `configs/maps/open_space/map.pgm`: open 4 m by 4 m map with a border wall.
 - `configs/nav2/turtlebot4/params.yaml`: TurtleBot4 map, planner, controller, and costmaps.
 - `launch/nav2.launch.py`: generic driver, map server, TF, and Nav2 composition.
 
@@ -149,7 +149,7 @@ the equivalent launch command is:
 ros2 launch launch/nav2.launch.py \
   robot:=turtlebot4 \
   scenario:=obstacle_course \
-  map-file:=$PWD/configs/nav2/turtlebot4/obstacle_map.yaml
+  map-file:=$PWD/configs/maps/obstacle_course/map.yaml
 ```
 
 The obstacle scenario publishes a real `sensor_msgs/msg/LaserScan`, feeds the

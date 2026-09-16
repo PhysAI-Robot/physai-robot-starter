@@ -24,14 +24,7 @@ from collections.abc import Callable
 
 import numpy as np
 
-from ..contracts import (
-    ALL_JOINT_NAMES,
-    SO101_ACTION_SCHEMA,
-    Action,
-    GripperCommand,
-    Observation,
-    PoseStamped,
-)
+from ..contracts import Action, GripperCommand, Observation, PoseStamped
 from ..data.metadata import CheckpointMetadata, validate_checkpoint_compatibility
 from ..model_store import resolve_local_model
 from ..robots.base import RobotPort
@@ -68,11 +61,7 @@ class VLAPolicy(Policy):
     # -- to implement --------------------------------------------------
     @abstractmethod
     def _infer(self, batch: dict) -> np.ndarray:
-        """Return (action_horizon, 6) absolute joint targets in radians.
-
-        Column layout: 5 arm joints then the gripper joint (radians, *not*
-        normalised) — matching `observation.state`.
-        """
+        """Return an action chunk in the robot's declared action layout."""
 
     # -- plumbing ------------------------------------------------------
     def reset(
@@ -106,8 +95,11 @@ class VLAPolicy(Policy):
             )
             if chunk.ndim == 1:
                 chunk = chunk[None, :]
-            if chunk.shape[1] != 6:
-                raise ValueError(f"expected (T, 6) actions, got {chunk.shape}")
+            expected_width = len(self._model_action_names())
+            if chunk.shape[1] != expected_width:
+                raise ValueError(
+                    f"expected (T, {expected_width}) actions, got {chunk.shape}"
+                )
             self._chunk.extend(chunk[: self.action_horizon])
 
         return self._decode_action(self._chunk.popleft())
@@ -115,21 +107,35 @@ class VLAPolicy(Policy):
     def _decode_action(self, values: np.ndarray) -> Action:
         if self.action_decoder is not None:
             return self.action_decoder(values)
-        if values.size != 6:
+        action_names = self._model_action_names()
+        arm_size = len(self.robot.robot_spec.action_joint_names)
+        if values.size != len(action_names):
             raise ValueError(
-                "default VLA action decoder expects 5 joints and one gripper; "
-                "provide action_decoder for another robot"
+                f"expected {len(action_names)} action values, got {values.size}"
             )
-        try:
-            gripper_to_normalized = self.robot.joint_to_gripper
-        except AttributeError as exc:
+        if values.size == arm_size:
+            return Action(joint_position=values, joint_names=action_names)
+        if (
+            values.size != arm_size + 1
+            or "gripper" not in self.robot.robot_spec.capabilities
+        ):
+            raise ValueError("provide action_decoder for this robot's action layout")
+        gripper_to_normalized = getattr(self.robot, "joint_to_gripper", None)
+        if gripper_to_normalized is None:
             raise ValueError(
                 "robot has no joint_to_gripper mapping; provide action_decoder"
-            ) from exc
+            )
         return Action(
-            joint_position=values[:5],
-            gripper=GripperCommand(position=gripper_to_normalized(values[5])),
+            joint_position=values[:arm_size],
+            gripper=GripperCommand(position=gripper_to_normalized(values[arm_size])),
+            joint_names=self.robot.robot_spec.action_joint_names,
         )
+
+    def _model_action_names(self) -> tuple[str, ...]:
+        names = self.robot.robot_spec.action_joint_names
+        if "gripper" in self.robot.robot_spec.capabilities:
+            return (*names, "gripper")
+        return names
 
 
 class ReplayPolicy(VLAPolicy):
@@ -200,8 +206,6 @@ class LeRobotPolicy(VLAPolicy):
         cls, env, checkpoint_dir, device: str | None = None, **kw
     ) -> "LeRobotPolicy":
         import json
-        from pathlib import Path
-
         import torch
         from lerobot.policies.act import ACTPolicy, make_act_pre_post_processors
 
@@ -236,10 +240,30 @@ class LeRobotPolicy(VLAPolicy):
             validate_checkpoint_compatibility(
                 checkpoint_meta,
                 {
+                    "schema_version": "physai.checkpoint.v1",
                     "robot": env.robot_spec.name,
+                    **(
+                        {"task": env.task.name}
+                        if getattr(env, "task", None) is not None
+                        else {}
+                    ),
+                    "observation_schema": {
+                        "observation.state": {
+                            "shape": [len(env.robot_spec.joint_names)]
+                        },
+                    },
                     "action_schema": {
-                        "schema": SO101_ACTION_SCHEMA,
-                        "names": list(ALL_JOINT_NAMES),
+                        "schema": env.robot_spec.metadata.get(
+                            "action_schema", "generic.v1"
+                        ),
+                        "names": list(
+                            (*env.robot_spec.action_joint_names,)
+                            + (
+                                ("gripper",)
+                                if "gripper" in env.robot_spec.capabilities
+                                else ()
+                            )
+                        ),
                     },
                 },
             )

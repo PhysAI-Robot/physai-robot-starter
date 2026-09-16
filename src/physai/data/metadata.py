@@ -27,10 +27,13 @@ class DatasetMetadata:
     contract_schema: str
     observation_schema: Mapping[str, Any]
     action_schema: Mapping[str, Any]
+    task_name: str | None = None
     simulator_config: Mapping[str, Any] = field(default_factory=dict)
     camera_config: Mapping[str, Any] = field(default_factory=dict)
     seeds: tuple[int, ...] = ()
     split: Mapping[str, Any] = field(default_factory=dict)
+    scene_name: str | None = None
+    scene_config: Mapping[str, Any] = field(default_factory=dict)
     schema_version: str = DATASET_SCHEMA_VERSION
 
     def to_dict(self) -> dict[str, Any]:
@@ -38,6 +41,7 @@ class DatasetMetadata:
             "schema_version": self.schema_version,
             "robot": self.robot,
             "task": self.task,
+            "task_name": self.task_name,
             "contract_schema": self.contract_schema,
             "observation_schema": dict(self.observation_schema),
             "action_schema": dict(self.action_schema),
@@ -45,6 +49,8 @@ class DatasetMetadata:
             "camera_config": dict(self.camera_config),
             "seeds": list(self.seeds),
             "split": dict(self.split),
+            "scene_name": self.scene_name,
+            "scene_config": dict(self.scene_config),
         }
 
     @classmethod
@@ -52,6 +58,7 @@ class DatasetMetadata:
         return cls(
             robot=str(values["robot"]),
             task=str(values["task"]),
+            task_name=values.get("task_name"),
             contract_schema=str(values["contract_schema"]),
             observation_schema=values["observation_schema"],
             action_schema=values["action_schema"],
@@ -59,6 +66,8 @@ class DatasetMetadata:
             camera_config=values.get("camera_config", {}),
             seeds=tuple(int(seed) for seed in values.get("seeds", ())),
             split=values.get("split", {}),
+            scene_name=values.get("scene_name"),
+            scene_config=values.get("scene_config", {}),
             schema_version=str(values.get("schema_version", DATASET_SCHEMA_VERSION)),
         )
 
@@ -71,6 +80,8 @@ class CheckpointMetadata:
     action_schema: Mapping[str, Any]
     normalization: Mapping[str, Any]
     training_config: Mapping[str, Any]
+    scene_name: str | None = None
+    scene_config: Mapping[str, Any] = field(default_factory=dict)
     schema_version: str = CHECKPOINT_SCHEMA_VERSION
 
     def to_dict(self) -> dict[str, Any]:
@@ -82,6 +93,8 @@ class CheckpointMetadata:
             "action_schema": dict(self.action_schema),
             "normalization": dict(self.normalization),
             "training_config": dict(self.training_config),
+            "scene_name": self.scene_name,
+            "scene_config": dict(self.scene_config),
         }
 
     @classmethod
@@ -93,6 +106,8 @@ class CheckpointMetadata:
             action_schema=values["action_schema"],
             normalization=values.get("normalization", {}),
             training_config=values.get("training_config", {}),
+            scene_name=values.get("scene_name"),
+            scene_config=values.get("scene_config", {}),
             schema_version=str(values.get("schema_version", CHECKPOINT_SCHEMA_VERSION)),
         )
 
@@ -105,6 +120,11 @@ def validate_checkpoint_compatibility(
     actual_values = (
         actual.to_dict() if isinstance(actual, CheckpointMetadata) else actual
     )
+    if actual_values.get("schema_version") != CHECKPOINT_SCHEMA_VERSION:
+        raise ValueError(
+            "unsupported checkpoint metadata schema: "
+            f"{actual_values.get('schema_version')!r}"
+        )
     for key, expected_value in expected.items():
         if key not in actual_values:
             raise ValueError(f"checkpoint metadata is missing {key!r}")

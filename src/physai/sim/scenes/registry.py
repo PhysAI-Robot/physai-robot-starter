@@ -60,6 +60,15 @@ def create_scene(name: str, **kwargs: Any) -> ManipulationSceneConfig:
     return get_scene_definition(name).factory(**kwargs)
 
 
+def default_scene_for(robot_kind: str, task_name: str) -> str | None:
+    """Find the registered scene for an embodiment kind and task."""
+    _load_builtins()
+    for definition in _DEFINITIONS.values():
+        if definition.supports(robot_kind, task_name):
+            return definition.name
+    return None
+
+
 def _load_builtins() -> None:
     global _BUILTINS_LOADED
     if _BUILTINS_LOADED:

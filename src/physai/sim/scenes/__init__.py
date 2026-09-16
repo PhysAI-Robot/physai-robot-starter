@@ -14,6 +14,7 @@ from .registry import (
     SceneDefinition,
     available_scenes,
     create_scene,
+    default_scene_for,
     get_scene_definition,
     register_scene,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "SceneDefinition",
     "available_scenes",
     "create_scene",
+    "default_scene_for",
     "get_scene_definition",
     "register_scene",
 ]

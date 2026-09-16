@@ -7,7 +7,8 @@ from dataclasses import dataclass
 import mujoco
 import numpy as np
 
-from ...contracts import ARM_JOINT_NAMES, Header, Pose, PoseStamped, Quaternion, Vector3
+from ...contracts import Header, Pose, PoseStamped, Quaternion, Vector3
+from .contracts import ARM_JOINT_NAMES
 
 APPROACH_AXIS = "x"
 PINCH_AXIS = "z"

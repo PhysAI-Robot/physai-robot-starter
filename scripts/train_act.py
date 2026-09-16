@@ -57,7 +57,7 @@ def main() -> int:
         args.dataset,
         chunk_size=args.chunk_size,
         image_size=args.image_size,
-        task=task,
+        task=meta.get("task_name", task),
     )
     print(f"{len(train_set)} (timestep) training samples")
 
@@ -87,6 +87,8 @@ def main() -> int:
             "lr": args.lr,
             "device": args.device,
         },
+        scene_name=meta.get("scene_name"),
+        scene_config=meta.get("scene_config", {}),
     )
     (args.out / "checkpoint_meta.json").write_text(
         json.dumps(checkpoint_meta.to_dict(), indent=2), encoding="utf-8"
@@ -139,6 +141,7 @@ def main() -> int:
                 "chunk_size": args.chunk_size,
                 "image_size": args.image_size,
                 "task": task,
+                "task_name": meta.get("task_name", task),
                 "steps": args.steps,
                 "batch_size": args.batch_size,
                 "lr": args.lr,

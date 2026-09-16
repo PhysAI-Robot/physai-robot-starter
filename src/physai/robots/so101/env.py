@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import mujoco
 import numpy as np
 
 from ...contracts import (
-    ALL_JOINT_NAMES,
-    ARM_JOINT_NAMES,
     Action,
-    GRIPPER_JOINT_NAME,
     GripperCommand,
     Header,
     ImageFrame,
@@ -27,6 +24,8 @@ from ...sim.domain_randomization import (
 )
 from ...sim.scene import SceneConfig, build_model
 from .kinematics import ArmKinematics
+from .contracts import ALL_JOINT_NAMES, ARM_JOINT_NAMES, GRIPPER_JOINT_NAME
+from .scene import scene_defaults
 
 HOME_QPOS = np.array([0.0, -1.05, 1.25, 0.75, 0.0], dtype=np.float64)
 
@@ -35,7 +34,7 @@ HOME_QPOS = np.array([0.0, -1.05, 1.25, 0.75, 0.0], dtype=np.float64)
 class EnvConfig:
     """SO-101-specific simulation and observation settings."""
 
-    scene: SceneConfig = field(default_factory=SceneConfig)
+    scene: SceneConfig = field(default_factory=lambda: SceneConfig(**scene_defaults()))
     control_hz: float = 25.0
     render: bool = True
     cameras: tuple[str, ...] = ("front", "wrist")
@@ -65,6 +64,17 @@ class SO101Env(MuJoCoSimulationCore):
 
     def __init__(self, cfg: EnvConfig | None = None) -> None:
         self.cfg = cfg or EnvConfig()
+        defaults = scene_defaults()
+        missing = {
+            key: value
+            for key, value in defaults.items()
+            if getattr(self.cfg.scene, key) is None
+        }
+        if missing:
+            self.cfg = replace(
+                self.cfg,
+                scene=replace(self.cfg.scene, **missing),
+            )
         self.model, self.spec = build_model(self.cfg.scene)
         self.randomization = DomainRandomizationEngine(
             self.model, self.cfg.domain_randomization
@@ -155,7 +165,10 @@ class SO101Env(MuJoCoSimulationCore):
                 for name, limit in zip(ARM_JOINT_NAMES, self.arm_limits)
             },
             max_joint_delta={name: 0.5 for name in ARM_JOINT_NAMES},
-            metadata={"control_hz": self.cfg.control_hz},
+            metadata={
+                "control_hz": self.cfg.control_hz,
+                "action_schema": "so101.joint_position.v1",
+            },
             joint_state_frame="base",
             camera_frames={"front": "camera_front", "wrist": "camera_wrist"},
             units={

@@ -18,22 +18,11 @@ quaternion as x,y,z,w).
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
 
 import numpy as np
-
-# SO-101 compatibility names. Other embodiments must provide their own ordering.
-ARM_JOINT_NAMES: tuple[str, ...] = (
-    "shoulder_pan",
-    "shoulder_lift",
-    "elbow_flex",
-    "wrist_flex",
-    "wrist_roll",
-)
-GRIPPER_JOINT_NAME = "gripper"
-ALL_JOINT_NAMES: tuple[str, ...] = ARM_JOINT_NAMES + (GRIPPER_JOINT_NAME,)
-SO101_ACTION_SCHEMA = "so101.joint_position.v1"
 
 
 def _now() -> float:
@@ -58,17 +47,25 @@ class Header:
 class JointState:
     """sensor_msgs/msg/JointState. Positions in rad, velocities in rad/s."""
 
-    name: tuple[str, ...] = ALL_JOINT_NAMES
-    position: np.ndarray = field(default_factory=lambda: np.zeros(6))
-    velocity: np.ndarray = field(default_factory=lambda: np.zeros(6))
-    effort: np.ndarray = field(default_factory=lambda: np.zeros(6))
+    name: tuple[str, ...] = ()
+    position: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    velocity: np.ndarray | None = None
+    effort: np.ndarray | None = None
     header: Header = field(default_factory=Header)
 
     def __post_init__(self) -> None:
         self.name = tuple(self.name)
         self.position = np.asarray(self.position, dtype=np.float64)
-        self.velocity = np.asarray(self.velocity, dtype=np.float64)
-        self.effort = np.asarray(self.effort, dtype=np.float64)
+        self.velocity = (
+            np.zeros_like(self.position)
+            if self.velocity is None
+            else np.asarray(self.velocity, dtype=np.float64)
+        )
+        self.effort = (
+            np.zeros_like(self.position)
+            if self.effort is None
+            else np.asarray(self.effort, dtype=np.float64)
+        )
         sizes = {self.position.size, self.velocity.size, self.effort.size}
         if len(sizes) != 1 or self.position.size != len(self.name):
             raise ValueError("joint names and state arrays must have the same size")
@@ -104,8 +101,8 @@ class JointState:
         return {
             "name": list(self.name),
             "position": self.position.tolist(),
-            "velocity": self.velocity.tolist(),
-            "effort": self.effort.tolist(),
+            "velocity": np.asarray(self.velocity).tolist(),
+            "effort": np.asarray(self.effort).tolist(),
             "stamp": self.header.stamp,
         }
 
@@ -485,42 +482,3 @@ class ActionSpec:
             "fields": [spec.to_dict() for spec in self.fields],
             "metadata": dict(self.metadata),
         }
-
-
-def so101_action_values(action: Action, *, gripper_joint: float) -> np.ndarray:
-    """Return the canonical SO-101 dataset action in joint order and radians."""
-    if action.joint_position is None:
-        raise ValueError("SO-101 action requires joint-position targets")
-    if action.joint_position.size != len(ARM_JOINT_NAMES):
-        raise ValueError(
-            f"SO-101 expects {len(ARM_JOINT_NAMES)} arm targets, "
-            f"got {action.joint_position.size}"
-        )
-    if action.joint_names is not None and action.joint_names != ARM_JOINT_NAMES:
-        raise ValueError(
-            f"SO-101 expects joint order {ARM_JOINT_NAMES}, got {action.joint_names}"
-        )
-    values = np.concatenate([action.joint_position, [gripper_joint]])
-    if not np.isfinite(values).all():
-        raise ValueError("SO-101 action contains non-finite values")
-    return values
-
-
-def so101_action_spec() -> ActionSpec:
-    """Describe the stable six-value SO-101 training action layout."""
-    return ActionSpec(
-        fields=(
-            TensorSpec(
-                name="action",
-                shape=(len(ALL_JOINT_NAMES),),
-                dtype="float32",
-                units="rad",
-            ),
-        ),
-        metadata={
-            "schema": SO101_ACTION_SCHEMA,
-            "mode": "joint_position",
-            "absolute": True,
-            "joint_names": list(ALL_JOINT_NAMES),
-        },
-    )

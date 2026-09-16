@@ -126,7 +126,7 @@ src/physai/
 ├── planner/           language-to-plan implementations
 ├── policy/            control and model adapters
 ├── control/           action resolution and rate limiting
-├── data/              episode recording and loading
+├── data/              episode recording, metadata, evaluation, and loading
 ├── bridge/            ROS2 transport, message mapping, adapters, and tick loop
 └── runtime/           robot-task-policy composition and safety orchestration
 ```
@@ -159,7 +159,8 @@ publishes joint states, camera images, CameraInfo, and TF while accepting joint
 trajectory and gripper commands; the TurtleBot4 node accepts `/cmd_vel` and
 publishes wheel state, `/odom`, and `odom` to `base_link` TF. The generic
 `launch/` composition starts the currently supported Nav2 profile; robot-owned
-Nav2 parameters and maps live under `configs/nav2/<robot>/`.
+Nav2 parameters live under `configs/nav2/<robot>/`; reusable environment maps
+live under `configs/maps/<environment>/`.
 
 ### Task-specific scenes
 
@@ -179,12 +180,13 @@ sim/scenes/sorting_minimal.py
 ```
 
 Each scene builder owns model geometry and initial object layout. Generic world
-settings are separated from manipulation attachment settings; the built-in
-manipulation config supplies SO-101 defaults, including calibrated pad positions
-and replacement of the original jaw collision meshes, while another arm should
-provide its own attachment config or builder. Robot model paths, end-effector
-anchors, and pad attachment bodies are configuration, not hardcoded task
-ownership. It must not own task reward, policy decisions, or ROS2 transport. The legacy `sim/scene.py`
+settings are separated from manipulation attachment settings; robot-owned scene
+default providers supply model paths, end-effector anchors, and pad attachment
+bodies. The SO-101 provider supplies its calibrated pad positions and collision
+configuration, while another arm should provide its own attachment provider or
+builder. Robot model paths and end-effector anchors are configuration, not
+hardcoded task ownership. It must not own task reward, policy decisions, or ROS2
+transport. The legacy `sim/scene.py`
 facade may translate the old `SceneConfig(num_cubes=...)` API, but new code
 should select `PickPlaceMinimalSceneConfig` or `SortingMinimalSceneConfig`
 directly. This keeps task-specific object branches out of the shared scene
@@ -238,6 +240,13 @@ its joint names, action modes, observation modalities, named capabilities,
 joint limits, and optional per-joint command-step limits.
 Workflow code should call `supports()` or `require()` rather than branch on a
 robot name.
+
+Robot registration also declares an embodiment kind. The registry exposes
+`robot_kind()` and robot-owned `scene_defaults()` so runtime composition can
+select and validate scenes before constructing a concrete robot. Scene
+definitions declare compatible robot kinds and task names; incompatible
+combinations fail during composition rather than inside a policy or scene
+builder.
 
 `Action` may carry explicit joint names and a timestamp. Legacy callers may
 omit those fields, but adapters and safety-critical paths should populate them
@@ -361,6 +370,18 @@ action                    (T, 6) float32, absolute joint targets
 The six values are ordered as:
 `shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, gripper`.
 Dataset recording and loading belong to `physai.data`; task semantics do not.
+
+The canonical SO-101 schemas are `so101_observation_spec()` and
+`so101_action_spec()` in `physai.contracts`. Dataset metadata serializes those
+schemas rather than defining a second joint or camera layout. The current
+recorder writes a compact internal `.npz` format with LeRobot-shaped feature
+keys; a future standard `LeRobotDataset` exporter must consume the same
+metadata and must not introduce a parallel action contract.
+
+Dataset and checkpoint metadata also record the selected scene name and scene
+configuration snapshot. This makes training and evaluation reproducible when
+the scene registry grows, while keeping scene construction owned by
+`physai.sim.scenes`.
 
 ## ROS2 boundary
 
