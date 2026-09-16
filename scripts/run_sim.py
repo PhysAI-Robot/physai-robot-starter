@@ -6,17 +6,19 @@ python scripts/run_sim.py --episodes 5 --seed 0
 python scripts/run_sim.py --video --episodes 5 --seed 0
 python scripts/run_sim.py --policy constant    # baseline: do nothing
 python scripts/run_sim.py --policy lerobot --checkpoint outputs/act_ckpt
-python scripts/run_sim.py --viewer             # interactive MuJoCo viewer
+python scripts/run_sim.py --viewer             # single-window scene + cameras UI
 """
 
 from __future__ import annotations
 
 import argparse
+import tempfile
 import time
 from dataclasses import replace
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
+import mujoco
 import numpy as np
 
 from physai.config import (
@@ -59,6 +61,142 @@ def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
     return gif
 
 
+class SingleWindowViewer:
+    """Tk viewer containing one interactive scene and every model camera."""
+
+    def __init__(self, env, policy, camera_names: list[str]) -> None:
+        try:
+            import tkinter as tk
+        except ImportError as exc:
+            raise RuntimeError(
+                "the custom viewer requires Tkinter; install python3-tk"
+            ) from exc
+        self._tk = tk
+        self.root = tk.Tk()
+        self.root.title("PhysAI MuJoCo Viewer")
+        self.env = env
+        self.policy = policy
+        self.camera_names = camera_names
+        self.closed = False
+        self.paused = False
+        self._last_drag: tuple[int, int] | None = None
+        scene_width = min(800, int(env.model.vis.global_.offwidth))
+        scene_height = min(600, int(env.model.vis.global_.offheight))
+        self._scene_renderer = mujoco.Renderer(
+            env.model, height=scene_height, width=scene_width
+        )
+        self._free_camera = mujoco.MjvCamera()
+        mujoco.mjv_defaultFreeCamera(env.model, self._free_camera)
+
+        toolbar = tk.Frame(self.root)
+        toolbar.pack(fill=tk.X)
+        self.pause_button = tk.Button(toolbar, text="Pause", command=self.toggle_pause)
+        self.pause_button.pack(side=tk.LEFT, padx=4, pady=4)
+        tk.Button(toolbar, text="Reset", command=self.reset).pack(side=tk.LEFT, padx=4)
+        tk.Button(toolbar, text="Zoom +", command=lambda: self.zoom(0.85)).pack(side=tk.LEFT, padx=4)
+        tk.Button(toolbar, text="Zoom -", command=lambda: self.zoom(1.18)).pack(side=tk.LEFT, padx=4)
+        self.status = tk.Label(toolbar, text="running", anchor="w")
+        self.status.pack(side=tk.LEFT, padx=12)
+
+        content = tk.Frame(self.root)
+        content.pack(fill=tk.BOTH, expand=True)
+        self.scene_label = tk.Label(content, text="Rendering scene...", bg="#202124")
+        self.scene_label.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.scene_label.bind("<ButtonPress-1>", self.begin_drag)
+        self.scene_label.bind("<B1-Motion>", self.drag_scene)
+        self.scene_label.bind("<ButtonRelease-1>", self.end_drag)
+        self.scene_label.bind("<MouseWheel>", self.scroll_zoom)
+        self.scene_label.bind("<Button-4>", lambda _event: self.zoom(0.9))
+        self.scene_label.bind("<Button-5>", lambda _event: self.zoom(1.1))
+
+        camera_panel = tk.Frame(content)
+        camera_panel.pack(side=tk.RIGHT, fill=tk.Y)
+        self.camera_labels: dict[str, object] = {}
+        self.camera_photos: dict[str, object] = {}
+        for name in camera_names:
+            panel = tk.Frame(camera_panel, bd=1, relief=tk.GROOVE)
+            panel.pack(fill=tk.X, padx=4, pady=4)
+            tk.Label(panel, text=name, anchor="w").pack(fill=tk.X)
+            label = tk.Label(panel, text="waiting", width=320, height=240)
+            label.pack()
+            self.camera_labels[name] = label
+
+        self.root.protocol("WM_DELETE_WINDOW", self.close)
+        self.reset()
+
+    def _photo(self, frame: np.ndarray):
+        frame = np.ascontiguousarray(frame, dtype=np.uint8)
+        height, width = frame.shape[:2]
+        ppm = f"P6\n{width} {height}\n255\n".encode() + frame.tobytes()
+        with tempfile.NamedTemporaryFile(suffix=".ppm") as image_file:
+            image_file.write(ppm)
+            image_file.flush()
+            return self._tk.PhotoImage(file=image_file.name, format="PPM")
+
+    def render(self) -> None:
+        if self.closed:
+            return
+        self._scene_renderer.update_scene(self.env.data, camera=self._free_camera)
+        scene_photo = self._photo(self._scene_renderer.render())
+        self.scene_photo = scene_photo
+        self.scene_label.configure(image=scene_photo, text="")
+        for name, label in self.camera_labels.items():
+            photo = self._photo(self.env.render_camera(name))
+            self.camera_photos[name] = photo
+            label.configure(image=photo, text="")
+        self.status.configure(
+            text=f"{'paused' if self.paused else 'running'}  step={self.env.step_count}"
+        )
+        self.root.update_idletasks()
+        self.root.update()
+
+    def tick(self) -> None:
+        if self.closed:
+            return
+        if not self.paused:
+            obs, _, terminated, truncated, _ = self.env.step(self.policy.act(self.obs))
+            self.obs = obs
+            if terminated or truncated or self.policy.done:
+                self.reset()
+        self.render()
+        self.root.after(max(1, round(1000 / self.env.cfg.control_hz)), self.tick)
+
+    def reset(self) -> None:
+        self.obs = self.env.reset()
+        self.policy.reset(self.obs)
+
+    def toggle_pause(self) -> None:
+        self.paused = not self.paused
+        self.pause_button.configure(text="Resume" if self.paused else "Pause")
+
+    def zoom(self, factor: float) -> None:
+        self._free_camera.distance = float(np.clip(self._free_camera.distance * factor, 0.05, 5.0))
+
+    def begin_drag(self, event) -> None:
+        self._last_drag = (event.x, event.y)
+
+    def drag_scene(self, event) -> None:
+        if self._last_drag is None:
+            return
+        last_x, last_y = self._last_drag
+        dx, dy = event.x - last_x, event.y - last_y
+        self._free_camera.azimuth -= dx * 0.5
+        self._free_camera.elevation = float(np.clip(self._free_camera.elevation + dy * 0.5, -89.0, 89.0))
+        self._last_drag = (event.x, event.y)
+
+    def end_drag(self, _event) -> None:
+        self._last_drag = None
+
+    def scroll_zoom(self, event) -> None:
+        self.zoom(0.9 if event.delta > 0 else 1.1)
+
+    def close(self) -> None:
+        if not self.closed:
+            self.closed = True
+            self._scene_renderer.close()
+            self.root.destroy()
+
+
 def build_policy(name: str, env, checkpoint: Path | None = None):
     if env.robot_spec.supports("base_velocity"):
         if name != "constant":
@@ -66,7 +204,10 @@ def build_policy(name: str, env, checkpoint: Path | None = None):
         name = "constant_twist"
     if name == "lerobot" and checkpoint is None:
         raise ValueError("--policy lerobot needs --checkpoint")
-    return create_policy(name, env=env, checkpoint=checkpoint)
+    policy_kwargs = {"env": env}
+    if name == "lerobot":
+        policy_kwargs["checkpoint"] = checkpoint
+    return create_policy(name, **policy_kwargs)
 
 
 def build_so101_config(
@@ -159,7 +300,12 @@ def main() -> int:
     ap.add_argument(
         "--viewer",
         action="store_true",
-        help="open the interactive viewer instead of writing a video",
+        help="open the single-window interactive scene and camera viewer",
+    )
+    ap.add_argument(
+        "--camera-view",
+        action="store_true",
+        help="compatibility flag; --viewer already shows all cameras",
     )
     args = ap.parse_args()
 
@@ -189,6 +335,8 @@ def main() -> int:
     )
 
     if args.viewer:
+        if args.camera_view and args.robot == "turtlebot4":
+            ap.error("--camera-view currently supports the SO-101 viewer only")
         return run_viewer(
             args, task_config, seed, max_steps, sim_config.domain_randomization
         )
@@ -273,17 +421,16 @@ def run_viewer(
     max_steps: int,
     domain_randomization: DomainRandomizationConfig,
 ) -> int:
-    import mujoco.viewer
-
     if args.robot == "turtlebot4":
         env = create_robot(
             args.robot,
             config=TurtleBot4Config(
                 max_steps=args.max_steps,
-                render=False,
+                render=True,
                 domain_randomization=domain_randomization,
             ),
         )
+        camera_names = ["free"]
     else:
         env = create_robot(
             args.robot,
@@ -292,30 +439,28 @@ def run_viewer(
                 task_config,
                 seed,
                 max_steps,
-                render=False,
+                render=True,
                 domain_randomization=domain_randomization,
             ),
         )
-    obs = env.reset()
     policy = build_policy(args.policy, env, args.checkpoint)
-    policy.reset(obs)
+    if args.robot != "turtlebot4":
+        camera_names = [
+            mujoco.mj_id2name(env.model, mujoco.mjtObj.mjOBJ_CAMERA, camera_id)
+            for camera_id in range(env.model.ncam)
+        ]
+        camera_names = [name for name in camera_names if name]
 
-    print("Viewer open. Close the window to exit.")
-    with mujoco.viewer.launch_passive(env.model, env.data) as viewer:
-        next_tick = time.perf_counter()
-        control_period = 1.0 / env.cfg.control_hz
-        while viewer.is_running():
-            obs, _, terminated, truncated, _ = env.step(policy.act(obs))
-            viewer.sync()
-            if terminated or truncated:
-                obs = env.reset()
-                policy.reset(obs)
-            next_tick += control_period
-            remaining = next_tick - time.perf_counter()
-            if remaining > 0:
-                time.sleep(remaining)
-            else:
-                next_tick = time.perf_counter()
+    app = None
+    try:
+        print("Custom viewer open. Close the window to exit.")
+        app = SingleWindowViewer(env, policy, camera_names)
+        app.tick()
+        app.root.mainloop()
+    finally:
+        if app is not None and not app.closed:
+            app.close()
+        env.close()
     return 0
 
 

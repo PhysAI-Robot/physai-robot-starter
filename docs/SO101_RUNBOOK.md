@@ -10,6 +10,10 @@ planner/VLM/VLA workflows.
 uv run python scripts/fetch_assets.py --robot so101
 ```
 
+The fetch includes the upstream `so101_new_calib_camera.xml` variant and its
+wrist camera mount meshes. When that file is present, the simulator selects it
+automatically; otherwise it falls back to the base SO-101 model.
+
 Open the robot in MuJoCo:
 
 ```bash
@@ -39,6 +43,22 @@ uv run python scripts/run_sim.py \
 
 Video recording is opt-in. Add `--video` when you want frames written under
 `outputs/`; use `--viewer` only for interactive local runs.
+
+The interactive viewer is a single Tk window containing the MuJoCo scene and
+all named cameras discovered in the loaded model. Drag the scene to orbit,
+scroll to zoom, and use the toolbar to pause, resume, or reset:
+
+```bash
+uv run python scripts/run_sim.py \
+  --config configs/tasks/so101/pick_place.yaml \
+  --viewer \
+  --seed 0
+```
+
+The camera panels are generated automatically, so `front` and `wrist` appear
+without selecting one manually. `--camera-view` is retained as a compatibility
+flag and is no longer required. This mode requires a desktop display and
+Tkinter (`python3-tk` on Debian/Ubuntu).
 
 ## 2. Run the Basic Task
 
@@ -151,7 +171,51 @@ The scripted planner is the deterministic starting point. SmolVLM and Claude
 backends are optional. Planner output must remain a validated plan and must
 pass robot capability and safety checks before producing commands.
 
-## 7. Parameters and Open Work
+## 7. Phase 2A Visual Servoing Baseline
+
+The deterministic `visual_servo` policy detects the configured RGB blob in the
+front camera, projects its centroid through a pinhole calibration onto the
+configured workspace plane, and executes a bounded pick-and-place state machine
+through the existing IK and joint-position safety path:
+
+```bash
+uv run python scripts/eval_policy.py \
+  --policy visual_servo \
+  --episodes 1 \
+  --seed 0 \
+  --max-steps 400
+```
+
+The same policy can be inspected interactively with the MuJoCo viewer and live
+front-camera window:
+
+```bash
+uv run python scripts/run_sim.py \
+  --config configs/tasks/so101/pick_place.yaml \
+  --policy visual_servo \
+  --viewer \
+  --camera-view \
+  --camera front \
+  --seed 0
+```
+
+The default detector targets the red pick cube. The fixed front camera performs
+the macro approach; during descent, the moving wrist camera recalibrates from
+its current MuJoCo pose and provides a guarded final alignment correction.
+After detection, the policy closes the gripper, lifts, transfers to the
+configured target, releases, and retreats. Use
+`SO101VisualServoPolicy` directly when the target RGB, target pixel, camera
+intrinsics, or camera-to-base transform must be changed. The public calibration
+uses a right-handed pinhole frame with `+z` forward; MuJoCo's camera `-z`
+viewing convention is converted at the adapter boundary. The fixed front
+camera can derive its calibration from the environment. The wrist camera moves
+with the arm and therefore requires a fresh TF-based calibration each control
+tick before it can be used for metric servoing.
+
+The policy exposes `metrics.visual_error_px`, `metrics.ee_error_m`,
+`metrics.settled`, and `metrics.failure_reason` separately from task reward.
+
+## 8. Parameters and Open Work
 
 Main files are `configs/tasks/so101/pick_place.yaml`,
 `src/physai/robots/so101/env.py`, `src/physai/sim/scenes/common.py`, and

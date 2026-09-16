@@ -50,6 +50,7 @@ def _load_builtins() -> None:
     register_policy("constant", _make_constant)
     register_policy("constant_twist", _make_constant_twist)
     register_policy("scripted", _make_scripted)
+    register_policy("visual_servo", _make_visual_servo)
     register_policy("replay", _make_replay)
     register_policy("lerobot", _make_lerobot)
     _BUILTINS_LOADED = True
@@ -75,6 +76,18 @@ def _make_scripted(*, env, **kwargs: Any) -> Policy:
         "scripted",
         env=env,
         cfg=kwargs.get("cfg"),
+    )
+
+
+def _make_visual_servo(*, env, **kwargs: Any) -> Policy:
+    from ..robots.registry import create_robot_policy
+
+    return create_robot_policy(
+        env.robot_spec.name,
+        "visual_servo",
+        env=env,
+        cfg=kwargs.get("cfg"),
+        **{key: value for key, value in kwargs.items() if key != "cfg"},
     )
 
 

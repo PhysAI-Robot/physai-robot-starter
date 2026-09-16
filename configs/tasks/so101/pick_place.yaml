@@ -8,7 +8,7 @@ task:
   scene: pick_place_minimal
 
 scene:
-  robot_xml: assets/so101/so101_new_calib.xml
+  robot_xml: assets/so101/so101_new_calib_camera.xml
   timestep: 0.002
   table_pos: [0.30, 0.0, 0.01]
   table_size: [0.20, 0.25, 0.01]
