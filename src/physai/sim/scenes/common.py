@@ -241,12 +241,31 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
         xyaxes=list(cfg.front_cam_xyaxes),
         fovy=48,
     )
-    _find_body(spec, cfg.static_pad_body).add_camera(
-        name="wrist",
-        pos=list(cfg.wrist_cam_pos),
-        xyaxes=list(cfg.wrist_cam_xyaxes),
-        fovy=62,
+    camera_body = next(
+        (body for body in spec.bodies if body.name == "wrist_camera"), None
     )
+    if camera_body is not None:
+        # The official camera variant contains the calibrated mount and camera
+        # body. The sensor is added here because the upstream model only
+        # describes the physical camera mesh, not a MuJoCo render sensor.
+        camera_body.add_camera(
+            name="wrist",
+            # Keep the virtual optical centre just outside the physical lens
+            # housing; placing it at the body origin makes the housing occlude
+            # the rendered image as a large black spot.
+            pos=[0.0, 0.0, 0.025],
+            # The official camera body uses +z as its optical direction while
+            # MuJoCo camera sensors look along local -z.
+            xyaxes=[1.0, 0.0, 0.0, 0.0, -1.0, 0.0],
+            fovy=62,
+        )
+    else:
+        _find_body(spec, cfg.static_pad_body).add_camera(
+            name="wrist",
+            pos=list(cfg.wrist_cam_pos),
+            xyaxes=list(cfg.wrist_cam_xyaxes),
+            fovy=62,
+        )
     return spec
 
 

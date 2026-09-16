@@ -116,8 +116,8 @@ approach, followed by TurtleBot4 visual goal tracking where a suitable visual
 target is available.
 
 #### Key Deliverables
-- [ ] Visual feature or fiducial detection with documented camera-frame and robot-frame transforms.
-- [ ] Image-based or pose-based visual servo controller producing bounded `Action` values through the existing safety layer.
+- [x] Visual feature or fiducial detection with documented camera-frame and robot-frame transforms. **Partial:** the deterministic baseline detects an RGB blob and supports a calibrated fixed front camera; fiducials and dynamic wrist TF updates remain.
+- [x] Image-based or pose-based visual servo controller producing bounded `Action` values through the existing safety layer. **Partial:** `visual_servo` emits bounded joint-position actions through the Jacobian resolver; end-to-end robustness evaluation remains.
 - [ ] SO-101 visual alignment and approach acceptance test with position error, settling time, and failure reporting.
 - [ ] Deterministic replay and robustness evaluation under bounded camera and scene perturbations.
 

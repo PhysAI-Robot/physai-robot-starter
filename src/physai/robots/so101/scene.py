@@ -9,8 +9,12 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 
 def scene_defaults() -> dict[str, object]:
     """Return the SO-101 model and end-effector attachment configuration."""
+    model_name = "so101_new_calib_camera.xml"
+    model_path = REPO_ROOT / "assets" / "so101" / model_name
+    if not model_path.exists():
+        model_path = REPO_ROOT / "assets" / "so101" / "so101_new_calib.xml"
     return {
-        "robot_xml": REPO_ROOT / "assets" / "so101" / "so101_new_calib.xml",
+        "robot_xml": model_path,
         "ee_site": "gripperframe",
         "gripper_joint": "gripper",
         "static_pad_body": "gripper",

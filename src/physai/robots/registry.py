@@ -173,9 +173,10 @@ def _load_builtins() -> None:
 
         register_scene_defaults("so101", so101_scene_defaults)
     if ("so101", "scripted") not in _POLICY_FACTORIES:
-        from .so101.policy import make_scripted_policy
+        from .so101.policy import make_scripted_policy, make_visual_servo_policy
 
         register_robot_policy("so101", "scripted", make_scripted_policy)
+        register_robot_policy("so101", "visual_servo", make_visual_servo_policy)
     if "so101" not in _ENV_CONFIG_FACTORIES:
         from .so101.env import EnvConfig
 

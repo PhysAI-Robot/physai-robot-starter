@@ -66,7 +66,7 @@ def main() -> int:
     # when env construction moved behind create_robot(): render defaulted to
     # --render alone (so `--policy lerobot` died on an empty images dict) and
     # --camera-size stopped reaching SceneConfig entirely.
-    needs_images = args.policy == "lerobot"
+    needs_images = args.policy in {"lerobot", "visual_servo"}
     scene_kwargs = {"camera_width": args.camera_size, "camera_height": args.camera_size}
     if args.sorting:
         scene_kwargs["num_cubes"] = 3
@@ -128,10 +128,12 @@ def main() -> int:
     # from disk per episode would dominate wall-clock time for no reason.
     reusable_policy = None
     if args.policy != "replay":
+        policy_kwargs = {"env": env}
+        if args.policy == "lerobot":
+            policy_kwargs["checkpoint"] = args.checkpoint
         reusable_policy = create_policy(
             args.policy,
-            env=env,
-            checkpoint=args.checkpoint,
+            **policy_kwargs,
         )
 
     results = []

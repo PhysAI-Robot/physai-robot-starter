@@ -1,7 +1,14 @@
 def test_builtin_policies_are_discoverable():
     from physai.policy import available_policies
 
-    assert {"constant", "constant_twist", "scripted", "replay", "lerobot"} <= set(
+    assert {
+        "constant",
+        "constant_twist",
+        "scripted",
+        "visual_servo",
+        "replay",
+        "lerobot",
+    } <= set(
         available_policies()
     )
 
