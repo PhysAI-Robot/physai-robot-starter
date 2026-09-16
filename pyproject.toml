@@ -28,6 +28,13 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "assets: requires downloaded SO-101 simulation assets",
+    "ros2: requires ROS 2 and message packages",
+    "integration: crosses multiple PhysAI module boundaries",
+    "acceptance: validates a complete robot workflow",
+    "slow: takes longer than a normal unit test",
+]
 
 [tool.uv]
 override-dependencies = ["datasets>=5.0.1", "setuptools>=83"]

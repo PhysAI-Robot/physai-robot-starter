@@ -1,6 +1,6 @@
 """Compare deterministic and randomized scripted SO-101 evaluation.
 
-    uv run python scripts/eval_randomization.py --episodes 20 --clutter-count 2
+uv run python scripts/eval_randomization.py --episodes 20 --clutter-count 2
 """
 
 from __future__ import annotations
@@ -56,13 +56,15 @@ def evaluate_mode(args: argparse.Namespace, randomized: bool) -> dict:
                 total += reward
                 if terminated or truncated or policy.done:
                     break
-            results.append({
-                "seed": seed,
-                "success": bool(info.get("success")),
-                "steps": env.step_count,
-                "return": total,
-                "randomization": env.randomization_metadata.as_dict(),
-            })
+            results.append(
+                {
+                    "seed": seed,
+                    "success": bool(info.get("success")),
+                    "steps": env.step_count,
+                    "return": total,
+                    "randomization": env.randomization_metadata.as_dict(),
+                }
+            )
     finally:
         env.close()
     success_count = sum(item["success"] for item in results)

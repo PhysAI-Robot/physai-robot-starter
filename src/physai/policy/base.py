@@ -17,13 +17,16 @@ class Policy(ABC):
 
     name: str = "policy"
 
-    def reset(self, observation: Observation, goal: PoseStamped | None = None,
-              instruction: str | None = None) -> None:
+    def reset(
+        self,
+        observation: Observation,
+        goal: PoseStamped | None = None,
+        instruction: str | None = None,
+    ) -> None:
         """Called once per episode, before the first `act`."""
 
     @abstractmethod
-    def act(self, observation: Observation) -> Action:
-        ...
+    def act(self, observation: Observation) -> Action: ...
 
     @property
     def done(self) -> bool:

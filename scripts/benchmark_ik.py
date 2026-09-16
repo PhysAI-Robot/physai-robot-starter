@@ -1,6 +1,6 @@
 """Benchmark SO-101 FK/IK metrics over a deterministic reachable target set.
 
-    uv run python scripts/benchmark_ik.py --targets 20 --json-out outputs/ik_benchmark.json
+uv run python scripts/benchmark_ik.py --targets 20 --json-out outputs/ik_benchmark.json
 """
 
 from __future__ import annotations
@@ -43,7 +43,9 @@ def benchmark(args: argparse.Namespace) -> dict:
         q_init = observation.joint_state.position[:5]
         base_position = env.cube_pos.copy()
         target_quat = top_down_quat()
-        offsets = [TARGET_OFFSETS[index % len(TARGET_OFFSETS)] for index in range(args.targets)]
+        offsets = [
+            TARGET_OFFSETS[index % len(TARGET_OFFSETS)] for index in range(args.targets)
+        ]
         for index, offset in enumerate(offsets):
             target = base_position + np.asarray(offset, dtype=np.float64)
             started = time.perf_counter()

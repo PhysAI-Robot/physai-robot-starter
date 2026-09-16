@@ -1,43 +1,8 @@
 import numpy as np
 import pytest
 
-from physai.contracts import JointState, Observation
 from physai.robots import RobotSpec
-
-
-class FakeRobot:
-    def __init__(self) -> None:
-        self.robot_spec = RobotSpec(
-            name="so101",
-            kind="fixed_base_manipulator",
-            joint_names=("joint",),
-            action_joint_names=("joint",),
-            action_modes=("joint_position",),
-            capabilities=("arm_kinematics", "gripper"),
-        )
-        self.closed = False
-        self.observation = Observation(
-            joint_state=JointState(
-                name=("joint",),
-                position=np.zeros(1),
-                velocity=np.zeros(1),
-                effort=np.zeros(1),
-            )
-        )
-
-    def reset(self, seed=None):
-        del seed
-        return self.observation
-
-    def observe(self):
-        return self.observation
-
-    def step(self, action):
-        del action
-        return self.observation, 0.0, False, False, {}
-
-    def close(self):
-        self.closed = True
+from tests.support.fakes import FakeRobotPort
 
 
 def test_builtin_scene_registry_returns_typed_configs():
@@ -58,7 +23,17 @@ def test_builtin_scene_registry_returns_typed_configs():
 def test_runtime_rejects_task_scene_mismatch(monkeypatch):
     from physai.runtime import composition
 
-    fake = FakeRobot()
+    fake = FakeRobotPort(
+        RobotSpec(
+            name="so101",
+            kind="fixed_base_manipulator",
+            joint_names=("joint",),
+            action_joint_names=("joint",),
+            action_modes=("joint_position",),
+            capabilities=("arm_kinematics", "gripper"),
+        ),
+        validate_actions=False,
+    )
     monkeypatch.setattr(composition, "create_robot", lambda *args, **kwargs: fake)
 
     with pytest.raises(ValueError, match="scene .* incompatible"):
@@ -73,7 +48,17 @@ def test_runtime_rejects_task_scene_mismatch(monkeypatch):
 def test_runtime_records_explicit_scene(monkeypatch):
     from physai.runtime import composition
 
-    fake = FakeRobot()
+    fake = FakeRobotPort(
+        RobotSpec(
+            name="so101",
+            kind="fixed_base_manipulator",
+            joint_names=("joint",),
+            action_joint_names=("joint",),
+            action_modes=("joint_position",),
+            capabilities=("arm_kinematics", "gripper"),
+        ),
+        validate_actions=False,
+    )
     monkeypatch.setattr(composition, "create_robot", lambda *args, **kwargs: fake)
     runtime = composition.create_runtime(
         "so101",

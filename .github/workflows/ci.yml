@@ -8,6 +8,20 @@ permissions:
   contents: read
 
 jobs:
+  format:
+    name: Ruff format check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Check Python formatting
+        uses: astral-sh/ruff-action@v3
+        with:
+          args: "format --check --exclude .venv --exclude venv"
+
   test:
     name: Python 3.12 tests
     runs-on: ubuntu-24.04

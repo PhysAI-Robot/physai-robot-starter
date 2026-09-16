@@ -24,7 +24,15 @@ from collections.abc import Callable
 
 import numpy as np
 
-from ..contracts import Action, GripperCommand, Observation, PoseStamped
+from ..contracts import (
+    ALL_JOINT_NAMES,
+    SO101_ACTION_SCHEMA,
+    Action,
+    GripperCommand,
+    Observation,
+    PoseStamped,
+)
+from ..data.metadata import CheckpointMetadata, validate_checkpoint_compatibility
 from ..model_store import resolve_local_model
 from ..robots.base import RobotPort
 from .base import Policy
@@ -67,8 +75,12 @@ class VLAPolicy(Policy):
         """
 
     # -- plumbing ------------------------------------------------------
-    def reset(self, observation: Observation, goal: PoseStamped | None = None,
-              instruction: str | None = None) -> None:
+    def reset(
+        self,
+        observation: Observation,
+        goal: PoseStamped | None = None,
+        instruction: str | None = None,
+    ) -> None:
         self._chunk.clear()
         if instruction is not None:
             self.instruction = instruction
@@ -89,7 +101,9 @@ class VLAPolicy(Policy):
 
     def act(self, observation: Observation) -> Action:
         if not self._chunk:
-            chunk = np.asarray(self._infer(self.build_batch(observation)), dtype=np.float64)
+            chunk = np.asarray(
+                self._infer(self.build_batch(observation)), dtype=np.float64
+            )
             if chunk.ndim == 1:
                 chunk = chunk[None, :]
             if chunk.shape[1] != 6:
@@ -165,8 +179,15 @@ class LeRobotPolicy(VLAPolicy):
 
     name = "lerobot"
 
-    def __init__(self, env, policy, preprocessor, postprocessor,
-                 image_size: int | None = None, **kw) -> None:
+    def __init__(
+        self,
+        env,
+        policy,
+        preprocessor,
+        postprocessor,
+        image_size: int | None = None,
+        **kw,
+    ) -> None:
         kw.setdefault("action_horizon", 1)
         super().__init__(env, **kw)
         self.policy = policy
@@ -175,7 +196,9 @@ class LeRobotPolicy(VLAPolicy):
         self.image_size = image_size
 
     @classmethod
-    def from_checkpoint(cls, env, checkpoint_dir, device: str | None = None, **kw) -> "LeRobotPolicy":
+    def from_checkpoint(
+        cls, env, checkpoint_dir, device: str | None = None, **kw
+    ) -> "LeRobotPolicy":
         import json
         from pathlib import Path
 
@@ -187,8 +210,12 @@ class LeRobotPolicy(VLAPolicy):
         policy = ACTPolicy.from_pretrained(checkpoint_dir).to(device)
         policy.eval()
 
-        stats = json.loads((checkpoint_dir / "dataset_stats.json").read_text(encoding="utf-8"))
-        preprocessor, postprocessor = make_act_pre_post_processors(policy.config, dataset_stats=stats)
+        stats = json.loads(
+            (checkpoint_dir / "dataset_stats.json").read_text(encoding="utf-8")
+        )
+        preprocessor, postprocessor = make_act_pre_post_processors(
+            policy.config, dataset_stats=stats
+        )
 
         # Not config.json — ACTPolicy.save_pretrained() owns that filename
         # (it's the full ACTConfig dump). Our own metadata lives alongside it
@@ -201,10 +228,32 @@ class LeRobotPolicy(VLAPolicy):
             image_size = meta.get("image_size")
             kw.setdefault("instruction", meta.get("task", ""))
 
-        return cls(env, policy, preprocessor, postprocessor, image_size=image_size, **kw)
+        checkpoint_meta_path = checkpoint_dir / "checkpoint_meta.json"
+        if checkpoint_meta_path.exists():
+            checkpoint_meta = CheckpointMetadata.from_dict(
+                json.loads(checkpoint_meta_path.read_text(encoding="utf-8"))
+            )
+            validate_checkpoint_compatibility(
+                checkpoint_meta,
+                {
+                    "robot": env.robot_spec.name,
+                    "action_schema": {
+                        "schema": SO101_ACTION_SCHEMA,
+                        "names": list(ALL_JOINT_NAMES),
+                    },
+                },
+            )
 
-    def reset(self, observation: Observation, goal: PoseStamped | None = None,
-              instruction: str | None = None) -> None:
+        return cls(
+            env, policy, preprocessor, postprocessor, image_size=image_size, **kw
+        )
+
+    def reset(
+        self,
+        observation: Observation,
+        goal: PoseStamped | None = None,
+        instruction: str | None = None,
+    ) -> None:
         super().reset(observation, goal, instruction)
         self.policy.reset()
 
@@ -225,11 +274,13 @@ class LeRobotPolicy(VLAPolicy):
             h, w = t.shape[-2], t.shape[-1]
             side = min(h, w)
             top, left = (h - side) // 2, (w - side) // 2
-            t = t[:, top:top + side, left:left + side]
+            t = t[:, top : top + side, left : left + side]
         if self.image_size and t.shape[-1] != self.image_size:
             t = torch.nn.functional.interpolate(
-                t.unsqueeze(0), size=(self.image_size, self.image_size),
-                mode="bilinear", align_corners=False,
+                t.unsqueeze(0),
+                size=(self.image_size, self.image_size),
+                mode="bilinear",
+                align_corners=False,
             ).squeeze(0)
         return t
 

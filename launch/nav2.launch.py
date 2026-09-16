@@ -41,9 +41,16 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("scenario", default_value="open_space"),
             ExecuteProcess(
                 cmd=[
-                    "uv", "run", "python", "scripts/run_ros2_sim.py",
-                    "--robot", robot, "--max-ticks", max_ticks,
-                    "--scenario", scenario,
+                    "uv",
+                    "run",
+                    "python",
+                    "scripts/run_ros2_sim.py",
+                    "--robot",
+                    robot,
+                    "--max-ticks",
+                    max_ticks,
+                    "--scenario",
+                    scenario,
                 ],
                 cwd=str(REPO_ROOT),
                 output="screen",
@@ -65,7 +72,13 @@ def generate_launch_description() -> LaunchDescription:
                 package="nav2_lifecycle_manager",
                 executable="lifecycle_manager",
                 name="lifecycle_manager_map",
-                parameters=[{"use_sim_time": True, "autostart": True, "node_names": ["map_server"]}],
+                parameters=[
+                    {
+                        "use_sim_time": True,
+                        "autostart": True,
+                        "node_names": ["map_server"],
+                    }
+                ],
                 output="screen",
             ),
             Node(
@@ -113,7 +126,9 @@ def generate_launch_description() -> LaunchDescription:
                 package="nav2_lifecycle_manager",
                 executable="lifecycle_manager",
                 name="lifecycle_manager_navigation",
-                parameters=[{"use_sim_time": True, "autostart": True, "node_names": nav2_nodes}],
+                parameters=[
+                    {"use_sim_time": True, "autostart": True, "node_names": nav2_nodes}
+                ],
                 output="screen",
             ),
         ]

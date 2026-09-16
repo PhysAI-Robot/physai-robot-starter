@@ -58,7 +58,8 @@ def load_sim_config(path: str | Path) -> SimulationConfig:
 
 
 def _parse_simulation_config(
-    data: dict[str, Any], source: Path | str,
+    data: dict[str, Any],
+    source: Path | str,
 ) -> SimulationConfig:
     seed = data.get("seed", 0)
     if not isinstance(seed, int) or isinstance(seed, bool):

@@ -79,11 +79,11 @@ adapters.
 ### Bridging Deliverables
 - [x] `src/physai/contracts.py`: Define canonical `ObservationSpec` and `ActionSpec` schemas covering names, shapes, dtypes, units, ranges, camera layout, and normalization metadata.
 - [x] `src/physai/data/gym_env.py`: Add a Gymnasium-compatible environment adapter for direct MuJoCo task training with seeded `reset()`, `step()`, spaces, `rgb_array` rendering, structured episode information, and the existing safety gate.
-- [ ] Make the canonical SO-101 action layout explicit and consistent across policies, recorder output, replay, ROS 2 conversion, and training datasets.
-- [ ] Version dataset metadata with robot, task, contract schema, simulator configuration, camera configuration, seed, and train/validation/test split information.
-- [ ] Add checkpoint metadata and compatibility validation for robot, task, observation schema, action schema, normalization, and training configuration.
-- [ ] Add shared evaluation reports for success, collision, timeout, unsafe action, reward, and held-out seed performance.
-- [ ] Add a smoke test that runs one episode through the training adapter and confirms that the resulting action still passes the existing safety and robot validation gates.
+- [x] Make the canonical SO-101 action layout explicit and consistent across policies, recorder output, replay, ROS 2 conversion, and training datasets.
+- [x] Version dataset metadata with robot, task, contract schema, simulator configuration, camera configuration, seed, and train/validation/test split information.
+- [x] Add checkpoint metadata and compatibility validation for robot, task, observation schema, action schema, normalization, and training configuration.
+- [x] Add shared evaluation reports for success, collision, timeout, unsafe action, reward, and held-out seed performance.
+- [x] Add a smoke test that runs one episode through the training adapter and confirms that the resulting action still passes the existing safety and robot validation gates.
 
 ### Bridge Completion Gate
 The Phase 2A visual-servoing baseline and all learned policies must consume the

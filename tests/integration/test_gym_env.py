@@ -1,6 +1,8 @@
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.integration
+
 from physai.contracts import (
     Action,
     ActionSpec,

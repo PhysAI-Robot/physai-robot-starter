@@ -6,10 +6,8 @@ def test_load_minimal_pick_place_config():
     from physai.robots.so101 import EnvConfig
     from physai.sim import PickPlaceMinimalSceneConfig
 
-    root = Path(__file__).resolve().parents[1]
-    config = load_task_config(
-        root / "configs" / "tasks" / "so101" / "pick_place.yaml"
-    )
+    root = Path(__file__).resolve().parents[2]
+    config = load_task_config(root / "configs" / "tasks" / "so101" / "pick_place.yaml")
 
     assert config.robot == "so101"
     assert config.task == "pick_place"
@@ -23,7 +21,7 @@ def test_load_minimal_pick_place_config():
 def test_load_sim_config_keeps_randomization_disabled():
     from physai.config import load_sim_config
 
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     config = load_sim_config(root / "configs" / "sim_config.yaml")
 
     assert config.seed == 0

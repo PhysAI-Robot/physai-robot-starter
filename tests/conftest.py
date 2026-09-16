@@ -7,7 +7,9 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-ASSETS = Path(__file__).resolve().parents[1] / "assets" / "so101" / "so101_new_calib.xml"
+ASSETS = (
+    Path(__file__).resolve().parents[1] / "assets" / "so101" / "so101_new_calib.xml"
+)
 
 requires_assets = pytest.mark.skipif(
     not ASSETS.exists(),

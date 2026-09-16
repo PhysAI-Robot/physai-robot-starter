@@ -58,7 +58,7 @@ class CartesianTargetService:
         try:
             result = self.kin.ik(
                 target.pose.position.as_array(),
-                q_init=joint_state.position[:len(self.robot_spec.action_joint_names)],
+                q_init=joint_state.position[: len(self.robot_spec.action_joint_names)],
                 target_quat_wxyz=target.pose.orientation.to_mujoco(),
             )
         except (KeyError, ValueError, np.linalg.LinAlgError) as exc:

@@ -6,6 +6,7 @@ import pytest
 
 
 rclpy = pytest.importorskip("rclpy")
+pytestmark = pytest.mark.ros2
 pytest.importorskip("geometry_msgs.msg")
 pytest.importorskip("nav_msgs.msg")
 pytest.importorskip("sensor_msgs.msg")
@@ -34,7 +35,9 @@ def test_real_ros2_cmd_vel_publishes_turtlebot_state_and_tf():
     published_tf = []
     published_scan = []
     published_collision_counts = []
-    node.create_subscription(JointState, "/joint_states", published_joint_states.append, 10)
+    node.create_subscription(
+        JointState, "/joint_states", published_joint_states.append, 10
+    )
     node.create_subscription(Odometry, "/odom", published_odom.append, 10)
     node.create_subscription(TFMessage, "/tf", published_tf.append, 10)
     node.create_subscription(LaserScan, "/scan", published_scan.append, 10)
@@ -64,9 +67,10 @@ def test_real_ros2_cmd_vel_publishes_turtlebot_state_and_tf():
         assert published_collision_counts
         assert published_joint_states[-1].name == ["left_wheel", "right_wheel"]
         assert published_odom[-1].child_frame_id == "base_link"
-        assert [(item.header.frame_id, item.child_frame_id) for item in published_tf[-1].transforms] == [
-            ("odom", "base_link")
-        ]
+        assert [
+            (item.header.frame_id, item.child_frame_id)
+            for item in published_tf[-1].transforms
+        ] == [("odom", "base_link")]
         assert published_scan[-1].header.frame_id == "base_link"
         assert len(published_scan[-1].ranges) == 360
         assert all(

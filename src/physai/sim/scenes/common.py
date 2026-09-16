@@ -82,7 +82,10 @@ def _pad_quats(cfg: ManipulationSceneConfig) -> dict[str, np.ndarray]:
     site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, cfg.ee_site)
     site_rotation = data.site_xmat[site_id].reshape(3, 3)
     quaternions: dict[str, np.ndarray] = {}
-    for key, body_name in (("static", cfg.static_pad_body), ("moving", cfg.moving_pad_body)):
+    for key, body_name in (
+        ("static", cfg.static_pad_body),
+        ("moving", cfg.moving_pad_body),
+    ):
         body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name)
         local_rotation = data.xmat[body_id].reshape(3, 3).T @ site_rotation
         quaternion = np.zeros(4)
@@ -131,14 +134,17 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
         reflectance=0.1,
     )
     world.add_light(
-        pos=[0, 0, 2.0], dir=[0, 0, -1],
+        pos=[0, 0, 2.0],
+        dir=[0, 0, -1],
         type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL,
         diffuse=[0.7, 0.7, 0.7],
     )
     world.add_light(
-        pos=[0.5, 0.5, 1.2], dir=[-0.4, -0.4, -1],
+        pos=[0.5, 0.5, 1.2],
+        dir=[-0.4, -0.4, -1],
         type=mujoco.mjtLightType.mjLIGHT_SPOT,
-        cutoff=60, exponent=10,
+        cutoff=60,
+        exponent=10,
         diffuse=[0.3, 0.3, 0.3],
     )
     world.add_geom(
@@ -201,10 +207,18 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
             group=3,
         )
 
-    add_pad(_find_body(spec, cfg.static_pad_body), cfg.static_pad_pos,
-            quaternions["static"], "pad_static")
-    add_pad(_find_body(spec, cfg.moving_pad_body), cfg.moving_pad_pos,
-            quaternions["moving"], "pad_moving")
+    add_pad(
+        _find_body(spec, cfg.static_pad_body),
+        cfg.static_pad_pos,
+        quaternions["static"],
+        "pad_static",
+    )
+    add_pad(
+        _find_body(spec, cfg.moving_pad_body),
+        cfg.moving_pad_pos,
+        quaternions["moving"],
+        "pad_moving",
+    )
 
     world.add_camera(
         name="front",
@@ -226,8 +240,15 @@ def build_common_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
     return build_manipulation_spec(cfg)
 
 
-def add_cube(spec: mujoco.MjSpec, cfg: WorldSceneConfig, name: str,
-             position, rgba, cube_half: float, cube_mass: float) -> None:
+def add_cube(
+    spec: mujoco.MjSpec,
+    cfg: WorldSceneConfig,
+    name: str,
+    position,
+    rgba,
+    cube_half: float,
+    cube_mass: float,
+) -> None:
     cube = spec.worldbody.add_body(name=name, pos=list(position))
     cube.add_freejoint(name=f"{name}_free")
     cube.add_geom(

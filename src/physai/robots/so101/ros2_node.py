@@ -19,7 +19,9 @@ from ...bridge.mujoco_ros_bridge import MuJoCoROSBridge, RclpyTransport
 from .env import EnvConfig, SO101Env
 
 
-def _quaternion_from_rotation(rotation: np.ndarray) -> tuple[float, float, float, float]:
+def _quaternion_from_rotation(
+    rotation: np.ndarray,
+) -> tuple[float, float, float, float]:
     trace = float(np.trace(rotation))
     if trace > 0.0:
         scale = math.sqrt(trace + 1.0) * 2.0
@@ -66,10 +68,13 @@ class SO101ROS2Node:
 
         self.node = node
         self.simulation = SO101Env(config or EnvConfig(render=True))
-        transport = RclpyTransport(node, {
-            "/arm_controller/joint_trajectory": JointTrajectory,
-            "/gripper_controller/gripper_cmd": GripperCommand,
-        })
+        transport = RclpyTransport(
+            node,
+            {
+                "/arm_controller/joint_trajectory": JointTrajectory,
+                "/gripper_controller/gripper_cmd": GripperCommand,
+            },
+        )
         codec = ROS2MessageCodec(JointState, Image)
         self.bridge = MuJoCoROSBridge(self.simulation, transport, codec=codec)
         self.cartesian_service = CartesianTargetService(
@@ -103,7 +108,20 @@ class SO101ROS2Node:
         message.d = [0.0] * 5
         message.k = [focal, 0.0, center_x, 0.0, focal, center_y, 0.0, 0.0, 1.0]
         message.r = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
-        message.p = [focal, 0.0, center_x, 0.0, 0.0, focal, center_y, 0.0, 0.0, 0.0, 1.0, 0.0]
+        message.p = [
+            focal,
+            0.0,
+            center_x,
+            0.0,
+            0.0,
+            focal,
+            center_y,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+        ]
         return message
 
     def _tf_message(self, observation: Any) -> Any:
@@ -119,24 +137,49 @@ class SO101ROS2Node:
             world_rotations[frame] = data.xmat[body_id].reshape(3, 3).copy()
         parent = "world"
         for child in frames:
-            transforms.append(self._transform(parent, child, world_positions, world_rotations, observation))
+            transforms.append(
+                self._transform(
+                    parent, child, world_positions, world_rotations, observation
+                )
+            )
             parent = child
         world_positions["gripper_frame"] = world_positions["gripper"]
         world_rotations["gripper_frame"] = world_rotations["gripper"]
-        transforms.append(self._transform("gripper", "gripper_frame", world_positions, world_rotations, observation))
+        transforms.append(
+            self._transform(
+                "gripper",
+                "gripper_frame",
+                world_positions,
+                world_rotations,
+                observation,
+            )
+        )
         for camera_name, frame_name, parent in (
             ("front", "camera_front", "world"),
             ("wrist", "camera_wrist", "gripper_frame"),
         ):
-            camera_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, camera_name)
+            camera_id = mujoco.mj_name2id(
+                model, mujoco.mjtObj.mjOBJ_CAMERA, camera_name
+            )
             world_positions[frame_name] = data.cam_xpos[camera_id].copy()
             world_rotations[frame_name] = data.cam_xmat[camera_id].reshape(3, 3).copy()
-            transforms.append(self._transform(parent, frame_name, world_positions, world_rotations, observation))
+            transforms.append(
+                self._transform(
+                    parent, frame_name, world_positions, world_rotations, observation
+                )
+            )
         message = self._tf_message_type()
         message.transforms = transforms
         return message
 
-    def _transform(self, parent: str, child: str, positions: dict[str, np.ndarray], rotations: dict[str, np.ndarray], observation: Any) -> Any:
+    def _transform(
+        self,
+        parent: str,
+        child: str,
+        positions: dict[str, np.ndarray],
+        rotations: dict[str, np.ndarray],
+        observation: Any,
+    ) -> Any:
         parent_rotation = rotations[parent]
         translation = parent_rotation.T @ (positions[child] - positions[parent])
         rotation = parent_rotation.T @ rotations[child]

@@ -24,8 +24,12 @@ from physai.tasks import TaskRuntime, create_task
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--robot", default="so101", choices=["so101"],
-                    help="collect_demos currently supports the SO-101 manipulation workflow")
+    ap.add_argument(
+        "--robot",
+        default="so101",
+        choices=["so101"],
+        help="collect_demos currently supports the SO-101 manipulation workflow",
+    )
     ap.add_argument("--episodes", type=int, default=20)
     ap.add_argument("--out", type=Path, default=Path("data/pickplace_v1"))
     ap.add_argument("--seed", type=int, default=0)
@@ -33,31 +37,60 @@ def main() -> int:
     ap.add_argument("--width", type=int, default=224)
     ap.add_argument("--height", type=int, default=224)
     ap.add_argument("--keep-failures", action="store_true")
-    ap.add_argument("--no-images", action="store_true",
-                    help="record state/action only (much smaller files)")
+    ap.add_argument(
+        "--no-images",
+        action="store_true",
+        help="record state/action only (much smaller files)",
+    )
     ap.add_argument("--task", default="put the red cube on the green pad")
-    ap.add_argument("--sorting", action="store_true",
-                    help="3-cube color sorting variant. --task becomes a "
-                         "per-episode instruction naming the randomly chosen "
-                         "target color, e.g. 'put the blue cube on the green pad'.")
+    ap.add_argument(
+        "--sorting",
+        action="store_true",
+        help="3-cube color sorting variant. --task becomes a "
+        "per-episode instruction naming the randomly chosen "
+        "target color, e.g. 'put the blue cube on the green pad'.",
+    )
     args = ap.parse_args()
 
     scene_kwargs = {"camera_width": args.width, "camera_height": args.height}
-    env_kwargs = {"seed": args.seed, "max_steps": args.max_steps, "render": not args.no_images}
+    env_kwargs = {
+        "seed": args.seed,
+        "max_steps": args.max_steps,
+        "render": not args.no_images,
+    }
     if args.sorting:
         # Task selection moved onto TaskRuntime below; EnvConfig no longer
         # carries a `task` field, so setting one here raised a TypeError and
         # made --sorting unusable.
         scene_kwargs["num_cubes"] = 3
-    robot = create_robot(args.robot, config=EnvConfig(
-        scene=SceneConfig(**scene_kwargs), **env_kwargs,
-    ))
+    robot = create_robot(
+        args.robot,
+        config=EnvConfig(
+            scene=SceneConfig(**scene_kwargs),
+            **env_kwargs,
+        ),
+    )
     env = TaskRuntime(
         robot,
         create_task("sorting" if args.sorting else "pick_place"),
     )
-    rec = EpisodeRecorder(args.out, task=args.task, fps=env.cfg.control_hz,
-                          store_images=not args.no_images)
+    rec = EpisodeRecorder(
+        args.out,
+        task=args.task,
+        fps=env.cfg.control_hz,
+        store_images=not args.no_images,
+        robot_spec=robot.robot_spec,
+        simulator_config={
+            "control_hz": env.cfg.control_hz,
+            "max_steps": env.cfg.max_steps,
+            "randomize_cube": env.cfg.randomize_cube,
+            "randomize_target": env.cfg.randomize_target,
+        },
+        camera_config={
+            name: {"width": args.width, "height": args.height, "encoding": "rgb8"}
+            for name in env.cfg.cameras
+        },
+    )
 
     attempted = kept = 0
     while kept < args.episodes:
@@ -76,9 +109,14 @@ def main() -> int:
             grip_rad = env.gripper_to_joint(action.gripper.clipped())
             prev_obs = obs
             obs, reward, terminated, truncated, info = env.step(action)
-            rec.record(prev_obs, action, reward=reward,
-                       done=terminated or truncated, phase=policy.phase.name,
-                       gripper_joint=grip_rad)
+            rec.record(
+                prev_obs,
+                action,
+                reward=reward,
+                done=terminated or truncated,
+                phase=policy.phase.name,
+                gripper_joint=grip_rad,
+            )
             if terminated or truncated:
                 break
 
@@ -86,7 +124,9 @@ def main() -> int:
         if success or args.keep_failures:
             path = rec.end_episode(success, extra={"seed": seed})
             kept += 1
-            print(f"[{kept}/{args.episodes}] seed={seed} success={success} -> {path.name}")
+            print(
+                f"[{kept}/{args.episodes}] seed={seed} success={success} -> {path.name}"
+            )
         else:
             rec.end_episode(False)
             rec.episodes.pop()

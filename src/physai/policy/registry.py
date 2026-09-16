@@ -81,4 +81,5 @@ def _make_replay(*, env, actions, **kwargs: Any) -> Policy:
 
 def _make_lerobot(*, env, checkpoint, **kwargs: Any) -> Policy:
     from .vla_adapter import LeRobotPolicy
+
     return LeRobotPolicy.from_checkpoint(env, checkpoint, **kwargs)

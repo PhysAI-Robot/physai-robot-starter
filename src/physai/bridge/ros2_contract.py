@@ -36,61 +36,148 @@ class Endpoint:
 
 #: Node that wraps MuJoCo or a future real SO-101 hardware follower.
 ROBOT_ENDPOINTS: tuple[Endpoint, ...] = (
-    Endpoint("/joint_states", "sensor_msgs/msg/JointState",
-             Direction.PUBLISH, 25.0, "so101_driver",
-             "5 arm joints + gripper, radians"),
-    Endpoint("/camera/front/image_raw", "sensor_msgs/msg/Image",
-             Direction.PUBLISH, 25.0, "so101_driver", "rgb8"),
-    Endpoint("/camera/wrist/image_raw", "sensor_msgs/msg/Image",
-             Direction.PUBLISH, 25.0, "so101_driver", "rgb8"),
-    Endpoint("/camera/front/camera_info", "sensor_msgs/msg/CameraInfo",
-             Direction.PUBLISH, 25.0, "so101_driver"),
-    Endpoint("/camera/wrist/camera_info", "sensor_msgs/msg/CameraInfo",
-             Direction.PUBLISH, 25.0, "so101_driver"),
-    Endpoint("/tf", "tf2_msgs/msg/TFMessage",
-             Direction.PUBLISH, 25.0, "so101_driver"),
-    Endpoint("/arm_controller/joint_trajectory",
-             "trajectory_msgs/msg/JointTrajectory",
-             Direction.SUBSCRIBE, 25.0, "so101_driver",
-             "absolute joint targets; what the VLA emits"),
-    Endpoint("/gripper_controller/gripper_cmd",
-             "control_msgs/msg/GripperCommand",
-             Direction.SUBSCRIBE, 25.0, "so101_driver",
-             "normalised aperture 0..1"),
-    Endpoint("/cmd_vel", "geometry_msgs/msg/Twist",
-             Direction.SUBSCRIBE, 10.0, "turtlebot4_driver",
-             "base-frame linear and angular velocity"),
-    Endpoint("/odom", "nav_msgs/msg/Odometry",
-             Direction.PUBLISH, 10.0, "turtlebot4_driver",
-             "odom to base_link pose and twist"),
-    Endpoint("/tf", "tf2_msgs/msg/TFMessage",
-             Direction.PUBLISH, 10.0, "turtlebot4_driver",
-             "odom to base_link"),
+    Endpoint(
+        "/joint_states",
+        "sensor_msgs/msg/JointState",
+        Direction.PUBLISH,
+        25.0,
+        "so101_driver",
+        "5 arm joints + gripper, radians",
+    ),
+    Endpoint(
+        "/camera/front/image_raw",
+        "sensor_msgs/msg/Image",
+        Direction.PUBLISH,
+        25.0,
+        "so101_driver",
+        "rgb8",
+    ),
+    Endpoint(
+        "/camera/wrist/image_raw",
+        "sensor_msgs/msg/Image",
+        Direction.PUBLISH,
+        25.0,
+        "so101_driver",
+        "rgb8",
+    ),
+    Endpoint(
+        "/camera/front/camera_info",
+        "sensor_msgs/msg/CameraInfo",
+        Direction.PUBLISH,
+        25.0,
+        "so101_driver",
+    ),
+    Endpoint(
+        "/camera/wrist/camera_info",
+        "sensor_msgs/msg/CameraInfo",
+        Direction.PUBLISH,
+        25.0,
+        "so101_driver",
+    ),
+    Endpoint("/tf", "tf2_msgs/msg/TFMessage", Direction.PUBLISH, 25.0, "so101_driver"),
+    Endpoint(
+        "/arm_controller/joint_trajectory",
+        "trajectory_msgs/msg/JointTrajectory",
+        Direction.SUBSCRIBE,
+        25.0,
+        "so101_driver",
+        "absolute joint targets; what the VLA emits",
+    ),
+    Endpoint(
+        "/gripper_controller/gripper_cmd",
+        "control_msgs/msg/GripperCommand",
+        Direction.SUBSCRIBE,
+        25.0,
+        "so101_driver",
+        "normalised aperture 0..1",
+    ),
+    Endpoint(
+        "/cmd_vel",
+        "geometry_msgs/msg/Twist",
+        Direction.SUBSCRIBE,
+        10.0,
+        "turtlebot4_driver",
+        "base-frame linear and angular velocity",
+    ),
+    Endpoint(
+        "/odom",
+        "nav_msgs/msg/Odometry",
+        Direction.PUBLISH,
+        10.0,
+        "turtlebot4_driver",
+        "odom to base_link pose and twist",
+    ),
+    Endpoint(
+        "/tf",
+        "tf2_msgs/msg/TFMessage",
+        Direction.PUBLISH,
+        10.0,
+        "turtlebot4_driver",
+        "odom to base_link",
+    ),
 )
 
 #: Node that runs the VLA policy at the control rate.
 POLICY_ENDPOINTS: tuple[Endpoint, ...] = (
-    Endpoint("/joint_states", "sensor_msgs/msg/JointState",
-             Direction.SUBSCRIBE, 100.0, "vla_policy"),
-    Endpoint("/camera/front/image_raw", "sensor_msgs/msg/Image",
-             Direction.SUBSCRIBE, 30.0, "vla_policy"),
-    Endpoint("/camera/wrist/image_raw", "sensor_msgs/msg/Image",
-             Direction.SUBSCRIBE, 30.0, "vla_policy"),
-    Endpoint("/task/subgoal", "geometry_msgs/msg/PoseStamped",
-             Direction.SUBSCRIBE, 1.0, "vla_policy",
-             "current waypoint from the planner"),
-    Endpoint("/task/instruction", "std_msgs/msg/String",
-             Direction.SUBSCRIBE, 0.1, "vla_policy",
-             "language conditioning for the VLA"),
-    Endpoint("/arm_controller/joint_trajectory",
-             "trajectory_msgs/msg/JointTrajectory",
-             Direction.PUBLISH, 25.0, "vla_policy"),
-    Endpoint("/gripper_controller/gripper_cmd",
-             "control_msgs/msg/GripperCommand",
-             Direction.PUBLISH, 25.0, "vla_policy"),
-    Endpoint("/cmd_vel_ee", "geometry_msgs/msg/Twist",
-             Direction.PUBLISH, 25.0, "vla_policy",
-             "alternative Cartesian path; needs a servo node downstream"),
+    Endpoint(
+        "/joint_states",
+        "sensor_msgs/msg/JointState",
+        Direction.SUBSCRIBE,
+        100.0,
+        "vla_policy",
+    ),
+    Endpoint(
+        "/camera/front/image_raw",
+        "sensor_msgs/msg/Image",
+        Direction.SUBSCRIBE,
+        30.0,
+        "vla_policy",
+    ),
+    Endpoint(
+        "/camera/wrist/image_raw",
+        "sensor_msgs/msg/Image",
+        Direction.SUBSCRIBE,
+        30.0,
+        "vla_policy",
+    ),
+    Endpoint(
+        "/task/subgoal",
+        "geometry_msgs/msg/PoseStamped",
+        Direction.SUBSCRIBE,
+        1.0,
+        "vla_policy",
+        "current waypoint from the planner",
+    ),
+    Endpoint(
+        "/task/instruction",
+        "std_msgs/msg/String",
+        Direction.SUBSCRIBE,
+        0.1,
+        "vla_policy",
+        "language conditioning for the VLA",
+    ),
+    Endpoint(
+        "/arm_controller/joint_trajectory",
+        "trajectory_msgs/msg/JointTrajectory",
+        Direction.PUBLISH,
+        25.0,
+        "vla_policy",
+    ),
+    Endpoint(
+        "/gripper_controller/gripper_cmd",
+        "control_msgs/msg/GripperCommand",
+        Direction.PUBLISH,
+        25.0,
+        "vla_policy",
+    ),
+    Endpoint(
+        "/cmd_vel_ee",
+        "geometry_msgs/msg/Twist",
+        Direction.PUBLISH,
+        25.0,
+        "vla_policy",
+        "alternative Cartesian path; needs a servo node downstream",
+    ),
 )
 
 #: Topics fed from outside the robot stack (an operator UI, a bag, a test
@@ -99,22 +186,52 @@ EXTERNAL_INPUTS: frozenset[str] = frozenset({"/cmd_vel", "/task/instruction"})
 
 #: Node that runs the VLM planner. Slow, and allowed to be.
 PLANNER_ENDPOINTS: tuple[Endpoint, ...] = (
-    Endpoint("/camera/front/image_raw", "sensor_msgs/msg/Image",
-             Direction.SUBSCRIBE, 1.0, "vlm_planner", "sampled, not streamed"),
-    Endpoint("/task/instruction", "std_msgs/msg/String",
-             Direction.SUBSCRIBE, 0.1, "vlm_planner"),
-    Endpoint("/task/subgoal", "geometry_msgs/msg/PoseStamped",
-             Direction.PUBLISH, 0.2, "vlm_planner"),
-    Endpoint("/task/plan", "std_msgs/msg/String",
-             Direction.PUBLISH, 0.2, "vlm_planner", "JSON plan, for logging/debug"),
+    Endpoint(
+        "/camera/front/image_raw",
+        "sensor_msgs/msg/Image",
+        Direction.SUBSCRIBE,
+        1.0,
+        "vlm_planner",
+        "sampled, not streamed",
+    ),
+    Endpoint(
+        "/task/instruction",
+        "std_msgs/msg/String",
+        Direction.SUBSCRIBE,
+        0.1,
+        "vlm_planner",
+    ),
+    Endpoint(
+        "/task/subgoal",
+        "geometry_msgs/msg/PoseStamped",
+        Direction.PUBLISH,
+        0.2,
+        "vlm_planner",
+    ),
+    Endpoint(
+        "/task/plan",
+        "std_msgs/msg/String",
+        Direction.PUBLISH,
+        0.2,
+        "vlm_planner",
+        "JSON plan, for logging/debug",
+    ),
 )
 
 ALL_ENDPOINTS = ROBOT_ENDPOINTS + POLICY_ENDPOINTS + PLANNER_ENDPOINTS
 
 #: Frames, in the order they should appear in the TF tree.
 TF_FRAMES: tuple[str, ...] = (
-    "world", "base", "shoulder", "upper_arm", "lower_arm", "wrist",
-    "gripper", "gripper_frame", "camera_front", "camera_wrist",
+    "world",
+    "base",
+    "shoulder",
+    "upper_arm",
+    "lower_arm",
+    "wrist",
+    "gripper",
+    "gripper_frame",
+    "camera_front",
+    "camera_wrist",
 )
 
 TURTLEBOT_TF_FRAMES: tuple[str, ...] = ("odom", "base_link")
@@ -130,7 +247,9 @@ def describe() -> str:
             if e.owner != owner:
                 continue
             arrow = "->" if e.direction is Direction.PUBLISH else "<-"
-            lines.append(f"  {arrow} {e.topic:42s} {e.msg_type:44s} {e.rate_hz:6.1f} Hz")
+            lines.append(
+                f"  {arrow} {e.topic:42s} {e.msg_type:44s} {e.rate_hz:6.1f} Hz"
+            )
             if e.note:
                 lines.append(f"       {e.note}")
         lines.append("")

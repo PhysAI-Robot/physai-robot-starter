@@ -20,8 +20,9 @@ from physai.robots.turtlebot.navigation import Nav2AcceptanceResult
 
 
 class NavigateToPoseClient(Node):
-    def __init__(self, robot: str, action_name: str, odom_topic: str,
-                 collision_topic: str) -> None:
+    def __init__(
+        self, robot: str, action_name: str, odom_topic: str, collision_topic: str
+    ) -> None:
         super().__init__(f"{robot}_navigation_client")
         self.client = ActionClient(self, NavigateToPose, action_name)
         self.latest_odom: Odometry | None = None
@@ -45,9 +46,13 @@ class NavigateToPoseClient(Node):
     def _receive_collision_count(self, message: UInt32) -> None:
         self.latest_collision_count = int(message.data)
 
-    def send_goal(self, x: float, y: float, yaw: float, max_position_error: float) -> int:
+    def send_goal(
+        self, x: float, y: float, yaw: float, max_position_error: float
+    ) -> int:
         if not self.client.wait_for_server(timeout_sec=10.0):
-            self.report = Nav2AcceptanceResult(None, False, False, None, None, "action_server_unavailable")
+            self.report = Nav2AcceptanceResult(
+                None, False, False, None, None, "action_server_unavailable"
+            )
             self.get_logger().error("NavigateToPose action server is unavailable")
             return 2
 
@@ -64,7 +69,9 @@ class NavigateToPoseClient(Node):
         rclpy.spin_until_future_complete(self, send_future)
         goal_handle = send_future.result()
         if goal_handle is None or not goal_handle.accepted:
-            self.report = Nav2AcceptanceResult(None, False, False, None, None, "goal_rejected")
+            self.report = Nav2AcceptanceResult(
+                None, False, False, None, None, "goal_rejected"
+            )
             self.get_logger().error("NavigateToPose goal was rejected")
             return 3
 
@@ -72,12 +79,21 @@ class NavigateToPoseClient(Node):
         result_future = goal_handle.get_result_async()
         rclpy.spin_until_future_complete(self, result_future, timeout_sec=120.0)
         if not result_future.done():
-            self.report = Nav2AcceptanceResult(None, True, True, None, self.latest_collision_count, "action_timeout")
+            self.report = Nav2AcceptanceResult(
+                None, True, True, None, self.latest_collision_count, "action_timeout"
+            )
             self.get_logger().error("NavigateToPose timed out")
             return 6
         result = result_future.result()
         if result is None:
-            self.report = Nav2AcceptanceResult(None, True, False, None, self.latest_collision_count, "missing_action_result")
+            self.report = Nav2AcceptanceResult(
+                None,
+                True,
+                False,
+                None,
+                self.latest_collision_count,
+                "missing_action_result",
+            )
             self.get_logger().error("NavigateToPose returned no result")
             return 4
 
@@ -86,7 +102,14 @@ class NavigateToPoseClient(Node):
         while self.latest_odom is None and time.monotonic() < deadline:
             rclpy.spin_once(self, timeout_sec=0.1)
         if self.latest_odom is None:
-            self.report = Nav2AcceptanceResult(result.status, True, False, None, self.latest_collision_count, "missing_final_odometry")
+            self.report = Nav2AcceptanceResult(
+                result.status,
+                True,
+                False,
+                None,
+                self.latest_collision_count,
+                "missing_final_odometry",
+            )
             self.get_logger().error("No final odometry message received")
             return 7
         position = self.latest_odom.pose.pose.position
@@ -98,7 +121,9 @@ class NavigateToPoseClient(Node):
         collision_count = self.latest_collision_count
         self.get_logger().info(f"MuJoCo non-ground collision count: {collision_count}")
         if collision_count is None:
-            self.report = Nav2AcceptanceResult(result.status, True, False, error, None, "missing_collision_telemetry")
+            self.report = Nav2AcceptanceResult(
+                result.status, True, False, error, None, "missing_collision_telemetry"
+            )
             self.get_logger().error("No MuJoCo collision count message received")
             return 9
         failure_reason = None

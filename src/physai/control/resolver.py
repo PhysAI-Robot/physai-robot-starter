@@ -74,7 +74,9 @@ class WaypointResolver:
             q_init=q_now,
         )
         q = self.limiter(res.qpos) if self.limiter else res.qpos
-        return Action(joint_position=q, gripper=gripper or GripperCommand()), res.position_error
+        return Action(
+            joint_position=q, gripper=gripper or GripperCommand()
+        ), res.position_error
 
 
 class TwistToJointResolver:
@@ -110,8 +112,8 @@ class TwistToJointResolver:
         gripper: GripperCommand | None = None,
     ) -> Action:
         J = self.kin.site_jacobian(self._state_provider())
-        v = twist.as_array()                           # (6,)
-        JJt = J @ J.T + (self.damping ** 2) * np.eye(6)
+        v = twist.as_array()  # (6,)
+        JJt = J @ J.T + (self.damping**2) * np.eye(6)
         dq = J.T @ np.linalg.solve(JJt, v) * self.dt
         dq = np.clip(dq, -self.max_joint_step, self.max_joint_step)
         q = self.kin.clip_to_limits(joint_state.position[:5] + dq)

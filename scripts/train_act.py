@@ -25,6 +25,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from physai.policy.act_dataset import ACTEpisodeDataset
+from physai.data import CheckpointMetadata
 
 
 def main() -> int:
@@ -47,11 +48,16 @@ def main() -> int:
 
     meta = json.loads((args.dataset / "meta.json").read_text(encoding="utf-8"))
     task = meta["task"]
-    print(f"dataset: {args.dataset}  episodes: {meta['num_episodes']}  "
-          f"task: {task!r}  device: {args.device}")
+    print(
+        f"dataset: {args.dataset}  episodes: {meta['num_episodes']}  "
+        f"task: {task!r}  device: {args.device}"
+    )
 
     train_set = ACTEpisodeDataset(
-        args.dataset, chunk_size=args.chunk_size, image_size=args.image_size, task=task,
+        args.dataset,
+        chunk_size=args.chunk_size,
+        image_size=args.image_size,
+        task=task,
     )
     print(f"{len(train_set)} (timestep) training samples")
 
@@ -60,15 +66,49 @@ def main() -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     stats.to_json(args.out / "dataset_stats.json")
 
+    action_schema = meta.get("action_schema", meta["features"]["action"])
+    checkpoint_meta = CheckpointMetadata(
+        robot=meta.get("robot", meta.get("robot_type", "unknown")),
+        task=task,
+        observation_schema=meta.get(
+            "observation_schema",
+            {
+                "observation.state": meta["features"]["observation.state"],
+            },
+        ),
+        action_schema=action_schema,
+        normalization=stats.per_key,
+        training_config={
+            "algorithm": "act",
+            "chunk_size": args.chunk_size,
+            "image_size": args.image_size,
+            "steps": args.steps,
+            "batch_size": args.batch_size,
+            "lr": args.lr,
+            "device": args.device,
+        },
+    )
+    (args.out / "checkpoint_meta.json").write_text(
+        json.dumps(checkpoint_meta.to_dict(), indent=2), encoding="utf-8"
+    )
+
     loader = DataLoader(
-        train_set, batch_size=args.batch_size, shuffle=True,
-        num_workers=args.num_workers, drop_last=True, persistent_workers=args.num_workers > 0,
+        train_set,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=args.num_workers,
+        drop_last=True,
+        persistent_workers=args.num_workers > 0,
     )
 
     H = W = args.image_size
     input_features = {
-        "observation.images.front": PolicyFeature(type=FeatureType.VISUAL, shape=(3, H, W)),
-        "observation.images.wrist": PolicyFeature(type=FeatureType.VISUAL, shape=(3, H, W)),
+        "observation.images.front": PolicyFeature(
+            type=FeatureType.VISUAL, shape=(3, H, W)
+        ),
+        "observation.images.wrist": PolicyFeature(
+            type=FeatureType.VISUAL, shape=(3, H, W)
+        ),
         "observation.state": PolicyFeature(type=FeatureType.STATE, shape=(6,)),
     }
     output_features = {"action": PolicyFeature(type=FeatureType.ACTION, shape=(6,))}
@@ -94,19 +134,32 @@ def main() -> int:
         e["seed"] for e in meta.get("episodes", []) if e.get("seed") is not None
     )
     with (args.out / "training_meta.json").open("w", encoding="utf-8") as f:
-        json.dump({
-            "chunk_size": args.chunk_size, "image_size": args.image_size,
-            "task": task, "steps": args.steps, "batch_size": args.batch_size,
-            "lr": args.lr, "device": args.device,
-            "dataset": str(args.dataset), "train_seeds": train_seeds,
-        }, f, indent=2)
+        json.dump(
+            {
+                "chunk_size": args.chunk_size,
+                "image_size": args.image_size,
+                "task": task,
+                "steps": args.steps,
+                "batch_size": args.batch_size,
+                "lr": args.lr,
+                "device": args.device,
+                "dataset": str(args.dataset),
+                "train_seeds": train_seeds,
+            },
+            f,
+            indent=2,
+        )
 
-    preprocessor, postprocessor = make_act_pre_post_processors(cfg, dataset_stats=stats.per_key)
+    preprocessor, postprocessor = make_act_pre_post_processors(
+        cfg, dataset_stats=stats.per_key
+    )
     policy = ACTPolicy(cfg).to(args.device)
     policy.train()
 
     optimizer = torch.optim.AdamW(
-        policy.parameters(), lr=cfg.optimizer_lr, weight_decay=cfg.optimizer_weight_decay,
+        policy.parameters(),
+        lr=cfg.optimizer_lr,
+        weight_decay=cfg.optimizer_weight_decay,
     )
 
     history: list[dict] = []
@@ -131,11 +184,17 @@ def main() -> int:
         step += 1
         if step % args.log_every == 0 or step == 1:
             elapsed = time.time() - t0
-            entry = {"step": step, "loss": loss.item(), **loss_dict,
-                     "elapsed_s": round(elapsed, 1)}
+            entry = {
+                "step": step,
+                "loss": loss.item(),
+                **loss_dict,
+                "elapsed_s": round(elapsed, 1),
+            }
             history.append(entry)
-            print(f"step {step:5d}/{args.steps}  loss={loss.item():.4f}  "
-                  f"{loss_dict}  ({elapsed:.0f}s)")
+            print(
+                f"step {step:5d}/{args.steps}  loss={loss.item():.4f}  "
+                f"{loss_dict}  ({elapsed:.0f}s)"
+            )
 
         if step % args.save_every == 0 or step == args.steps:
             # Only the policy weights round-trip through save/from_pretrained
@@ -146,10 +205,14 @@ def main() -> int:
             # the pipeline objects themselves.
             policy.save_pretrained(args.out)
 
-    (args.out / "training_log.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
+    (args.out / "training_log.json").write_text(
+        json.dumps(history, indent=2), encoding="utf-8"
+    )
     total_time = time.time() - t0
-    print(f"\ndone: {args.steps} steps in {total_time:.0f}s "
-          f"({args.steps / total_time:.2f} steps/s)")
+    print(
+        f"\ndone: {args.steps} steps in {total_time:.0f}s "
+        f"({args.steps / total_time:.2f} steps/s)"
+    )
     print(f"checkpoint -> {args.out}")
     return 0
 

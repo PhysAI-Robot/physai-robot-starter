@@ -194,16 +194,16 @@ class SO101Env(MuJoCoSimulationCore):
                 else:
                     position[0] = self.cfg.scene.cube_pos[0]
                     position[1] = (y_lo + y_hi) / 2
-                self.data.qpos[qadr:qadr + 3] = position
-                self.data.qpos[qadr + 3:qadr + 7] = [1, 0, 0, 0]
+                self.data.qpos[qadr : qadr + 3] = position
+                self.data.qpos[qadr + 3 : qadr + 7] = [1, 0, 0, 0]
             self.target_color = self.rng.choice(list(self.sorting_cubes.keys()))
         else:
             cube_pos = np.array(self.cfg.scene.cube_pos, dtype=np.float64)
             if self.cfg.randomize_cube:
                 cube_pos[0] = self.rng.uniform(*self.cfg.cube_x_range)
                 cube_pos[1] = self.rng.uniform(*self.cfg.cube_y_range)
-            self.data.qpos[self.cube_qadr:self.cube_qadr + 3] = cube_pos
-            self.data.qpos[self.cube_qadr + 3:self.cube_qadr + 7] = [1, 0, 0, 0]
+            self.data.qpos[self.cube_qadr : self.cube_qadr + 3] = cube_pos
+            self.data.qpos[self.cube_qadr + 3 : self.cube_qadr + 7] = [1, 0, 0, 0]
 
         if self.cfg.randomize_target:
             target_pos = self.model.site_pos[self.target_sid].copy()
@@ -220,12 +220,15 @@ class SO101Env(MuJoCoSimulationCore):
         ]
         if self.sorting_cubes:
             protected_xy.extend(
-                tuple(float(value) for value in self.data.qpos[qadr:qadr + 2])
+                tuple(float(value) for value in self.data.qpos[qadr : qadr + 2])
                 for _, qadr in self.sorting_cubes.values()
             )
         else:
             protected_xy.append(
-                tuple(float(value) for value in self.data.qpos[self.cube_qadr:self.cube_qadr + 2])
+                tuple(
+                    float(value)
+                    for value in self.data.qpos[self.cube_qadr : self.cube_qadr + 2]
+                )
             )
         self.randomization_metadata = self.randomization.apply(
             self.rng,
@@ -273,18 +276,24 @@ class SO101Env(MuJoCoSimulationCore):
         super().close()
 
     def joint_state(self) -> JointState:
-        position = np.concatenate([
-            self.data.qpos[self.arm_qadr],
-            [self.data.qpos[self.grip_qadr]],
-        ])
-        velocity = np.concatenate([
-            self.data.qvel[self.arm_vadr],
-            [self.data.qvel[self.grip_vadr]],
-        ])
-        effort = np.concatenate([
-            self.data.actuator_force[self.arm_act_ids],
-            [self.data.actuator_force[self.grip_act_id]],
-        ])
+        position = np.concatenate(
+            [
+                self.data.qpos[self.arm_qadr],
+                [self.data.qpos[self.grip_qadr]],
+            ]
+        )
+        velocity = np.concatenate(
+            [
+                self.data.qvel[self.arm_vadr],
+                [self.data.qvel[self.grip_vadr]],
+            ]
+        )
+        effort = np.concatenate(
+            [
+                self.data.actuator_force[self.arm_act_ids],
+                [self.data.actuator_force[self.grip_act_id]],
+            ]
+        )
         return JointState(
             name=ALL_JOINT_NAMES,
             position=position,

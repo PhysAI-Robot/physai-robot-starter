@@ -16,7 +16,7 @@ from pathlib import Path
 import _bootstrap  # noqa: F401
 import numpy as np
 
-from physai.data import load_episode
+from physai.data import EvaluationReport, load_episode
 from physai.policy import available_policies, create_policy
 from physai.robots import available_robots, create_robot
 from physai.robots.so101 import EnvConfig
@@ -26,23 +26,39 @@ from physai.tasks import TaskRuntime, create_task
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--robot", default="so101", choices=["so101"],
-                    help="eval_policy currently supports the SO-101 manipulation workflow")
+    ap.add_argument(
+        "--robot",
+        default="so101",
+        choices=["so101"],
+        help="eval_policy currently supports the SO-101 manipulation workflow",
+    )
     ap.add_argument("--policy", default="scripted", choices=available_policies())
     ap.add_argument("--episodes", type=int, default=20)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--max-steps", type=int, default=600)
     ap.add_argument("--dataset", type=Path, help="required for --policy replay")
     ap.add_argument("--checkpoint", type=Path, help="required for --policy lerobot")
-    ap.add_argument("--camera-size", type=int, default=224,
-                    help="env camera render resolution (downscaled to the "
-                         "checkpoint's training size internally)")
-    ap.add_argument("--render", action="store_true",
-                    help="render cameras (slower; needed for image-conditioned policies)")
-    ap.add_argument("--sorting", action="store_true",
-                    help="evaluate the three-cube sorting task instead of pick-and-place, "
-                         "matching `collect_demos.py --sorting`")
-    ap.add_argument("--json-out", type=Path, help="write full per-episode results as JSON")
+    ap.add_argument(
+        "--camera-size",
+        type=int,
+        default=224,
+        help="env camera render resolution (downscaled to the "
+        "checkpoint's training size internally)",
+    )
+    ap.add_argument(
+        "--render",
+        action="store_true",
+        help="render cameras (slower; needed for image-conditioned policies)",
+    )
+    ap.add_argument(
+        "--sorting",
+        action="store_true",
+        help="evaluate the three-cube sorting task instead of pick-and-place, "
+        "matching `collect_demos.py --sorting`",
+    )
+    ap.add_argument(
+        "--json-out", type=Path, help="write full per-episode results as JSON"
+    )
     args = ap.parse_args()
 
     # An image-conditioned policy cannot run without rendered cameras, and it
@@ -93,15 +109,20 @@ def main() -> int:
         meta_path = args.checkpoint / "training_meta.json"
         if meta_path.exists():
             train_seeds = set(
-                json.loads(meta_path.read_text(encoding="utf-8")).get("train_seeds") or []
+                json.loads(meta_path.read_text(encoding="utf-8")).get("train_seeds")
+                or []
             )
-            overlap = sorted(train_seeds & set(range(args.seed, args.seed + args.episodes)))
+            overlap = sorted(
+                train_seeds & set(range(args.seed, args.seed + args.episodes))
+            )
             if overlap:
-                print(f"WARNING: {len(overlap)}/{args.episodes} evaluation seeds were in "
-                      f"this checkpoint's training set {overlap[:8]}"
-                      f"{'...' if len(overlap) > 8 else ''}\n"
-                      f"         This measures memorisation, not generalisation. "
-                      f"Pick a --seed beyond {max(train_seeds)}.")
+                print(
+                    f"WARNING: {len(overlap)}/{args.episodes} evaluation seeds were in "
+                    f"this checkpoint's training set {overlap[:8]}"
+                    f"{'...' if len(overlap) > 8 else ''}\n"
+                    f"         This measures memorisation, not generalisation. "
+                    f"Pick a --seed beyond {max(train_seeds)}."
+                )
 
     # Built once outside the loop where possible — reloading the checkpoint
     # from disk per episode would dominate wall-clock time for no reason.
@@ -114,6 +135,16 @@ def main() -> int:
         )
 
     results = []
+    train_seeds: set[int] = set()
+    if args.policy == "lerobot" and args.checkpoint:
+        import json
+
+        meta_path = args.checkpoint / "training_meta.json"
+        if meta_path.exists():
+            train_seeds = set(
+                json.loads(meta_path.read_text(encoding="utf-8")).get("train_seeds")
+                or []
+            )
     for ep in range(args.episodes):
         if args.policy == "replay":
             entry = episodes[ep % len(episodes)]
@@ -133,43 +164,62 @@ def main() -> int:
             if terminated or truncated:
                 break
 
-        results.append({
-            "seed": seed,
-            "success": bool(info.get("success")),
-            "steps": env.step_count,
-            "return": total,
-            "dist_cube_target": info["dist_cube_target"],
-            # Which cube the episode asked for, so a per-color breakdown is
-            # possible after the fact. ACT never receives this.
-            **({"target_color": info["target_color"]} if args.sorting else {}),
-        })
-        print(f"ep {ep:3d} seed={seed:<5d} success={results[-1]['success']!s:<5} "
-              f"steps={env.step_count:<4d} return={total:7.2f} "
-              f"d={results[-1]['dist_cube_target']:.3f}")
+        results.append(
+            {
+                "seed": seed,
+                "success": bool(info.get("success")),
+                "steps": env.step_count,
+                "reward": total,
+                "return": total,
+                "timeout": bool(truncated or info.get("timeout")),
+                "collision": bool(
+                    info.get("collision") or info.get("collision_detected")
+                ),
+                "unsafe_action": bool(info.get("unsafe_action")),
+                "held_out": bool(train_seeds) and seed not in train_seeds,
+                "dist_cube_target": info["dist_cube_target"],
+                # Which cube the episode asked for, so a per-color breakdown is
+                # possible after the fact. ACT never receives this.
+                **({"target_color": info["target_color"]} if args.sorting else {}),
+            }
+        )
+        print(
+            f"ep {ep:3d} seed={seed:<5d} success={results[-1]['success']!s:<5} "
+            f"steps={env.step_count:<4d} return={total:7.2f} "
+            f"d={results[-1]['dist_cube_target']:.3f}"
+        )
 
     env.close()
-    ok = sum(r["success"] for r in results)
-    n = len(results)
-    print(f"\npolicy={args.policy}  success {ok}/{n} = {ok / n:.0%}")
-    print(f"mean return {np.mean([r['return'] for r in results]):.2f}   "
-          f"mean steps {np.mean([r['steps'] for r in results]):.0f}")
+    report = EvaluationReport(
+        policy=args.policy,
+        robot=args.robot,
+        task="sorting" if args.sorting else "pick_place",
+        results=tuple(results),
+    )
+    summary = report.summary
+    print(
+        f"\npolicy={args.policy}  success {summary['success_count']}/{summary['episodes']} = "
+        f"{summary['success_rate']:.0%}"
+    )
+    print(
+        f"mean reward {summary['mean_reward']:.2f}   mean steps {summary['mean_steps']:.0f}   "
+        f"collisions {summary['collision_count']}   timeouts {summary['timeout_count']}   "
+        f"unsafe actions {summary['unsafe_action_count']}"
+    )
+    if summary["held_out_success_rate"] is not None:
+        print(
+            f"held-out success {summary['held_out_success_rate']:.0%} "
+            f"({summary['held_out_episodes']} episodes)"
+        )
 
     if args.json_out:
         import json
 
         args.json_out.parent.mkdir(parents=True, exist_ok=True)
-        args.json_out.write_text(json.dumps({
-            "policy": args.policy,
-            "task": "sorting" if args.sorting else "pick_place",
-            "checkpoint": str(args.checkpoint) if args.checkpoint else None,
-            "episodes": args.episodes,
-            "seed": args.seed,
-            "success_count": ok,
-            "success_rate": ok / n,
-            "mean_return": float(np.mean([r["return"] for r in results])),
-            "mean_steps": float(np.mean([r["steps"] for r in results])),
-            "results": results,
-        }, indent=2), encoding="utf-8")
+        payload = report.to_dict()
+        payload["checkpoint"] = str(args.checkpoint) if args.checkpoint else None
+        payload["seed_start"] = args.seed
+        args.json_out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         print(f"json -> {args.json_out}")
     return 0
 
