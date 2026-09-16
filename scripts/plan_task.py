@@ -34,25 +34,38 @@ from physai.tasks import TaskRuntime, create_task
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--instruction", default="put the red cube on the green pad")
-    ap.add_argument("--robot", default="so101", choices=["so101"],
-                    help="plan_task currently supports the SO-101 manipulation workflow")
+    ap.add_argument(
+        "--robot",
+        default="so101",
+        choices=["so101"],
+        help="plan_task currently supports the SO-101 manipulation workflow",
+    )
     ap.add_argument("--planner", default="smolvlm", choices=available_planners())
     ap.add_argument("--model")
     ap.add_argument("--device")
-    ap.add_argument("--effort", default="medium",
-                    choices=["low", "medium", "high", "xhigh", "max"])
+    ap.add_argument(
+        "--effort", default="medium", choices=["low", "medium", "high", "xhigh", "max"]
+    )
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--max-steps", type=int, default=800)
     ap.add_argument("--dry-run", action="store_true", help="print the plan and exit")
     ap.add_argument("--save-plan", type=Path)
-    ap.add_argument("--save-frames", type=Path,
-                    help="write the images sent to the planner, for debugging")
+    ap.add_argument(
+        "--save-frames",
+        type=Path,
+        help="write the images sent to the planner, for debugging",
+    )
     args = ap.parse_args()
 
-    robot = create_robot(args.robot, config=EnvConfig(
-        scene=SceneConfig(camera_width=512, camera_height=384),
-        seed=args.seed, max_steps=args.max_steps, render=True,
-    ))
+    robot = create_robot(
+        args.robot,
+        config=EnvConfig(
+            scene=SceneConfig(camera_width=512, camera_height=384),
+            seed=args.seed,
+            max_steps=args.max_steps,
+            render=True,
+        ),
+    )
     env = TaskRuntime(
         robot,
         create_task("pick_place"),
@@ -87,22 +100,28 @@ def main() -> int:
     print(f"notes:   {plan.notes}\n")
     for i, sg in enumerate(plan.subgoals):
         xyz = sg.waypoint.pose.position.as_array()
-        print(f"  {i}. {sg.skill:<12} {np.round(xyz, 3)}  grip={sg.gripper}"
-              f"  <- {sg.target_description}")
+        print(
+            f"  {i}. {sg.skill:<12} {np.round(xyz, 3)}  grip={sg.gripper}"
+            f"  <- {sg.target_description}"
+        )
         if sg.rationale:
             print(f"     {sg.rationale}")
 
     if args.save_plan:
         args.save_plan.parent.mkdir(parents=True, exist_ok=True)
-        args.save_plan.write_text(json.dumps(plan.to_dict(), indent=2), encoding="utf-8")
+        args.save_plan.write_text(
+            json.dumps(plan.to_dict(), indent=2), encoding="utf-8"
+        )
         print(f"\nplan -> {args.save_plan}")
 
     if args.dry_run or not plan.subgoals:
         env.close()
         return 0
 
-    print(f"\nGround truth for comparison: cube={np.round(env.cube_pos, 3)} "
-          f"target={np.round(env.target_pos, 3)}")
+    print(
+        f"\nGround truth for comparison: cube={np.round(env.cube_pos, 3)} "
+        f"target={np.round(env.target_pos, 3)}"
+    )
 
     runner = PlanRunner(env.kin, plan, dt=env.control_dt)
     runner.reset(obs)
@@ -116,9 +135,11 @@ def main() -> int:
         if runner.done or terminated or truncated:
             break
 
-    print(f"\nexecuted {runner.index}/{len(plan.subgoals)} sub-goals  "
-          f"success={bool(info.get('success'))}  "
-          f"dist_cube_target={info['dist_cube_target']:.3f}")
+    print(
+        f"\nexecuted {runner.index}/{len(plan.subgoals)} sub-goals  "
+        f"success={bool(info.get('success'))}  "
+        f"dist_cube_target={info['dist_cube_target']:.3f}"
+    )
     env.close()
     return 0
 

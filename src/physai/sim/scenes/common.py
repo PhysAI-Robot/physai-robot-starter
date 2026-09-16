@@ -9,10 +9,6 @@ import mujoco
 import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-DEFAULT_ROBOT_XML = REPO_ROOT / "assets" / "so101" / "so101_new_calib.xml"
-DEFAULT_STATIC_PAD_BODY = "gripper"
-DEFAULT_MOVING_PAD_BODY = "moving_jaw_so101_v1"
-DEFAULT_EE_SITE = "gripperframe"
 
 
 @dataclass
@@ -35,11 +31,11 @@ class WorldSceneConfig:
 class ManipulationSceneConfig(WorldSceneConfig):
     """World settings plus end-effector and gripper attachment details."""
 
-    robot_xml: Path = DEFAULT_ROBOT_XML
-    ee_site: str = DEFAULT_EE_SITE
-    gripper_joint: str = "gripper"
-    static_pad_body: str = DEFAULT_STATIC_PAD_BODY
-    moving_pad_body: str = DEFAULT_MOVING_PAD_BODY
+    robot_xml: Path | None = None
+    ee_site: str | None = None
+    gripper_joint: str | None = None
+    static_pad_body: str | None = None
+    moving_pad_body: str | None = None
     pad_friction: tuple[float, float, float] = (2.0, 0.02, 0.001)
     pad_size: tuple[float, float, float] = (0.011, 0.009, 0.0015)
     replace_jaw_collision: bool = True
@@ -53,9 +49,11 @@ class ManipulationSceneConfig(WorldSceneConfig):
     # keeping the original up vector, so the image is not also upside down.
     wrist_cam_pos: tuple[float, float, float] = (0.0, -0.07, 0.05)
     wrist_cam_xyaxes: tuple[float, ...] = (1.0, 0.0, 0.0, 0.0, 0.7, 0.7)
+    clutter_count: int = 0
+    clutter_size: tuple[float, float, float] = (0.018, 0.018, 0.025)
 
 
-# Compatibility name for callers from the original Phase 0 API. New code
+# Compatibility name for callers of the original shared-scene API. New code
 # should choose WorldSceneConfig or ManipulationSceneConfig explicitly.
 CommonSceneConfig = ManipulationSceneConfig
 
@@ -70,6 +68,24 @@ def _find_body(spec: mujoco.MjSpec, name: str):
     )
 
 
+def _validate_robot_attachment(cfg: ManipulationSceneConfig) -> None:
+    missing = [
+        name
+        for name in (
+            "robot_xml",
+            "ee_site",
+            "gripper_joint",
+            "static_pad_body",
+            "moving_pad_body",
+        )
+        if getattr(cfg, name) is None
+    ]
+    if missing:
+        raise ValueError(
+            "scene requires robot attachment configuration: " + ", ".join(missing)
+        )
+
+
 def _pad_quats(cfg: ManipulationSceneConfig) -> dict[str, np.ndarray]:
     model = mujoco.MjModel.from_xml_path(str(cfg.robot_xml))
     data = mujoco.MjData(model)
@@ -80,7 +96,10 @@ def _pad_quats(cfg: ManipulationSceneConfig) -> dict[str, np.ndarray]:
     site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, cfg.ee_site)
     site_rotation = data.site_xmat[site_id].reshape(3, 3)
     quaternions: dict[str, np.ndarray] = {}
-    for key, body_name in (("static", cfg.static_pad_body), ("moving", cfg.moving_pad_body)):
+    for key, body_name in (
+        ("static", cfg.static_pad_body),
+        ("moving", cfg.moving_pad_body),
+    ):
         body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name)
         local_rotation = data.xmat[body_id].reshape(3, 3).T @ site_rotation
         quaternion = np.zeros(4)
@@ -101,6 +120,7 @@ def _replace_jaw_collision(spec: mujoco.MjSpec, cfg: ManipulationSceneConfig) ->
 
 
 def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
+    _validate_robot_attachment(cfg)
     """Build a manipulation world with configurable robot attachments."""
     if cfg.robot_xml is None or not Path(cfg.robot_xml).exists():
         raise FileNotFoundError(
@@ -129,14 +149,17 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
         reflectance=0.1,
     )
     world.add_light(
-        pos=[0, 0, 2.0], dir=[0, 0, -1],
+        pos=[0, 0, 2.0],
+        dir=[0, 0, -1],
         type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL,
         diffuse=[0.7, 0.7, 0.7],
     )
     world.add_light(
-        pos=[0.5, 0.5, 1.2], dir=[-0.4, -0.4, -1],
+        pos=[0.5, 0.5, 1.2],
+        dir=[-0.4, -0.4, -1],
         type=mujoco.mjtLightType.mjLIGHT_SPOT,
-        cutoff=60, exponent=10,
+        cutoff=60,
+        exponent=10,
         diffuse=[0.3, 0.3, 0.3],
     )
     world.add_geom(
@@ -170,6 +193,17 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
         size=[0.006, 0.006, 0.006],
         rgba=[0.2, 0.9, 0.4, 0.9],
     )
+    if cfg.clutter_count < 0:
+        raise ValueError("clutter_count must be non-negative")
+    for index in range(cfg.clutter_count):
+        world.add_geom(
+            name=f"physai_clutter_{index}",
+            type=mujoco.mjtGeom.mjGEOM_BOX,
+            pos=[0.14 + 0.03 * index, -0.16 + 0.06 * index, cfg.clutter_size[2]],
+            size=list(cfg.clutter_size),
+            rgba=[0.35, 0.42, 0.48, 1.0],
+            friction=[0.8, 0.01, 0.0001],
+        )
 
     quaternions = _pad_quats(cfg)
 
@@ -188,10 +222,18 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
             group=3,
         )
 
-    add_pad(_find_body(spec, cfg.static_pad_body), cfg.static_pad_pos,
-            quaternions["static"], "pad_static")
-    add_pad(_find_body(spec, cfg.moving_pad_body), cfg.moving_pad_pos,
-            quaternions["moving"], "pad_moving")
+    add_pad(
+        _find_body(spec, cfg.static_pad_body),
+        cfg.static_pad_pos,
+        quaternions["static"],
+        "pad_static",
+    )
+    add_pad(
+        _find_body(spec, cfg.moving_pad_body),
+        cfg.moving_pad_pos,
+        quaternions["moving"],
+        "pad_moving",
+    )
 
     world.add_camera(
         name="front",
@@ -213,8 +255,15 @@ def build_common_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
     return build_manipulation_spec(cfg)
 
 
-def add_cube(spec: mujoco.MjSpec, cfg: WorldSceneConfig, name: str,
-             position, rgba, cube_half: float, cube_mass: float) -> None:
+def add_cube(
+    spec: mujoco.MjSpec,
+    cfg: WorldSceneConfig,
+    name: str,
+    position,
+    rgba,
+    cube_half: float,
+    cube_mass: float,
+) -> None:
     cube = spec.worldbody.add_body(name=name, pos=list(position))
     cube.add_freejoint(name=f"{name}_free")
     cube.add_geom(

@@ -4,14 +4,14 @@ Open-source starter kit for embodied AI and robotics. It connects classical
 robot control, MuJoCo simulation, ROS2 interfaces, and later data-driven
 policies through stable robot, task, observation, and action contracts.
 
-The project is currently in **Phase 1: Classical Foundation and ROS2
-Contract**. The supported foundation is an SO-101 arm and a TurtleBot4
-differential-drive base in MuJoCo. The immediate goal is reliable deterministic
-control and the first ROS2 integration, not a completed VLM or VLA stack.
+**Phase 1, the Classical Foundation and ROS2 Contract, is complete** for the
+supported SO-101 arm and TurtleBot4 differential-drive base in MuJoCo. The next
+step is the Phase 1-to-Phase 2 training bridge; VLM and VLA remain later-phase
+work.
 
-The shortest Phase 1 path is model-free: run the scripted SO-101
-pick-and-place baseline, inspect the contracts, then validate the ROS2 bridge
-when that integration is available.
+The shortest way to inspect the completed foundation is model-free: run the
+scripted SO-101 pick-and-place baseline, inspect the contracts, then validate
+the ROS2 bridge and TurtleBot4 navigation acceptance path.
 
 <p align="center">
   <img src="docs/media/so101_pick_place.gif" width="420"
@@ -48,10 +48,6 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 ```
 
-```bash
-uv sync
-```
-
 The base install contains MuJoCo, NumPy, image/video support, and YAML
 configuration. It does not install ROS2, VLM, or VLA dependencies. Use the
 optional extras below when
@@ -73,23 +69,57 @@ uv run python scripts/fetch_assets.py --robot so101
 uv run python scripts/run_sim.py
 ```
 
-The command writes a video and evaluation output to `outputs/`. Open the
+The command runs headlessly by default and writes evaluation output to
+`outputs/`. Add `--video` when you want a recorded episode. Open the
 interactive MuJoCo viewer after the headless run succeeds:
 
 ```bash
 uv run python scripts/run_sim.py --viewer
 ```
 
+### Optional WSL2 viewer performance
+
+This section is only for users running the viewer inside WSL2. Native Ubuntu
+users can skip it. On WSL2, MuJoCo can fall back to the CPU software renderer
+(`llvmpipe`), which makes the interactive viewer look choppy even when
+`nvidia-smi` can see the NVIDIA GPU. If that happens, enable the WSLg D3D12
+renderer for the shell before opening the viewer:
+
+```bash
+export GALLIUM_DRIVER=d3d12
+uv run python scripts/run_sim.py --viewer
+```
+
+To apply this automatically to future Bash sessions, add the setting once:
+
+```bash
+printf '\nexport GALLIUM_DRIVER=d3d12\n' >> ~/.bashrc
+source ~/.bashrc
+```
+
+Verify that OpenGL is accelerated and reports the NVIDIA GPU:
+
+```bash
+glxinfo -B | grep -Ei 'vendor|renderer|accelerated'
+```
+
+The renderer should mention `D3D12` and the NVIDIA GPU, not `llvmpipe` or
+`Accelerated: no`. WSL2 GPU support requires a current NVIDIA driver on the
+Windows host and WSLg; do not install the Linux NVIDIA display driver inside
+WSL with `sudo apt install nvidia-driver`.
+
 Run the same task from the checked-in YAML configuration:
 
 ```bash
-uv run python scripts/run_sim.py --config configs/task_pick_place.yaml
+uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml
 ```
 
 Use `--seed`, `--max-steps`, and `--camera-size` to override configuration.
 The shared simulation seed and domain-randomization switch come from
 `configs/sim_config.yaml`, selected by `--sim-config` and defaulting to that
-file. Randomization must remain disabled until its Phase 1E engine is added.
+file. Domain randomization can be enabled through that configuration; keep it
+disabled for the deterministic baseline and use
+`scripts/eval_randomization.py` to compare deterministic and randomized runs.
 For image-conditioned policies, keep `--camera-size` square and match the
 training resolution, such as `128` or `224`.
 
@@ -103,15 +133,16 @@ takes joint positions, the base takes a twist.
 | <img src="docs/media/so101_pick_place.gif" width="330" alt="SO-101 arm performing scripted pick-and-place"> | <img src="docs/media/turtlebot4_drive.gif" width="330" alt="TurtleBot4 driving an arc across a checkered floor"> |
 | Scripted pick-and-place, joint-position control | Constant forward and yaw twist, differential drive |
 
-| Robot | Current baseline | Phase 1 direction |
+| Robot | Phase 1 result | Next extension |
 | --- | --- | --- |
-| SO-101 | Deterministic MuJoCo pick-and-place with scripted control | ROS2 joint, gripper, camera, and TF bridge |
-| TurtleBot4 | Deterministic MuJoCo base-velocity smoke test | ROS2 `/cmd_vel`, odometry, TF, and Nav2 foundation |
+| SO-101 | Deterministic pick-and-place, ROS2 joint/gripper/camera/TF bridge, and IK safety validation | Visual servoing and learned manipulation |
+| TurtleBot4 | Deterministic navigation, ROS2/Nav2 acceptance path, obstacle detection, and collision telemetry | Visual goal tracking and future hardware integration |
 
-The TurtleBot4 path is currently a generic control smoke test, which is what
-its clip above shows; navigation is a Phase 1 deliverable and is not
-implemented yet. The SO-101 ROS2 bridge, TurtleBot4 navigation path, and
-controlled domain randomization are also part of the active Phase 1 roadmap.
+The TurtleBot4 path includes a deterministic ROS2 interface, open-space Nav2
+smoke testing, obstacle-aware navigation, LaserScan validation, and MuJoCo
+collision telemetry. The SO-101 path includes the ROS2 joint, gripper, camera,
+and TF bridge. Controlled domain randomization is available behind the
+configuration toggle and remains disabled by default.
 Direct MuJoCo remains the fast local path and does not replace ROS2
 integration validation.
 
@@ -119,7 +150,10 @@ The planned progression is:
 
 ```text
 Phase 1  Classical foundation + ROS2 contract
-    -> Phase 2  Vision-based motor skills with LeRobot
+        -> Phase 2  Learning-based motor skills
+          2A  Visual servoing baseline
+          2B  Imitation learning with LeRobot
+          2C  Deep reinforcement learning
     -> Phase 3  High-level VLM orchestration
     -> Phase 4  End-to-end VLA policy
 ```
@@ -128,6 +162,19 @@ Phase 2 and later are future direction. Their current scripts and adapters are
 experimental seams around the Phase 1 contracts, not completion claims for
 those phases. See [Roadmap](ROADMAP.md) for the scope and definition of done
 for each phase.
+
+The Phase 1-to-Phase 2 bridge now includes canonical `ObservationSpec` and
+`ActionSpec` schemas plus a Gymnasium adapter. Install the training extra when
+you need this boundary; the adapter still routes actions through the existing
+safety gate:
+
+```bash
+uv sync --extra training
+```
+
+The bridge is ready for training integration, but the canonical SO-101 action
+layout, dataset metadata, checkpoint compatibility, and shared evaluation
+report are still tracked as open roadmap work.
 
 ## Phase 1 workflows
 
@@ -200,9 +247,9 @@ whether a scene or camera change looks right.
 
 The repository contains early data and model workflows so they can be tested
 against the shared contracts. They belong to the roadmap's later phases and
-are not required for the current Phase 1 baseline.
+are not required for the completed Phase 1 baseline or its training bridge.
 
-### Phase 2: LeRobot and ACT
+### Phase 2B: LeRobot and ACT
 
 Collect demonstrations and fine-tune an ACT policy after installing the VLA
 extra:
@@ -332,9 +379,9 @@ uv run python scripts/show_ros2_contract.py
 The first synchronous MuJoCo bridge core is available as
 `physai.bridge.MuJoCoROSBridge`. It uses an injected transport, publishes
 joint states and rendered camera images, accepts joint trajectory and gripper
-commands, and applies the shared safety gate. A real `rclpy` node can be
-adapted with `RclpyTransport`; TF, CameraInfo, and TurtleBot4 mobile-base
-topics remain Phase 1 work.
+commands, and applies the shared safety gate. The real `rclpy` nodes also
+publish TF and CameraInfo for SO-101 and odometry, scans, and TF for
+TurtleBot4; the acceptance paths are documented in the robot runbooks.
 
 ## Docker
 

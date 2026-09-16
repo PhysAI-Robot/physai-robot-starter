@@ -13,7 +13,6 @@ from ..contracts import Action, GripperCommand, Observation, PoseStamped
 from ..control.resolver import JointRateLimiter
 from ..planner.base import Plan
 from ..robots.base import KinematicsPort
-from ..robots.so101.kinematics import TOP_DOWN
 from .base import Policy
 
 
@@ -30,6 +29,7 @@ class PlanRunner(Policy):
         max_subgoal_steps: int = 150,
         max_joint_rate: float = 0.8,
         dt: float = 0.04,
+        approach_dir=None,
     ) -> None:
         self.kin = kin
         self.plan = plan
@@ -42,13 +42,21 @@ class PlanRunner(Policy):
         self._settle = 0
         self._q_cmd: np.ndarray | None = None
         self._grip = 1.0
+        self.approach_dir = approach_dir
 
-    def reset(self, observation: Observation, goal: PoseStamped | None = None,
-              instruction: str | None = None) -> None:
+    def reset(
+        self,
+        observation: Observation,
+        goal: PoseStamped | None = None,
+        instruction: str | None = None,
+    ) -> None:
         self.index = 0
         self._steps = 0
         self._settle = 0
-        self._q_cmd = observation.joint_state.position[:5].copy()
+        joint_count = len(
+            getattr(self.kin, "joint_names", observation.joint_state.name)
+        )
+        self._q_cmd = observation.joint_state.position[:joint_count].copy()
         self._grip = 1.0
         self._limiter.reset(self._q_cmd)
 
@@ -62,20 +70,22 @@ class PlanRunner(Policy):
 
     def act(self, observation: Observation) -> Action:
         if self.done:
-            return Action(joint_position=self._q_cmd,
-                          gripper=GripperCommand(position=self._grip))
+            return Action(
+                joint_position=self._q_cmd, gripper=GripperCommand(position=self._grip)
+            )
 
         sg = self.plan.subgoals[self.index]
         if sg.gripper is not None:
             self._grip = float(sg.gripper)
         target = sg.waypoint.pose.position.as_array()
 
-        res = self.kin.ik_pinch(target, TOP_DOWN, q_init=self._q_cmd)
+        res = self.kin.ik_pinch(target, self.approach_dir, q_init=self._q_cmd)
         self._q_cmd = self._limiter(res.qpos)
 
         self._steps += 1
-        return Action(joint_position=self._q_cmd,
-                      gripper=GripperCommand(position=self._grip))
+        return Action(
+            joint_position=self._q_cmd, gripper=GripperCommand(position=self._grip)
+        )
 
     def note_progress(self, pinch_center: np.ndarray, gripper_now: float) -> None:
         """Advance the sub-goal cursor. Call once per control tick after `act`.

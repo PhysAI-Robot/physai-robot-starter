@@ -2,12 +2,30 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 import numpy as np
 
-from ..contracts import Action, Observation, PoseStamped
+from ..contracts import Action, ActionSpec, Observation, ObservationSpec, PoseStamped
+
+TrainingActionEncoder = Callable[
+    [Action, float | None], tuple[np.ndarray, tuple[str, ...]]
+]
+TrainingActionDecoder = Callable[[np.ndarray], Action]
+
+
+@dataclass(frozen=True)
+class RobotTrainingContract:
+    """Robot-owned observation, action, and dataset encoding contract."""
+
+    observation_spec: ObservationSpec
+    action_spec: ActionSpec
+    action_encoder: TrainingActionEncoder
+    action_decoder: TrainingActionDecoder | None = None
+    action_schema: Mapping[str, Any] = field(default_factory=dict)
+    observation_schema: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -27,6 +45,31 @@ class RobotSpec:
     joint_state_frame: str | None = None
     action_frame: str | None = None
     camera_frames: dict[str, str] = field(default_factory=dict)
+    units: dict[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        required_units = {
+            "joint_position": "rad",
+            "joint_velocity": "rad/s",
+        }
+        if "twist" in self.action_modes:
+            required_units.update(
+                linear_velocity="m/s",
+                angular_velocity="rad/s",
+            )
+        if "ee_pose" in self.observation_modalities:
+            required_units["position"] = "m"
+        object.__setattr__(self, "units", {**required_units, **self.units})
+        incorrect = [
+            f"{name}={self.units[name]!r} (expected {unit!r})"
+            for name, unit in required_units.items()
+            if self.units[name] != unit
+        ]
+        if incorrect:
+            raise ValueError(
+                f"robot {self.name!r} has invalid unit declarations: "
+                + ", ".join(incorrect)
+            )
 
     def supports(self, *capabilities: str) -> bool:
         """Return whether this embodiment provides every requested capability."""
@@ -35,8 +78,11 @@ class RobotSpec:
 
     def require(self, *capabilities: str) -> None:
         """Raise a clear error when a workflow needs unsupported capabilities."""
-        missing = [capability for capability in capabilities
-                   if capability not in self.capabilities]
+        missing = [
+            capability
+            for capability in capabilities
+            if capability not in self.capabilities
+        ]
         if missing:
             requested = ", ".join(missing)
             raise ValueError(f"robot {self.name!r} does not support: {requested}")
@@ -59,7 +105,10 @@ class RobotSpec:
                 raise ValueError(
                     f"robot {self.name!r} expects {expected} joint targets, got {size}"
                 )
-            if action.joint_names is not None and action.joint_names != self.action_joint_names:
+            if (
+                action.joint_names is not None
+                and action.joint_names != self.action_joint_names
+            ):
                 raise ValueError(
                     f"robot {self.name!r} expects joint order {self.action_joint_names}, "
                     f"got {action.joint_names}"
@@ -67,12 +116,19 @@ class RobotSpec:
         if mode == "twist":
             if action.ee_twist is None or not action.ee_twist.frame_id:
                 raise ValueError("twist action frame_id must not be empty")
-            if self.action_frame is not None and action.ee_twist.frame_id != self.action_frame:
+            if (
+                self.action_frame is not None
+                and action.ee_twist.frame_id != self.action_frame
+            ):
                 raise ValueError(
                     f"robot {self.name!r} expects twist frame {self.action_frame!r}, "
                     f"got {action.ee_twist.frame_id!r}"
                 )
-        values = action.joint_position if mode == "joint_position" else action.ee_twist.as_array()
+        values = (
+            action.joint_position
+            if mode == "joint_position"
+            else action.ee_twist.as_array()
+        )
         if not np.isfinite(values).all():
             raise ValueError("action contains non-finite values")
 
@@ -105,6 +161,9 @@ class RobotPort(Protocol):
 
     robot_spec: RobotSpec
 
+    @property
+    def training_contract(self) -> RobotTrainingContract: ...
+
     def reset(self, seed: int | None = None) -> Observation: ...
 
     def step(self, action: Action) -> tuple[Observation, float, bool, bool, dict]: ...
@@ -125,11 +184,21 @@ class KinematicsPort(Protocol):
 
     def fk(self, state: Any) -> PoseStamped: ...
 
-    def ik(self, target_pos: Any, approach_dir: Any = None,
-           q_init: Any = None, **kwargs: Any) -> Any: ...
+    def ik(
+        self,
+        target_pos: Any,
+        approach_dir: Any = None,
+        q_init: Any = None,
+        **kwargs: Any,
+    ) -> Any: ...
 
-    def ik_pinch(self, object_center: Any, approach_dir: Any = None,
-                 q_init: Any = None, **kwargs: Any) -> Any: ...
+    def ik_pinch(
+        self,
+        object_center: Any,
+        approach_dir: Any = None,
+        q_init: Any = None,
+        **kwargs: Any,
+    ) -> Any: ...
 
     def site_jacobian(self, state: Any) -> np.ndarray: ...
 

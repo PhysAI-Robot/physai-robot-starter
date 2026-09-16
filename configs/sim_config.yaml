@@ -2,5 +2,12 @@
 seed: 0
 
 domain_randomization:
-  # Keep the baseline reproducible until Phase 1E is implemented.
+  # Keep the baseline reproducible unless explicitly enabled.
   enabled: false
+  friction_scale: [0.9, 1.1]
+  mass_scale: [0.95, 1.05]
+  lighting_scale: [0.9, 1.1]
+  camera_position_jitter: 0.0
+  clutter_x_range: [0.14, 0.28]
+  clutter_y_range: [-0.16, 0.16]
+  clutter_clearance: 0.05

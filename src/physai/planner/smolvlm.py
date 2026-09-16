@@ -38,8 +38,7 @@ class SmolVLMPlanner(Planner):
             from transformers import AutoModelForVision2Seq, AutoProcessor
         except ImportError as exc:  # pragma: no cover
             raise ImportError(
-                "SmolVLM needs torch and transformers: "
-                "uv sync --extra smolvlm"
+                "SmolVLM needs torch and transformers: uv sync --extra smolvlm"
             ) from exc
 
         local_model = resolve_local_model(model, model_name="smolvlm")

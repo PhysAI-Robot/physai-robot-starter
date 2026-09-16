@@ -45,8 +45,9 @@ def main() -> int:
         n_ok = 0
         for y in ys:
             grasp = env.kin.ik_pinch(np.array([x, y, args.z]), TOP_DOWN, q_init=q0)
-            hover = env.kin.ik_pinch(np.array([x, y, args.z + args.hover]),
-                                     TOP_DOWN, q_init=q0)
+            hover = env.kin.ik_pinch(
+                np.array([x, y, args.z + args.hover]), TOP_DOWN, q_init=q0
+            )
             if grasp.converged and hover.converged:
                 cells.append("o")
                 n_ok += 1

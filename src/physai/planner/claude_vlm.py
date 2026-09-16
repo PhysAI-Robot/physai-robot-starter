@@ -137,14 +137,16 @@ class ClaudePlanner(Planner):
         content: list[dict] = []
         for name, frame in observation.images.items():
             content.append({"type": "text", "text": f"Camera `{name}`:"})
-            content.append({
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": "image/png",
-                    "data": _png_b64(frame.data),
-                },
-            })
+            content.append(
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": _png_b64(frame.data),
+                    },
+                }
+            )
         js = observation.joint_state
         state = {
             "joint_names": list(js.name),
@@ -155,10 +157,12 @@ class ClaudePlanner(Planner):
                 round(v, 4)
                 for v in observation.ee_pose.pose.position.as_array().tolist()
             ]
-        content.append({
-            "type": "text",
-            "text": f"Current robot state:\n{json.dumps(state, indent=2)}",
-        })
+        content.append(
+            {
+                "type": "text",
+                "text": f"Current robot state:\n{json.dumps(state, indent=2)}",
+            }
+        )
         content.append({"type": "text", "text": f"Instruction: {instruction}"})
         return content
 
@@ -176,7 +180,12 @@ class ClaudePlanner(Planner):
                 "effort": self.effort,
                 "format": {"type": "json_schema", "schema": PLAN_SCHEMA},
             },
-            messages=[{"role": "user", "content": self._build_content(instruction, observation)}],
+            messages=[
+                {
+                    "role": "user",
+                    "content": self._build_content(instruction, observation),
+                }
+            ],
         )
 
         if response.stop_reason == "refusal":

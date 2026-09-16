@@ -68,9 +68,14 @@ def _make_constant_twist(**_: Any) -> Policy:
 
 
 def _make_scripted(*, env, **kwargs: Any) -> Policy:
-    from .scripted import ScriptedPickPlace
+    from ..robots.registry import create_robot_policy
 
-    return ScriptedPickPlace(env.kin, env, cfg=kwargs.get("cfg"))
+    return create_robot_policy(
+        env.robot_spec.name,
+        "scripted",
+        env=env,
+        cfg=kwargs.get("cfg"),
+    )
 
 
 def _make_replay(*, env, actions, **kwargs: Any) -> Policy:
@@ -81,4 +86,5 @@ def _make_replay(*, env, actions, **kwargs: Any) -> Policy:
 
 def _make_lerobot(*, env, checkpoint, **kwargs: Any) -> Policy:
     from .vla_adapter import LeRobotPolicy
+
     return LeRobotPolicy.from_checkpoint(env, checkpoint, **kwargs)

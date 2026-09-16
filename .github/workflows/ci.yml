@@ -8,6 +8,20 @@ permissions:
   contents: read
 
 jobs:
+  format:
+    name: Ruff format check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Check Python formatting
+        uses: astral-sh/ruff-action@v3
+        with:
+          args: "format --check --exclude .venv --exclude venv"
+
   test:
     name: Python 3.12 tests
     runs-on: ubuntu-24.04
@@ -46,7 +60,40 @@ jobs:
           uv run python scripts/fetch_assets.py --robot turtlebot4
 
       - name: Install project and test dependencies
-        run: uv sync --locked --extra dev
+        run: uv sync --locked --extra dev --extra training
 
       - name: Run test suite
         run: uv run python -m pytest tests/ -q
+
+  ros2-acceptance:
+    name: ROS2 Jazzy robot acceptance
+    runs-on: ubuntu-24.04
+    env:
+      MUJOCO_GL: osmesa
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Cache robot assets
+        uses: actions/cache@v5
+        with:
+          path: assets
+          key: robot-assets-${{ runner.os }}-${{ hashFiles('scripts/fetch_assets.py') }}
+
+      - name: Fetch robot assets
+        run: |
+          python scripts/fetch_assets.py --robot so101
+          python scripts/fetch_assets.py --robot turtlebot4
+
+      - name: Build ROS2 test image
+        run: docker build --tag physai-ros2-test --file docker/Dockerfile .
+
+      - name: Run ROS2 robot acceptance tests
+        run: |
+          docker run --rm \
+            --env MUJOCO_GL=osmesa \
+            --volume "$GITHUB_WORKSPACE/assets:/workspace/assets:ro" \
+            physai-ros2-test \
+            bash -lc 'source /opt/ros/jazzy/setup.bash && uv run python -m pytest tests/robots/ -q'

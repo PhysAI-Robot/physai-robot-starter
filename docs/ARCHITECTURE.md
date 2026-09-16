@@ -97,7 +97,7 @@ errors.
 | Module | Owns | Must not own |
 | --- | --- | --- |
 | `physai.contracts` | Shared `Observation`, `Action`, and ROS2-shaped value types | Robot-specific ordering or task rules |
-| `physai.config` | Typed YAML configuration for shared simulation and task runtime settings | Simulation behavior, robot construction, or task evaluation |
+| `physai.config` | Typed YAML configuration parsing delegated to robot-owned config factories | Simulation behavior, robot construction, or task evaluation |
 | `physai.robots` | Embodiment discovery, `RobotSpec`, robot ports, factories, environments, and robot-specific adapters | Task reward, planner decisions, or model SDKs |
 | `physai.tasks` | Task state, reset rules, reward, metrics, and termination | Robot internals or action generation |
 | `physai.sim` | MuJoCo simulation core, generic scene primitives, task-specific scene builders, rendering, and simulation time | Robot-specific environment logic, ROS2 transport, QoS, or callbacks |
@@ -107,7 +107,8 @@ errors.
 | `physai.data` | Episode recording and dataset loading | Simulation decisions or model inference |
 | `physai.bridge` | ROS2 transport, topic/message mapping, timing, and ROS2-backed adapters | Physics implementation, task semantics, or model inference |
 | `physai.runtime` | Runtime composition, compatibility checks, and safety orchestration | Robot-specific physics, task reward, or model inference |
-| `scripts/` | CLI argument parsing and runtime composition | IK, reward calculation, or SDK-specific implementation |
+| `scripts/` | Generic CLI argument parsing and runtime composition | IK, reward calculation, or SDK-specific implementation |
+| `launch/` | Generic ROS2 launch composition and launch arguments | Robot physics, transport callbacks, or task rules |
 | `tests/` | Executable behavior and contract coverage | New runtime ownership |
 
 The source tree follows this ownership map:
@@ -125,7 +126,7 @@ src/physai/
 ├── planner/           language-to-plan implementations
 ├── policy/            control and model adapters
 ├── control/           action resolution and rate limiting
-├── data/              episode recording and loading
+├── data/              episode recording, metadata, evaluation, and loading
 ├── bridge/            ROS2 transport, message mapping, adapters, and tick loop
 └── runtime/           robot-task-policy composition and safety orchestration
 ```
@@ -152,10 +153,14 @@ capabilities, not on a robot name or transport implementation.
 
 `MuJoCoROSBridge` owns the synchronous control tick around
 `ROS2MuJoCoAdapter`. `RclpyTransport` adapts an existing `rclpy` node to the
-transport port without importing ROS2 from the core package. The current bridge
-publishes joint states and available camera images and accepts joint trajectory
-and gripper commands; TF, CameraInfo, and mobile-base endpoints remain later
-Phase 1 work.
+transport port without importing ROS2 from the core package. Embodiment-owned
+ROS2 nodes under `physai.robots` compose these generic pieces: the SO-101 node
+publishes joint states, camera images, CameraInfo, and TF while accepting joint
+trajectory and gripper commands; the TurtleBot4 node accepts `/cmd_vel` and
+publishes wheel state, `/odom`, and `odom` to `base_link` TF. The generic
+`launch/` composition starts the currently supported Nav2 profile; robot-owned
+Nav2 parameters live under `configs/nav2/<robot>/`; reusable environment maps
+live under `configs/maps/<environment>/`.
 
 ### Task-specific scenes
 
@@ -175,12 +180,13 @@ sim/scenes/sorting_minimal.py
 ```
 
 Each scene builder owns model geometry and initial object layout. Generic world
-settings are separated from manipulation attachment settings; the built-in
-manipulation config supplies SO-101 defaults, including calibrated pad positions
-and replacement of the original jaw collision meshes, while another arm should
-provide its own attachment config or builder. Robot model paths, end-effector
-anchors, and pad attachment bodies are configuration, not hardcoded task
-ownership. It must not own task reward, policy decisions, or ROS2 transport. The legacy `sim/scene.py`
+settings are separated from manipulation attachment settings; robot-owned scene
+default providers supply model paths, end-effector anchors, and pad attachment
+bodies. The SO-101 provider supplies its calibrated pad positions and collision
+configuration, while another arm should provide its own attachment provider or
+builder. Robot model paths and end-effector anchors are configuration, not
+hardcoded task ownership. It must not own task reward, policy decisions, or ROS2
+transport. The legacy `sim/scene.py`
 facade may translate the old `SceneConfig(num_cubes=...)` API, but new code
 should select `PickPlaceMinimalSceneConfig` or `SortingMinimalSceneConfig`
 directly. This keeps task-specific object branches out of the shared scene
@@ -235,6 +241,13 @@ joint limits, and optional per-joint command-step limits.
 Workflow code should call `supports()` or `require()` rather than branch on a
 robot name.
 
+Robot registration also declares an embodiment kind. The registry exposes
+`robot_kind()` and robot-owned `scene_defaults()` so runtime composition can
+select and validate scenes before constructing a concrete robot. Scene
+definitions declare compatible robot kinds and task names; incompatible
+combinations fail during composition rather than inside a policy or scene
+builder.
+
 `Action` may carry explicit joint names and a timestamp. Legacy callers may
 omit those fields, but adapters and safety-critical paths should populate them
 so joint ordering and command freshness are checked at the boundary.
@@ -254,14 +267,14 @@ on MuJoCo types. `SO101Env` is a robot-owned backend that provides observation,
 action, lifecycle, and embodiment state; it does not create or evaluate a
 task. `TaskRuntime` composes a registered task around a robot port and owns
 task reset, metrics, reward, success hold, and termination for synchronous
-Phase 0 workflows.
+direct-MuJoCo workflows.
 
 `Planner` maps an instruction and observation to `Plan`. A `Plan` contains
 language-grounded `SubGoal` values and optional `PoseStamped` waypoints.
 `Policy` maps an observation and optional goal to one `Action` per control tick.
 `Task` owns evaluation, reward, and termination around the backend state.
 
-`physai.runtime.create_runtime` is the P0 composition entry point. It validates
+`physai.runtime.create_runtime` is the direct composition entry point. It validates
 the task's declared capabilities against the selected `RobotSpec`, wraps the
 robot port with `TaskRuntime` when a task is selected, creates an optional
 registered policy, and routes actions through `SafetyController` before
@@ -289,8 +302,8 @@ turtlebot4 + generic smoke test + constant twist policy + MuJoCo
 that belong in the generic adapter or policy contracts. `pick_place` is the
 registered manipulation task and requires arm and gripper capabilities, so the
 policy, demo, and planner workflows are currently SO-101-specific. TurtleBot4
-has a native MuJoCo model, differential-drive controls, wheel state, and base
-pose, but no navigation task yet.
+has a native MuJoCo model, differential-drive controls, wheel state, base pose,
+direct RPP navigation, and a ROS2/Nav2 obstacle acceptance path.
 
 The current pick-and-place and sorting implementations are intentionally
 minimal baselines for smoke tests and early experiments. They live in
@@ -345,7 +358,9 @@ through an explicit local path. Model storage and path resolution are owned by
 
 ## Demonstration data
 
-SO-101 demonstrations use LeRobot-shaped arrays:
+Robot demonstrations use LeRobot-shaped arrays. The feature names, camera
+streams, action layout, and encoder belong to the selected robot's
+`RobotTrainingContract` in `src/physai/robots/<robot>/contracts.py`:
 
 ```text
 observation.images.front  (T, H, W, 3) uint8
@@ -357,15 +372,29 @@ action                    (T, 6) float32, absolute joint targets
 The six values are ordered as:
 `shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, gripper`.
 Dataset recording and loading belong to `physai.data`; task semantics do not.
+The recorder consumes the robot contract without importing a concrete robot.
+
+The canonical SO-101 schemas are `so101_observation_spec()` and
+`so101_action_spec()` in `physai.robots.so101.contracts`; TurtleBot4 provides
+the corresponding twist and wheel-state schemas in
+`physai.robots.turtlebot.contracts`. Dataset metadata serializes these robot
+contracts rather than defining a second joint or camera layout. The current
+recorder writes a compact internal `.npz` format with LeRobot-shaped feature
+keys; a future standard `LeRobotDataset` exporter must consume the same
+metadata and must not introduce a parallel action contract.
+
+Dataset and checkpoint metadata also record the selected scene name and scene
+configuration snapshot. This makes training and evaluation reproducible when
+the scene registry grows, while keeping scene construction owned by
+`physai.sim.scenes`.
 
 ## ROS2 boundary
 
-Phase 0 runs in one process without ROS2. The message-shaped values in
-`src/physai/contracts.py` intentionally match the planned ROS2 types, while
-the topic mapping is documented in `src/physai/bridge/ros2_contract.py`.
-The first synchronous bridge core is available in
-`src/physai/bridge/mujoco_ros_bridge.py`; the integration target is ROS2 Jazzy
-on Ubuntu 24.04.
+Direct MuJoCo can run in one process without ROS2. The shared values in
+`src/physai/contracts.py` intentionally mirror the ROS2 types while remaining
+transport-neutral; topic mapping is documented in
+`src/physai/bridge/ros2_contract.py`. The synchronous bridge core and real
+`rclpy` nodes are available for ROS2 Jazzy on Ubuntu 24.04.
 
 The ROS2 boundary has two interchangeable adapter roles:
 
@@ -380,17 +409,14 @@ subscribes to the joint trajectory and gripper command endpoints, decodes
 those messages into the shared `Action` contract, and exposes the latest
 complete command through its synchronous tick API. It publishes canonical
 joint states and camera frames through an injected `MessageCodec`; the
-default `ContractMessageCodec` is used by Phase 0 tests, while
+default `ContractMessageCodec` is used by transport-neutral tests, while
 `ROS2MessageCodec` can construct real ROS2 message instances without adding
 `rclpy` as a core dependency.
 
 Both adapters must make unit conversion, joint ordering, timestamps, frame
 names, command freshness, and command rate explicit. Joint order and value
-shape are validated at decode time against `RobotSpec`. The current adapter
-publishes only the observation fields represented by the Phase 0 contract;
-CameraInfo, TF, and mobile-base endpoint publication require the remaining
-Phase 1 integration work. The ROS2 contract file is the source of truth for
-those external interfaces; it is not itself an adapter.
+shape are validated at decode time against `RobotSpec`. The ROS2 contract file
+is the source of truth for external interfaces; it is not itself an adapter.
 
 ### Required validation gates
 

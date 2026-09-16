@@ -19,7 +19,6 @@ import numpy as np
 
 from ..contracts import Action, GripperCommand, JointState, PoseStamped, Twist
 from ..robots.base import KinematicsPort
-from ..robots.so101.kinematics import TOP_DOWN
 
 
 class JointRateLimiter:
@@ -54,7 +53,7 @@ class WaypointResolver:
         self,
         kin: KinematicsPort,
         rate_limiter: JointRateLimiter | None = None,
-        approach_dir=TOP_DOWN,
+        approach_dir=None,
     ) -> None:
         self.kin = kin
         self.limiter = rate_limiter
@@ -67,14 +66,17 @@ class WaypointResolver:
         gripper: GripperCommand | None = None,
     ) -> tuple[Action, float]:
         """Returns (action, position_error_metres)."""
-        q_now = joint_state.position[:5]
+        joint_count = len(getattr(self.kin, "joint_names", joint_state.name))
+        q_now = joint_state.position[:joint_count]
         res = self.kin.ik(
             waypoint.pose.position.as_array(),
             self.approach_dir,
             q_init=q_now,
         )
         q = self.limiter(res.qpos) if self.limiter else res.qpos
-        return Action(joint_position=q, gripper=gripper or GripperCommand()), res.position_error
+        return Action(
+            joint_position=q, gripper=gripper or GripperCommand()
+        ), res.position_error
 
 
 class TwistToJointResolver:
@@ -82,7 +84,8 @@ class TwistToJointResolver:
 
     Integrates the commanded end-effector velocity for one control tick using a
     damped pseudo-inverse of the site Jacobian. `data` must be the live MjData
-    (Phase 1: replace with a KDL/pinocchio chain fed from /joint_states).
+    unless a hardware-oriented implementation supplies a state provider and
+    calibrated kinematics backend.
     """
 
     def __init__(
@@ -109,9 +112,10 @@ class TwistToJointResolver:
         gripper: GripperCommand | None = None,
     ) -> Action:
         J = self.kin.site_jacobian(self._state_provider())
-        v = twist.as_array()                           # (6,)
-        JJt = J @ J.T + (self.damping ** 2) * np.eye(6)
+        v = twist.as_array()  # (6,)
+        JJt = J @ J.T + (self.damping**2) * np.eye(6)
         dq = J.T @ np.linalg.solve(JJt, v) * self.dt
         dq = np.clip(dq, -self.max_joint_step, self.max_joint_step)
-        q = self.kin.clip_to_limits(joint_state.position[:5] + dq)
+        joint_count = len(getattr(self.kin, "joint_names", joint_state.name))
+        q = self.kin.clip_to_limits(joint_state.position[:joint_count] + dq)
         return Action(joint_position=q, gripper=gripper or GripperCommand())

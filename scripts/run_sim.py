@@ -1,23 +1,30 @@
-"""Run one episode and write a video. The 30-second sanity check.
+"""Run one episode, optionally writing a video. The 30-second sanity check.
 
-    python scripts/run_sim.py                      # scripted expert, 1 episode
-    python scripts/run_sim.py --config configs/task_pick_place.yaml
-    python scripts/run_sim.py --episodes 5 --seed 0
-    python scripts/run_sim.py --policy constant    # baseline: do nothing
-    python scripts/run_sim.py --policy lerobot --checkpoint outputs/act_ckpt
-    python scripts/run_sim.py --viewer             # interactive MuJoCo viewer
+python scripts/run_sim.py                      # scripted expert, 1 episode
+python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml
+python scripts/run_sim.py --episodes 5 --seed 0
+python scripts/run_sim.py --video --episodes 5 --seed 0
+python scripts/run_sim.py --policy constant    # baseline: do nothing
+python scripts/run_sim.py --policy lerobot --checkpoint outputs/act_ckpt
+python scripts/run_sim.py --viewer             # interactive MuJoCo viewer
 """
 
 from __future__ import annotations
 
 import argparse
+import time
 from dataclasses import replace
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
 import numpy as np
 
-from physai.config import TaskConfig, load_sim_config, load_task_config
+from physai.config import (
+    DomainRandomizationConfig,
+    TaskConfig,
+    load_sim_config,
+    load_task_config,
+)
 from physai.policy import available_policies, create_policy
 from physai.robots import available_robots, create_robot
 from physai.robots.so101 import EnvConfig
@@ -36,8 +43,10 @@ def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
     import imageio.v3 as iio
 
     mp4 = stem.with_suffix(".mp4")
-    for plugin, kwargs in (("FFMPEG", {"codec": "libx264"}),
-                           ("pyav", {"codec": "libx264"})):
+    for plugin, kwargs in (
+        ("FFMPEG", {"codec": "libx264"}),
+        ("pyav", {"codec": "libx264"}),
+    ):
         try:
             iio.imwrite(mp4, frames, fps=fps, plugin=plugin, **kwargs)
             return mp4
@@ -66,15 +75,18 @@ def build_so101_config(
     seed: int,
     max_steps: int,
     render: bool,
+    domain_randomization: DomainRandomizationConfig,
 ) -> EnvConfig:
     if task_config is None:
-        cam_w, cam_h = ((args.camera_size, args.camera_size) if args.camera_size
-                        else (640, 480))
+        cam_w, cam_h = (
+            (args.camera_size, args.camera_size) if args.camera_size else (640, 480)
+        )
         return EnvConfig(
             scene=SceneConfig(camera_width=cam_w, camera_height=cam_h),
             seed=seed,
             max_steps=max_steps,
             render=render,
+            domain_randomization=domain_randomization,
         )
 
     config = task_config.env
@@ -85,18 +97,34 @@ def build_so101_config(
             camera_width=args.camera_size,
             camera_height=args.camera_size,
         )
-    return replace(config, scene=scene, seed=seed, max_steps=max_steps, render=render)
+    return replace(
+        config,
+        scene=scene,
+        seed=seed,
+        max_steps=max_steps,
+        render=render,
+        domain_randomization=domain_randomization,
+    )
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--sim-config", type=Path,
-                    default=Path("configs/sim_config.yaml"),
-                    help="shared simulation configuration")
-    ap.add_argument("--config", type=Path,
-                    help="YAML task configuration (for example configs/task_pick_place.yaml)")
-    ap.add_argument("--robot", choices=available_robots(),
-                    help="override the robot selected by --config")
+    ap.add_argument(
+        "--sim-config",
+        type=Path,
+        default=Path("configs/sim_config.yaml"),
+        help="shared simulation configuration",
+    )
+    ap.add_argument(
+        "--config",
+        type=Path,
+        help="YAML task configuration (for example configs/tasks/so101/pick_place.yaml)",
+    )
+    ap.add_argument(
+        "--robot",
+        choices=available_robots(),
+        help="override the robot selected by --config",
+    )
     # "lerobot" belongs here: build_policy() handles it and the module
     # docstring documents it, but dropping it from choices made argparse
     # reject the documented command before it ever got there.
@@ -106,30 +134,36 @@ def main() -> int:
         choices=[name for name in available_policies() if name != "replay"],
     )
     ap.add_argument("--episodes", type=int, default=1)
-    ap.add_argument("--seed", type=int,
-                    help="override the seed selected by --config (default: 0)")
-    ap.add_argument("--max-steps", type=int,
-                    help="override the episode length selected by --config")
+    ap.add_argument(
+        "--seed", type=int, help="override the seed selected by --config (default: 0)"
+    )
+    ap.add_argument(
+        "--max-steps", type=int, help="override the episode length selected by --config"
+    )
     ap.add_argument("--camera", default="front")
     ap.add_argument("--checkpoint", type=Path)
-    ap.add_argument("--camera-size", type=int,
-                    help="square render resolution. IMPORTANT for --policy lerobot: "
-                         "a policy trained on square images (collect_demos.py's "
-                         "default) sees a stretched, off-distribution image if "
-                         "you render non-square here — pass the training size "
-                         "(e.g. 128) to avoid the mismatch.")
+    ap.add_argument(
+        "--camera-size",
+        type=int,
+        help="square render resolution. IMPORTANT for --policy lerobot: "
+        "a policy trained on square images (collect_demos.py's "
+        "default) sees a stretched, off-distribution image if "
+        "you render non-square here — pass the training size "
+        "(e.g. 128) to avoid the mismatch.",
+    )
     ap.add_argument("--out", type=Path, default=Path("outputs"))
-    ap.add_argument("--no-video", action="store_true")
-    ap.add_argument("--viewer", action="store_true",
-                    help="open the interactive viewer instead of writing a video")
+    ap.add_argument(
+        "--video", action="store_true", help="render frames and write an episode video"
+    )
+    ap.add_argument("--no-video", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument(
+        "--viewer",
+        action="store_true",
+        help="open the interactive viewer instead of writing a video",
+    )
     args = ap.parse_args()
 
     sim_config = load_sim_config(args.sim_config)
-    if sim_config.domain_randomization.enabled:
-        ap.error(
-            "domain randomization is not implemented yet; "
-            "set domain_randomization.enabled to false"
-        )
     task_config = load_task_config(args.config) if args.config else None
     configured_robot = task_config.robot if task_config else (args.robot or "so101")
     if args.robot and args.robot != configured_robot:
@@ -139,26 +173,48 @@ def main() -> int:
     args.robot = args.robot or configured_robot
     if task_config and args.robot != "so101":
         ap.error("--config currently supports the SO-101 pick-and-place workflow only")
-    seed = args.seed if args.seed is not None else (
-        task_config.env.seed if task_config and task_config.env.seed is not None
-        else sim_config.seed
+    seed = (
+        args.seed
+        if args.seed is not None
+        else (
+            task_config.env.seed
+            if task_config and task_config.env.seed is not None
+            else sim_config.seed
+        )
     )
-    max_steps = args.max_steps if args.max_steps is not None else (
-        task_config.env.max_steps if task_config else 600
+    max_steps = (
+        args.max_steps
+        if args.max_steps is not None
+        else (task_config.env.max_steps if task_config else 600)
     )
 
     if args.viewer:
-        return run_viewer(args, task_config, seed, max_steps)
+        return run_viewer(
+            args, task_config, seed, max_steps, sim_config.domain_randomization
+        )
 
     if args.robot == "turtlebot4":
-        env = create_robot(args.robot, config=TurtleBot4Config(
-            max_steps=max_steps, render=not args.no_video,
-        ))
+        env = create_robot(
+            args.robot,
+            config=TurtleBot4Config(
+                max_steps=max_steps,
+                render=args.video and not args.no_video,
+                domain_randomization=sim_config.domain_randomization,
+            ),
+        )
         camera_name = "free"
     else:
-        robot = create_robot(args.robot, config=build_so101_config(
-            args, task_config, seed, max_steps, render=not args.no_video,
-        ))
+        robot = create_robot(
+            args.robot,
+            config=build_so101_config(
+                args,
+                task_config,
+                seed,
+                max_steps,
+                render=args.video and not args.no_video,
+                domain_randomization=sim_config.domain_randomization,
+            ),
+        )
         env = TaskRuntime(
             robot,
             create_task(
@@ -177,10 +233,11 @@ def main() -> int:
     for ep in range(args.episodes):
         obs = env.reset(seed=seed + ep)
         policy.reset(obs)
+        print(f"  randomization={env.randomization_metadata.as_dict()}")
         frames, total_reward, info = [], 0.0, {}
 
         for _ in range(max_steps):
-            if not args.no_video:
+            if args.video and not args.no_video:
                 frames.append(env.render_camera(camera_name))
             obs, reward, terminated, truncated, info = env.step(policy.act(obs))
             total_reward += reward
@@ -191,12 +248,17 @@ def main() -> int:
         successes += ok
         distance = info.get("dist_cube_target")
         suffix = f" dist_cube_target={distance:.3f}" if distance is not None else ""
-        print(f"episode {ep}: success={ok} steps={env.step_count} "
-              f"return={total_reward:.2f}{suffix}")
+        print(
+            f"episode {ep}: success={ok} steps={env.step_count} "
+            f"return={total_reward:.2f}{suffix}"
+        )
 
-        if frames and not args.no_video:
-            path = write_video(np.stack(frames), args.out / f"{args.policy}_ep{ep:03d}",
-                               fps=int(env.cfg.control_hz))
+        if frames and args.video and not args.no_video:
+            path = write_video(
+                np.stack(frames),
+                args.out / f"{args.policy}_ep{ep:03d}",
+                fps=int(env.cfg.control_hz),
+            )
             print(f"  video -> {path}")
 
     env.close()
@@ -209,29 +271,51 @@ def run_viewer(
     task_config: TaskConfig | None,
     seed: int,
     max_steps: int,
+    domain_randomization: DomainRandomizationConfig,
 ) -> int:
     import mujoco.viewer
 
     if args.robot == "turtlebot4":
-        env = create_robot(args.robot, config=TurtleBot4Config(
-            max_steps=args.max_steps, render=False,
-        ))
+        env = create_robot(
+            args.robot,
+            config=TurtleBot4Config(
+                max_steps=args.max_steps,
+                render=False,
+                domain_randomization=domain_randomization,
+            ),
+        )
     else:
-        env = create_robot(args.robot, config=build_so101_config(
-            args, task_config, seed, max_steps, render=False,
-        ))
+        env = create_robot(
+            args.robot,
+            config=build_so101_config(
+                args,
+                task_config,
+                seed,
+                max_steps,
+                render=False,
+                domain_randomization=domain_randomization,
+            ),
+        )
     obs = env.reset()
     policy = build_policy(args.policy, env, args.checkpoint)
     policy.reset(obs)
 
     print("Viewer open. Close the window to exit.")
     with mujoco.viewer.launch_passive(env.model, env.data) as viewer:
+        next_tick = time.perf_counter()
+        control_period = 1.0 / env.cfg.control_hz
         while viewer.is_running():
             obs, _, terminated, truncated, _ = env.step(policy.act(obs))
             viewer.sync()
             if terminated or truncated:
                 obs = env.reset()
                 policy.reset(obs)
+            next_tick += control_period
+            remaining = next_tick - time.perf_counter()
+            if remaining > 0:
+                time.sleep(remaining)
+            else:
+                next_tick = time.perf_counter()
     return 0
 
 

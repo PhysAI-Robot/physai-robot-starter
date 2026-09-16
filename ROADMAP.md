@@ -1,179 +1,174 @@
 # 🗺️ Project Roadmap: physai-robot-starter
 
-`physai-robot-starter` is an open-source starter kit for Embodied AI & Robotics. It bridges classical ROS 2 control stacks with modern Data-Driven Motor Skills (LeRobot), High-Level VLM Planning (SmolVLM), and End-to-End VLA policies in MuJoCo.
+`physai-robot-starter` is an open-source starter kit for Embodied AI & Robotics. It bridges classical ROS 2 control stacks with visual control, learning-based motor skills, high-level vision-language planning, and end-to-end vision-language-action policies in MuJoCo.
+
+# Project Roadmap & Strategic Vision
+
+## Strategic Long-Term Vision
+`physai-robot-starter` is designed as a **Fully Customizable, Code-First Control Framework for Embodied AI**. The core infrastructure provides a modular development baseline where engineers can plug, train, and swap any orchestration tier—ranging from primitive deterministic scripts to multi-agent foundation intelligence—directly through standard configuration entrypoints without altering the underlying communication abstractions.
+
+The framework is structured to scale across two core vectors of customization:
+
+### 1. Vertical Control Spectrum (Plug-and-Play Orchestration)
+The execution engine supports an open, interchangeable stack of control methodologies. A developer can hot-swap or cascade these layers depending on their hardware and compute constraints:
+* **The Scripted Baseline:** Hardcoded, model-free state machines for ultra-fast, predictable trajectory and path generation.
+* **Classical Visual Servoing:** Closed-loop execution combining real-time camera vectors with analytical kinematic controllers tailored to the agent's specific capability profile (e.g., coordinate mapping or velocity vectoring).
+* **Data-Driven Skill Learning:** An all-in-one local pipeline to log expert demonstrations into standardized robotics dataset formats, enabling native training of localized policy networks directly inside the environment.
+* **Unified End-to-End VLA:** Native abstraction bindings to serve large-scale Vision-Language-Action models directly controlling physical action spaces when maximum semantic generalization is required.
+
+### 2. Horizontal Agent Heterogeneity & Agnostic Task Routing
+The simulation workspace explicitly decouples scene orchestration from physical execution to support multi-robot scaling and flexible task delegation.
+* **Zero-Setup Robot Agnosticism:** To prevent onboarding complexity, all rigid physical profiles, mass properties, and meshes are entirely pre-configured and sealed within their respective **MJCF (.xml)** and **STL assets**. Users treat these agents as complete, turn-key entities. The framework interacts with them purely through unified abstract API ports—hiding hardware-specific friction from the user.
+* **Centralized Semantic Orchestration:** The environment can host diverse agents simultaneously. A centralized task-routing arbiter assesses human instructions alongside environmental contexts and dynamically maps sub-tasks to the best-suited agent based on its registered capability profile (e.g., mobile bases for transit, manipulators for sorting). The arbiter can be configured as a simple deterministic decision tree, a classical behavioral tree, or scaled up to a multimodal Vision-Language Model (VLM) depending on the project's scale.
 
 
 ```
 
-[Phase 1: Classical Foundation & ROS 2] ➔ [Phase 2: Vision Skills (LeRobot)] ➔ [Phase 3: VLM Orchestration] ➔ [Phase 4: End-to-End VLA]
+[Phase 1: Classical Foundation & ROS 2] ➔ [Phase 2: Learning-Based Motor Skills] ➔ [Phase 3: VLM Orchestration] ➔ [Phase 4: End-to-End VLA]
 
 ```
 
 ## Current Status
 
-**Current phase: Phase 1 - Classical Foundation & ROS 2 Contract.**
+**Current phase: Phase 1 complete; Phase 1 to Phase 2 training bridge complete; Phase 2A preparation is next.**
 
-The MuJoCo baseline, robot registry, capability-aware action/observation
-contracts, SO-101 kinematics, TurtleBot4 model, and initial ROS 2-shaped
-contracts are already in place. The active work is to make the Phase 1
-foundation reliable and executable through deterministic tests, robot control
-adapters, and the first ROS 2 integration.
+Phase 1 is complete for the SO-101 and TurtleBot4 scope. The next work is to
+make the stable contracts ready for visual-servoing and learning workflows.
 
 Phase 2 and later are future direction only. They should consume the stable
-contracts produced by Phase 1, not drive changes to those contracts ad hoc.
+contracts produced by Phase 1 and the completed training bridge, not drive
+changes to those contracts ad hoc.
 
-The checklist below tracks implementation evidence in the repository, not
-phase completion. `[x]` means the deliverable exists and has focused coverage;
-`[ ]` means it is planned, missing, or only partially implemented. A phase is
-complete only when its Definition of Done also passes.
-
----
-
-## 🏗️ Phase 1: Classical Robotics Foundation & ROS 2 Contract
-
-### Objective
-Make the existing SO-101 and TurtleBot4 MuJoCo implementations reliable
-through stable contracts, deterministic control, and a first ROS 2 integration.
-Keep the architecture extensible for the Standalone Franka Panda and Google
-Mobile Manipulator, but do not make those two robots requirements for the first
-Phase 1 completion gate.
-
-The Phase 1 implementation should preserve the current capability-aware design:
-fixed-base manipulators expose joint and gripper capabilities, mobile bases
-expose base velocity and odometry, and a future mobile manipulator may combine
-both. Do not force every embodiment into one identical action array.
-
-### Phase 1A: Contracts and Deterministic Simulator Baseline
-
-Stabilize the interfaces that every later controller, ROS 2 node, and learning
-policy will consume.
-
-#### Deliverables
-- [x] `configs/sim_config.yaml`: Centralized simulation configuration with `domain_randomization.enabled: false` by default.
-- [x] `src/physai/robots/registry.py`: Capability-aware robot discovery and factory API for the currently supported robots.
-- [x] Contract validation for action modes, joint names, camera names, timestamps, frame IDs, shapes, and finite values.
-- [ ] Explicit runtime validation for declared units such as radians, metres, and metres per second.
-- [x] Deterministic reset and seed handling for SO-101 and TurtleBot4.
-- [x] Smoke and regression tests covering `reset()`, `step()`, action validation, and capability requirements.
-
-#### Definition of Done
-- [x] `available_robots()` reports SO-101 and TurtleBot4 without importing optional ROS 2 or ML dependencies.
-- [ ] Repeating an episode with the same seed produces the same initial state and task randomization. **Partial:** baseline reset behavior is covered; sorting randomization still needs a dedicated regression assertion.
-- [x] Invalid action modes, shapes, joint orders, and unsupported capabilities fail with clear errors.
-- [x] The existing scripted SO-101 workflow and TurtleBot4 twist workflow remain runnable after contract changes. **Verified:** the scripted SO-101 task completes `20/20` in the deterministic reliability check (`--episodes 20 --seed 0 --max-steps 600`). The result required fixing an unreachable `lift_height` (IK never converged, freezing the arm), calibrating `gripper_grip` and `gripper_force_limit`, placing the added pad geoms on the actual jaw contact surfaces, and disabling the original jaw collision meshes so contacts are not duplicated.
-
-### Phase 1B: SO-101 Control and ROS 2 Bridge
-
-Deliver the first complete ROS 2 control path for the robot with the most
-complete task and kinematics support.
-
-#### Deliverables
-- [x] `src/physai/bridge/mujoco_ros_bridge.py`: Synchronous runtime MuJoCo bridge that publishes joint states and camera frames and accepts joint trajectory and gripper commands through an injected transport.
-- [ ] ROS 2 message adapters for `sensor_msgs/msg/JointState`, `sensor_msgs/msg/Image`, `trajectory_msgs/msg/JointTrajectory`, and the gripper command interface. **Partial:** codec and `RclpyTransport` adapters exist; a real ROS 2 node integration is still pending.
-- [ ] TF publication for the documented SO-101 frame tree.
-- [x] Teleoperation path using an equivalent ROS2-shaped joint and gripper test client; real `rclpy` node integration remains pending.
-- [x] Integration test for command-to-simulation and simulation-to-topic flow using the transport port and fake ROS 2 transport.
-
-#### Definition of Done
-- [ ] A joint trajectory command moves the SO-101 in MuJoCo at the configured control rate. **Partial:** the bridge tick and command routing are tested with a fake robot; an end-to-end SO-101 ROS 2 test is still pending.
-- [x] Published joint names, radians, timestamps, camera encoding, and frame IDs match the ROS 2 contract for the fields currently represented by `Observation`.
-- [x] Gripper commands are converted consistently between normalized aperture and simulator joint units.
-- [x] The bridge can run with rendering disabled and does not require ML packages.
-
-### Phase 1C: TurtleBot4 Navigation Foundation
-
-Add navigation only for the mobile-base embodiment. SO-101 does not need Nav2.
-Start with a small deterministic world and a simple controller before adding
-more complex planners.
-
-#### Deliverables
-- [ ] TurtleBot4 ROS 2 bridge for `/cmd_vel`, wheel state, `/odom`, and TF.
-- [ ] `configs/nav2/`: Minimal Nav2 configuration and launch assets for the TurtleBot4 test world.
-- [ ] Waypoint or Point A to Point B scenario with known start and goal poses.
-- [ ] RPP controller as the initial baseline; evaluate MPPI separately if the simulator timing supports it.
-- [ ] Obstacle and collision regression scenarios.
-
-#### Definition of Done
-- [ ] TurtleBot4 accepts a standard `geometry_msgs/msg/Twist` command and reports consistent odometry.
-- [ ] Nav2 reaches a goal in the deterministic test world without collision.
-- [ ] The result is reproducible across repeated runs with the same seed.
-- [ ] Navigation failures report useful termination and timeout information.
-
-### Phase 1D: Per-Robot Kinematics and Manipulation Control
-
-Keep kinematics implementations beside the robot they describe. The current
-SO-101 implementation is numerical damped-least-squares IK, so analytical IK
-should not be a Phase 1 requirement unless a later robot specifically needs it.
-
-#### Deliverables
-- [ ] Benchmark the existing SO-101 FK, Jacobian, and numerical IK over a defined set of reachable targets.
-- [ ] Expose Cartesian targeting through a ROS 2 service or action after the local IK behavior is validated.
-- [x] Validate reachable-target position error, convergence, joint limits, and gripper contact behavior in simulator tests.
-- [ ] Complete orientation-error and collision/contact acceptance coverage with recorded benchmark metrics.
-- [ ] Add a separate kinematics adapter for each future arm embodiment instead of generalizing SO-101 assumptions.
-
-#### Definition of Done
-- [ ] SO-101 IK reaches the documented test targets within the configured position and orientation tolerances.
-- [ ] Unreachable targets fail explicitly and do not emit unsafe joint targets.
-- [ ] Joint-limit and collision checks are included in the acceptance test, not only final end-effector position.
-- [ ] The benchmark records success rate, error, iterations, and runtime.
-
-### Phase 1E: Controlled Domain Randomization
-
-Add randomization only after the deterministic controller and ROS 2 paths are
-stable. Keep all randomization behind one configuration and seed so failures
-remain reproducible.
-
-#### Deliverables
-- [ ] `src/physai/sim/domain_randomization.py`: Engine for selected physics and visual parameters.
-- [ ] Configuration for friction, mass, lighting, camera pose, and clutter ranges with documented defaults.
-- [x] Explicit `enabled: false` behavior that preserves the deterministic baseline.
-- [ ] Seeded randomization metadata recorded in episode or evaluation output.
-- [ ] Regression comparison between deterministic and randomized runs.
-
-#### Definition of Done
-- [ ] Switching `domain_randomization.enabled` between `false` and `true` does not change ROS 2 topic names or message schemas.
-- [ ] The same seed reproduces the same randomized parameters.
-- [ ] Randomized values stay within documented safe ranges and do not silently invalidate robot models.
-- [ ] Baseline control success and failure rates are reported separately for deterministic and randomized settings.
-
-### Phase 1 Scope Boundary
-
-The first Phase 1 completion gate covers **SO-101 + TurtleBot4**. Standalone
-Franka Panda and Google Mobile Manipulator remain planned embodiments and can
-be added after the shared contracts, bridge pattern, and acceptance tests are
-proven on the first two robots.
-
-### Definition of Done (DoD)
-- [x] SO-101 and TurtleBot4 pass the deterministic contract, reset, and control regression suite. The current suite has 70 passing tests and 2 skipped; the scripted SO-101 pick-and-place reliability check is 20/20 with the calibrated pad setup.
-- [x] SO-101 can be teleoperated through its ROS 2-shaped joint and gripper interfaces; real `rclpy` node integration remains pending.
-- [ ] TurtleBot4 can navigate from Point A to Point B through the ROS 2/Nav2 path without collision in the deterministic test world.
-- [ ] SO-101 IK meets the documented position and orientation tolerances on reachable targets and rejects invalid targets safely.
-- [ ] Domain Randomization can be enabled or disabled through `configs/sim_config.yaml` without changing ROS 2 topic contracts.
-- [x] The bridge and simulator can run without Phase 2+ dependencies such as LeRobot, VLM, or VLA packages.
+The roadmap tracks implementation evidence. `[x]` means the deliverable exists
+and has focused coverage; `[ ]` means it is planned, missing, or partial.
 
 ---
 
-## 🎯 Phase 2: Vision-Based Motor Skills (Imitation Learning via LeRobot)
+## 🏗️ Phase 1: Classical Robotics Foundation & ROS 2 Contract (Complete)
+
+Phase 1 is complete for the **SO-101 + TurtleBot4** scope. The main outcomes
+are:
+
+- [x] Stable capability-aware `Observation -> Action` contracts, robot registry,
+  unit/frame validation, deterministic resets, and seeded regression coverage.
+- [x] Reliable MuJoCo baselines for SO-101 manipulation and TurtleBot4 mobile
+  control, including reproducible scripted SO-101 sorting at `20/20` success.
+- [x] SO-101 ROS 2 bridge with joint, gripper, camera, TF, teleoperation, and
+  real `rclpy` acceptance coverage.
+- [x] TurtleBot4 ROS 2/Nav2 path with `/cmd_vel`, odometry, TF, LaserScan,
+  Collision Monitor, obstacle validation, and structured navigation reports.
+- [x] SO-101 FK, Jacobian, numerical IK, Cartesian targeting, joint-limit, and
+  collision/contact safety validation, including explicit unreachable-target
+  rejection.
+- [x] Seeded domain randomization for physics, visuals, cameras, and clutter,
+  with deterministic baseline preservation and evaluation metadata.
+- [x] Shared acceptance coverage confirms deterministic control, ROS 2 message
+  contracts, navigation without collision, IK safety, and randomization bounds.
+- [x] Phase 1 runs without Phase 2+ dependencies such as LeRobot, VLM, or VLA;
+  the architecture remains open for future Franka and mobile-manipulator
+  adapters.
+
+---
+
+## Phase 1 to Phase 2 Bridge: Training Readiness
+
+Add the smallest training boundary on top of the completed Phase 1 contracts.
+This work must adapt the existing `Observation -> Action` interface for
+learning tools without moving training logic into robot environments or ROS 2
+adapters.
+
+### Bridging Deliverables
+- [x] `src/physai/contracts.py`: Define canonical `ObservationSpec` and `ActionSpec` schemas covering names, shapes, dtypes, units, ranges, camera layout, and normalization metadata.
+- [x] Robot-owned `RobotTrainingContract` providers define each embodiment's observation/action schema, camera layout, dataset encoder, and optional action decoder without coupling `physai.data` or `physai.policy` to a concrete robot.
+- [x] `src/physai/data/gym_env.py`: Add a Gymnasium-compatible environment adapter for direct MuJoCo task training with seeded `reset()`, `step()`, spaces, `rgb_array` rendering, structured episode information, and the existing safety gate.
+- [x] Make the canonical SO-101 action layout explicit and consistent across policies, recorder output, replay, ROS 2 conversion, and training datasets.
+- [x] Version dataset metadata with robot, task, contract schema, simulator configuration, camera configuration, seed, and train/validation/test split information.
+- [x] Add checkpoint metadata and compatibility validation for robot, task, observation schema, action schema, normalization, and training configuration.
+- [x] Add shared evaluation reports for success, collision, timeout, unsafe action, reward, and held-out seed performance.
+- [x] Add a smoke test that runs one episode through the training adapter and confirms that the resulting action still passes the existing safety and robot validation gates.
+
+### Bridge Completion Gate
+The Phase 2A visual-servoing baseline and all learned policies must consume the
+same canonical observation and action schemas. A training framework may be
+changed later, but policies must remain evaluable through the repository's
+policy boundary without changing the robot adapter or ROS 2 contract.
+
+The bridge is complete as a preparation milestone. The current `.npz` files
+are an internal, LeRobot-shaped prototype format; standard `LeRobotDataset`
+export, visual-servo baselines, and training framework containers remain Phase
+2 deliverables.
+
+---
+
+## 🎯 Phase 2: Learning-Based Motor Skills
 
 ### Objective
-Transition from rigid, purely mathematical calculations (Phase 1 IK/Nav2) to data-driven, vision-based control. Utilize Hugging Face's **LeRobot** ecosystem to train local neural network policies that map raw camera observations directly to low-level motor actions.
+Build low-level motor skills on top of the stable Phase 1 contracts. Establish a
+classical visual-control baseline first, then add learned policies through
+imitation learning and deep reinforcement learning. All three tracks must
+produce the same `Observation -> Action` policy interface.
 
-### Key Deliverables & Directory Layout
+### Phase 2A: Visual Servoing Baselines
+
+Implement explicit camera-feedback controllers before training learned visual
+policies. The first targets are SO-101 wrist-camera alignment and object
+approach, followed by TurtleBot4 visual goal tracking where a suitable visual
+target is available.
+
+#### Key Deliverables
+- [ ] Visual feature or fiducial detection with documented camera-frame and robot-frame transforms.
+- [ ] Image-based or pose-based visual servo controller producing bounded `Action` values through the existing safety layer.
+- [ ] SO-101 visual alignment and approach acceptance test with position error, settling time, and failure reporting.
+- [ ] Deterministic replay and robustness evaluation under bounded camera and scene perturbations.
+
+#### Definition of Done
+1. A visual servo controller reaches and holds a documented image or pose target from multiple initial conditions.
+2. Commands respect the existing joint limits, action-step limits, and collision checks.
+3. Evaluation reports visual error, end-effector error, settling time, and failure reason separately from learned-policy metrics.
+
+### Phase 2B: Vision-Based Motor Skills (Imitation Learning via LeRobot)
+
+Transition from explicit visual control to data-driven policies. Use Hugging
+Face's **LeRobot** ecosystem to train local policies that map raw camera
+observations and robot state to low-level motor actions. The Phase 2A
+controller remains the interpretable baseline for comparison.
+
+#### Key Deliverables & Directory Layout
 - [ ] `scripts/collect_demos.py`: Automated trajectory recorder producing a LeRobot-shaped `.npz` and metadata layout for the SO-101. **Partial:** it does not yet export the standard `LeRobotDataset` format or support teleoperation/base odometry.
 - [ ] `docker/Dockerfile.lerobot`: Headless containerized environment for policy training and dependency isolation.
 - [ ] `scripts/train_policy.py`: Local GPU or cloud training pipeline for ACT (Action Chunking with Transformers) or Diffusion Policy models. **Partial:** the ACT-specific `scripts/train_act.py` exists; the planned unified entry point does not.
 - [ ] `scripts/eval_policy.py`: Closed-loop evaluation runner executing policies over the direct MuJoCo interface. **Partial:** scripted, replay, and LeRobot policies are supported; ROS 2 evaluation is not integrated.
 
-### Interface Contract
+#### Interface Contract
 * **Planned input observation:** `camera_wrist_rgb` ($224 \times 224$), `camera_top_rgb` ($224 \times 224$), `joint_states`
 * **Planned output action:** Predicted joint position target sequences / base action vectors ($N=100$ chunking horizon).
 * **Current prototype:** SO-101 `front` and `wrist` RGB frames, six-value joint state, and configurable ACT chunks (default `30`) in `src/physai/policy/act_dataset.py`.
 
-### Definition of Done (DoD)
+#### Definition of Done (DoD)
 1. Harvest 50–100 successful task episodes per manipulation skill exported cleanly to `LeRobotDataset`.
 2. Policy training finishes with converging loss curves inside the containerized environment.
 3. Closed-loop evaluation in `eval_policy.py` achieves **> 80% task success rate** over 20 randomized trials in MuJoCo, bypassing analytical solvers.
+
+### Phase 2C: Deep Reinforcement Learning
+
+Train policies directly against MuJoCo task rewards after the observation,
+action, safety, and evaluation paths are proven by the preceding baselines.
+Start with state-based control so reward design and dynamics can be debugged
+before adding pixel observations.
+
+#### Key Deliverables
+- [ ] `scripts/train_rl.py`: Reproducible PPO or SAC training entry point with checkpoint and metrics output.
+- [ ] `scripts/eval_rl.py` or equivalent policy integration in `scripts/eval_policy.py` for held-out seeds.
+- [ ] RL environment adapter exposing the existing `Observation`, `Action`, `RobotSpec`, and safety contracts.
+- [ ] SO-101 state-based pick-and-place or TurtleBot4 navigation benchmark before vision-based RL.
+- [ ] Seeded training, checkpoint metadata, deterministic evaluation, and domain-randomized evaluation reports.
+
+#### Definition of Done
+1. A PPO or SAC policy trains reproducibly from a fixed seed in MuJoCo.
+2. A trained checkpoint runs through the existing policy boundary without changing the robot adapter.
+3. The policy achieves at least 80% success over 20 held-out seeds on a documented task.
+4. Randomized evaluation reports success, collision, timeout, and unsafe-action failures separately.
+5. Vision-based RL is added only after the state-based benchmark passes.
 
 ---
 
