@@ -8,12 +8,11 @@ chunk buffering, unit conversion — is already handled and matches the format
 the recorder writes.
 
 Observation keys follow the LeRobot convention so a checkpoint fine-tuned on a
-LeRobot dataset recorded from this env needs no remapping:
+dataset recorded from a robot contract needs no remapping:
 
-    observation.images.front   (H, W, 3) uint8
-    observation.images.wrist   (H, W, 3) uint8
-    observation.state          (6,) float32   5 arm joints + gripper, radians
-    action                     (6,) float32   same layout, absolute targets
+    observation.images.<camera> (H, W, 3) uint8
+    observation.state           (N,) float32
+    action                      (M,) float32
 """
 
 from __future__ import annotations
@@ -47,14 +46,22 @@ class VLAPolicy(Policy):
         robot: RobotPort,
         action_horizon: int = 1,
         instruction: str = "",
-        image_keys: tuple[str, ...] = ("front", "wrist"),
+        image_keys: tuple[str, ...] | None = None,
         action_decoder: Callable[[np.ndarray], Action] | None = None,
     ) -> None:
         self.robot = robot
         self.env = robot
         self.action_horizon = max(1, action_horizon)
         self.instruction = instruction
-        self.image_keys = image_keys
+        contract = getattr(robot, "training_contract", None)
+        if image_keys is None:
+            self.image_keys = (
+                tuple(camera.name for camera in contract.observation_spec.cameras)
+                if contract is not None
+                else ()
+            )
+        else:
+            self.image_keys = image_keys
         self.action_decoder = action_decoder
         self._chunk: deque[np.ndarray] = deque()
 
@@ -107,6 +114,9 @@ class VLAPolicy(Policy):
     def _decode_action(self, values: np.ndarray) -> Action:
         if self.action_decoder is not None:
             return self.action_decoder(values)
+        contract = getattr(self.robot, "training_contract", None)
+        if contract is not None and contract.action_decoder is not None:
+            return contract.action_decoder(values)
         action_names = self._model_action_names()
         arm_size = len(self.robot.robot_spec.action_joint_names)
         if values.size != len(action_names):
@@ -132,6 +142,14 @@ class VLAPolicy(Policy):
         )
 
     def _model_action_names(self) -> tuple[str, ...]:
+        contract = getattr(self.robot, "training_contract", None)
+        if contract is not None:
+            names = contract.action_spec.metadata.get("names")
+            if names is not None:
+                return tuple(names)
+            joint_names = contract.action_spec.metadata.get("joint_names")
+            if joint_names is not None:
+                return tuple(joint_names)
         names = self.robot.robot_spec.action_joint_names
         if "gripper" in self.robot.robot_spec.capabilities:
             return (*names, "gripper")
@@ -204,8 +222,9 @@ class LeRobotPolicy(VLAPolicy):
     @classmethod
     def from_checkpoint(
         cls, env, checkpoint_dir, device: str | None = None, **kw
-    ) -> "LeRobotPolicy":
+    ) -> LeRobotPolicy:
         import json
+
         import torch
         from lerobot.policies.act import ACTPolicy, make_act_pre_post_processors
 
@@ -237,6 +256,27 @@ class LeRobotPolicy(VLAPolicy):
             checkpoint_meta = CheckpointMetadata.from_dict(
                 json.loads(checkpoint_meta_path.read_text(encoding="utf-8"))
             )
+            contract = getattr(env, "training_contract", None)
+            if contract is not None:
+                expected_observation_schema = dict(contract.observation_schema)
+                expected_action_schema = dict(contract.action_schema)
+            else:
+                expected_observation_schema = {
+                    "observation.state": {"shape": [len(env.robot_spec.joint_names)]}
+                }
+                expected_action_schema = {
+                    "schema": env.robot_spec.metadata.get(
+                        "action_schema", "generic.v1"
+                    ),
+                    "names": list(
+                        (*env.robot_spec.action_joint_names,)
+                        + (
+                            ("gripper",)
+                            if "gripper" in env.robot_spec.capabilities
+                            else ()
+                        )
+                    ),
+                }
             validate_checkpoint_compatibility(
                 checkpoint_meta,
                 {
@@ -247,24 +287,8 @@ class LeRobotPolicy(VLAPolicy):
                         if getattr(env, "task", None) is not None
                         else {}
                     ),
-                    "observation_schema": {
-                        "observation.state": {
-                            "shape": [len(env.robot_spec.joint_names)]
-                        },
-                    },
-                    "action_schema": {
-                        "schema": env.robot_spec.metadata.get(
-                            "action_schema", "generic.v1"
-                        ),
-                        "names": list(
-                            (*env.robot_spec.action_joint_names,)
-                            + (
-                                ("gripper",)
-                                if "gripper" in env.robot_spec.capabilities
-                                else ()
-                            )
-                        ),
-                    },
+                    "observation_schema": expected_observation_schema,
+                    "action_schema": expected_action_schema,
                 },
             )
 

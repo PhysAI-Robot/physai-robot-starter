@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
 from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
 
 import numpy as np
 
 from ..contracts import Action, Observation
+from ..robots.base import RobotSpec, RobotTrainingContract
 from .metadata import DatasetMetadata
-from ..robots.base import RobotSpec
 
 
 @dataclass
@@ -69,6 +69,7 @@ class EpisodeRecorder:
         action_encoder: ActionEncoder | None = None,
         action_schema: dict | None = None,
         observation_schema: dict | None = None,
+        training_contract: RobotTrainingContract | None = None,
     ) -> None:
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
@@ -83,9 +84,18 @@ class EpisodeRecorder:
         self.split = split or {}
         self.scene_name = scene_name
         self.scene_config = scene_config or {}
-        self.action_encoder = action_encoder or _generic_action_encoder
-        self._action_schema = action_schema
-        self._observation_schema = observation_schema
+        self.training_contract = training_contract
+        self.action_encoder = (
+            action_encoder
+            or (training_contract.action_encoder if training_contract else None)
+            or _generic_action_encoder
+        )
+        self._action_schema = action_schema or (
+            dict(training_contract.action_schema) if training_contract else None
+        )
+        self._observation_schema = observation_schema or (
+            dict(training_contract.observation_schema) if training_contract else None
+        )
         self._state_names: tuple[str, ...] | None = None
         self._action_names: tuple[str, ...] | None = None
         self.episodes: list[dict] = []
@@ -199,7 +209,7 @@ class EpisodeRecorder:
         meta = {
             "codebase_version": "physai-0.0.1",
             **metadata.to_dict(),
-            "created_utc": datetime.now(timezone.utc).isoformat(),
+            "created_utc": datetime.now(UTC).isoformat(),
             "robot_type": self.robot_type,
             "task": self.task,
             "fps": self.fps,

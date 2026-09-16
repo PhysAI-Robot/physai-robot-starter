@@ -32,7 +32,7 @@ class DatasetStats:
         Path(path).write_text(json.dumps(self.per_key, indent=2), encoding="utf-8")
 
     @classmethod
-    def from_json(cls, path: Path) -> "DatasetStats":
+    def from_json(cls, path: Path) -> DatasetStats:
         return cls(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
@@ -48,18 +48,24 @@ class ACTEpisodeDataset(Dataset):
     def __init__(
         self,
         dataset_dir: str | Path,
-        camera_keys: tuple[str, ...] = ("front", "wrist"),
+        camera_keys: tuple[str, ...] | None = None,
         chunk_size: int = 30,
         image_size: int = 128,
-        task: str = "put the red cube on the green pad",
+        task: str | None = None,
     ) -> None:
         self.dataset_dir = Path(dataset_dir)
-        self.camera_keys = camera_keys
         self.chunk_size = chunk_size
         self.image_size = image_size
-        self.task = task
 
         meta = json.loads((self.dataset_dir / "meta.json").read_text(encoding="utf-8"))
+        if camera_keys is None:
+            camera_keys = tuple(
+                key.removeprefix("observation.images.")
+                for key in meta.get("observation_schema", {})
+                if key.startswith("observation.images.")
+            )
+        self.camera_keys = camera_keys
+        self.task = task if task is not None else meta.get("task", "")
         self.episodes: list[dict[str, np.ndarray]] = []
         self.index: list[tuple[int, int]] = []  # (episode_idx, timestep)
         for e in meta["episodes"]:
@@ -143,7 +149,6 @@ class ACTEpisodeDataset(Dataset):
             key = f"observation.images.{cam}"
             # Sample frames rather than decoding every one at full res — image
             # normalization only needs a stable per-channel estimate.
-            n_ep = len(self.episodes)
             sample_frames = []
             for e in self.episodes:
                 frames = e[key]

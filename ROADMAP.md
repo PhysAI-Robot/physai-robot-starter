@@ -79,6 +79,7 @@ adapters.
 
 ### Bridging Deliverables
 - [x] `src/physai/contracts.py`: Define canonical `ObservationSpec` and `ActionSpec` schemas covering names, shapes, dtypes, units, ranges, camera layout, and normalization metadata.
+- [x] Robot-owned `RobotTrainingContract` providers define each embodiment's observation/action schema, camera layout, dataset encoder, and optional action decoder without coupling `physai.data` or `physai.policy` to a concrete robot.
 - [x] `src/physai/data/gym_env.py`: Add a Gymnasium-compatible environment adapter for direct MuJoCo task training with seeded `reset()`, `step()`, spaces, `rgb_array` rendering, structured episode information, and the existing safety gate.
 - [x] Make the canonical SO-101 action layout explicit and consistent across policies, recorder output, replay, ROS 2 conversion, and training datasets.
 - [x] Version dataset metadata with robot, task, contract schema, simulator configuration, camera configuration, seed, and train/validation/test split information.

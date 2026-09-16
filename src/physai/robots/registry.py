@@ -12,12 +12,14 @@ ROS2NodeFactory = Callable[..., Any]
 EnvConfigFactory = Callable[..., Any]
 NavigationFactory = Callable[..., Any]
 SceneDefaultsFactory = Callable[[], dict[str, Any]]
+RobotPolicyFactory = Callable[..., Any]
 _FACTORIES: dict[str, RobotFactory] = {}
 _KINDS: dict[str, str] = {}
 _ROS2_NODE_FACTORIES: dict[str, ROS2NodeFactory] = {}
 _ENV_CONFIG_FACTORIES: dict[str, EnvConfigFactory] = {}
 _NAVIGATION_FACTORIES: dict[str, NavigationFactory] = {}
 _SCENE_DEFAULT_FACTORIES: dict[str, SceneDefaultsFactory] = {}
+_POLICY_FACTORIES: dict[tuple[str, str], RobotPolicyFactory] = {}
 
 
 def register_robot(
@@ -70,6 +72,29 @@ def register_scene_defaults(
         raise ValueError(f"scene defaults for robot {name!r} are already registered")
     _SCENE_DEFAULT_FACTORIES[name] = factory
     return factory
+
+
+def register_robot_policy(
+    robot_name: str, policy_name: str, factory: RobotPolicyFactory
+) -> RobotPolicyFactory:
+    """Register a policy implementation owned by one robot adapter."""
+    key = (robot_name, policy_name)
+    if key in _POLICY_FACTORIES:
+        raise ValueError(
+            f"policy {policy_name!r} for robot {robot_name!r} is already registered"
+        )
+    _POLICY_FACTORIES[key] = factory
+    return factory
+
+
+def create_robot_policy(robot_name: str, policy_name: str, **kwargs: Any) -> Any:
+    """Create a robot-owned policy without importing its implementation."""
+    _load_builtins()
+    try:
+        factory = _POLICY_FACTORIES[(robot_name, policy_name)]
+    except KeyError as exc:
+        raise ValueError(f"robot {robot_name!r} has no policy {policy_name!r}") from exc
+    return factory(**kwargs)
 
 
 def scene_defaults(name: str) -> dict[str, Any]:
@@ -147,6 +172,10 @@ def _load_builtins() -> None:
         from .so101.scene import scene_defaults as so101_scene_defaults
 
         register_scene_defaults("so101", so101_scene_defaults)
+    if ("so101", "scripted") not in _POLICY_FACTORIES:
+        from .so101.policy import make_scripted_policy
+
+        register_robot_policy("so101", "scripted", make_scripted_policy)
     if "so101" not in _ENV_CONFIG_FACTORIES:
         from .so101.env import EnvConfig
 

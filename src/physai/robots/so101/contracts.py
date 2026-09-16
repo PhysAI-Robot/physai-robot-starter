@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import numpy as np
 
@@ -13,6 +14,7 @@ from ...contracts import (
     ObservationSpec,
     TensorSpec,
 )
+from ..base import RobotTrainingContract
 
 ARM_JOINT_NAMES: tuple[str, ...] = (
     "shoulder_pan",
@@ -80,6 +82,7 @@ def so101_action_spec() -> ActionSpec:
             "schema": SO101_ACTION_SCHEMA,
             "mode": "joint_position",
             "absolute": True,
+            "names": list(ALL_JOINT_NAMES),
             "joint_names": list(ALL_JOINT_NAMES),
         },
     )
@@ -90,10 +93,9 @@ def so101_observation_spec(
     camera_config: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> ObservationSpec:
     """Describe the canonical SO-101 state and camera observation layout."""
-    camera_config = camera_config or {}
+    camera_config = camera_config or {"front": {}, "wrist": {}}
     cameras = []
-    for name in ("front", "wrist"):
-        config = camera_config.get(name, {})
+    for name, config in camera_config.items():
         cameras.append(
             CameraSpec(
                 name=name,
@@ -145,6 +147,21 @@ def so101_observation_schema(
     return schema
 
 
+def so101_training_contract(
+    *, camera_config: Mapping[str, Mapping[str, Any]] | None = None
+) -> RobotTrainingContract:
+    """Return the complete SO-101 contract consumed by training adapters."""
+    return RobotTrainingContract(
+        observation_spec=so101_observation_spec(camera_config=camera_config),
+        action_spec=so101_action_spec(),
+        action_encoder=lambda action, gripper_joint: so101_action_encoder(
+            action, gripper_joint=0.0 if gripper_joint is None else gripper_joint
+        ),
+        action_schema=so101_action_schema(),
+        observation_schema=so101_observation_schema(camera_config=camera_config),
+    )
+
+
 __all__ = [
     "ALL_JOINT_NAMES",
     "ARM_JOINT_NAMES",
@@ -157,4 +174,5 @@ __all__ = [
     "so101_action_values",
     "so101_observation_schema",
     "so101_observation_spec",
+    "so101_training_contract",
 ]

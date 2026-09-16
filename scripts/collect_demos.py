@@ -16,14 +16,9 @@ from pathlib import Path
 import _bootstrap  # noqa: F401
 
 from physai.data import EpisodeRecorder
-from physai.robots.so101.expert import SO101PickPlaceExpert
-from physai.robots import available_robots, create_robot
+from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
-from physai.robots.so101.contracts import (
-    so101_action_encoder,
-    so101_action_schema,
-    so101_observation_schema,
-)
+from physai.robots.so101.expert import SO101PickPlaceExpert
 from physai.sim import SceneConfig
 from physai.tasks import TaskRuntime, create_task
 
@@ -80,6 +75,7 @@ def main() -> int:
         robot,
         create_task("sorting" if args.sorting else "pick_place"),
     )
+    training_contract = robot.training_contract
     rec = EpisodeRecorder(
         args.out,
         task=args.task,
@@ -87,21 +83,7 @@ def main() -> int:
         fps=env.cfg.control_hz,
         store_images=not args.no_images,
         robot_spec=robot.robot_spec,
-        action_encoder=lambda action, gripper_joint: so101_action_encoder(
-            action,
-            gripper_joint=(
-                gripper_joint
-                if gripper_joint is not None
-                else env.gripper_to_joint(action.gripper.clipped())
-            ),
-        ),
-        action_schema=so101_action_schema(),
-        observation_schema=so101_observation_schema(
-            camera_config={
-                name: {"width": args.width, "height": args.height, "encoding": "rgb8"}
-                for name in env.cfg.cameras
-            }
-        ),
+        training_contract=training_contract,
         simulator_config={
             "control_hz": env.cfg.control_hz,
             "max_steps": env.cfg.max_steps,
