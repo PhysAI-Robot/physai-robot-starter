@@ -42,13 +42,17 @@ def save_gif(frames: list[np.ndarray], path: Path, fps: int, stride: int = 3) ->
 
 
 def _so101(scene: SceneConfig, task: str, seed: int, max_steps: int = 400):
-    robot = SO101Env(EnvConfig(scene=scene, seed=seed, max_steps=max_steps, render=True))
+    robot = SO101Env(
+        EnvConfig(scene=scene, seed=seed, max_steps=max_steps, render=True)
+    )
     return robot, TaskRuntime(robot, create_task(task))
 
 
 def render_pick_place(seed: int = 0) -> None:
     print("[so101] scripted pick-and-place")
-    robot, env = _so101(SceneConfig(camera_width=640, camera_height=480), "pick_place", seed)
+    robot, env = _so101(
+        SceneConfig(camera_width=640, camera_height=480), "pick_place", seed
+    )
     obs = env.reset(seed=seed)
     policy = create_policy("scripted", env=env)
     policy.reset(obs)
@@ -67,7 +71,9 @@ def render_pick_place(seed: int = 0) -> None:
 def render_camera_views(seed: int = 0) -> None:
     """Both observation cameras at the moment the jaws close on the cube."""
     print("[so101] observation cameras")
-    robot, env = _so101(SceneConfig(camera_width=480, camera_height=480), "pick_place", seed)
+    robot, env = _so101(
+        SceneConfig(camera_width=480, camera_height=480), "pick_place", seed
+    )
     obs = env.reset(seed=seed)
     policy = create_policy("scripted", env=env)
     policy.reset(obs)
@@ -99,7 +105,11 @@ def render_sorting(seed: int = 0, planner_seed: int = 1) -> None:
         if terminated or truncated or policy.done:
             break
     print(f"  scripted target={env.target_color} success={bool(info.get('success'))}")
-    save_gif(frames, MEDIA / "sorting" / "sorting_scripted.gif", fps=int(robot.cfg.control_hz))
+    save_gif(
+        frames,
+        MEDIA / "sorting" / "sorting_scripted.gif",
+        fps=int(robot.cfg.control_hz),
+    )
     env.close()
 
     # Same layout, one word different in the instruction.
@@ -122,8 +132,11 @@ def render_sorting(seed: int = 0, planner_seed: int = 1) -> None:
             if runner.done or terminated or truncated:
                 break
         print(f"  planner instruction={color}")
-        save_gif(frames, MEDIA / "sorting" / f"sorting_planner_{color}.gif",
-                 fps=int(robot.cfg.control_hz))
+        save_gif(
+            frames,
+            MEDIA / "sorting" / f"sorting_planner_{color}.gif",
+            fps=int(robot.cfg.control_hz),
+        )
         env.close()
 
 
@@ -139,8 +152,9 @@ def render_turtlebot(seed: int = 0) -> None:
     for _ in range(240):
         frames.append(env.render_camera())
         env.step(action)
-    save_gif(frames, MEDIA / "turtlebot4_drive.gif",
-             fps=int(env.cfg.control_hz), stride=5)
+    save_gif(
+        frames, MEDIA / "turtlebot4_drive.gif", fps=int(env.cfg.control_hz), stride=5
+    )
     env.close()
 
 
@@ -153,8 +167,9 @@ GROUPS = {
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--only", choices=sorted(GROUPS),
-                    help="render one group instead of all of them")
+    ap.add_argument(
+        "--only", choices=sorted(GROUPS), help="render one group instead of all of them"
+    )
     args = ap.parse_args()
 
     names = [args.only] if args.only else list(GROUPS)

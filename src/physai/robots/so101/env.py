@@ -2,26 +2,35 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import mujoco
 import numpy as np
 
 from ...contracts import (
-    ALL_JOINT_NAMES,
-    ARM_JOINT_NAMES,
     Action,
-    GRIPPER_JOINT_NAME,
     GripperCommand,
     Header,
     ImageFrame,
     JointState,
     Observation,
 )
-from ...robots.base import RobotSpec
+from ...robots.base import RobotSpec, RobotTrainingContract
 from ...sim.core import MuJoCoSimulationCore
+from ...sim.domain_randomization import (
+    DomainRandomizationConfig,
+    DomainRandomizationEngine,
+    RandomizationMetadata,
+)
 from ...sim.scene import SceneConfig, build_model
+from .contracts import (
+    ALL_JOINT_NAMES,
+    ARM_JOINT_NAMES,
+    GRIPPER_JOINT_NAME,
+    so101_training_contract,
+)
 from .kinematics import ArmKinematics
+from .scene import scene_defaults
 
 HOME_QPOS = np.array([0.0, -1.05, 1.25, 0.75, 0.0], dtype=np.float64)
 
@@ -30,7 +39,7 @@ HOME_QPOS = np.array([0.0, -1.05, 1.25, 0.75, 0.0], dtype=np.float64)
 class EnvConfig:
     """SO-101-specific simulation and observation settings."""
 
-    scene: SceneConfig = field(default_factory=SceneConfig)
+    scene: SceneConfig = field(default_factory=lambda: SceneConfig(**scene_defaults()))
     control_hz: float = 25.0
     render: bool = True
     cameras: tuple[str, ...] = ("front", "wrist")
@@ -42,6 +51,9 @@ class EnvConfig:
     target_x_range: tuple[float, float] = (0.16, 0.26)
     target_y_range: tuple[float, float] = (-0.13, -0.04)
     seed: int | None = None
+    domain_randomization: DomainRandomizationConfig = field(
+        default_factory=DomainRandomizationConfig
+    )
     # The XML's default actuator forcerange (+/-3.35 N*m) is a per-servo torque
     # rating, not a sane grip-force budget: lifting a 0.03 kg cube only needs a
     # few mN*m, but a fixed-position squeeze target can drive the actuator to
@@ -57,7 +69,21 @@ class SO101Env(MuJoCoSimulationCore):
 
     def __init__(self, cfg: EnvConfig | None = None) -> None:
         self.cfg = cfg or EnvConfig()
+        defaults = scene_defaults()
+        missing = {
+            key: value
+            for key, value in defaults.items()
+            if getattr(self.cfg.scene, key) is None
+        }
+        if missing:
+            self.cfg = replace(
+                self.cfg,
+                scene=replace(self.cfg.scene, **missing),
+            )
         self.model, self.spec = build_model(self.cfg.scene)
+        self.randomization = DomainRandomizationEngine(
+            self.model, self.cfg.domain_randomization
+        )
         super().__init__(
             self.model,
             control_hz=self.cfg.control_hz,
@@ -118,6 +144,15 @@ class SO101Env(MuJoCoSimulationCore):
             self.model, mujoco.mjtObj.mjOBJ_SITE, "target_site"
         )
         self.kin = ArmKinematics(self.model, ee_site=self.cfg.scene.ee_site)
+        self.randomization_metadata = RandomizationMetadata(
+            enabled=False,
+            seed=self.cfg.seed,
+            friction_scale=1.0,
+            mass_scale=1.0,
+            lighting_scale=1.0,
+            camera_position_offset={},
+            clutter_position={},
+        )
         self._last_action = Action(joint_position=HOME_QPOS.copy())
 
     @property
@@ -135,10 +170,31 @@ class SO101Env(MuJoCoSimulationCore):
                 for name, limit in zip(ARM_JOINT_NAMES, self.arm_limits)
             },
             max_joint_delta={name: 0.5 for name in ARM_JOINT_NAMES},
-            metadata={"control_hz": self.cfg.control_hz},
+            metadata={
+                "control_hz": self.cfg.control_hz,
+                "action_schema": "so101.joint_position.v1",
+            },
             joint_state_frame="base",
             camera_frames={"front": "camera_front", "wrist": "camera_wrist"},
+            units={
+                "joint_position": "rad",
+                "joint_velocity": "rad/s",
+                "position": "m",
+            },
         )
+
+    @property
+    def training_contract(self) -> RobotTrainingContract:
+        """Return the configured SO-101 contract for training adapters."""
+        camera_config = {
+            name: {
+                "width": self.cfg.scene.camera_width,
+                "height": self.cfg.scene.camera_height,
+                "encoding": "rgb8",
+            }
+            for name in self.cfg.cameras
+        }
+        return so101_training_contract(camera_config=camera_config)
 
     def gripper_to_joint(self, normalized: float) -> float:
         lo, hi = self.grip_limits
@@ -161,7 +217,7 @@ class SO101Env(MuJoCoSimulationCore):
             colors = list(self.sorting_cubes.keys())
             self.rng.shuffle(colors)
             for color, (y_lo, y_hi) in zip(colors, y_bands):
-                body_id, qadr = self.sorting_cubes[color]
+                _body_id, qadr = self.sorting_cubes[color]
                 position = np.array([0.0, 0.0, base_z], dtype=np.float64)
                 if self.cfg.randomize_cube:
                     position[0] = self.rng.uniform(*self.cfg.cube_x_range)
@@ -169,16 +225,16 @@ class SO101Env(MuJoCoSimulationCore):
                 else:
                     position[0] = self.cfg.scene.cube_pos[0]
                     position[1] = (y_lo + y_hi) / 2
-                self.data.qpos[qadr:qadr + 3] = position
-                self.data.qpos[qadr + 3:qadr + 7] = [1, 0, 0, 0]
+                self.data.qpos[qadr : qadr + 3] = position
+                self.data.qpos[qadr + 3 : qadr + 7] = [1, 0, 0, 0]
             self.target_color = self.rng.choice(list(self.sorting_cubes.keys()))
         else:
             cube_pos = np.array(self.cfg.scene.cube_pos, dtype=np.float64)
             if self.cfg.randomize_cube:
                 cube_pos[0] = self.rng.uniform(*self.cfg.cube_x_range)
                 cube_pos[1] = self.rng.uniform(*self.cfg.cube_y_range)
-            self.data.qpos[self.cube_qadr:self.cube_qadr + 3] = cube_pos
-            self.data.qpos[self.cube_qadr + 3:self.cube_qadr + 7] = [1, 0, 0, 0]
+            self.data.qpos[self.cube_qadr : self.cube_qadr + 3] = cube_pos
+            self.data.qpos[self.cube_qadr + 3 : self.cube_qadr + 7] = [1, 0, 0, 0]
 
         if self.cfg.randomize_target:
             target_pos = self.model.site_pos[self.target_sid].copy()
@@ -189,6 +245,27 @@ class SO101Env(MuJoCoSimulationCore):
                 self.model, mujoco.mjtObj.mjOBJ_GEOM, "target_pad"
             )
             self.model.geom_pos[target_geom_id] = target_pos
+
+        protected_xy: list[tuple[float, float]] = [
+            tuple(float(value) for value in self.model.site_pos[self.target_sid][:2])
+        ]
+        if self.sorting_cubes:
+            protected_xy.extend(
+                tuple(float(value) for value in self.data.qpos[qadr : qadr + 2])
+                for _, qadr in self.sorting_cubes.values()
+            )
+        else:
+            protected_xy.append(
+                tuple(
+                    float(value)
+                    for value in self.data.qpos[self.cube_qadr : self.cube_qadr + 2]
+                )
+            )
+        self.randomization_metadata = self.randomization.apply(
+            self.rng,
+            seed=seed if seed is not None else self.cfg.seed,
+            protected_xy=tuple(protected_xy),
+        )
 
         self.data.ctrl[self.arm_act_ids] = HOME_QPOS
         self.data.ctrl[self.grip_act_id] = self.gripper_to_joint(1.0)
@@ -223,24 +300,31 @@ class SO101Env(MuJoCoSimulationCore):
         reward = 0.0
         terminated = False
         truncated = self.step_count >= self.cfg.max_steps
+        info["randomization"] = self.randomization_metadata.as_dict()
         return observation, reward, terminated, truncated, info
 
     def close(self) -> None:
         super().close()
 
     def joint_state(self) -> JointState:
-        position = np.concatenate([
-            self.data.qpos[self.arm_qadr],
-            [self.data.qpos[self.grip_qadr]],
-        ])
-        velocity = np.concatenate([
-            self.data.qvel[self.arm_vadr],
-            [self.data.qvel[self.grip_vadr]],
-        ])
-        effort = np.concatenate([
-            self.data.actuator_force[self.arm_act_ids],
-            [self.data.actuator_force[self.grip_act_id]],
-        ])
+        position = np.concatenate(
+            [
+                self.data.qpos[self.arm_qadr],
+                [self.data.qpos[self.grip_qadr]],
+            ]
+        )
+        velocity = np.concatenate(
+            [
+                self.data.qvel[self.arm_vadr],
+                [self.data.qvel[self.grip_vadr]],
+            ]
+        )
+        effort = np.concatenate(
+            [
+                self.data.actuator_force[self.arm_act_ids],
+                [self.data.actuator_force[self.grip_act_id]],
+            ]
+        )
         return JointState(
             name=ALL_JOINT_NAMES,
             position=position,

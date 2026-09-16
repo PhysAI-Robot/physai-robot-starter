@@ -1,13 +1,14 @@
-"""ROS2-shaped message contracts.
+"""Shared application contracts and ROS2-compatible value types.
 
-Phase 0 runs without ROS2, but every interface boundary in this repo speaks
-these dataclasses instead of raw numpy. In Phase 1 each one is replaced by its
-real message type with no changes to callers:
+These dataclasses are the internal boundary between policies, tasks, robot
+ports, and adapters. Their fields and units mirror the corresponding ROS2
+messages, but they remain transport-neutral so direct MuJoCo execution does
+not require ROS2. The bridge converts them at the ROS2 boundary:
 
     JointState      -> sensor_msgs/msg/JointState
     Twist           -> geometry_msgs/msg/Twist
     PoseStamped     -> geometry_msgs/msg/PoseStamped
-    GripperCommand  -> control_msgs/action/GripperCommand (goal)
+    GripperCommand  -> control_msgs/msg/GripperCommand
     ImageFrame      -> sensor_msgs/msg/Image  (+ CameraInfo)
 
 Field names and units deliberately match the ROS2 definitions (SI, radians,
@@ -17,20 +18,11 @@ quaternion as x,y,z,w).
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
-
-# SO-101 compatibility names. Other embodiments must provide their own ordering.
-ARM_JOINT_NAMES: tuple[str, ...] = (
-    "shoulder_pan",
-    "shoulder_lift",
-    "elbow_flex",
-    "wrist_flex",
-    "wrist_roll",
-)
-GRIPPER_JOINT_NAME = "gripper"
-ALL_JOINT_NAMES: tuple[str, ...] = ARM_JOINT_NAMES + (GRIPPER_JOINT_NAME,)
 
 
 def _now() -> float:
@@ -55,24 +47,34 @@ class Header:
 class JointState:
     """sensor_msgs/msg/JointState. Positions in rad, velocities in rad/s."""
 
-    name: tuple[str, ...] = ALL_JOINT_NAMES
-    position: np.ndarray = field(default_factory=lambda: np.zeros(6))
-    velocity: np.ndarray = field(default_factory=lambda: np.zeros(6))
-    effort: np.ndarray = field(default_factory=lambda: np.zeros(6))
+    name: tuple[str, ...] = ()
+    position: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    velocity: np.ndarray | None = None
+    effort: np.ndarray | None = None
     header: Header = field(default_factory=Header)
 
     def __post_init__(self) -> None:
         self.name = tuple(self.name)
         self.position = np.asarray(self.position, dtype=np.float64)
-        self.velocity = np.asarray(self.velocity, dtype=np.float64)
-        self.effort = np.asarray(self.effort, dtype=np.float64)
+        self.velocity = (
+            np.zeros_like(self.position)
+            if self.velocity is None
+            else np.asarray(self.velocity, dtype=np.float64)
+        )
+        self.effort = (
+            np.zeros_like(self.position)
+            if self.effort is None
+            else np.asarray(self.effort, dtype=np.float64)
+        )
         sizes = {self.position.size, self.velocity.size, self.effort.size}
         if len(sizes) != 1 or self.position.size != len(self.name):
             raise ValueError("joint names and state arrays must have the same size")
         if len(set(self.name)) != len(self.name):
             raise ValueError("joint names must be unique")
-        if not all(np.isfinite(values).all()
-                   for values in (self.position, self.velocity, self.effort)):
+        if not all(
+            np.isfinite(values).all()
+            for values in (self.position, self.velocity, self.effort)
+        ):
             raise ValueError("joint state contains non-finite values")
 
     def validate(
@@ -99,8 +101,8 @@ class JointState:
         return {
             "name": list(self.name),
             "position": self.position.tolist(),
-            "velocity": self.velocity.tolist(),
-            "effort": self.effort.tolist(),
+            "velocity": np.asarray(self.velocity).tolist(),
+            "effort": np.asarray(self.effort).tolist(),
             "stamp": self.header.stamp,
         }
 
@@ -184,7 +186,7 @@ class Twist:
 
 @dataclass
 class GripperCommand:
-    """control_msgs/action/GripperCommand goal.
+    """control_msgs/msg/GripperCommand command.
 
     `position` is normalized aperture: 0.0 = fully closed, 1.0 = fully open.
     The env maps it onto the gripper joint's actual range.
@@ -236,8 +238,7 @@ class ImageFrame:
             raise ValueError(f"unsupported image encoding {self.encoding!r}")
         if expected_camera is not None and self.camera_name != expected_camera:
             raise ValueError(
-                f"image expects camera {expected_camera!r}, "
-                f"got {self.camera_name!r}"
+                f"image expects camera {expected_camera!r}, got {self.camera_name!r}"
             )
         if expected_frame is not None and self.header.frame_id != expected_frame:
             raise ValueError(
@@ -299,7 +300,9 @@ class Action:
 
     def __post_init__(self) -> None:
         if self.joint_position is not None:
-            self.joint_position = np.asarray(self.joint_position, dtype=np.float64).reshape(-1)
+            self.joint_position = np.asarray(
+                self.joint_position, dtype=np.float64
+            ).reshape(-1)
             if self.joint_names is not None:
                 self.joint_names = tuple(self.joint_names)
 
@@ -313,3 +316,169 @@ class Action:
         if self.ee_twist is not None:
             return "twist"
         return None
+
+
+@dataclass(frozen=True)
+class TensorSpec:
+    """Canonical metadata for one numeric observation or action value."""
+
+    name: str
+    shape: tuple[int, ...]
+    dtype: str
+    units: str = "unitless"
+    minimum: float | None = None
+    maximum: float | None = None
+    normalization: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("tensor spec name must not be empty")
+        if any(not isinstance(size, int) or size < 0 for size in self.shape):
+            raise ValueError("tensor spec shape must contain non-negative integers")
+        np.dtype(self.dtype)
+        if self.minimum is not None and not np.isfinite(self.minimum):
+            raise ValueError("tensor spec minimum must be finite")
+        if self.maximum is not None and not np.isfinite(self.maximum):
+            raise ValueError("tensor spec maximum must be finite")
+        if (
+            self.minimum is not None
+            and self.maximum is not None
+            and self.minimum > self.maximum
+        ):
+            raise ValueError("tensor spec minimum must not exceed maximum")
+
+    def validate(self, value: Any) -> np.ndarray:
+        array = np.asarray(value)
+        if array.shape != self.shape:
+            raise ValueError(
+                f"{self.name!r} expects shape {self.shape}, got {array.shape}"
+            )
+        if array.dtype != np.dtype(self.dtype):
+            raise ValueError(
+                f"{self.name!r} expects dtype {self.dtype!r}, got {array.dtype!s}"
+            )
+        if not np.issubdtype(array.dtype, np.number):
+            raise ValueError(f"{self.name!r} must use a numeric dtype")
+        if not np.isfinite(array).all():
+            raise ValueError(f"{self.name!r} contains non-finite values")
+        if self.minimum is not None and np.any(array < self.minimum):
+            raise ValueError(f"{self.name!r} contains values below its minimum")
+        if self.maximum is not None and np.any(array > self.maximum):
+            raise ValueError(f"{self.name!r} contains values above its maximum")
+        return array
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "shape": list(self.shape),
+            "dtype": self.dtype,
+            "units": self.units,
+            "minimum": self.minimum,
+            "maximum": self.maximum,
+            "normalization": dict(self.normalization),
+        }
+
+
+@dataclass(frozen=True)
+class CameraSpec:
+    """Canonical metadata for one image observation stream."""
+
+    name: str
+    shape: tuple[int, int, int]
+    dtype: str = "uint8"
+    encoding: str = "rgb8"
+    frame_id: str = ""
+    normalization: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("camera spec name must not be empty")
+        if len(self.shape) != 3 or any(size <= 0 for size in self.shape):
+            raise ValueError("camera spec shape must be (height, width, channels)")
+        np.dtype(self.dtype)
+        if not self.encoding:
+            raise ValueError("camera spec encoding must not be empty")
+
+    def validate(self, value: Any) -> np.ndarray:
+        array = np.asarray(value)
+        if array.shape != self.shape:
+            raise ValueError(
+                f"camera {self.name!r} expects shape {self.shape}, got {array.shape}"
+            )
+        if array.dtype != np.dtype(self.dtype):
+            raise ValueError(
+                f"camera {self.name!r} expects dtype {self.dtype!r}, got {array.dtype!s}"
+            )
+        return array
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "shape": list(self.shape),
+            "dtype": self.dtype,
+            "encoding": self.encoding,
+            "frame_id": self.frame_id,
+            "normalization": dict(self.normalization),
+        }
+
+
+@dataclass(frozen=True)
+class ObservationSpec:
+    """Canonical training schema for policy observations."""
+
+    fields: tuple[TensorSpec, ...] = ()
+    cameras: tuple[CameraSpec, ...] = ()
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        names = [spec.name for spec in (*self.fields, *self.cameras)]
+        if len(names) != len(set(names)):
+            raise ValueError("observation spec names must be unique")
+
+    def validate(self, values: Mapping[str, Any]) -> None:
+        expected = {spec.name for spec in (*self.fields, *self.cameras)}
+        missing = expected - values.keys()
+        extra = values.keys() - expected
+        if missing:
+            raise ValueError(f"observation is missing fields: {sorted(missing)}")
+        if extra:
+            raise ValueError(f"observation has unexpected fields: {sorted(extra)}")
+        for spec in (*self.fields, *self.cameras):
+            spec.validate(values[spec.name])
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "fields": [spec.to_dict() for spec in self.fields],
+            "cameras": [spec.to_dict() for spec in self.cameras],
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(frozen=True)
+class ActionSpec:
+    """Canonical training schema for policy actions."""
+
+    fields: tuple[TensorSpec, ...]
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        names = [spec.name for spec in self.fields]
+        if len(names) != len(set(names)):
+            raise ValueError("action spec names must be unique")
+
+    def validate(self, values: Mapping[str, Any]) -> None:
+        expected = {spec.name for spec in self.fields}
+        missing = expected - values.keys()
+        extra = values.keys() - expected
+        if missing:
+            raise ValueError(f"action is missing fields: {sorted(missing)}")
+        if extra:
+            raise ValueError(f"action has unexpected fields: {sorted(extra)}")
+        for spec in self.fields:
+            spec.validate(values[spec.name])
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "fields": [spec.to_dict() for spec in self.fields],
+            "metadata": dict(self.metadata),
+        }

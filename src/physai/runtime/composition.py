@@ -1,4 +1,4 @@
-"""Explicit runtime assembly for P0 workflows."""
+"""Explicit runtime assembly for direct and ROS2-backed workflows."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from ..planner.base import Planner
 from ..policy.base import Policy
 from ..policy.registry import create_policy
 from ..robots.base import RobotPort
-from ..robots.registry import create_robot
-from ..sim.scenes import create_scene, get_scene_definition
+from ..robots.registry import create_robot, robot_kind, scene_defaults
+from ..sim.scenes import create_scene, default_scene_for, get_scene_definition
 from ..tasks import TaskRuntime, create_task
 from ..tasks.base import Task
 
@@ -73,6 +73,11 @@ def create_runtime(
 ) -> RuntimeComposition:
     """Build and validate a robot-task-policy composition.
 
+    The registered robot kind is resolved before construction so scene
+    defaults and scene compatibility can be selected without branching on a
+    concrete robot name. The constructed robot is then checked again through
+    its ``RobotSpec`` before task, policy, and safety components are composed.
+
     ``robot_config`` and ``robot_kwargs`` are kept separate so callers can
     pass either an existing typed config or factory fields, but not silently
     merge both. Task semantics are composed around the robot port after the
@@ -83,31 +88,34 @@ def create_runtime(
 
     fields = dict(robot_kwargs or {})
     scene_config = None
+    embodiment_kind = robot_kind(robot_name)
     if scene_name is not None:
-        if robot_name != "so101":
+        if embodiment_kind is None:
             raise ValueError(
-                f"scene selection is not supported by robot {robot_name!r} yet"
+                f"scene selection requires a registered kind for robot {robot_name!r}"
             )
         if robot_config is not None or "scene" in fields:
             raise TypeError(
                 "pass either scene_name or an explicit robot scene config, not both"
             )
-        scene_config = create_scene(scene_name, **(scene_kwargs or {}))
+        scene_config = create_scene(
+            scene_name,
+            **scene_defaults(robot_name),
+            **(scene_kwargs or {}),
+        )
         fields["scene"] = scene_config
 
-    default_scenes = {
-        "pick_place": "pick_place_minimal",
-        "sorting": "sorting_minimal",
-    }
     selected_scene_name = scene_name
-    if selected_scene_name is None and task_name in default_scenes and robot_name == "so101":
-        selected_scene_name = default_scenes[task_name]
+    if selected_scene_name is None and task_name is not None and embodiment_kind:
+        selected_scene_name = default_scene_for(embodiment_kind, task_name)
         if robot_config is None and "scene" not in fields:
-            scene_config = create_scene(selected_scene_name, **(scene_kwargs or {}))
-            fields["scene"] = scene_config
-
-    if task_name is not None and robot_name == "so101" and robot_config is None:
-        fields.setdefault("task", task_name)
+            if selected_scene_name is not None:
+                scene_config = create_scene(
+                    selected_scene_name,
+                    **scene_defaults(robot_name),
+                    **(scene_kwargs or {}),
+                )
+                fields["scene"] = scene_config
     robot = create_robot(
         robot_name,
         adapter=adapter,
@@ -117,14 +125,20 @@ def create_runtime(
     )
 
     try:
-        task = create_task(task_name, **(task_kwargs or {})) if task_name is not None else None
+        task = (
+            create_task(task_name, **(task_kwargs or {}))
+            if task_name is not None
+            else None
+        )
 
         if task is not None:
             robot.robot_spec.validate_task(task)
 
         if selected_scene_name is not None:
             definition = get_scene_definition(selected_scene_name)
-            if not definition.supports(robot.robot_spec.kind, task.name if task else None):
+            if not definition.supports(
+                robot.robot_spec.kind, task.name if task else None
+            ):
                 task_label = task.name if task else "no task"
                 raise ValueError(
                     f"scene {selected_scene_name!r} is incompatible with "

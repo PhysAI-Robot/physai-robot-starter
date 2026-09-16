@@ -1,19 +1,18 @@
 """Seam for dropping a real VLA checkpoint into the loop.
 
-Nothing here imports torch — Phase 0 runs without it. The point of this file is
-that when you `uv sync --extra vla` and load SmolVLA (or TurboVLA, or an ACT
+Nothing here imports torch. When you `uv sync --extra vla` and load SmolVLA
+(or TurboVLA, or an ACT
 checkpoint you trained on the demos from `scripts/collect_demos.py`), the only
 thing you write is `_infer`. Everything else — observation packing, action
 chunk buffering, unit conversion — is already handled and matches the format
 the recorder writes.
 
 Observation keys follow the LeRobot convention so a checkpoint fine-tuned on a
-LeRobot dataset recorded from this env needs no remapping:
+dataset recorded from a robot contract needs no remapping:
 
-    observation.images.front   (H, W, 3) uint8
-    observation.images.wrist   (H, W, 3) uint8
-    observation.state          (6,) float32   5 arm joints + gripper, radians
-    action                     (6,) float32   same layout, absolute targets
+    observation.images.<camera> (H, W, 3) uint8
+    observation.state           (N,) float32
+    action                      (M,) float32
 """
 
 from __future__ import annotations
@@ -25,6 +24,7 @@ from collections.abc import Callable
 import numpy as np
 
 from ..contracts import Action, GripperCommand, Observation, PoseStamped
+from ..data.metadata import CheckpointMetadata, validate_checkpoint_compatibility
 from ..model_store import resolve_local_model
 from ..robots.base import RobotPort
 from .base import Policy
@@ -46,29 +46,37 @@ class VLAPolicy(Policy):
         robot: RobotPort,
         action_horizon: int = 1,
         instruction: str = "",
-        image_keys: tuple[str, ...] = ("front", "wrist"),
+        image_keys: tuple[str, ...] | None = None,
         action_decoder: Callable[[np.ndarray], Action] | None = None,
     ) -> None:
         self.robot = robot
         self.env = robot
         self.action_horizon = max(1, action_horizon)
         self.instruction = instruction
-        self.image_keys = image_keys
+        contract = getattr(robot, "training_contract", None)
+        if image_keys is None:
+            self.image_keys = (
+                tuple(camera.name for camera in contract.observation_spec.cameras)
+                if contract is not None
+                else ()
+            )
+        else:
+            self.image_keys = image_keys
         self.action_decoder = action_decoder
         self._chunk: deque[np.ndarray] = deque()
 
     # -- to implement --------------------------------------------------
     @abstractmethod
     def _infer(self, batch: dict) -> np.ndarray:
-        """Return (action_horizon, 6) absolute joint targets in radians.
-
-        Column layout: 5 arm joints then the gripper joint (radians, *not*
-        normalised) — matching `observation.state`.
-        """
+        """Return an action chunk in the robot's declared action layout."""
 
     # -- plumbing ------------------------------------------------------
-    def reset(self, observation: Observation, goal: PoseStamped | None = None,
-              instruction: str | None = None) -> None:
+    def reset(
+        self,
+        observation: Observation,
+        goal: PoseStamped | None = None,
+        instruction: str | None = None,
+    ) -> None:
         self._chunk.clear()
         if instruction is not None:
             self.instruction = instruction
@@ -89,11 +97,16 @@ class VLAPolicy(Policy):
 
     def act(self, observation: Observation) -> Action:
         if not self._chunk:
-            chunk = np.asarray(self._infer(self.build_batch(observation)), dtype=np.float64)
+            chunk = np.asarray(
+                self._infer(self.build_batch(observation)), dtype=np.float64
+            )
             if chunk.ndim == 1:
                 chunk = chunk[None, :]
-            if chunk.shape[1] != 6:
-                raise ValueError(f"expected (T, 6) actions, got {chunk.shape}")
+            expected_width = len(self._model_action_names())
+            if chunk.shape[1] != expected_width:
+                raise ValueError(
+                    f"expected (T, {expected_width}) actions, got {chunk.shape}"
+                )
             self._chunk.extend(chunk[: self.action_horizon])
 
         return self._decode_action(self._chunk.popleft())
@@ -101,21 +114,46 @@ class VLAPolicy(Policy):
     def _decode_action(self, values: np.ndarray) -> Action:
         if self.action_decoder is not None:
             return self.action_decoder(values)
-        if values.size != 6:
+        contract = getattr(self.robot, "training_contract", None)
+        if contract is not None and contract.action_decoder is not None:
+            return contract.action_decoder(values)
+        action_names = self._model_action_names()
+        arm_size = len(self.robot.robot_spec.action_joint_names)
+        if values.size != len(action_names):
             raise ValueError(
-                "default VLA action decoder expects 5 joints and one gripper; "
-                "provide action_decoder for another robot"
+                f"expected {len(action_names)} action values, got {values.size}"
             )
-        try:
-            gripper_to_normalized = self.robot.joint_to_gripper
-        except AttributeError as exc:
+        if values.size == arm_size:
+            return Action(joint_position=values, joint_names=action_names)
+        if (
+            values.size != arm_size + 1
+            or "gripper" not in self.robot.robot_spec.capabilities
+        ):
+            raise ValueError("provide action_decoder for this robot's action layout")
+        gripper_to_normalized = getattr(self.robot, "joint_to_gripper", None)
+        if gripper_to_normalized is None:
             raise ValueError(
                 "robot has no joint_to_gripper mapping; provide action_decoder"
-            ) from exc
+            )
         return Action(
-            joint_position=values[:5],
-            gripper=GripperCommand(position=gripper_to_normalized(values[5])),
+            joint_position=values[:arm_size],
+            gripper=GripperCommand(position=gripper_to_normalized(values[arm_size])),
+            joint_names=self.robot.robot_spec.action_joint_names,
         )
+
+    def _model_action_names(self) -> tuple[str, ...]:
+        contract = getattr(self.robot, "training_contract", None)
+        if contract is not None:
+            names = contract.action_spec.metadata.get("names")
+            if names is not None:
+                return tuple(names)
+            joint_names = contract.action_spec.metadata.get("joint_names")
+            if joint_names is not None:
+                return tuple(joint_names)
+        names = self.robot.robot_spec.action_joint_names
+        if "gripper" in self.robot.robot_spec.capabilities:
+            return (*names, "gripper")
+        return names
 
 
 class ReplayPolicy(VLAPolicy):
@@ -165,8 +203,15 @@ class LeRobotPolicy(VLAPolicy):
 
     name = "lerobot"
 
-    def __init__(self, env, policy, preprocessor, postprocessor,
-                 image_size: int | None = None, **kw) -> None:
+    def __init__(
+        self,
+        env,
+        policy,
+        preprocessor,
+        postprocessor,
+        image_size: int | None = None,
+        **kw,
+    ) -> None:
         kw.setdefault("action_horizon", 1)
         super().__init__(env, **kw)
         self.policy = policy
@@ -175,9 +220,10 @@ class LeRobotPolicy(VLAPolicy):
         self.image_size = image_size
 
     @classmethod
-    def from_checkpoint(cls, env, checkpoint_dir, device: str | None = None, **kw) -> "LeRobotPolicy":
+    def from_checkpoint(
+        cls, env, checkpoint_dir, device: str | None = None, **kw
+    ) -> LeRobotPolicy:
         import json
-        from pathlib import Path
 
         import torch
         from lerobot.policies.act import ACTPolicy, make_act_pre_post_processors
@@ -187,8 +233,12 @@ class LeRobotPolicy(VLAPolicy):
         policy = ACTPolicy.from_pretrained(checkpoint_dir).to(device)
         policy.eval()
 
-        stats = json.loads((checkpoint_dir / "dataset_stats.json").read_text(encoding="utf-8"))
-        preprocessor, postprocessor = make_act_pre_post_processors(policy.config, dataset_stats=stats)
+        stats = json.loads(
+            (checkpoint_dir / "dataset_stats.json").read_text(encoding="utf-8")
+        )
+        preprocessor, postprocessor = make_act_pre_post_processors(
+            policy.config, dataset_stats=stats
+        )
 
         # Not config.json — ACTPolicy.save_pretrained() owns that filename
         # (it's the full ACTConfig dump). Our own metadata lives alongside it
@@ -201,10 +251,57 @@ class LeRobotPolicy(VLAPolicy):
             image_size = meta.get("image_size")
             kw.setdefault("instruction", meta.get("task", ""))
 
-        return cls(env, policy, preprocessor, postprocessor, image_size=image_size, **kw)
+        checkpoint_meta_path = checkpoint_dir / "checkpoint_meta.json"
+        if checkpoint_meta_path.exists():
+            checkpoint_meta = CheckpointMetadata.from_dict(
+                json.loads(checkpoint_meta_path.read_text(encoding="utf-8"))
+            )
+            contract = getattr(env, "training_contract", None)
+            if contract is not None:
+                expected_observation_schema = dict(contract.observation_schema)
+                expected_action_schema = dict(contract.action_schema)
+            else:
+                expected_observation_schema = {
+                    "observation.state": {"shape": [len(env.robot_spec.joint_names)]}
+                }
+                expected_action_schema = {
+                    "schema": env.robot_spec.metadata.get(
+                        "action_schema", "generic.v1"
+                    ),
+                    "names": list(
+                        (*env.robot_spec.action_joint_names,)
+                        + (
+                            ("gripper",)
+                            if "gripper" in env.robot_spec.capabilities
+                            else ()
+                        )
+                    ),
+                }
+            validate_checkpoint_compatibility(
+                checkpoint_meta,
+                {
+                    "schema_version": "physai.checkpoint.v1",
+                    "robot": env.robot_spec.name,
+                    **(
+                        {"task": env.task.name}
+                        if getattr(env, "task", None) is not None
+                        else {}
+                    ),
+                    "observation_schema": expected_observation_schema,
+                    "action_schema": expected_action_schema,
+                },
+            )
 
-    def reset(self, observation: Observation, goal: PoseStamped | None = None,
-              instruction: str | None = None) -> None:
+        return cls(
+            env, policy, preprocessor, postprocessor, image_size=image_size, **kw
+        )
+
+    def reset(
+        self,
+        observation: Observation,
+        goal: PoseStamped | None = None,
+        instruction: str | None = None,
+    ) -> None:
         super().reset(observation, goal, instruction)
         self.policy.reset()
 
@@ -225,11 +322,13 @@ class LeRobotPolicy(VLAPolicy):
             h, w = t.shape[-2], t.shape[-1]
             side = min(h, w)
             top, left = (h - side) // 2, (w - side) // 2
-            t = t[:, top:top + side, left:left + side]
+            t = t[:, top : top + side, left : left + side]
         if self.image_size and t.shape[-1] != self.image_size:
             t = torch.nn.functional.interpolate(
-                t.unsqueeze(0), size=(self.image_size, self.image_size),
-                mode="bilinear", align_corners=False,
+                t.unsqueeze(0),
+                size=(self.image_size, self.image_size),
+                mode="bilinear",
+                align_corners=False,
             ).squeeze(0)
         return t
 

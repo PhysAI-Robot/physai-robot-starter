@@ -1,8 +1,8 @@
-"""Conversions between internal contracts and ROS2-shaped messages.
+"""Conversions between internal contracts and ROS2 messages.
 
-The default codec keeps the Phase 0 dataclasses intact. A ROS2 node can inject
-a codec that constructs real ``sensor_msgs`` and ``trajectory_msgs`` values
-without making the core package depend on ``rclpy``.
+The default codec keeps transport-neutral dataclasses intact. A ROS2 node can
+inject a codec that constructs real ``sensor_msgs`` and ``trajectory_msgs``
+values without making the core package depend on ``rclpy``.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ class MessageCodec(Protocol):
 
 
 class ContractMessageCodec:
-    """Codec for Phase 0 contract objects and ROS2-shaped input objects."""
+    """Codec for internal contract objects and ROS2-shaped input objects."""
 
     def encode_joint_state(self, value: JointState) -> JointState:
         return value
@@ -47,7 +47,9 @@ class ContractMessageCodec:
             raise ValueError("joint trajectory must contain joint_names")
         positions = np.asarray(getattr(point, "positions", ()), dtype=np.float64)
         if positions.size != len(joint_names):
-            raise ValueError("joint trajectory names and positions have different sizes")
+            raise ValueError(
+                "joint trajectory names and positions have different sizes"
+            )
         return Action(
             joint_position=positions,
             joint_names=joint_names,
@@ -101,7 +103,11 @@ def _header_stamp(header: Any) -> float | None:
     stamp = header.stamp
     if isinstance(stamp, (int, float)):
         return float(stamp)
-    return float(getattr(stamp, "sec", 0)) + float(getattr(stamp, "nanosec", 0)) * 1e-9
+    seconds = float(getattr(stamp, "sec", 0))
+    nanoseconds = float(getattr(stamp, "nanosec", 0))
+    if seconds == 0.0 and nanoseconds == 0.0:
+        return None
+    return seconds + nanoseconds * 1e-9
 
 
 def _copy_header(message: Any, source: Any) -> None:

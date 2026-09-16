@@ -32,6 +32,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-rviz2 \
     ros-jazzy-ros2-control \
     ros-jazzy-ros2-controllers \
+    ros-jazzy-control-msgs \
+    ros-jazzy-navigation2 \
+    ros-jazzy-nav2-bringup \
     ros-dev-tools \
     git \
     ffmpeg \
@@ -51,10 +54,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /workspace
 
 COPY . .
-RUN uv sync --locked --extra dev
+RUN uv sync --locked --extra dev --extra training
 ENV PATH="/workspace/.venv/bin:${PATH}"
 
-ENV MUJOCO_GL=osmesa
+ENV MUJOCO_GL=egl
 ENV PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
 
 RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc

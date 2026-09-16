@@ -71,8 +71,7 @@ class Planner(ABC):
     name = "planner"
 
     @abstractmethod
-    def plan(self, instruction: str, observation: Observation) -> Plan:
-        ...
+    def plan(self, instruction: str, observation: Observation) -> Plan: ...
 
 
 class ScriptedPlanner(Planner):
@@ -93,14 +92,27 @@ class ScriptedPlanner(Planner):
             instruction=instruction,
             notes="scripted stand-in; no perception involved",
             subgoals=[
-                SubGoal.from_xyz("move_above", self.pick_xyz + np.array([0, 0, 0.045]),
-                                 target_description="cube", gripper=0.55),
-                SubGoal.from_xyz("grasp", self.pick_xyz,
-                                 target_description="cube", gripper=0.2),
-                SubGoal.from_xyz("move_above", self.place_xyz + np.array([0, 0, 0.055]),
-                                 target_description="target pad", gripper=0.2),
-                SubGoal.from_xyz("release", self.place_xyz,
-                                 target_description="target pad", gripper=0.55),
+                SubGoal.from_xyz(
+                    "move_above",
+                    self.pick_xyz + np.array([0, 0, 0.045]),
+                    target_description="cube",
+                    gripper=0.55,
+                ),
+                SubGoal.from_xyz(
+                    "grasp", self.pick_xyz, target_description="cube", gripper=0.2
+                ),
+                SubGoal.from_xyz(
+                    "move_above",
+                    self.place_xyz + np.array([0, 0, 0.055]),
+                    target_description="target pad",
+                    gripper=0.2,
+                ),
+                SubGoal.from_xyz(
+                    "release",
+                    self.place_xyz,
+                    target_description="target pad",
+                    gripper=0.55,
+                ),
             ],
         )
 
@@ -119,8 +131,10 @@ class SortingPlanner(Planner):
 
     name = "sorting_planner"
 
-    def __init__(self, env, place_xyz, colors: tuple[str, ...] = ("red", "blue", "yellow")) -> None:
-        self.env = env          # privileged access to cube_positions, same pattern as ScriptedPickPlace
+    def __init__(
+        self, env, place_xyz, colors: tuple[str, ...] = ("red", "blue", "yellow")
+    ) -> None:
+        self.env = env  # privileged access to cube_positions for scripted baselines
         self.place_xyz = np.asarray(place_xyz, dtype=np.float64)
         self.colors = colors
 
@@ -129,7 +143,9 @@ class SortingPlanner(Planner):
         for color in self.colors:
             if color in lowered:
                 return color
-        raise ValueError(f"no known color ({', '.join(self.colors)}) found in instruction {instruction!r}")
+        raise ValueError(
+            f"no known color ({', '.join(self.colors)}) found in instruction {instruction!r}"
+        )
 
     def plan(self, instruction: str, observation: Observation) -> Plan:
         color = self._parse_color(instruction)
@@ -138,13 +154,26 @@ class SortingPlanner(Planner):
             instruction=instruction,
             notes=f"parsed target color={color!r} from instruction; grounded via env.cube_positions",
             subgoals=[
-                SubGoal.from_xyz("move_above", pick_xyz + np.array([0, 0, 0.045]),
-                                 target_description=f"{color} cube", gripper=0.55),
-                SubGoal.from_xyz("grasp", pick_xyz,
-                                 target_description=f"{color} cube", gripper=0.2),
-                SubGoal.from_xyz("move_above", self.place_xyz + np.array([0, 0, 0.055]),
-                                 target_description="target pad", gripper=0.2),
-                SubGoal.from_xyz("release", self.place_xyz,
-                                 target_description="target pad", gripper=0.55),
+                SubGoal.from_xyz(
+                    "move_above",
+                    pick_xyz + np.array([0, 0, 0.045]),
+                    target_description=f"{color} cube",
+                    gripper=0.55,
+                ),
+                SubGoal.from_xyz(
+                    "grasp", pick_xyz, target_description=f"{color} cube", gripper=0.2
+                ),
+                SubGoal.from_xyz(
+                    "move_above",
+                    self.place_xyz + np.array([0, 0, 0.055]),
+                    target_description="target pad",
+                    gripper=0.2,
+                ),
+                SubGoal.from_xyz(
+                    "release",
+                    self.place_xyz,
+                    target_description="target pad",
+                    gripper=0.55,
+                ),
             ],
         )

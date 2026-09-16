@@ -23,9 +23,12 @@ from physai.control import TwistToJointResolver
 from physai.robots.so101 import EnvConfig, SO101Env
 
 KEYMAP = {
-    ord("W"): ("lin", 0, +1.0), ord("S"): ("lin", 0, -1.0),
-    ord("A"): ("lin", 1, +1.0), ord("D"): ("lin", 1, -1.0),
-    ord("Q"): ("lin", 2, +1.0), ord("E"): ("lin", 2, -1.0),
+    ord("W"): ("lin", 0, +1.0),
+    ord("S"): ("lin", 0, -1.0),
+    ord("A"): ("lin", 1, +1.0),
+    ord("D"): ("lin", 1, -1.0),
+    ord("Q"): ("lin", 2, +1.0),
+    ord("E"): ("lin", 2, -1.0),
 }
 
 
@@ -55,15 +58,18 @@ def main() -> int:
             state["reset"] = True
 
     print(__doc__)
-    with mujoco.viewer.launch_passive(env.model, env.data, key_callback=on_key) as viewer:
+    with mujoco.viewer.launch_passive(
+        env.model, env.data, key_callback=on_key
+    ) as viewer:
         while viewer.is_running():
             if state["reset"]:
                 obs = env.reset()
                 state.update(lin=np.zeros(3), grip=1.0, reset=False)
 
             twist = Twist(linear=Vector3.from_array(state["lin"]))
-            action = resolver(twist, obs.joint_state,
-                              GripperCommand(position=state["grip"]))
+            action = resolver(
+                twist, obs.joint_state, GripperCommand(position=state["grip"])
+            )
             obs, *_rest = env.step(action)
             # Key presses are momentary: decay the command so the arm stops.
             state["lin"] *= 0.6

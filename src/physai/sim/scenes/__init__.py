@@ -6,11 +6,15 @@ from .common import (
     WorldSceneConfig,
     build_manipulation_spec,
 )
-from .pick_place_minimal import PickPlaceMinimalSceneConfig, build_spec as build_pick_place_spec
+from .pick_place_minimal import (
+    PickPlaceMinimalSceneConfig,
+    build_spec as build_pick_place_spec,
+)
 from .registry import (
     SceneDefinition,
     available_scenes,
     create_scene,
+    default_scene_for,
     get_scene_definition,
     register_scene,
 )
@@ -28,6 +32,7 @@ __all__ = [
     "SceneDefinition",
     "available_scenes",
     "create_scene",
+    "default_scene_for",
     "get_scene_definition",
     "register_scene",
 ]

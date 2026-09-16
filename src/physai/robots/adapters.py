@@ -44,7 +44,7 @@ class DirectMuJoCoAdapter:
         self._environment.close()
 
     def __getattr__(self, name: str) -> Any:
-        """Keep the Phase 0 convenience surface available during migration."""
+        """Keep direct-environment convenience attributes available."""
         return getattr(self._environment, name)
 
 

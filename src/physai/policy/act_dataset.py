@@ -32,7 +32,7 @@ class DatasetStats:
         Path(path).write_text(json.dumps(self.per_key, indent=2), encoding="utf-8")
 
     @classmethod
-    def from_json(cls, path: Path) -> "DatasetStats":
+    def from_json(cls, path: Path) -> DatasetStats:
         return cls(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
@@ -48,18 +48,24 @@ class ACTEpisodeDataset(Dataset):
     def __init__(
         self,
         dataset_dir: str | Path,
-        camera_keys: tuple[str, ...] = ("front", "wrist"),
+        camera_keys: tuple[str, ...] | None = None,
         chunk_size: int = 30,
         image_size: int = 128,
-        task: str = "put the red cube on the green pad",
+        task: str | None = None,
     ) -> None:
         self.dataset_dir = Path(dataset_dir)
-        self.camera_keys = camera_keys
         self.chunk_size = chunk_size
         self.image_size = image_size
-        self.task = task
 
         meta = json.loads((self.dataset_dir / "meta.json").read_text(encoding="utf-8"))
+        if camera_keys is None:
+            camera_keys = tuple(
+                key.removeprefix("observation.images.")
+                for key in meta.get("observation_schema", {})
+                if key.startswith("observation.images.")
+            )
+        self.camera_keys = camera_keys
+        self.task = task if task is not None else meta.get("task", "")
         self.episodes: list[dict[str, np.ndarray]] = []
         self.index: list[tuple[int, int]] = []  # (episode_idx, timestep)
         for e in meta["episodes"]:
@@ -89,11 +95,13 @@ class ACTEpisodeDataset(Dataset):
             h, w = t.shape[-2], t.shape[-1]
             side = min(h, w)
             top, left = (h - side) // 2, (w - side) // 2
-            t = t[:, top:top + side, left:left + side]
+            t = t[:, top : top + side, left : left + side]
         if t.shape[-1] != self.image_size:
             t = torch.nn.functional.interpolate(
-                t.unsqueeze(0), size=(self.image_size, self.image_size),
-                mode="bilinear", align_corners=False,
+                t.unsqueeze(0),
+                size=(self.image_size, self.image_size),
+                mode="bilinear",
+                align_corners=False,
             ).squeeze(0)
         return t
 
@@ -108,7 +116,7 @@ class ACTEpisodeDataset(Dataset):
         n_pad = self.chunk_size - chunk.shape[0]
         is_pad = np.zeros(self.chunk_size, dtype=bool)
         if n_pad > 0:
-            pad = np.repeat(actions[T - 1:T], n_pad, axis=0)
+            pad = np.repeat(actions[T - 1 : T], n_pad, axis=0)
             chunk = np.concatenate([chunk, pad], axis=0)
             is_pad[-n_pad:] = True
 
@@ -129,21 +137,24 @@ class ACTEpisodeDataset(Dataset):
         action = np.concatenate([e["action"] for e in self.episodes], axis=0)
         per_key = {
             "observation.state": {
-                "mean": state.mean(0).tolist(), "std": (state.std(0) + 1e-6).tolist(),
+                "mean": state.mean(0).tolist(),
+                "std": (state.std(0) + 1e-6).tolist(),
             },
             "action": {
-                "mean": action.mean(0).tolist(), "std": (action.std(0) + 1e-6).tolist(),
+                "mean": action.mean(0).tolist(),
+                "std": (action.std(0) + 1e-6).tolist(),
             },
         }
         for cam in self.camera_keys:
             key = f"observation.images.{cam}"
             # Sample frames rather than decoding every one at full res — image
             # normalization only needs a stable per-channel estimate.
-            n_ep = len(self.episodes)
             sample_frames = []
             for e in self.episodes:
                 frames = e[key]
-                idx = np.linspace(0, frames.shape[0] - 1, num=min(8, frames.shape[0])).astype(int)
+                idx = np.linspace(
+                    0, frames.shape[0] - 1, num=min(8, frames.shape[0])
+                ).astype(int)
                 sample_frames.append(frames[idx].astype(np.float32) / 255.0)
             stacked = np.concatenate(sample_frames, axis=0)  # (N, H, W, 3)
             mean = stacked.mean(axis=(0, 1, 2))

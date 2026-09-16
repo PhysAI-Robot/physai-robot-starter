@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=83"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -10,16 +10,17 @@ requires-python = ">=3.12,<3.13"
 license = { file = "LICENSE" }
 dependencies = [
     "mujoco>=3.2",
-    "numpy>=2.5.2",
+    "numpy>=2.0,<2.3",
     "imageio>=2.34",
     "imageio-ffmpeg>=0.6.0",
     "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]
-vlm = ["anthropic>=0.40"]
-smolvlm = ["torch>=2.4", "transformers>=4.45", "Pillow>=10.0", "huggingface-hub>=0.24"]
-vla = ["torch>=2.4", "lerobot"]
+training = ["gymnasium>=1.3.0,<2.0"]
+vlm = ["anthropic>=1.4.0"]
+smolvlm = ["torch>=2.7,<2.12", "transformers>=4.45", "Pillow>=10.0", "huggingface-hub>=0.36.2"]
+vla = ["torch>=2.7,<2.12", "lerobot>=0.6.1"]
 dev = ["pytest>=9.1.1", "lark>=1.2"]
 
 [tool.setuptools.packages.find]
@@ -27,3 +28,13 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "assets: requires downloaded SO-101 simulation assets",
+    "ros2: requires ROS 2 and message packages",
+    "integration: crosses multiple PhysAI module boundaries",
+    "acceptance: validates a complete robot workflow",
+    "slow: takes longer than a normal unit test",
+]
+
+[tool.uv]
+override-dependencies = ["datasets>=5.0.1", "setuptools>=83"]

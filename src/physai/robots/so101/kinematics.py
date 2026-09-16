@@ -7,7 +7,8 @@ from dataclasses import dataclass
 import mujoco
 import numpy as np
 
-from ...contracts import ARM_JOINT_NAMES, Header, Pose, PoseStamped, Quaternion, Vector3
+from ...contracts import Header, Pose, PoseStamped, Quaternion, Vector3
+from .contracts import ARM_JOINT_NAMES
 
 APPROACH_AXIS = "x"
 PINCH_AXIS = "z"
@@ -43,7 +44,10 @@ class ArmKinematics:
         if self.site_id < 0:
             raise KeyError(f"site {ee_site!r} not in model")
         self.joint_ids = np.array(
-            [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n) for n in joint_names]
+            [
+                mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)
+                for n in joint_names
+            ]
         )
         if (self.joint_ids < 0).any():
             missing = [n for n, i in zip(joint_names, self.joint_ids) if i < 0]
@@ -68,13 +72,44 @@ class ArmKinematics:
 
     def pinch_center(self, data: mujoco.MjData, offset=PINCH_OFFSET) -> np.ndarray:
         rotation = data.site_xmat[self.site_id].reshape(3, 3)
-        return data.site_xpos[self.site_id] + rotation @ np.asarray(offset, dtype=np.float64)
+        return data.site_xpos[self.site_id] + rotation @ np.asarray(
+            offset, dtype=np.float64
+        )
 
     def site_jacobian(self, data: mujoco.MjData) -> np.ndarray:
         jacp = np.zeros((3, self.model.nv))
         jacr = np.zeros((3, self.model.nv))
         mujoco.mj_jacSite(self.model, data, jacp, jacr, self.site_id)
         return np.vstack([jacp[:, self.dof_adr], jacr[:, self.dof_adr]])
+
+    def forbidden_contact_body_pairs(
+        self,
+        data: mujoco.MjData,
+        *,
+        allowed_body_pairs: tuple[tuple[str, str], ...] = (),
+    ) -> tuple[tuple[str, str], ...]:
+        """Return contacts not explicitly allowed by the caller.
+
+        Contact is evaluated against the caller's live data so object placement
+        and task-specific contacts are represented. Body names are used because
+        the imported robot collision meshes are not consistently named.
+        """
+        allowed = {frozenset(pair) for pair in allowed_body_pairs}
+        forbidden: list[tuple[str, str]] = []
+        for index in range(data.ncon):
+            contact = data.contact[index]
+            body_ids = (
+                int(self.model.geom_bodyid[contact.geom1]),
+                int(self.model.geom_bodyid[contact.geom2]),
+            )
+            pair = tuple(
+                mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_BODY, body_id)
+                or f"body_{body_id}"
+                for body_id in body_ids
+            )
+            if frozenset(pair) not in allowed:
+                forbidden.append(pair)
+        return tuple(forbidden)
 
     def ik(
         self,
@@ -94,14 +129,34 @@ class ArmKinematics:
     ) -> IKResult:
         model, data = self.model, self._scratch
         target_pos = np.asarray(target_pos, dtype=np.float64).reshape(3)
+        if not np.isfinite(target_pos).all():
+            raise ValueError("IK target_pos must contain only finite values")
         axis_col = "xyz".index(approach_axis)
         if approach_dir is not None:
             approach_dir = np.asarray(approach_dir, dtype=np.float64).reshape(3)
-            approach_dir = approach_dir / np.linalg.norm(approach_dir)
+            norm = np.linalg.norm(approach_dir)
+            if not np.isfinite(norm) or norm <= 1e-12:
+                raise ValueError("IK approach_dir must be a finite non-zero vector")
+            approach_dir = approach_dir / norm
+
+        if q_init is not None:
+            q_init = np.asarray(q_init, dtype=np.float64).reshape(5)
+            if not np.isfinite(q_init).all():
+                raise ValueError("IK q_init must contain only finite values")
+        if target_quat_wxyz is not None:
+            target_quat_wxyz = np.asarray(target_quat_wxyz, dtype=np.float64).reshape(4)
+            quat_norm = np.linalg.norm(target_quat_wxyz)
+            if not np.isfinite(quat_norm) or quat_norm <= 1e-12:
+                raise ValueError(
+                    "IK target_quat_wxyz must be a finite non-zero quaternion"
+                )
+            target_quat_wxyz = target_quat_wxyz / quat_norm
 
         mujoco.mj_resetData(model, data)
         if q_init is not None:
-            data.qpos[self.qpos_adr] = np.asarray(q_init, dtype=np.float64).reshape(5)
+            data.qpos[self.qpos_adr] = np.clip(
+                q_init, self.limits[:, 0], self.limits[:, 1]
+            )
 
         error = np.zeros(6)
         position_error = rotation_error = np.inf
@@ -115,7 +170,9 @@ class ArmKinematics:
 
             if target_quat_wxyz is not None:
                 current_quat = np.zeros(4)
-                mujoco.mju_mat2Quat(current_quat, data.site_xmat[self.site_id].reshape(9))
+                mujoco.mju_mat2Quat(
+                    current_quat, data.site_xmat[self.site_id].reshape(9)
+                )
                 negative = np.zeros(4)
                 mujoco.mju_negQuat(negative, current_quat)
                 delta_quat = np.zeros(4)
@@ -126,7 +183,10 @@ class ArmKinematics:
             elif approach_dir is not None:
                 current_axis = rotation[:, axis_col]
                 cross = np.cross(current_axis, approach_dir)
-                sine, cosine = np.linalg.norm(cross), float(np.dot(current_axis, approach_dir))
+                sine, cosine = (
+                    np.linalg.norm(cross),
+                    float(np.dot(current_axis, approach_dir)),
+                )
                 angle = float(np.arctan2(sine, cosine))
                 error[3:] = cross / sine * angle if sine > 1e-9 else 0.0
             else:
@@ -141,7 +201,9 @@ class ArmKinematics:
             system = weighted_jacobian @ weighted_jacobian.T + damping**2 * np.eye(6)
             delta = weighted_jacobian.T @ np.linalg.solve(system, weighted_error)
             target = data.qpos[self.qpos_adr] + step_scale * delta
-            data.qpos[self.qpos_adr] = np.clip(target, self.limits[:, 0], self.limits[:, 1])
+            data.qpos[self.qpos_adr] = np.clip(
+                target, self.limits[:, 0], self.limits[:, 1]
+            )
 
         return IKResult(
             qpos=data.qpos[self.qpos_adr].copy(),
@@ -152,8 +214,15 @@ class ArmKinematics:
             site_rotation=data.site_xmat[self.site_id].reshape(3, 3).copy(),
         )
 
-    def ik_pinch(self, object_center, approach_dir=TOP_DOWN, q_init=None,
-                 *, pinch_offset=PINCH_OFFSET, **ik_kwargs) -> IKResult:
+    def ik_pinch(
+        self,
+        object_center,
+        approach_dir=TOP_DOWN,
+        q_init=None,
+        *,
+        pinch_offset=PINCH_OFFSET,
+        **ik_kwargs,
+    ) -> IKResult:
         object_center = np.asarray(object_center, dtype=np.float64).reshape(3)
         offset = np.asarray(pinch_offset, dtype=np.float64)
         first = self.ik(object_center, approach_dir, q_init=q_init, **ik_kwargs)
