@@ -179,11 +179,13 @@ class TurtleBot4Env(MuJoCoSimulationCore):
             camera_position_offset={},
             clutter_position={},
         )
-        self._actuator_ids = {self.model.actuator(i).name: i for i in range(self.model.nu)}
+        self._actuator_ids = {
+            self.model.actuator(i).name: i for i in range(self.model.nu)
+        }
         self._base_body_id = self.model.body(BASE_BODY).id
-        self._has_chase_camera = mujoco.mj_name2id(
-            self.model, mujoco.mjtObj.mjOBJ_CAMERA, CHASE_CAMERA
-        ) >= 0
+        self._has_chase_camera = (
+            mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, CHASE_CAMERA) >= 0
+        )
 
     @property
     def robot_spec(self) -> RobotSpec:
@@ -217,8 +219,10 @@ class TurtleBot4Env(MuJoCoSimulationCore):
             self.rng, seed=seed if seed is not None else self.cfg.seed
         )
         x, y, z = self.cfg.initial_pose
-        free_qadr = int(self.model.jnt_qposadr[self.model.joint("floating_base_joint").id])
-        self.data.qpos[free_qadr:free_qadr + 7] = (x, y, z, 1.0, 0.0, 0.0, 0.0)
+        free_qadr = int(
+            self.model.jnt_qposadr[self.model.joint("floating_base_joint").id]
+        )
+        self.data.qpos[free_qadr : free_qadr + 7] = (x, y, z, 1.0, 0.0, 0.0, 0.0)
         self.data.ctrl[:] = 0.0
         if "lidar_spin" in self._actuator_ids:
             self.data.ctrl[self._actuator_ids["lidar_spin"]] = 0.05
@@ -301,8 +305,12 @@ class TurtleBot4Env(MuJoCoSimulationCore):
         return ranges
 
     def joint_state(self) -> JointState:
-        positions = np.array([self.data.joint(name).qpos[0] for name in ("left", "right")])
-        velocities = np.array([self.data.joint(name).qvel[0] for name in ("left", "right")])
+        positions = np.array(
+            [self.data.joint(name).qpos[0] for name in ("left", "right")]
+        )
+        velocities = np.array(
+            [self.data.joint(name).qvel[0] for name in ("left", "right")]
+        )
         return JointState(
             name=self._WHEEL_NAMES,
             position=positions,
@@ -342,8 +350,12 @@ class TurtleBot4Env(MuJoCoSimulationCore):
 
     def _pose_array(self) -> np.ndarray:
         body = self.data.body(self._base_body_id)
-        yaw = float(np.arctan2(2 * (body.xquat[0] * body.xquat[3] + body.xquat[1] * body.xquat[2]),
-                               1 - 2 * (body.xquat[2] ** 2 + body.xquat[3] ** 2)))
+        yaw = float(
+            np.arctan2(
+                2 * (body.xquat[0] * body.xquat[3] + body.xquat[1] * body.xquat[2]),
+                1 - 2 * (body.xquat[2] ** 2 + body.xquat[3] ** 2),
+            )
+        )
         return np.array([body.xpos[0], body.xpos[1], yaw])
 
     def _pose_stamped(self) -> PoseStamped:

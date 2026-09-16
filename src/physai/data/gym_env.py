@@ -70,14 +70,15 @@ class GymnasiumAdapter(gym.Env):
         self.render_mode = render_mode
         self.safety = safety or SafetyController(backend.robot_spec)
         self._observation: Observation | None = None
-        self.action_space = spaces.Dict({
-            spec.name: _space_for_spec(spec)
-            for spec in action_spec.fields
-        })
-        self.observation_space = spaces.Dict({
-            spec.name: _space_for_spec(spec)
-            for spec in (*observation_spec.fields, *observation_spec.cameras)
-        })
+        self.action_space = spaces.Dict(
+            {spec.name: _space_for_spec(spec) for spec in action_spec.fields}
+        )
+        self.observation_space = spaces.Dict(
+            {
+                spec.name: _space_for_spec(spec)
+                for spec in (*observation_spec.fields, *observation_spec.cameras)
+            }
+        )
 
     def reset(
         self,

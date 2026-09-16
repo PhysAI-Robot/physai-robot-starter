@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 rclpy = pytest.importorskip("rclpy")
+pytestmark = pytest.mark.ros2
 pytest.importorskip("control_msgs.msg")
 pytest.importorskip("sensor_msgs.msg")
 pytest.importorskip("tf2_msgs.msg")
@@ -49,7 +50,11 @@ def test_real_ros2_trajectory_and_gripper_move_mujoco():
         initial = driver.reset(seed=42).joint_state.position.copy()
         trajectory = JointTrajectory()
         trajectory.joint_names = [
-            "shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll",
+            "shoulder_pan",
+            "shoulder_lift",
+            "elbow_flex",
+            "wrist_flex",
+            "wrist_roll",
         ]
         point = JointTrajectoryPoint()
         point.positions = [0.2, -0.8, 1.0, 0.5, 0.1]
@@ -71,8 +76,13 @@ def test_real_ros2_trajectory_and_gripper_move_mujoco():
         assert published_camera_info[-1].width > 0
         assert published_tf
         transforms = published_tf[-1].transforms
-        assert {transform.child_frame_id for transform in transforms} == set(TF_FRAMES) - {"world"}
-        assert [(transform.header.frame_id, transform.child_frame_id) for transform in transforms] == [
+        assert {transform.child_frame_id for transform in transforms} == set(
+            TF_FRAMES
+        ) - {"world"}
+        assert [
+            (transform.header.frame_id, transform.child_frame_id)
+            for transform in transforms
+        ] == [
             ("world", "base"),
             ("base", "shoulder"),
             ("shoulder", "upper_arm"),
@@ -90,10 +100,7 @@ def test_real_ros2_trajectory_and_gripper_move_mujoco():
         for transform in transforms:
             quaternion = transform.transform.rotation
             norm = (
-                quaternion.x**2
-                + quaternion.y**2
-                + quaternion.z**2
-                + quaternion.w**2
+                quaternion.x**2 + quaternion.y**2 + quaternion.z**2 + quaternion.w**2
             ) ** 0.5
             assert norm == pytest.approx(1.0, abs=1e-6)
             assert (

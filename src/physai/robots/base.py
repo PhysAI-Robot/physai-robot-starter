@@ -60,8 +60,11 @@ class RobotSpec:
 
     def require(self, *capabilities: str) -> None:
         """Raise a clear error when a workflow needs unsupported capabilities."""
-        missing = [capability for capability in capabilities
-                   if capability not in self.capabilities]
+        missing = [
+            capability
+            for capability in capabilities
+            if capability not in self.capabilities
+        ]
         if missing:
             requested = ", ".join(missing)
             raise ValueError(f"robot {self.name!r} does not support: {requested}")
@@ -84,7 +87,10 @@ class RobotSpec:
                 raise ValueError(
                     f"robot {self.name!r} expects {expected} joint targets, got {size}"
                 )
-            if action.joint_names is not None and action.joint_names != self.action_joint_names:
+            if (
+                action.joint_names is not None
+                and action.joint_names != self.action_joint_names
+            ):
                 raise ValueError(
                     f"robot {self.name!r} expects joint order {self.action_joint_names}, "
                     f"got {action.joint_names}"
@@ -92,12 +98,19 @@ class RobotSpec:
         if mode == "twist":
             if action.ee_twist is None or not action.ee_twist.frame_id:
                 raise ValueError("twist action frame_id must not be empty")
-            if self.action_frame is not None and action.ee_twist.frame_id != self.action_frame:
+            if (
+                self.action_frame is not None
+                and action.ee_twist.frame_id != self.action_frame
+            ):
                 raise ValueError(
                     f"robot {self.name!r} expects twist frame {self.action_frame!r}, "
                     f"got {action.ee_twist.frame_id!r}"
                 )
-        values = action.joint_position if mode == "joint_position" else action.ee_twist.as_array()
+        values = (
+            action.joint_position
+            if mode == "joint_position"
+            else action.ee_twist.as_array()
+        )
         if not np.isfinite(values).all():
             raise ValueError("action contains non-finite values")
 
@@ -150,11 +163,21 @@ class KinematicsPort(Protocol):
 
     def fk(self, state: Any) -> PoseStamped: ...
 
-    def ik(self, target_pos: Any, approach_dir: Any = None,
-           q_init: Any = None, **kwargs: Any) -> Any: ...
+    def ik(
+        self,
+        target_pos: Any,
+        approach_dir: Any = None,
+        q_init: Any = None,
+        **kwargs: Any,
+    ) -> Any: ...
 
-    def ik_pinch(self, object_center: Any, approach_dir: Any = None,
-                 q_init: Any = None, **kwargs: Any) -> Any: ...
+    def ik_pinch(
+        self,
+        object_center: Any,
+        approach_dir: Any = None,
+        q_init: Any = None,
+        **kwargs: Any,
+    ) -> Any: ...
 
     def site_jacobian(self, state: Any) -> np.ndarray: ...
 

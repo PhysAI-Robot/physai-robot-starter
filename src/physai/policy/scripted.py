@@ -43,8 +43,8 @@ class Phase(Enum):
 
 @dataclass
 class ExpertConfig:
-    hover_height: float = 0.045     # above the cube centre, top-down reachable
-    grasp_height: float = 0.000     # pinch centre level with the cube centre
+    hover_height: float = 0.045  # above the cube centre, top-down reachable
+    grasp_height: float = 0.000  # pinch centre level with the cube centre
     # Above ~0.045 the carry pose falls outside the top-down IK envelope for
     # cube positions near the far edge of `cube_y_range`: IK stops converging,
     # `_solve()` then returns the frozen qpos, and the arm never advances past
@@ -56,20 +56,20 @@ class ExpertConfig:
     # the free cube out of the jaws before they capture it; stopping at
     # `gripper_touch` (≈ the object width) captures it with ~zero squeeze, and
     # only then is it safe to squeeze down for real holding force.
-    gripper_open: float = 0.55      # normalised aperture; > cube width
-    gripper_touch: float = 0.21     # jaw gap ≈ 30 mm, just wider than the cube
+    gripper_open: float = 0.55  # normalised aperture; > cube width
+    gripper_touch: float = 0.21  # jaw gap ≈ 30 mm, just wider than the cube
     # Measured with mj_contactForce: default 0.18 loads the pad contact to
     # 20-50x the cube's weight, which chatters and then loses contact outright
     # mid-TRANSFER. 0.19 keeps enough squeeze to hold the cube without driving
     # the contact into that unstable, overloaded regime.
-    gripper_grip: float = 0.19       # a few mm of squeeze; sets holding force
+    gripper_grip: float = 0.19  # a few mm of squeeze; sets holding force
     pos_tol: float = 0.012
-    settle_steps: int = 8           # ticks to hold at CLOSE / RELEASE
+    settle_steps: int = 8  # ticks to hold at CLOSE / RELEASE
     max_phase_steps: int = 120
     # Without rate limiting the position servos are handed a step input and the
     # arm swats the cube off the table before it ever closes the jaws.
-    max_joint_rate: float = 1.2     # rad/s
-    approach_rate: float = 0.5      # rad/s, used from DESCEND onwards
+    max_joint_rate: float = 1.2  # rad/s
+    approach_rate: float = 0.5  # rad/s, used from DESCEND onwards
     # The jaws close at ~5 rad/s if commanded as a step, which bats a free cube
     # out of the gripper before contact can capture it. Normalised units/s.
     gripper_rate: float = 0.9
@@ -78,9 +78,11 @@ class ExpertConfig:
 class ScriptedPickPlace(Policy):
     name = "scripted_pick_place"
 
-    def __init__(self, kin: KinematicsPort, env, cfg: ExpertConfig | None = None) -> None:
+    def __init__(
+        self, kin: KinematicsPort, env, cfg: ExpertConfig | None = None
+    ) -> None:
         self.kin = kin
-        self.env = env          # for privileged cube/target pose access
+        self.env = env  # for privileged cube/target pose access
         self.cfg = cfg or ExpertConfig()
         self.phase = Phase.APPROACH
         self._phase_steps = 0
@@ -93,8 +95,12 @@ class ScriptedPickPlace(Policy):
         self._limiter = JointRateLimiter(self.cfg.max_joint_rate, self._dt)
 
     # -- lifecycle -----------------------------------------------------
-    def reset(self, observation: Observation, goal: PoseStamped | None = None,
-              instruction: str | None = None) -> None:
+    def reset(
+        self,
+        observation: Observation,
+        goal: PoseStamped | None = None,
+        instruction: str | None = None,
+    ) -> None:
         self.phase = Phase.APPROACH
         self._phase_steps = 0
         self._settle = 0
@@ -122,7 +128,7 @@ class ScriptedPickPlace(Policy):
         cfg = self.cfg
         t = self.env.target_pos
         table_top = self.env.cfg.scene.table_pos[2] + self.env.cfg.scene.table_size[2]
-        rest_z = table_top + self.env.cfg.scene.cube_half   # cube centre on table
+        rest_z = table_top + self.env.cfg.scene.cube_half  # cube centre on table
 
         # Pre-grasp phases track the live cube. Post-grasp phases must NOT:
         # the cube moves with the gripper, so a live-tracking target recedes as
@@ -143,7 +149,9 @@ class ScriptedPickPlace(Policy):
 
         carry_z = rest_z + cfg.lift_height
         if self.phase is Phase.LIFT:
-            gx, gy = self._grasp_xy if self._grasp_xy is not None else self.env.cube_pos[:2]
+            gx, gy = (
+                self._grasp_xy if self._grasp_xy is not None else self.env.cube_pos[:2]
+            )
             return np.array([gx, gy, carry_z]), cfg.gripper_grip
         if self.phase is Phase.TRANSFER:
             return np.array([t[0], t[1], carry_z]), cfg.gripper_grip
@@ -156,8 +164,16 @@ class ScriptedPickPlace(Policy):
 
     def _advance(self) -> None:
         order = [
-            Phase.APPROACH, Phase.DESCEND, Phase.CLOSE, Phase.SQUEEZE, Phase.LIFT,
-            Phase.TRANSFER, Phase.LOWER, Phase.RELEASE, Phase.RETREAT, Phase.DONE,
+            Phase.APPROACH,
+            Phase.DESCEND,
+            Phase.CLOSE,
+            Phase.SQUEEZE,
+            Phase.LIFT,
+            Phase.TRANSFER,
+            Phase.LOWER,
+            Phase.RELEASE,
+            Phase.RETREAT,
+            Phase.DONE,
         ]
         self.phase = order[min(order.index(self.phase) + 1, len(order) - 1)]
         self._phase_steps = 0
@@ -166,16 +182,20 @@ class ScriptedPickPlace(Policy):
     # -- policy --------------------------------------------------------
     def act(self, observation: Observation) -> Action:
         if self.phase is Phase.DONE:
-            return Action(joint_position=self._q_cmd,
-                          gripper=GripperCommand(position=self._grip))
+            return Action(
+                joint_position=self._q_cmd, gripper=GripperCommand(position=self._grip)
+            )
 
         target_xyz, grip_goal = self._waypoint()
         step = self.cfg.gripper_rate * self._dt
         self._grip = float(np.clip(grip_goal, self._grip - step, self._grip + step))
         grip = self._grip
         # Slow down once we're near the cube — a fast descent bounces it away.
-        rate = (self.cfg.max_joint_rate if self.phase is Phase.APPROACH
-                else self.cfg.approach_rate)
+        rate = (
+            self.cfg.max_joint_rate
+            if self.phase is Phase.APPROACH
+            else self.cfg.approach_rate
+        )
         self._limiter.max_delta = rate * self._dt
         self._q_cmd = self._limiter(self._solve(target_xyz))
 
@@ -186,9 +206,7 @@ class ScriptedPickPlace(Policy):
         grip_now = self.env.joint_to_gripper(observation.joint_state.position[5])
         grip_vel = abs(float(observation.joint_state.velocity[5]))
         ramp_done = abs(self._grip - grip_goal) < 1e-6
-        gripper_settled = ramp_done and (
-            abs(grip_now - grip) < 0.06 or grip_vel < 0.05
-        )
+        gripper_settled = ramp_done and (abs(grip_now - grip) < 0.06 or grip_vel < 0.05)
 
         self._phase_steps += 1
         if self.phase in (Phase.CLOSE, Phase.SQUEEZE, Phase.RELEASE):
@@ -205,5 +223,6 @@ class ScriptedPickPlace(Policy):
             # rest of the episode in a phase that can no longer converge.
             self._advance()
 
-        return Action(joint_position=self._q_cmd,
-                      gripper=GripperCommand(position=self._grip))
+        return Action(
+            joint_position=self._q_cmd, gripper=GripperCommand(position=self._grip)
+        )

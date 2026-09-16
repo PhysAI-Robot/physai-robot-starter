@@ -100,7 +100,11 @@ def create_runtime(
         "sorting": "sorting_minimal",
     }
     selected_scene_name = scene_name
-    if selected_scene_name is None and task_name in default_scenes and robot_name == "so101":
+    if (
+        selected_scene_name is None
+        and task_name in default_scenes
+        and robot_name == "so101"
+    ):
         selected_scene_name = default_scenes[task_name]
         if robot_config is None and "scene" not in fields:
             scene_config = create_scene(selected_scene_name, **(scene_kwargs or {}))
@@ -117,14 +121,20 @@ def create_runtime(
     )
 
     try:
-        task = create_task(task_name, **(task_kwargs or {})) if task_name is not None else None
+        task = (
+            create_task(task_name, **(task_kwargs or {}))
+            if task_name is not None
+            else None
+        )
 
         if task is not None:
             robot.robot_spec.validate_task(task)
 
         if selected_scene_name is not None:
             definition = get_scene_definition(selected_scene_name)
-            if not definition.supports(robot.robot_spec.kind, task.name if task else None):
+            if not definition.supports(
+                robot.robot_spec.kind, task.name if task else None
+            ):
                 task_label = task.name if task else "no task"
                 raise ValueError(
                     f"scene {selected_scene_name!r} is incompatible with "

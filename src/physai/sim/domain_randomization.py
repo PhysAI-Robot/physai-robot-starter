@@ -37,7 +37,10 @@ class DomainRandomizationConfig:
                 raise ValueError(f"{name} must contain two finite values")
             if bounds[0] > bounds[1]:
                 raise ValueError(f"{name} must satisfy low <= high")
-        if not np.isfinite(self.camera_position_jitter) or self.camera_position_jitter < 0:
+        if (
+            not np.isfinite(self.camera_position_jitter)
+            or self.camera_position_jitter < 0
+        ):
             raise ValueError("camera_position_jitter must be finite and non-negative")
         if not np.isfinite(self.clutter_clearance) or self.clutter_clearance < 0:
             raise ValueError("clutter_clearance must be finite and non-negative")
@@ -67,8 +70,7 @@ class RandomizationMetadata:
                 for name, offset in self.camera_position_offset.items()
             },
             "clutter_position": {
-                name: list(position)
-                for name, position in self.clutter_position.items()
+                name: list(position) for name, position in self.clutter_position.items()
             },
         }
 
@@ -128,23 +130,24 @@ class DomainRandomizationEngine:
         for camera_id in range(self.model.ncam):
             offset = rng.uniform(-jitter, jitter, size=3)
             self.model.cam_pos[camera_id] += offset
-            name = mujoco.mj_id2name(
-                self.model, mujoco.mjtObj.mjOBJ_CAMERA, camera_id
-            ) or f"camera_{camera_id}"
+            name = (
+                mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_CAMERA, camera_id)
+                or f"camera_{camera_id}"
+            )
             offsets[name] = tuple(float(value) for value in offset)
         clutter_positions: dict[str, tuple[float, float]] = {}
         for geom_id in range(self.model.ngeom):
-            name = mujoco.mj_id2name(
-                self.model, mujoco.mjtObj.mjOBJ_GEOM, geom_id
-            )
+            name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, geom_id)
             if not name or not name.startswith("physai_clutter_"):
                 continue
             x, y = 0.0, 0.0
             for _ in range(100):
-                candidate = np.array([
-                    rng.uniform(*self.config.clutter_x_range),
-                    rng.uniform(*self.config.clutter_y_range),
-                ])
+                candidate = np.array(
+                    [
+                        rng.uniform(*self.config.clutter_x_range),
+                        rng.uniform(*self.config.clutter_y_range),
+                    ]
+                )
                 if all(
                     np.linalg.norm(candidate - np.asarray(point))
                     >= self.config.clutter_clearance

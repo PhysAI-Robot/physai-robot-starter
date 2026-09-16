@@ -1,10 +1,10 @@
 """Download Hugging Face model snapshots into the ignored models/ directory.
 
-    python scripts/download_models.py --model smolvlm
-    python scripts/download_models.py --model smolvla
-    python scripts/download_models.py --model turbovla
-    python scripts/download_models.py --repo HuggingFaceTB/SmolVLM-500M-Instruct
-    python scripts/download_models.py --repo org/model --name my_model
+python scripts/download_models.py --model smolvlm
+python scripts/download_models.py --model smolvla
+python scripts/download_models.py --model turbovla
+python scripts/download_models.py --repo HuggingFaceTB/SmolVLM-500M-Instruct
+python scripts/download_models.py --repo org/model --name my_model
 """
 
 from __future__ import annotations
@@ -52,13 +52,19 @@ def main() -> int:
     try:
         from huggingface_hub import snapshot_download
     except ImportError:
-        print("Model download needs huggingface-hub: uv run --with huggingface-hub ...",
-              file=sys.stderr)
+        print(
+            "Model download needs huggingface-hub: uv run --with huggingface-hub ...",
+            file=sys.stderr,
+        )
         return 1
 
     print(f"Downloading {repo} -> {destination}")
-    snapshot_download(repo_id=repo, revision=args.revision,
-                      local_dir=destination, local_dir_use_symlinks=False)
+    snapshot_download(
+        repo_id=repo,
+        revision=args.revision,
+        local_dir=destination,
+        local_dir_use_symlinks=False,
+    )
     print(f"Model ready: {destination}")
     return 0
 

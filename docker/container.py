@@ -43,9 +43,13 @@ def main() -> int:
     )
     ap.add_argument("command", choices=["build", "start", "stop", "shell"])
     mode = ap.add_mutually_exclusive_group()
-    mode.add_argument("--gpu", action="store_true", help="build the CUDA image (default)")
+    mode.add_argument(
+        "--gpu", action="store_true", help="build the CUDA image (default)"
+    )
     mode.add_argument("--cpu", action="store_true", help="build the CPU-only image")
-    ap.add_argument("--no-cache", action="store_true", help="build without the layer cache")
+    ap.add_argument(
+        "--no-cache", action="store_true", help="build without the layer cache"
+    )
     args, extra = ap.parse_known_args()
 
     if args.command == "build":
@@ -55,7 +59,9 @@ def main() -> int:
             ap.error("--gpu/--cpu apply to build only; rebuild to switch mode")
         gpu = MODE_FILE.read_text().strip() != "cpu" if MODE_FILE.exists() else True
 
-    print(f"mode: {'gpu' if gpu else 'cpu'} (base image {CUDA_BASE if gpu else CPU_BASE})")
+    print(
+        f"mode: {'gpu' if gpu else 'cpu'} (base image {CUDA_BASE if gpu else CPU_BASE})"
+    )
 
     if args.command == "build":
         rc = compose(["build", *(["--no-cache"] if args.no_cache else []), *extra], gpu)

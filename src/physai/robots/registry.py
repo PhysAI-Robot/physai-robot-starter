@@ -54,7 +54,9 @@ def available_robots() -> tuple[str, ...]:
     return tuple(sorted(_FACTORIES))
 
 
-def create_robot(name: str, *, adapter: str = "direct_mujoco", **kwargs: Any) -> RobotPort:
+def create_robot(
+    name: str, *, adapter: str = "direct_mujoco", **kwargs: Any
+) -> RobotPort:
     """Create a robot through the selected simulation or hardware adapter."""
     _load_builtins()
     try:
@@ -72,9 +74,7 @@ def create_ros2_node(name: str, node: Any, **kwargs: Any) -> Any:
         factory = _ROS2_NODE_FACTORIES[name]
     except KeyError as exc:
         choices = ", ".join(sorted(_ROS2_NODE_FACTORIES))
-        raise ValueError(
-            f"unknown ROS2 robot {name!r}; available: {choices}"
-        ) from exc
+        raise ValueError(f"unknown ROS2 robot {name!r}; available: {choices}") from exc
     return factory(node, **kwargs)
 
 

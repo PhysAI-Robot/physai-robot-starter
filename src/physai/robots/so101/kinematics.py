@@ -43,7 +43,10 @@ class ArmKinematics:
         if self.site_id < 0:
             raise KeyError(f"site {ee_site!r} not in model")
         self.joint_ids = np.array(
-            [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n) for n in joint_names]
+            [
+                mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, n)
+                for n in joint_names
+            ]
         )
         if (self.joint_ids < 0).any():
             missing = [n for n, i in zip(joint_names, self.joint_ids) if i < 0]
@@ -68,7 +71,9 @@ class ArmKinematics:
 
     def pinch_center(self, data: mujoco.MjData, offset=PINCH_OFFSET) -> np.ndarray:
         rotation = data.site_xmat[self.site_id].reshape(3, 3)
-        return data.site_xpos[self.site_id] + rotation @ np.asarray(offset, dtype=np.float64)
+        return data.site_xpos[self.site_id] + rotation @ np.asarray(
+            offset, dtype=np.float64
+        )
 
     def site_jacobian(self, data: mujoco.MjData) -> np.ndarray:
         jacp = np.zeros((3, self.model.nv))
@@ -141,12 +146,16 @@ class ArmKinematics:
             target_quat_wxyz = np.asarray(target_quat_wxyz, dtype=np.float64).reshape(4)
             quat_norm = np.linalg.norm(target_quat_wxyz)
             if not np.isfinite(quat_norm) or quat_norm <= 1e-12:
-                raise ValueError("IK target_quat_wxyz must be a finite non-zero quaternion")
+                raise ValueError(
+                    "IK target_quat_wxyz must be a finite non-zero quaternion"
+                )
             target_quat_wxyz = target_quat_wxyz / quat_norm
 
         mujoco.mj_resetData(model, data)
         if q_init is not None:
-            data.qpos[self.qpos_adr] = np.clip(q_init, self.limits[:, 0], self.limits[:, 1])
+            data.qpos[self.qpos_adr] = np.clip(
+                q_init, self.limits[:, 0], self.limits[:, 1]
+            )
 
         error = np.zeros(6)
         position_error = rotation_error = np.inf
@@ -160,7 +169,9 @@ class ArmKinematics:
 
             if target_quat_wxyz is not None:
                 current_quat = np.zeros(4)
-                mujoco.mju_mat2Quat(current_quat, data.site_xmat[self.site_id].reshape(9))
+                mujoco.mju_mat2Quat(
+                    current_quat, data.site_xmat[self.site_id].reshape(9)
+                )
                 negative = np.zeros(4)
                 mujoco.mju_negQuat(negative, current_quat)
                 delta_quat = np.zeros(4)
@@ -171,7 +182,10 @@ class ArmKinematics:
             elif approach_dir is not None:
                 current_axis = rotation[:, axis_col]
                 cross = np.cross(current_axis, approach_dir)
-                sine, cosine = np.linalg.norm(cross), float(np.dot(current_axis, approach_dir))
+                sine, cosine = (
+                    np.linalg.norm(cross),
+                    float(np.dot(current_axis, approach_dir)),
+                )
                 angle = float(np.arctan2(sine, cosine))
                 error[3:] = cross / sine * angle if sine > 1e-9 else 0.0
             else:
@@ -186,7 +200,9 @@ class ArmKinematics:
             system = weighted_jacobian @ weighted_jacobian.T + damping**2 * np.eye(6)
             delta = weighted_jacobian.T @ np.linalg.solve(system, weighted_error)
             target = data.qpos[self.qpos_adr] + step_scale * delta
-            data.qpos[self.qpos_adr] = np.clip(target, self.limits[:, 0], self.limits[:, 1])
+            data.qpos[self.qpos_adr] = np.clip(
+                target, self.limits[:, 0], self.limits[:, 1]
+            )
 
         return IKResult(
             qpos=data.qpos[self.qpos_adr].copy(),
@@ -197,8 +213,15 @@ class ArmKinematics:
             site_rotation=data.site_xmat[self.site_id].reshape(3, 3).copy(),
         )
 
-    def ik_pinch(self, object_center, approach_dir=TOP_DOWN, q_init=None,
-                 *, pinch_offset=PINCH_OFFSET, **ik_kwargs) -> IKResult:
+    def ik_pinch(
+        self,
+        object_center,
+        approach_dir=TOP_DOWN,
+        q_init=None,
+        *,
+        pinch_offset=PINCH_OFFSET,
+        **ik_kwargs,
+    ) -> IKResult:
         object_center = np.asarray(object_center, dtype=np.float64).reshape(3)
         offset = np.asarray(pinch_offset, dtype=np.float64)
         first = self.ik(object_center, approach_dir, q_init=q_init, **ik_kwargs)

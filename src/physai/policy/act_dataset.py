@@ -89,11 +89,13 @@ class ACTEpisodeDataset(Dataset):
             h, w = t.shape[-2], t.shape[-1]
             side = min(h, w)
             top, left = (h - side) // 2, (w - side) // 2
-            t = t[:, top:top + side, left:left + side]
+            t = t[:, top : top + side, left : left + side]
         if t.shape[-1] != self.image_size:
             t = torch.nn.functional.interpolate(
-                t.unsqueeze(0), size=(self.image_size, self.image_size),
-                mode="bilinear", align_corners=False,
+                t.unsqueeze(0),
+                size=(self.image_size, self.image_size),
+                mode="bilinear",
+                align_corners=False,
             ).squeeze(0)
         return t
 
@@ -108,7 +110,7 @@ class ACTEpisodeDataset(Dataset):
         n_pad = self.chunk_size - chunk.shape[0]
         is_pad = np.zeros(self.chunk_size, dtype=bool)
         if n_pad > 0:
-            pad = np.repeat(actions[T - 1:T], n_pad, axis=0)
+            pad = np.repeat(actions[T - 1 : T], n_pad, axis=0)
             chunk = np.concatenate([chunk, pad], axis=0)
             is_pad[-n_pad:] = True
 
@@ -129,10 +131,12 @@ class ACTEpisodeDataset(Dataset):
         action = np.concatenate([e["action"] for e in self.episodes], axis=0)
         per_key = {
             "observation.state": {
-                "mean": state.mean(0).tolist(), "std": (state.std(0) + 1e-6).tolist(),
+                "mean": state.mean(0).tolist(),
+                "std": (state.std(0) + 1e-6).tolist(),
             },
             "action": {
-                "mean": action.mean(0).tolist(), "std": (action.std(0) + 1e-6).tolist(),
+                "mean": action.mean(0).tolist(),
+                "std": (action.std(0) + 1e-6).tolist(),
             },
         }
         for cam in self.camera_keys:
@@ -143,7 +147,9 @@ class ACTEpisodeDataset(Dataset):
             sample_frames = []
             for e in self.episodes:
                 frames = e[key]
-                idx = np.linspace(0, frames.shape[0] - 1, num=min(8, frames.shape[0])).astype(int)
+                idx = np.linspace(
+                    0, frames.shape[0] - 1, num=min(8, frames.shape[0])
+                ).astype(int)
                 sample_frames.append(frames[idx].astype(np.float32) / 255.0)
             stacked = np.concatenate(sample_frames, axis=0)  # (N, H, W, 3)
             mean = stacked.mean(axis=(0, 1, 2))

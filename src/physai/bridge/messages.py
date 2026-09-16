@@ -47,7 +47,9 @@ class ContractMessageCodec:
             raise ValueError("joint trajectory must contain joint_names")
         positions = np.asarray(getattr(point, "positions", ()), dtype=np.float64)
         if positions.size != len(joint_names):
-            raise ValueError("joint trajectory names and positions have different sizes")
+            raise ValueError(
+                "joint trajectory names and positions have different sizes"
+            )
         return Action(
             joint_position=positions,
             joint_names=joint_names,

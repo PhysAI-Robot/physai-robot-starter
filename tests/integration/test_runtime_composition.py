@@ -1,39 +1,11 @@
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.integration
+
 from physai.contracts import Action, JointState, Observation
 from physai.robots import RobotSpec
-
-
-class FakeRobot:
-    def __init__(self, spec: RobotSpec) -> None:
-        self.robot_spec = spec
-        self.closed = False
-        self.observation = Observation(
-            joint_state=JointState(
-                name=spec.joint_names,
-                position=np.zeros(len(spec.joint_names)),
-                velocity=np.zeros(len(spec.joint_names)),
-                effort=np.zeros(len(spec.joint_names)),
-            )
-        )
-
-    def reset(self, seed=None):
-        del seed
-        return self.observation
-
-    def observe(self):
-        return self.observation
-
-    def send_action(self, action):
-        self.robot_spec.validate_action(action)
-
-    def step(self, action):
-        self.send_action(action)
-        return self.observation, 0.0, False, False, {}
-
-    def close(self):
-        self.closed = True
+from tests.support.fakes import FakeRobotPort
 
 
 def test_robot_spec_rejects_wrong_joint_order():
@@ -81,7 +53,7 @@ def test_runtime_rejects_incompatible_robot_task_before_episode(monkeypatch):
         action_modes=("twist",),
         capabilities=("base_velocity",),
     )
-    fake = FakeRobot(spec)
+    fake = FakeRobotPort(spec)
     monkeypatch.setattr(composition, "create_robot", lambda *args, **kwargs: fake)
 
     with pytest.raises(ValueError, match="does not support"):
@@ -101,7 +73,7 @@ def test_runtime_validates_action_before_forwarding(monkeypatch):
         capabilities=("arm_kinematics", "gripper"),
         joint_limits={"a": (-1.0, 1.0)},
     )
-    fake = FakeRobot(spec)
+    fake = FakeRobotPort(spec)
     monkeypatch.setattr(composition, "create_robot", lambda *args, **kwargs: fake)
     runtime = composition.create_runtime("arm", task_name="pick_place")
     try:
@@ -124,7 +96,7 @@ def test_runtime_composes_task_around_robot(monkeypatch):
         action_modes=("joint_position",),
         capabilities=("arm_kinematics", "gripper"),
     )
-    fake = FakeRobot(spec)
+    fake = FakeRobotPort(spec)
     monkeypatch.setattr(composition, "create_robot", lambda *args, **kwargs: fake)
 
     runtime = composition.create_runtime("arm", task_name="pick_place")

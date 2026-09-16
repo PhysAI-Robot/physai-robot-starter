@@ -24,8 +24,10 @@ def main() -> int:
     # Must land beside the robot XML so the relative meshdir still resolves.
     path = export_xml(args.out)
     print(f"wrote {path}")
-    print("note: mesh paths are relative to assets/so101/, so copy the file "
-          "there before loading it standalone.")
+    print(
+        "note: mesh paths are relative to assets/so101/, so copy the file "
+        "there before loading it standalone."
+    )
     return 0
 
 

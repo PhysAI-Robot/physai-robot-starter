@@ -41,7 +41,9 @@ def test_twist_array_round_trip():
     np.testing.assert_allclose(Twist.from_array(t.as_array()).as_array(), t.as_array())
 
 
-@pytest.mark.parametrize("value,expected", [(-1.0, 0.0), (0.0, 0.0), (0.5, 0.5), (2.0, 1.0)])
+@pytest.mark.parametrize(
+    "value,expected", [(-1.0, 0.0), (0.0, 0.0), (0.5, 0.5), (2.0, 1.0)]
+)
 def test_gripper_command_is_clipped_to_unit_range(value, expected):
     assert GripperCommand(position=value).clipped() == expected
 

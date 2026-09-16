@@ -25,7 +25,9 @@ def make_turtlebot4(
             "the hardware-specific mobile-base adapter is not implemented"
         )
     if config is not None and kwargs:
-        raise TypeError("pass either config or TurtleBot4Config keyword fields, not both")
+        raise TypeError(
+            "pass either config or TurtleBot4Config keyword fields, not both"
+        )
     direct = TurtleBot4Env(config or TurtleBot4Config(**kwargs))
     return select_adapter(
         adapter, direct, transport=transport, hardware=hardware, codec=codec

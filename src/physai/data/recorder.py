@@ -9,7 +9,15 @@ from pathlib import Path
 
 import numpy as np
 
-from ..contracts import Action, GripperCommand, Observation
+from ..contracts import (
+    ALL_JOINT_NAMES,
+    SO101_ACTION_SCHEMA,
+    Action,
+    GripperCommand,
+    Observation,
+    so101_action_values,
+)
+from .metadata import DatasetMetadata
 from ..robots.base import RobotSpec
 
 
@@ -35,6 +43,9 @@ class EpisodeRecorder:
         store_images: bool = True,
         robot_type: str = "so101",
         robot_spec: RobotSpec | None = None,
+        simulator_config: dict | None = None,
+        camera_config: dict | None = None,
+        split: dict | None = None,
     ) -> None:
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
@@ -43,6 +54,9 @@ class EpisodeRecorder:
         self.store_images = store_images
         self.robot_spec = robot_spec
         self.robot_type = robot_spec.name if robot_spec else robot_type
+        self.simulator_config = simulator_config or {}
+        self.camera_config = camera_config or {}
+        self.split = split or {}
         self._state_names: tuple[str, ...] | None = None
         self._action_names: tuple[str, ...] | None = None
         self.episodes: list[dict] = []
@@ -63,15 +77,28 @@ class EpisodeRecorder:
         if self._buf is None:
             raise RuntimeError("call start_episode() first")
         if action.joint_position is not None:
-            action_values = action.joint_position
-            action_names = tuple(
-                f"joint_{index}" for index in range(action_values.size)
-            ) + ("gripper",)
+            if self.robot_type == "so101":
+                grip = (
+                    gripper_joint
+                    if gripper_joint is not None
+                    else (action.gripper or GripperCommand()).clipped()
+                )
+                action_values = so101_action_values(action, gripper_joint=grip)
+                action_names = ALL_JOINT_NAMES
+            else:
+                action_values = action.joint_position
+                action_names = tuple(
+                    f"joint_{index}" for index in range(action_values.size)
+                ) + ("gripper",)
         elif action.ee_twist is not None:
             action_values = action.ee_twist.as_array()
             action_names = (
-                "linear_x", "linear_y", "linear_z",
-                "angular_x", "angular_y", "angular_z",
+                "linear_x",
+                "linear_y",
+                "linear_z",
+                "angular_x",
+                "angular_y",
+                "angular_z",
             )
         else:
             raise ValueError("EpisodeRecorder requires joint-position or twist actions")
@@ -84,9 +111,12 @@ class EpisodeRecorder:
                 self._buf.images.setdefault(name, []).append(frame.data.copy())
 
         self._buf.state.append(observation.joint_state.position.astype(np.float32))
-        if action.joint_position is not None:
-            grip = (gripper_joint if gripper_joint is not None
-                else (action.gripper or GripperCommand()).clipped())
+        if action.joint_position is not None and self.robot_type != "so101":
+            grip = (
+                gripper_joint
+                if gripper_joint is not None
+                else (action.gripper or GripperCommand()).clipped()
+            )
             action_values = np.concatenate([action_values, [grip]])
         self._buf.action.append(action_values.astype(np.float32))
         self._buf.reward.append(float(reward))
@@ -111,15 +141,17 @@ class EpisodeRecorder:
             arrays[f"observation.images.{name}"] = np.stack(frames)
         np.savez_compressed(path, **arrays)
 
-        self.episodes.append({
-            "index": idx,
-            "file": path.name,
-            "length": len(self._buf),
-            "success": bool(success),
-            "task": self.task,
-            "fps": self.fps,
-            **(extra or {}),
-        })
+        self.episodes.append(
+            {
+                "index": idx,
+                "file": path.name,
+                "length": len(self._buf),
+                "success": bool(success),
+                "task": self.task,
+                "fps": self.fps,
+                **(extra or {}),
+            }
+        )
         self._buf = None
         return path
 
@@ -131,12 +163,53 @@ class EpisodeRecorder:
             state_names = list(self.robot_spec.joint_names)
         if self.robot_type == "so101" and self.robot_spec is None:
             state_names = [
-                "shoulder_pan", "shoulder_lift", "elbow_flex",
-                "wrist_flex", "wrist_roll", "gripper",
+                "shoulder_pan",
+                "shoulder_lift",
+                "elbow_flex",
+                "wrist_flex",
+                "wrist_roll",
+                "gripper",
             ]
             action_names = state_names.copy()
+        action_schema = {
+            "schema": SO101_ACTION_SCHEMA
+            if self.robot_type == "so101"
+            else "generic.v1",
+            "names": action_names,
+            "dtype": "float32",
+            "shape": [len(action_names)],
+            "units": "rad" if self.robot_type == "so101" else "task-defined",
+            "absolute": self.robot_type == "so101",
+        }
+        metadata = DatasetMetadata(
+            robot=self.robot_type,
+            task=self.task,
+            contract_schema="physai.contracts.v1",
+            observation_schema={
+                "observation.state": {
+                    "dtype": "float32",
+                    "shape": [len(state_names)],
+                    "names": state_names,
+                },
+            },
+            action_schema=action_schema,
+            simulator_config=self.simulator_config,
+            camera_config=self.camera_config,
+            seeds=tuple(
+                int(episode["seed"])
+                for episode in self.episodes
+                if episode.get("seed") is not None
+            ),
+            split=self.split
+            or {
+                "train": list(range(len(self.episodes))),
+                "validation": [],
+                "test": [],
+            },
+        )
         meta = {
             "codebase_version": "physai-0.0.1",
+            **metadata.to_dict(),
             "created_utc": datetime.now(timezone.utc).isoformat(),
             "robot_type": self.robot_type,
             "task": self.task,
@@ -145,8 +218,12 @@ class EpisodeRecorder:
             "num_successful_episodes": n_ok,
             "total_frames": sum(e["length"] for e in self.episodes),
             "features": {
-                "observation.state": {"dtype": "float32", "shape": [len(state_names)], "names": state_names},
-                "action": {"dtype": "float32", "shape": [len(action_names)], "names": action_names},
+                "observation.state": {
+                    "dtype": "float32",
+                    "shape": [len(state_names)],
+                    "names": state_names,
+                },
+                "action": action_schema,
             },
             "episodes": self.episodes,
         }

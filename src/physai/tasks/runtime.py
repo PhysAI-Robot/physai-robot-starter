@@ -43,13 +43,21 @@ class TaskRuntime:
         self.robot.send_action(action)
 
     def step(self, action: Action) -> tuple[Observation, float, bool, bool, dict]:
-        observation, _, robot_terminated, truncated, robot_info = self.robot.step(action)
+        observation, _, robot_terminated, truncated, robot_info = self.robot.step(
+            action
+        )
         info = dict(robot_info)
         info.update(self.task.evaluate(self.robot))
         self._success_streak = self._success_streak + 1 if info.get("at_target") else 0
         info["success"] = self._success_streak >= self.success_hold_steps
         terminated = robot_terminated or self.task.terminated(self.robot, info)
-        return observation, self.task.reward(self.robot, info), terminated, truncated, info
+        return (
+            observation,
+            self.task.reward(self.robot, info),
+            terminated,
+            truncated,
+            info,
+        )
 
     def close(self) -> None:
         self.robot.close()

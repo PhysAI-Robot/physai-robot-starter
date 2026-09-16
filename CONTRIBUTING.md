@@ -61,6 +61,16 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 Use a focused test path when iterating. For documentation-only changes, check
 local links and command names against the current repository.
 
+Run the test tiers independently when diagnosing failures:
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/unit tests/policy tests/data -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/integration tests/bridge -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest -m acceptance -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest -m assets -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest -m ros2 -q
+```
+
 ## Repository hygiene
 
 Do not commit downloaded assets, model snapshots, demonstrations, videos,

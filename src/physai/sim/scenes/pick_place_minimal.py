@@ -21,8 +21,9 @@ class PickPlaceMinimalSceneConfig(ManipulationSceneConfig):
 def build_spec(cfg: PickPlaceMinimalSceneConfig | None = None) -> mujoco.MjSpec:
     cfg = cfg or PickPlaceMinimalSceneConfig()
     spec = build_manipulation_spec(cfg)
-    add_cube(spec, cfg, "cube", cfg.cube_pos, cfg.cube_rgba,
-             cfg.cube_half, cfg.cube_mass)
+    add_cube(
+        spec, cfg, "cube", cfg.cube_pos, cfg.cube_rgba, cfg.cube_half, cfg.cube_mass
+    )
     return spec
 
 

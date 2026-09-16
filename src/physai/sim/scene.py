@@ -8,8 +8,14 @@ from pathlib import Path
 import mujoco
 
 from .scenes.common import ManipulationSceneConfig
-from .scenes.pick_place_minimal import PickPlaceMinimalSceneConfig, build_spec as build_pick_place_spec
-from .scenes.sorting_minimal import SortingMinimalSceneConfig, build_spec as build_sorting_spec
+from .scenes.pick_place_minimal import (
+    PickPlaceMinimalSceneConfig,
+    build_spec as build_pick_place_spec,
+)
+from .scenes.sorting_minimal import (
+    SortingMinimalSceneConfig,
+    build_spec as build_sorting_spec,
+)
 
 
 @dataclass
@@ -40,8 +46,10 @@ class SceneConfig(ManipulationSceneConfig):
 
 
 def _common_kwargs(cfg: SceneConfig) -> dict:
-    return {field.name: getattr(cfg, field.name)
-            for field in fields(ManipulationSceneConfig)}
+    return {
+        field.name: getattr(cfg, field.name)
+        for field in fields(ManipulationSceneConfig)
+    }
 
 
 def _pick_place_config(cfg: SceneConfig) -> PickPlaceMinimalSceneConfig:
@@ -66,7 +74,10 @@ def _sorting_config(cfg: SceneConfig) -> SortingMinimalSceneConfig:
 
 
 def build_spec(
-    cfg: SceneConfig | PickPlaceMinimalSceneConfig | SortingMinimalSceneConfig | None = None,
+    cfg: SceneConfig
+    | PickPlaceMinimalSceneConfig
+    | SortingMinimalSceneConfig
+    | None = None,
 ) -> mujoco.MjSpec:
     """Build the selected minimal scene through the legacy config surface."""
     cfg = cfg or SceneConfig()
@@ -85,7 +96,10 @@ def build_spec(
 
 
 def build_model(
-    cfg: SceneConfig | PickPlaceMinimalSceneConfig | SortingMinimalSceneConfig | None = None,
+    cfg: SceneConfig
+    | PickPlaceMinimalSceneConfig
+    | SortingMinimalSceneConfig
+    | None = None,
 ):
     spec = build_spec(cfg)
     return spec.compile(), spec
@@ -93,7 +107,10 @@ def build_model(
 
 def export_xml(
     path: Path,
-    cfg: SceneConfig | PickPlaceMinimalSceneConfig | SortingMinimalSceneConfig | None = None,
+    cfg: SceneConfig
+    | PickPlaceMinimalSceneConfig
+    | SortingMinimalSceneConfig
+    | None = None,
 ) -> Path:
     """Write a selected minimal scene to disk."""
     spec = build_spec(cfg)
@@ -106,7 +123,11 @@ def export_xml(
 
 if __name__ == "__main__":
     model, _ = build_model()
-    print(f"compiled: nq={model.nq} nu={model.nu} nbody={model.nbody} ncam={model.ncam}")
-    names = [mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_CAMERA, index)
-             for index in range(model.ncam)]
+    print(
+        f"compiled: nq={model.nq} nu={model.nu} nbody={model.nbody} ncam={model.ncam}"
+    )
+    names = [
+        mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_CAMERA, index)
+        for index in range(model.ncam)
+    ]
     print("cameras:", names)

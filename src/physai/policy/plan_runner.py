@@ -43,8 +43,12 @@ class PlanRunner(Policy):
         self._q_cmd: np.ndarray | None = None
         self._grip = 1.0
 
-    def reset(self, observation: Observation, goal: PoseStamped | None = None,
-              instruction: str | None = None) -> None:
+    def reset(
+        self,
+        observation: Observation,
+        goal: PoseStamped | None = None,
+        instruction: str | None = None,
+    ) -> None:
         self.index = 0
         self._steps = 0
         self._settle = 0
@@ -62,8 +66,9 @@ class PlanRunner(Policy):
 
     def act(self, observation: Observation) -> Action:
         if self.done:
-            return Action(joint_position=self._q_cmd,
-                          gripper=GripperCommand(position=self._grip))
+            return Action(
+                joint_position=self._q_cmd, gripper=GripperCommand(position=self._grip)
+            )
 
         sg = self.plan.subgoals[self.index]
         if sg.gripper is not None:
@@ -74,8 +79,9 @@ class PlanRunner(Policy):
         self._q_cmd = self._limiter(res.qpos)
 
         self._steps += 1
-        return Action(joint_position=self._q_cmd,
-                      gripper=GripperCommand(position=self._grip))
+        return Action(
+            joint_position=self._q_cmd, gripper=GripperCommand(position=self._grip)
+        )
 
     def note_progress(self, pinch_center: np.ndarray, gripper_now: float) -> None:
         """Advance the sub-goal cursor. Call once per control tick after `act`.

@@ -33,6 +33,7 @@ ARM_JOINT_NAMES: tuple[str, ...] = (
 )
 GRIPPER_JOINT_NAME = "gripper"
 ALL_JOINT_NAMES: tuple[str, ...] = ARM_JOINT_NAMES + (GRIPPER_JOINT_NAME,)
+SO101_ACTION_SCHEMA = "so101.joint_position.v1"
 
 
 def _now() -> float:
@@ -73,8 +74,10 @@ class JointState:
             raise ValueError("joint names and state arrays must have the same size")
         if len(set(self.name)) != len(self.name):
             raise ValueError("joint names must be unique")
-        if not all(np.isfinite(values).all()
-                   for values in (self.position, self.velocity, self.effort)):
+        if not all(
+            np.isfinite(values).all()
+            for values in (self.position, self.velocity, self.effort)
+        ):
             raise ValueError("joint state contains non-finite values")
 
     def validate(
@@ -238,8 +241,7 @@ class ImageFrame:
             raise ValueError(f"unsupported image encoding {self.encoding!r}")
         if expected_camera is not None and self.camera_name != expected_camera:
             raise ValueError(
-                f"image expects camera {expected_camera!r}, "
-                f"got {self.camera_name!r}"
+                f"image expects camera {expected_camera!r}, got {self.camera_name!r}"
             )
         if expected_frame is not None and self.header.frame_id != expected_frame:
             raise ValueError(
@@ -301,7 +303,9 @@ class Action:
 
     def __post_init__(self) -> None:
         if self.joint_position is not None:
-            self.joint_position = np.asarray(self.joint_position, dtype=np.float64).reshape(-1)
+            self.joint_position = np.asarray(
+                self.joint_position, dtype=np.float64
+            ).reshape(-1)
             if self.joint_names is not None:
                 self.joint_names = tuple(self.joint_names)
 
@@ -481,3 +485,42 @@ class ActionSpec:
             "fields": [spec.to_dict() for spec in self.fields],
             "metadata": dict(self.metadata),
         }
+
+
+def so101_action_values(action: Action, *, gripper_joint: float) -> np.ndarray:
+    """Return the canonical SO-101 dataset action in joint order and radians."""
+    if action.joint_position is None:
+        raise ValueError("SO-101 action requires joint-position targets")
+    if action.joint_position.size != len(ARM_JOINT_NAMES):
+        raise ValueError(
+            f"SO-101 expects {len(ARM_JOINT_NAMES)} arm targets, "
+            f"got {action.joint_position.size}"
+        )
+    if action.joint_names is not None and action.joint_names != ARM_JOINT_NAMES:
+        raise ValueError(
+            f"SO-101 expects joint order {ARM_JOINT_NAMES}, got {action.joint_names}"
+        )
+    values = np.concatenate([action.joint_position, [gripper_joint]])
+    if not np.isfinite(values).all():
+        raise ValueError("SO-101 action contains non-finite values")
+    return values
+
+
+def so101_action_spec() -> ActionSpec:
+    """Describe the stable six-value SO-101 training action layout."""
+    return ActionSpec(
+        fields=(
+            TensorSpec(
+                name="action",
+                shape=(len(ALL_JOINT_NAMES),),
+                dtype="float32",
+                units="rad",
+            ),
+        ),
+        metadata={
+            "schema": SO101_ACTION_SCHEMA,
+            "mode": "joint_position",
+            "absolute": True,
+            "joint_names": list(ALL_JOINT_NAMES),
+        },
+    )
