@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+
 import mujoco
 
 
@@ -25,12 +27,10 @@ class MuJoCoSimulationCore:
         self.control_dt = self.n_substeps * model.opt.timestep
         self.step_count = 0
         self._renderer: mujoco.Renderer | None = None
+        self._renderer_thread_id: int | None = None
         if render:
-            self._renderer = mujoco.Renderer(
-                model,
-                height=camera_height,
-                width=camera_width,
-            )
+            self._camera_width = camera_width
+            self._camera_height = camera_height
 
     def reset_simulation(self) -> None:
         """Reset simulator state before an adapter applies its initial state."""
@@ -44,8 +44,18 @@ class MuJoCoSimulationCore:
         self.step_count += 1
 
     def render_camera(self, name: str) -> object:
-        if self._renderer is None:
+        if not hasattr(self, "_camera_width"):
             raise RuntimeError("simulation constructed with render=False")
+        thread_id = threading.get_ident()
+        if self._renderer is None or self._renderer_thread_id != thread_id:
+            if self._renderer is not None:
+                self._renderer.close()
+            self._renderer = mujoco.Renderer(
+                self.model,
+                height=self._camera_height,
+                width=self._camera_width,
+            )
+            self._renderer_thread_id = thread_id
         self._renderer.update_scene(self.data, camera=name)
         return self._renderer.render()
 
@@ -53,3 +63,4 @@ class MuJoCoSimulationCore:
         if self._renderer is not None:
             self._renderer.close()
             self._renderer = None
+            self._renderer_thread_id = None
