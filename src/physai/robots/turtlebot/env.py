@@ -326,7 +326,7 @@ class TurtleBot4Env(MuJoCoSimulationCore):
         )
 
     def render_camera(self, name: str = "free") -> np.ndarray:
-        if self._renderer is None:
+        if not hasattr(self, "_camera_width"):
             raise RuntimeError("env constructed with render=False")
         camera: str | int = name
         if name == "free":
@@ -335,12 +335,11 @@ class TurtleBot4Env(MuJoCoSimulationCore):
             # `camera_frames` already declares this image to be in base_link,
             # so resolve it to the base-tracking camera when one is available.
             camera = CHASE_CAMERA if self._has_chase_camera else -1
-        self._renderer.update_scene(self.data, camera=camera)
-        return self._renderer.render()
+        return super().render_camera(camera)
 
     def observe(self) -> Observation:
         images = {}
-        if self._renderer is not None:
+        if hasattr(self, "_camera_width"):
             images["free"] = ImageFrame(
                 data=self.render_camera(),
                 camera_name="free",

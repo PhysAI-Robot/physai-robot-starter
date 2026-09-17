@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PhysAI Viewer</title>
+    <link rel="stylesheet" href="/static/viewer.css" />
+    <script type="importmap">
+      {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.178.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/"}}
+    </script>
+  </head>
+  <body>
+    <header><strong>PHYS<span>AI</span></strong><label>Robot <select id="robot-select" aria-label="Active robot"></select></label><span id="status">connecting</span></header>
+    <main><section id="viewport"></section><aside><h1>Simulation</h1><p id="telemetry">waiting for state</p><button id="reset">Reset</button><button id="pause">Pause</button><p class="hint">Drag to orbit · right-drag to pan · wheel to zoom.</p><div class="camera-grid"><figure><figcaption>front</figcaption><img data-camera="front" alt="Front camera feed" /></figure><figure><figcaption>wrist</figcaption><img data-camera="wrist" alt="Wrist camera feed" /></figure></div><p id="control-hint" class="hint"></p></aside></main>
+    <script type="module" src="/static/viewer.js"></script>
+  </body>
+</html>

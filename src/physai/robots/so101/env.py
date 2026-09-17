@@ -43,6 +43,7 @@ class EnvConfig:
     control_hz: float = 25.0
     render: bool = True
     cameras: tuple[str, ...] = ("front", "wrist")
+    camera_stride: int = 1
     max_steps: int = 400
     randomize_cube: bool = True
     cube_x_range: tuple[float, float] = (0.20, 0.24)
@@ -334,13 +335,16 @@ class SO101Env(MuJoCoSimulationCore):
         )
 
     def render_camera(self, name: str) -> np.ndarray:
-        if self._renderer is None:
+        if not hasattr(self, "_camera_width"):
             raise RuntimeError("env constructed with render=False")
         return super().render_camera(name)
 
     def observe(self) -> Observation:
         images: dict[str, ImageFrame] = {}
-        if self._renderer is not None:
+        if (
+            hasattr(self, "_camera_width")
+            and self.step_count % self.cfg.camera_stride == 0
+        ):
             for camera in self.cfg.cameras:
                 images[camera] = ImageFrame(
                     data=self.render_camera(camera),
