@@ -186,6 +186,19 @@ uv run python scripts/eval_policy.py \
   --max-steps 400
 ```
 
+Run the bounded camera-jitter robustness check and save its per-episode
+metrics as JSON:
+
+```bash
+uv run python scripts/eval_policy.py \
+  --policy visual_servo \
+  --episodes 20 \
+  --seed 0 \
+  --max-steps 600 \
+  --camera-jitter 0.005 \
+  --json-out outputs/visual_servo_20seed_jitter.json
+```
+
 The same policy can be inspected interactively with the MuJoCo viewer and live
 front-camera window:
 

@@ -121,6 +121,9 @@ class VisualServoMetrics:
     ee_error_m: float | None = None
     settled: bool = False
     failure_reason: str | None = None
+    phase: str = "APPROACH"
+    phase_steps: int = 0
+    settling_time_s: float | None = None
 
 
 class VisualServoPhase(Enum):
@@ -181,6 +184,9 @@ class SO101VisualServoPolicy(Policy):
         self._target_xy: np.ndarray | None = None
         self._q_cmd: np.ndarray | None = None
         self._grip = 1.0
+        self._elapsed_steps = 0
+        self._settling_time_s: float | None = None
+        self._last_visual_error_px: float | None = None
 
     def _calibration_from_env(self, camera: str | None = None) -> CameraCalibration:
         camera = camera or self.camera
@@ -215,6 +221,9 @@ class SO101VisualServoPolicy(Policy):
         self._target_xy = None
         self._q_cmd = observation.joint_state.position[:5].copy()
         self._grip = 1.0
+        self._elapsed_steps = 0
+        self._settling_time_s = None
+        self._last_visual_error_px = None
 
     def _refine_from_final_camera(self) -> None:
         if self._target_xy is None:
@@ -225,6 +234,11 @@ class SO101VisualServoPolicy(Policy):
         feature = self.detector.detect(frame)
         if feature is None:
             return
+        target_pixel = (
+            self.target_pixel
+            or (np.array([frame.width, frame.height], dtype=np.float64) - 1.0) / 2.0
+        )
+        self._last_visual_error_px = float(np.linalg.norm(feature.pixel - target_pixel))
         try:
             candidate = self._calibration_from_env(self.final_camera).pixel_to_plane(
                 feature.pixel, self.target_plane_z
@@ -290,6 +304,13 @@ class SO101VisualServoPolicy(Policy):
                 return Action(
                     joint_position=self._q_cmd, gripper=GripperCommand(position=1.0)
                 )
+            target_pixel = (
+                self.target_pixel
+                or (np.array([frame.width, frame.height], dtype=np.float64) - 1.0) / 2.0
+            )
+            self._last_visual_error_px = float(
+                np.linalg.norm(feature.pixel - target_pixel)
+            )
             try:
                 self._target_xy = self.calibration.pixel_to_plane(
                     feature.pixel, self.target_plane_z
@@ -309,6 +330,9 @@ class SO101VisualServoPolicy(Policy):
         self._q_cmd = self._limiter(self._solve(target))
         pinch = self.env.kin.pinch_center(self.env.data)
         reached = float(np.linalg.norm(pinch - target)) <= self.ee_tolerance
+        self._elapsed_steps += 1
+        if reached and self._settling_time_s is None:
+            self._settling_time_s = self._elapsed_steps * self._dt
         grip_now = self.env.joint_to_gripper(observation.joint_state.position[-1])
         settled_gripper = abs(grip_now - self._grip) < 0.06
         self._phase_steps += 1
@@ -319,9 +343,12 @@ class SO101VisualServoPolicy(Policy):
         elif reached or self._phase_steps >= 120:
             self._advance()
         self.metrics = VisualServoMetrics(
-            visual_error_px=None,
+            visual_error_px=self._last_visual_error_px,
             ee_error_m=float(np.linalg.norm(pinch - target)),
             settled=reached,
+            phase=self._phase.name,
+            phase_steps=self._phase_steps,
+            settling_time_s=self._settling_time_s,
         )
         return Action(
             joint_position=self._q_cmd, gripper=GripperCommand(position=self._grip)
