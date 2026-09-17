@@ -49,54 +49,30 @@ and has focused coverage; `[ ]` means it is planned, missing, or partial.
 Phase 1 is complete for the **SO-101 + TurtleBot4** scope. The main outcomes
 are:
 
-- [x] Stable capability-aware `Observation -> Action` contracts, robot registry,
-  unit/frame validation, deterministic resets, and seeded regression coverage.
-- [x] Reliable MuJoCo baselines for SO-101 manipulation and TurtleBot4 mobile
-  control, including reproducible scripted SO-101 sorting at `20/20` success.
-- [x] SO-101 ROS 2 bridge with joint, gripper, camera, TF, teleoperation, and
-  real `rclpy` acceptance coverage.
-- [x] TurtleBot4 ROS 2/Nav2 path with `/cmd_vel`, odometry, TF, LaserScan,
-  Collision Monitor, obstacle validation, and structured navigation reports.
-- [x] SO-101 FK, Jacobian, numerical IK, Cartesian targeting, joint-limit, and
-  collision/contact safety validation, including explicit unreachable-target
-  rejection.
-- [x] Seeded domain randomization for physics, visuals, cameras, and clutter,
-  with deterministic baseline preservation and evaluation metadata.
-- [x] Shared acceptance coverage confirms deterministic control, ROS 2 message
-  contracts, navigation without collision, IK safety, and randomization bounds.
-- [x] Phase 1 runs without Phase 2+ dependencies such as LeRobot, VLM, or VLA;
-  the architecture remains open for future Franka and mobile-manipulator
-  adapters.
+- [x] Stable capability-aware `Observation -> Action` contracts, robot
+  registries, validation, deterministic resets, and seeded regression coverage.
+- [x] Reproducible MuJoCo baselines for SO-101 manipulation and TurtleBot4
+  navigation, including `20/20` scripted SO-101 sorting success.
+- [x] SO-101 and TurtleBot4 ROS 2/Nav2 bridges with sensors, actuation, TF,
+  teleoperation, navigation reporting, and real-message acceptance coverage.
+- [x] SO-101 kinematics, IK, joint/contact safety, domain randomization, and
+  shared acceptance coverage are complete and documented.
+- [x] Phase 1 remains independent of Phase 2+ dependencies and ready for
+  additional robot adapters.
 
 ---
 
-## Phase 1 to Phase 2 Bridge: Training Readiness
+### Training Readiness Bridge
 
-Add the smallest training boundary on top of the completed Phase 1 contracts.
-This work must adapt the existing `Observation -> Action` interface for
-learning tools without moving training logic into robot environments or ROS 2
-adapters.
+Phase 1 also includes the completed training-readiness boundary. Canonical
+observation/action specs, robot-owned training contracts, the Gymnasium adapter,
+SO-101 action layout, safety gate, metadata, checkpoint compatibility, and
+shared evaluation reports are covered by focused tests.
 
-### Bridging Deliverables
-- [x] `src/physai/contracts.py`: Define canonical `ObservationSpec` and `ActionSpec` schemas covering names, shapes, dtypes, units, ranges, camera layout, and normalization metadata.
-- [x] Robot-owned `RobotTrainingContract` providers define each embodiment's observation/action schema, camera layout, dataset encoder, and optional action decoder without coupling `physai.data` or `physai.policy` to a concrete robot.
-- [x] `src/physai/data/gym_env.py`: Add a Gymnasium-compatible environment adapter for direct MuJoCo task training with seeded `reset()`, `step()`, spaces, `rgb_array` rendering, structured episode information, and the existing safety gate.
-- [x] Make the canonical SO-101 action layout explicit and consistent across policies, recorder output, replay, ROS 2 conversion, and training datasets.
-- [x] Version dataset metadata with robot, task, contract schema, simulator configuration, camera configuration, seed, and train/validation/test split information.
-- [x] Add checkpoint metadata and compatibility validation for robot, task, observation schema, action schema, normalization, and training configuration.
-- [x] Add shared evaluation reports for success, collision, timeout, unsafe action, reward, and held-out seed performance.
-- [x] Add a smoke test that runs one episode through the training adapter and confirms that the resulting action still passes the existing safety and robot validation gates.
-
-### Bridge Completion Gate
-The Phase 2A visual-servoing baseline and all learned policies must consume the
-same canonical observation and action schemas. A training framework may be
-changed later, but policies must remain evaluable through the repository's
-policy boundary without changing the robot adapter or ROS 2 contract.
-
-The bridge is complete as a preparation milestone. The current `.npz` files
-are an internal, LeRobot-shaped prototype format; standard `LeRobotDataset`
-export, visual-servo baselines, and training framework containers remain Phase
-2 deliverables.
+The bridge is complete as a Phase 1 preparation milestone. Current `.npz`
+files remain an internal, LeRobot-shaped prototype; standard
+`LeRobotDataset` export, visual-servo baselines, and training containers remain
+Phase 2 deliverables.
 
 ---
 
