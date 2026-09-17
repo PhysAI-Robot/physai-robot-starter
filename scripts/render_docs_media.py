@@ -71,7 +71,7 @@ def render_pick_place(seed: int = 0) -> None:
 def render_camera_views(seed: int = 0) -> None:
     """Both observation cameras at the moment the jaws close on the cube."""
     print("[so101] observation cameras")
-    robot, env = _so101(
+    _robot, env = _so101(
         SceneConfig(camera_width=480, camera_height=480), "pick_place", seed
     )
     obs = env.reset(seed=seed)

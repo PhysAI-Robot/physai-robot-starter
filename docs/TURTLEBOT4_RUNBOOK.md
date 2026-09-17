@@ -38,7 +38,8 @@ SO-101 in one web process, see the [Web Viewer Runbook](WEB_VIEWER_RUNBOOK.md).
 
 ```bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest \
-  tests/test_robot_registry.py -q
+  tests/unit/test_robot_registry.py \
+  tests/acceptance/turtlebot/test_navigation.py -q
 ```
 
 These checks cover registry creation, reset determinism, wheel motion, ground

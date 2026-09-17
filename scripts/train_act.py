@@ -153,7 +153,7 @@ def main() -> int:
             indent=2,
         )
 
-    preprocessor, postprocessor = make_act_pre_post_processors(
+    preprocessor, _postprocessor = make_act_pre_post_processors(
         cfg, dataset_stats=stats.per_key
     )
     policy = ACTPolicy(cfg).to(args.device)

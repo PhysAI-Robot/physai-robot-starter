@@ -65,8 +65,9 @@ def test_action_reports_generic_mode_and_rejects_ambiguous_commands():
     from physai.contracts import Action, Twist
 
     assert Action(ee_twist=Twist()).mode == "twist"
+    action = Action(joint_position=[0], ee_twist=Twist())
     with pytest.raises(ValueError, match="both"):
-        Action(joint_position=[0], ee_twist=Twist()).mode
+        _ = action.mode
 
 
 def test_joint_state_rejects_mismatched_arrays():

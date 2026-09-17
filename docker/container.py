@@ -33,7 +33,7 @@ def compose(args: list[str], gpu: bool) -> int:
     cmd = ["docker", "compose", *files, *args]
     env = dict(os.environ, BASE_IMAGE=CUDA_BASE if gpu else CPU_BASE)
     print("+", " ".join(cmd))
-    return subprocess.run(cmd, env=env).returncode
+    return subprocess.run(cmd, env=env, check=False).returncode
 
 
 def main() -> int:

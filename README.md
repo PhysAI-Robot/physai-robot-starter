@@ -5,9 +5,9 @@ robot control, MuJoCo simulation, ROS2 interfaces, and later data-driven
 policies through stable robot, task, observation, and action contracts.
 
 **Phase 1, the Classical Foundation and ROS2 Contract, is complete** for the
-supported SO-101 arm and TurtleBot4 differential-drive base in MuJoCo. The next
-step is the Phase 1-to-Phase 2 training bridge; VLM and VLA remain later-phase
-work.
+supported SO-101 arm and TurtleBot4 differential-drive base in MuJoCo. The
+Phase 1-to-Phase 2 training bridge and the Phase 2A visual-servo baseline are
+available; Phase 2B learning workflows remain the next major work.
 
 The shortest way to inspect the completed foundation is model-free: run the
 scripted SO-101 pick-and-place baseline, inspect the contracts, then validate

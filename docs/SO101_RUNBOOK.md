@@ -105,14 +105,16 @@ uv run python scripts/eval_policy.py \
 
 ```bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest \
-  tests/test_sim.py tests/test_tasks.py tests/test_robot_registry.py -q
+  tests/acceptance/so101/test_kinematics.py \
+  tests/acceptance/so101/test_scene.py \
+  tests/unit/test_robot_registry.py -q
 ```
 
 The transport-level ROS2 check does not require a ROS2 installation:
 
 ```bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest \
-  tests/test_robot_registry.py::test_ros2_mujoco_teleop_command_moves_so101 -q
+  tests/integration/test_ros2_adapters.py::test_ros2_mujoco_teleop_command_moves_so101 -q
 ```
 
 ## 4. Run the Real ROS2 Node

@@ -249,7 +249,7 @@ class SO101ROS2Node:
 def _copy_ros_stamp(header: Any, stamp: float) -> None:
     seconds = max(0.0, float(stamp))
     header.stamp.sec = int(seconds)
-    header.stamp.nanosec = int(round((seconds - header.stamp.sec) * 1e9))
+    header.stamp.nanosec = round((seconds - header.stamp.sec) * 1e9)
 
 
 __all__ = ["SO101ROS2Node"]

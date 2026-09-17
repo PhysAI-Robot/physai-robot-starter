@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "physai"
 version = "0.0.1"
-description = "Phase 0 starter: SO-101 arm in MuJoCo with VLM planner + VLA policy seams"
+description = "Modular robotics starter for MuJoCo, ROS2, visual servoing, and learning workflows"
 requires-python = ">=3.12,<3.13"
 license = { file = "LICENSE" }
 dependencies = [

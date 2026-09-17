@@ -108,14 +108,17 @@ def create_runtime(
     selected_scene_name = scene_name
     if selected_scene_name is None and task_name is not None and embodiment_kind:
         selected_scene_name = default_scene_for(embodiment_kind, task_name)
-        if robot_config is None and "scene" not in fields:
-            if selected_scene_name is not None:
-                scene_config = create_scene(
-                    selected_scene_name,
-                    **scene_defaults(robot_name),
-                    **(scene_kwargs or {}),
-                )
-                fields["scene"] = scene_config
+        if (
+            robot_config is None
+            and "scene" not in fields
+            and selected_scene_name is not None
+        ):
+            scene_config = create_scene(
+                selected_scene_name,
+                **scene_defaults(robot_name),
+                **(scene_kwargs or {}),
+            )
+            fields["scene"] = scene_config
     robot = create_robot(
         robot_name,
         adapter=adapter,

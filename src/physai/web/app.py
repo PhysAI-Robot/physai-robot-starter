@@ -1,6 +1,7 @@
 """FastAPI application factory for the browser viewer."""
 
 import asyncio
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -56,7 +57,18 @@ def create_app(
         )
     static_dir = Path(__file__).with_name("static")
     assets_dir = Path(__file__).resolve().parents[3] / "assets"
-    app = FastAPI(title="PhysAI Web Viewer")
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        for session in sessions.values():
+            session.start()
+        try:
+            yield
+        finally:
+            for session in sessions.values():
+                session.stop()
+
+    app = FastAPI(title="PhysAI Web Viewer", lifespan=lifespan)
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
     app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
@@ -66,16 +78,6 @@ def create_app(
             return sessions[selected]
         except KeyError as exc:
             raise ValueError(f"unknown robot {selected!r}") from exc
-
-    @app.on_event("startup")
-    async def start_session() -> None:
-        for session in sessions.values():
-            session.start()
-
-    @app.on_event("shutdown")
-    async def stop_session() -> None:
-        for session in sessions.values():
-            session.stop()
 
     @app.get("/api/robots")
     async def robots() -> list[dict[str, Any]]:
@@ -160,5 +162,6 @@ def create_app(
             pass
         finally:
             receiver.cancel()
+            await asyncio.gather(receiver, return_exceptions=True)
 
     return app
