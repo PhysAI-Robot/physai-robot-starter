@@ -11,8 +11,8 @@ import time
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from ..control.safety import SafetyController
 from ..contracts import Action, Observation
+from ..control.safety import SafetyController
 from ..robots.base import RobotPort, RobotSpec
 from .adapters import ROS2MuJoCoAdapter, ROS2Transport
 from .messages import MessageCodec

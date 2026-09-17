@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from conftest import requires_assets
 
 pytestmark = [pytest.mark.acceptance, pytest.mark.assets, pytest.mark.slow]
@@ -108,6 +107,7 @@ def test_ik_rejects_unreachable_target_without_unsafe_joint_command(env):
 @requires_assets
 def test_ik_collision_acceptance_allows_grasp_contact_but_rejects_table_contact(env):
     import mujoco
+
     from physai.robots.so101.kinematics import TOP_DOWN
 
     obs = env.reset(seed=0)

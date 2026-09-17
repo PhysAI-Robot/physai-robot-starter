@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import argparse
+
 import _bootstrap  # noqa: F401
 
 
 def main() -> int:
     import rclpy
+
     from physai.robots import available_robots, create_ros2_node
 
     parser = argparse.ArgumentParser()

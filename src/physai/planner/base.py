@@ -32,7 +32,7 @@ class SubGoal:
     rationale: str = ""
 
     @classmethod
-    def from_xyz(cls, skill: str, xyz, **kw) -> "SubGoal":
+    def from_xyz(cls, skill: str, xyz, **kw) -> SubGoal:
         return cls(
             skill=skill,
             waypoint=PoseStamped(pose=Pose(position=Vector3.from_array(xyz))),

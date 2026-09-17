@@ -8,9 +8,9 @@ from .domain_randomization import (
 )
 from .scene import SceneConfig, build_model, build_spec, export_xml
 from .scenes import (
-    PickPlaceMinimalSceneConfig,
     CommonSceneConfig,
     ManipulationSceneConfig,
+    PickPlaceMinimalSceneConfig,
     SortingMinimalSceneConfig,
     WorldSceneConfig,
     available_scenes,
@@ -19,20 +19,20 @@ from .scenes import (
 )
 
 __all__ = [
-    "MuJoCoSimulationCore",
+    "CommonSceneConfig",
     "DomainRandomizationConfig",
     "DomainRandomizationEngine",
-    "RandomizationMetadata",
-    "CommonSceneConfig",
-    "WorldSceneConfig",
     "ManipulationSceneConfig",
-    "build_manipulation_spec",
+    "MuJoCoSimulationCore",
     "PickPlaceMinimalSceneConfig",
-    "SortingMinimalSceneConfig",
-    "available_scenes",
-    "create_scene",
+    "RandomizationMetadata",
     "SceneConfig",
+    "SortingMinimalSceneConfig",
+    "WorldSceneConfig",
+    "available_scenes",
+    "build_manipulation_spec",
     "build_model",
     "build_spec",
+    "create_scene",
     "export_xml",
 ]

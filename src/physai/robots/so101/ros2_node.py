@@ -9,12 +9,12 @@ from typing import Any
 import mujoco
 import numpy as np
 
-from ...bridge.messages import ROS2MessageCodec
 from ...bridge.cartesian import (
     CartesianTargetRequest,
     CartesianTargetResult,
     CartesianTargetService,
 )
+from ...bridge.messages import ROS2MessageCodec
 from ...bridge.mujoco_ros_bridge import MuJoCoROSBridge, RclpyTransport
 from .env import EnvConfig, SO101Env
 

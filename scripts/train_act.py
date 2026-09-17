@@ -24,8 +24,8 @@ import _bootstrap  # noqa: F401
 import torch
 from torch.utils.data import DataLoader
 
-from physai.policy.act_dataset import ACTEpisodeDataset
 from physai.data import CheckpointMetadata
+from physai.policy.act_dataset import ACTEpisodeDataset
 
 
 def main() -> int:

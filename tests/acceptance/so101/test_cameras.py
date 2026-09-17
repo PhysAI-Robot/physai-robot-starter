@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from conftest import requires_assets
 
 pytestmark = [pytest.mark.acceptance, pytest.mark.assets, pytest.mark.slow]
@@ -31,6 +30,7 @@ def test_both_observation_cameras_carry_signal():
 @requires_assets
 def test_wrist_camera_looks_toward_the_object_it_is_grasping():
     import mujoco
+
     from physai.robots.so101 import EnvConfig, SO101Env
     from physai.tasks import TaskRuntime, create_task
 

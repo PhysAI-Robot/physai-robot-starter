@@ -10,15 +10,13 @@ import json
 import time
 from pathlib import Path
 
+import _bootstrap  # noqa: F401
 import mujoco
 import numpy as np
-
-import _bootstrap  # noqa: F401
 
 from physai.robots.so101 import EnvConfig, SO101Env
 from physai.robots.so101.kinematics import top_down_quat
 from physai.sim import SceneConfig
-
 
 TARGET_OFFSETS = (
     (0.00, -0.03, 0.01),

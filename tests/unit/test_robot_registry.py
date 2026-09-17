@@ -22,8 +22,8 @@ def test_ros2_nodes_are_registered_for_supported_robots():
 
 
 def test_so101_environment_is_owned_by_robot_package():
+    from physai import sim
     from physai.robots.so101 import EnvConfig, SO101Env
-    import physai.sim as sim
 
     env = SO101Env(EnvConfig(render=False))
     try:

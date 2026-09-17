@@ -1,5 +1,4 @@
 import pytest
-
 from conftest import requires_assets
 
 pytestmark = pytest.mark.assets

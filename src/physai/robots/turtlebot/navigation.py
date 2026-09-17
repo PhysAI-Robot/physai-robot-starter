@@ -7,7 +7,7 @@ positive linear velocity drives along world ``-Y`` when yaw is zero.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import atan2, cos, hypot, pi, sin
+from math import atan2, cos, hypot, pi
 
 import numpy as np
 
@@ -190,11 +190,11 @@ def navigate_to_coordinates(
 
 
 __all__ = [
+    "Nav2AcceptanceResult",
     "NavigationGoal",
     "NavigationResult",
-    "Nav2AcceptanceResult",
     "RPPConfig",
     "RegulatedPurePursuit",
-    "navigate_to_goal",
     "navigate_to_coordinates",
+    "navigate_to_goal",
 ]

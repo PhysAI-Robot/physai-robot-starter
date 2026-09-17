@@ -14,14 +14,13 @@ import argparse
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
-import numpy as np
 
 from physai.data import EvaluationReport, load_episode
 from physai.policy import available_policies, create_policy
-from physai.robots import available_robots, create_robot
+from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
-from physai.sim.domain_randomization import DomainRandomizationConfig
 from physai.sim import SceneConfig
+from physai.sim.domain_randomization import DomainRandomizationConfig
 from physai.tasks import TaskRuntime, create_task
 
 

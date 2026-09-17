@@ -25,7 +25,7 @@ import numpy as np
 
 from physai.planner import available_planners, create_planner
 from physai.policy.plan_runner import PlanRunner
-from physai.robots import available_robots, create_robot
+from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
 from physai.sim import SceneConfig
 from physai.tasks import TaskRuntime, create_task

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Mapping
-
+from typing import Any
 
 DATASET_SCHEMA_VERSION = "physai.dataset.v1"
 CHECKPOINT_SCHEMA_VERSION = "physai.checkpoint.v1"
@@ -54,7 +54,7 @@ class DatasetMetadata:
         }
 
     @classmethod
-    def from_dict(cls, values: Mapping[str, Any]) -> "DatasetMetadata":
+    def from_dict(cls, values: Mapping[str, Any]) -> DatasetMetadata:
         return cls(
             robot=str(values["robot"]),
             task=str(values["task"]),
@@ -98,7 +98,7 @@ class CheckpointMetadata:
         }
 
     @classmethod
-    def from_dict(cls, values: Mapping[str, Any]) -> "CheckpointMetadata":
+    def from_dict(cls, values: Mapping[str, Any]) -> CheckpointMetadata:
         return cls(
             robot=str(values["robot"]),
             task=str(values["task"]),

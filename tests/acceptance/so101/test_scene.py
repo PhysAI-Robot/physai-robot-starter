@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from conftest import requires_assets
 
 pytestmark = [pytest.mark.acceptance, pytest.mark.assets, pytest.mark.slow]
@@ -9,6 +8,7 @@ pytestmark = [pytest.mark.acceptance, pytest.mark.assets, pytest.mark.slow]
 @requires_assets
 def test_scene_has_the_task_objects_and_cameras():
     import mujoco
+
     from physai.sim import build_model
 
     model, _ = build_model()
@@ -24,6 +24,7 @@ def test_scene_has_the_task_objects_and_cameras():
 @requires_assets
 def test_calibrated_pads_replace_jaw_collision_meshes():
     import mujoco
+
     from physai.sim import build_model
 
     model, _ = build_model()
@@ -46,6 +47,7 @@ def test_calibrated_pads_replace_jaw_collision_meshes():
 @requires_assets
 def test_task_specific_scene_configs_have_separate_object_layouts():
     import mujoco
+
     from physai.sim import (
         PickPlaceMinimalSceneConfig,
         SortingMinimalSceneConfig,
@@ -76,6 +78,7 @@ def test_table_does_not_intersect_the_robot_base():
 @requires_assets
 def test_sorting_scene_has_three_colored_cubes():
     import mujoco
+
     from physai.sim import SceneConfig, build_model
 
     model, _ = build_model(SceneConfig(num_cubes=3))
