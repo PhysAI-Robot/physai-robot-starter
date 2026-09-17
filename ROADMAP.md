@@ -52,7 +52,8 @@ are:
 - [x] Stable capability-aware `Observation -> Action` contracts, robot
   registries, validation, deterministic resets, and seeded regression coverage.
 - [x] Reproducible MuJoCo baselines for SO-101 manipulation and TurtleBot4
-  navigation, including `20/20` scripted SO-101 sorting success.
+  navigation, including the documented `20/20` scripted SO-101 single-cube
+  pick-and-place check.
 - [x] SO-101 and TurtleBot4 ROS 2/Nav2 bridges with sensors, actuation, TF,
   teleoperation, navigation reporting, and real-message acceptance coverage.
 - [x] SO-101 kinematics, IK, joint/contact safety, domain randomization, and

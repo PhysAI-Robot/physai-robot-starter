@@ -31,9 +31,9 @@ instruction + camera images
      Robot environment and task evaluation
 ```
 
-The current runnable baseline is the scripted planner/policy path with
-`PlanRunner`; model-backed planners and VLA policies plug into the same
-boundaries.
+The current runnable baselines are the scripted planner/policy path with
+`PlanRunner` and the SO-101 visual-servo policy; model-backed planners and VLA
+policies plug into the same boundaries.
 
 ## Execution modes and deployment parity
 
@@ -295,7 +295,7 @@ The currently implemented compositions are concrete and should remain listed
 here as an inventory of repository support:
 
 ```text
-so101 + pick_place + scripted policy or Planner + PlanRunner + MuJoCo
+so101 + pick_place + scripted, visual-servo, or Planner + PlanRunner + MuJoCo
 turtlebot4 + generic smoke test + constant twist policy + MuJoCo
 ```
 

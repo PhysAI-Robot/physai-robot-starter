@@ -52,7 +52,9 @@ def load_sim_config(path: str | Path) -> SimulationConfig:
     with config_path.open(encoding="utf-8") as stream:
         data = yaml.safe_load(stream)
     if not isinstance(data, dict):
-        raise ValueError(f"configuration root must be a mapping: {config_path}")
+        raise ValueError(  # noqa: TRY004
+            f"configuration root must be a mapping: {config_path}"
+        )
 
     return _parse_simulation_config(data, config_path)
 
@@ -63,10 +65,14 @@ def _parse_simulation_config(
 ) -> SimulationConfig:
     seed = data.get("seed", 0)
     if not isinstance(seed, int) or isinstance(seed, bool):
-        raise ValueError(f"{source}: simulation seed must be an integer")
+        raise ValueError(  # noqa: TRY004
+            f"{source}: simulation seed must be an integer"
+        )
     randomization_data = data.get("domain_randomization", {})
     if not isinstance(randomization_data, dict):
-        raise ValueError(f"{source}: domain_randomization must be a mapping")
+        raise ValueError(  # noqa: TRY004
+            f"{source}: domain_randomization must be a mapping"
+        )
     enabled = randomization_data.get("enabled", False)
     kwargs: dict[str, Any] = {"enabled": enabled}
     for key in (
@@ -99,11 +105,15 @@ def load_task_config(path: str | Path) -> TaskConfig:
     with config_path.open(encoding="utf-8") as stream:
         data = yaml.safe_load(stream)
     if not isinstance(data, dict):
-        raise ValueError(f"configuration root must be a mapping: {config_path}")
+        raise ValueError(  # noqa: TRY004
+            f"configuration root must be a mapping: {config_path}"
+        )
 
     simulation_data = data.get("simulation", {})
     if not isinstance(simulation_data, dict):
-        raise ValueError("configuration field 'simulation' must be a mapping")
+        raise ValueError(  # noqa: TRY004
+            "configuration field 'simulation' must be a mapping"
+        )
     simulation = _parse_simulation_config(simulation_data, config_path)
 
     robot = _required_string(data, "robot")
@@ -148,7 +158,9 @@ def load_task_config(path: str | Path) -> TaskConfig:
 def _required_mapping(data: dict[str, Any], key: str) -> dict[str, Any]:
     value = data.get(key)
     if not isinstance(value, dict):
-        raise ValueError(f"configuration field {key!r} must be a mapping")
+        raise ValueError(  # noqa: TRY004
+            f"configuration field {key!r} must be a mapping"
+        )
     return value
 
 

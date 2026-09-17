@@ -147,7 +147,7 @@ def navigate_to_goal(
     pursuit = controller or RegulatedPurePursuit()
     env = TurtleBot4Env(config or TurtleBot4Config(render=False, max_steps=max_steps))
     try:
-        observation = env.reset(seed=seed)
+        env.reset(seed=seed)
         collision_count = 0
         reached = False
         for step in range(1, max_steps + 1):
@@ -155,7 +155,7 @@ def navigate_to_goal(
             if pursuit.reached(pose, goal):
                 reached = True
                 break
-            observation, _, _, _, _ = env.step(
+            _observation, _, _, _, _ = env.step(
                 Action(ee_twist=pursuit.command(pose, goal))
             )
             collision_count += env.non_ground_contact_count()

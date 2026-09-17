@@ -37,12 +37,8 @@ def test_turtlebot4_lidar_detects_configured_obstacle():
         env.reset(seed=0)
         ranges = env.lidar_ranges()
         forward_index = (
-            int(
-                round(
-                    (0.0 - env.cfg.lidar_angle_min)
-                    / (2.0 * np.pi)
-                    * env.cfg.lidar_samples
-                )
+            round(
+                (0.0 - env.cfg.lidar_angle_min) / (2.0 * np.pi) * env.cfg.lidar_samples
             )
             % env.cfg.lidar_samples
         )

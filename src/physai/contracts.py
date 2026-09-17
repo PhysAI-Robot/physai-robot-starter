@@ -275,7 +275,9 @@ class Observation:
         camera_frames = expected_camera_frames or {}
         for name, frame in self.images.items():
             if not isinstance(frame, ImageFrame):
-                raise ValueError(f"observation image {name!r} is not an ImageFrame")
+                raise ValueError(  # noqa: TRY004
+                    f"observation image {name!r} is not an ImageFrame"
+                )
             frame.validate(
                 expected_camera=name,
                 expected_frame=camera_frames.get(name),

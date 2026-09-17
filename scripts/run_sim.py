@@ -51,7 +51,7 @@ def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
         try:
             iio.imwrite(mp4, frames, fps=fps, plugin=plugin, **kwargs)
             return mp4
-        except Exception:
+        except (ImportError, OSError, RuntimeError, TypeError, ValueError):
             continue
 
     gif = stem.with_suffix(".gif")
