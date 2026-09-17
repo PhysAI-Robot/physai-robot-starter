@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import time
 
-import numpy as np
-
 from ..contracts import Action, Observation
 from ..robots.base import RobotSpec
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-
 rclpy = pytest.importorskip("rclpy")
 pytestmark = pytest.mark.ros2
 pytest.importorskip("geometry_msgs.msg")
@@ -17,8 +16,7 @@ pytest.importorskip("rosgraph_msgs.msg")
 def test_real_ros2_cmd_vel_publishes_turtlebot_state_and_tf():
     from geometry_msgs.msg import Twist
     from nav_msgs.msg import Odometry
-    from sensor_msgs.msg import JointState
-    from sensor_msgs.msg import LaserScan
+    from sensor_msgs.msg import JointState, LaserScan
     from std_msgs.msg import UInt32
     from tf2_msgs.msg import TFMessage
 

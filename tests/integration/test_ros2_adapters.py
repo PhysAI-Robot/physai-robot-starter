@@ -268,8 +268,8 @@ def test_ros2_hardware_adapter_uses_shared_transport_boundary():
 
 @pytest.mark.integration
 def test_hardware_factory_does_not_construct_a_mujoco_environment(monkeypatch):
-    from physai.robots.so101 import factory
     from physai.robots import RobotSpec
+    from physai.robots.so101 import factory
 
     class FakeHardware:
         robot_spec = RobotSpec(

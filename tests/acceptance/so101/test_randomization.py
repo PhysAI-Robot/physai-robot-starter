@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from conftest import requires_assets
 
 pytestmark = [pytest.mark.acceptance, pytest.mark.assets, pytest.mark.slow]

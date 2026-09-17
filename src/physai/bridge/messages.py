@@ -61,7 +61,7 @@ class ContractMessageCodec:
             return value
         command = getattr(value, "command", value)
         return GripperCommand(
-            position=float(getattr(command, "position")),
+            position=float(command.position),
             max_effort=float(getattr(command, "max_effort", 0.0)),
         )
 

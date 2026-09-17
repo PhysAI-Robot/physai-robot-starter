@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ..control.safety import SafetyController
 from ..contracts import Action, Observation
+from ..control.safety import SafetyController
 from ..planner.base import Planner
 from ..policy.base import Policy
 from ..policy.registry import create_policy

@@ -10,10 +10,14 @@ import mujoco
 from .scenes.common import ManipulationSceneConfig
 from .scenes.pick_place_minimal import (
     PickPlaceMinimalSceneConfig,
+)
+from .scenes.pick_place_minimal import (
     build_spec as build_pick_place_spec,
 )
 from .scenes.sorting_minimal import (
     SortingMinimalSceneConfig,
+)
+from .scenes.sorting_minimal import (
     build_spec as build_sorting_spec,
 )
 
