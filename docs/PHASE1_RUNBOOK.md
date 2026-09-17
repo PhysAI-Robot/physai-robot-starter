@@ -11,6 +11,8 @@ follow `configs/maps/<environment>/`.
   collection, imitation learning, and planner/VLM/VLA continuation.
 - [TurtleBot4 Runbook](TURTLEBOT4_RUNBOOK.md): viewer, velocity control, ROS2,
   RPP navigation, dummy-map Nav2, and obstacle-navigation continuation.
+- [Web Viewer Runbook](WEB_VIEWER_RUNBOOK.md): headless Three.js console,
+  multi-robot selection, keyboard control, cameras, and API contracts.
 
 ## Shared Setup
 

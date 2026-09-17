@@ -8,8 +8,9 @@ workflow rules live in [AGENTS.md](../AGENTS.md).
 ## Design shape
 
 The stack separates embodiment, task, and decision-making so each can evolve
-independently. A runtime composition selects one robot, one task, and one
-planner or policy, then connects them through message-shaped contracts.
+independently. A runtime composition selects one or more robots, one task
+where applicable, and one planner or policy per session, then connects them
+through message-shaped contracts.
 
 ```text
 instruction + camera images
@@ -310,6 +311,33 @@ minimal baselines for smoke tests and early experiments. They live in
 `physai.tasks.pick_place_minimal` and `physai.tasks.sorting_minimal`; the
 registry keys `pick_place` and `sorting` remain stable so configuration does
 not encode an implementation filename.
+
+### Web fleet composition
+
+The FastAPI console composes a `SimulationSession` per selected registry robot.
+Sessions run their own physics and camera loops, while each WebSocket
+connection selects one active session for browser rendering and keyboard
+control. The web layer consumes `RobotPort`, `RobotSpec`, and shared
+`Action`/`Observation` contracts; it must not import SO-101 or TurtleBot4
+physics implementations to decide how a robot works.
+
+```text
+registered robot names
+          |
+          v
+{ robot_name: SimulationSession }
+          |
+          +-- /api/robots       capability discovery
+          +-- /api/scene        selected static geometry
+          +-- /api/state        selected dynamic state
+          +-- /ws               selected control and telemetry stream
+```
+
+The launcher accepts repeated `--robot` options. Multiple sessions may run
+concurrently, but one browser connection controls one selected robot at a
+time. Capability-specific controls belong at the presentation boundary; a
+robot without a gripper or twist resolver must not be forced through the
+SO-101 keyboard mapping.
 
 The near-term instantiation is `so101 + pick_place`, but adding another robot
 must not require changing this composition model. Every robot/task combination

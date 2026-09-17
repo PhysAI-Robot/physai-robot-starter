@@ -77,6 +77,22 @@ interactive MuJoCo viewer after the headless run succeeds:
 uv run python scripts/run_sim.py --viewer
 ```
 
+For the browser-based headless Three.js viewer, see the
+[Web Viewer runbook](docs/WEB_VIEWER_RUNBOOK.md). It explains the difference
+between running a scripted SO-101 episode and inspecting the live web session.
+
+The web console can run multiple registered robots in parallel and lets the
+browser select which robot receives keyboard commands:
+
+```bash
+MUJOCO_GL=egl uv run --extra web python scripts/run_web.py \
+  --robot so101 --robot turtlebot4 --port 8004
+```
+
+The web layer remains robot-agnostic and discovers action modes and cameras
+from each robot's `RobotSpec`. See the runbook for the current keyboard mapping
+and WebSocket/API contract.
+
 ### Optional WSL2 viewer performance
 
 This section is only for users running the viewer inside WSL2. Native Ubuntu
