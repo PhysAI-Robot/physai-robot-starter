@@ -60,6 +60,9 @@ without selecting one manually. `--camera-view` is retained as a compatibility
 flag and is no longer required. This mode requires a desktop display and
 Tkinter (`python3-tk` on Debian/Ubuntu).
 
+For the headless browser console, including keyboard jog and multi-robot
+selection, use the shared [Web Viewer Runbook](WEB_VIEWER_RUNBOOK.md).
+
 ## 2. Run the Basic Task
 
 Run the scripted pick-and-place policy:

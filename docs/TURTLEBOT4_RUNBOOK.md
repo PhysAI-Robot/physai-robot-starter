@@ -31,6 +31,9 @@ uv run python scripts/run_sim.py \
 At yaw zero, positive linear velocity drives along the model's world `-Y`
 direction. The navigation controller and tests use this model convention.
 
+To inspect TurtleBot4 in the headless Three.js console, or run it alongside
+SO-101 in one web process, see the [Web Viewer Runbook](WEB_VIEWER_RUNBOOK.md).
+
 ## 2. Validate Basic Differential-Drive Control
 
 ```bash
