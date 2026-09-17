@@ -30,14 +30,14 @@ The simulation workspace explicitly decouples scene orchestration from physical 
 
 ## Current Status
 
-**Current phase: Phase 1 complete; Phase 1 to Phase 2 training bridge complete; Phase 2A preparation is next.**
+**Current phase: Phase 2A visual-servo baseline complete; Phase 2B learning workflows are next.**
 
 Phase 1 is complete for the SO-101 and TurtleBot4 scope. The next work is to
 make the stable contracts ready for visual-servoing and learning workflows.
 
-Phase 2 and later are future direction only. They should consume the stable
-contracts produced by Phase 1 and the completed training bridge, not drive
-changes to those contracts ad hoc.
+Phase 2B and later should consume the stable contracts produced by Phase 1,
+the completed training bridge, and the Phase 2A evaluation path rather than
+drive changes to those contracts ad hoc.
 
 The roadmap tracks implementation evidence. `[x]` means the deliverable exists
 and has focused coverage; `[ ]` means it is planned, missing, or partial.
@@ -116,10 +116,10 @@ approach, followed by TurtleBot4 visual goal tracking where a suitable visual
 target is available.
 
 #### Key Deliverables
-- [x] Visual feature or fiducial detection with documented camera-frame and robot-frame transforms. **Partial:** the deterministic baseline detects an RGB blob and supports a calibrated fixed front camera; fiducials and dynamic wrist TF updates remain.
-- [x] Image-based or pose-based visual servo controller producing bounded `Action` values through the existing safety layer. **Partial:** `visual_servo` emits bounded joint-position actions through the Jacobian resolver; end-to-end robustness evaluation remains.
-- [ ] SO-101 visual alignment and approach acceptance test with position error, settling time, and failure reporting.
-- [ ] Deterministic replay and robustness evaluation under bounded camera and scene perturbations.
+- [x] Visual feature detection with documented camera-frame and robot-frame transforms. The baseline detects the red cube, uses the fixed front camera for macro approach, and recalibrates the moving wrist camera for guarded final alignment. Fiducial detection remains future work.
+- [x] Image-based visual servo controller producing bounded `Action` values through the existing safety layer. `visual_servo` executes approach, grasp, lift, transfer, release, and retreat through bounded IK and joint-position validation.
+- [x] SO-101 visual alignment and approach acceptance test with position error, settling time, and failure reporting across multiple seeds.
+- [x] Deterministic robustness evaluation under bounded camera perturbation. The 20-seed report with 5 mm camera-position jitter records `20/20` success, zero timeout, collision, and unsafe-action failures.
 
 #### Definition of Done
 1. A visual servo controller reaches and holds a documented image or pose target from multiple initial conditions.

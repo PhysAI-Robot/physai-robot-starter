@@ -20,6 +20,7 @@ from physai.data import EvaluationReport, load_episode
 from physai.policy import available_policies, create_policy
 from physai.robots import available_robots, create_robot
 from physai.robots.so101 import EnvConfig
+from physai.sim.domain_randomization import DomainRandomizationConfig
 from physai.sim import SceneConfig
 from physai.tasks import TaskRuntime, create_task
 
@@ -36,6 +37,12 @@ def main() -> int:
     ap.add_argument("--episodes", type=int, default=20)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--max-steps", type=int, default=600)
+    ap.add_argument(
+        "--camera-jitter",
+        type=float,
+        default=0.0,
+        help="enable seeded camera-position jitter in metres for robustness evaluation",
+    )
     ap.add_argument("--dataset", type=Path, help="required for --policy replay")
     ap.add_argument("--checkpoint", type=Path, help="required for --policy lerobot")
     ap.add_argument(
@@ -70,6 +77,12 @@ def main() -> int:
     scene_kwargs = {"camera_width": args.camera_size, "camera_height": args.camera_size}
     if args.sorting:
         scene_kwargs["num_cubes"] = 3
+    if args.camera_jitter < 0:
+        ap.error("--camera-jitter must be non-negative")
+    randomization = DomainRandomizationConfig(
+        enabled=args.camera_jitter > 0,
+        camera_position_jitter=args.camera_jitter,
+    )
     robot = create_robot(
         args.robot,
         config=EnvConfig(
@@ -77,6 +90,7 @@ def main() -> int:
             seed=args.seed,
             max_steps=args.max_steps,
             render=args.render or needs_images,
+            domain_randomization=randomization,
         ),
     )
     env = TaskRuntime(
@@ -180,6 +194,17 @@ def main() -> int:
                 "unsafe_action": bool(info.get("unsafe_action")),
                 "held_out": bool(train_seeds) and seed not in train_seeds,
                 "dist_cube_target": info["dist_cube_target"],
+                **(
+                    {
+                        "visual_error_px": policy.metrics.visual_error_px,
+                        "ee_error_m": policy.metrics.ee_error_m,
+                        "phase": policy.metrics.phase,
+                        "settling_time_s": policy.metrics.settling_time_s,
+                        "failure_reason": policy.metrics.failure_reason,
+                    }
+                    if args.policy == "visual_servo"
+                    else {}
+                ),
                 # Which cube the episode asked for, so a per-color breakdown is
                 # possible after the fact. ACT never receives this.
                 **({"target_color": info["target_color"]} if args.sorting else {}),
