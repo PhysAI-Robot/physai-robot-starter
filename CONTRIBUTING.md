@@ -54,9 +54,13 @@ commit. A roadmap update should normally be a separate `[docs]` commit.
 Install development dependencies and run the test suite from the project root:
 
 ```bash
-uv sync --extra dev
+uv sync --extra dev --extra training
+uv run ruff format --check .
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 ```
+
+Run `uv run ruff format .` locally to apply formatting before committing. The
+format check matches the CI `Ruff format check` job.
 
 Use a focused test path when iterating. For documentation-only changes, check
 local links and command names against the current repository.

@@ -13,7 +13,9 @@ def make_scripted_policy(*, env, cfg: Any = None, **_: Any) -> SO101PickPlaceExp
     return SO101PickPlaceExpert(env.kin, env, cfg=cfg)
 
 
-def make_visual_servo_policy(*, env, cfg: Any = None, **kwargs: Any) -> SO101VisualServoPolicy:
+def make_visual_servo_policy(
+    *, env, cfg: Any = None, **kwargs: Any
+) -> SO101VisualServoPolicy:
     """Build the deterministic SO-101 camera-feedback baseline."""
     options = dict(kwargs)
     if cfg is not None:
