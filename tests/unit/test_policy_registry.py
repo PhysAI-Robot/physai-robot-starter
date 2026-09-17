@@ -8,9 +8,7 @@ def test_builtin_policies_are_discoverable():
         "visual_servo",
         "replay",
         "lerobot",
-    } <= set(
-        available_policies()
-    )
+    } <= set(available_policies())
 
 
 def test_constant_policy_is_created_through_registry():

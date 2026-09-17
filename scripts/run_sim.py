@@ -93,8 +93,12 @@ class SingleWindowViewer:
         self.pause_button = tk.Button(toolbar, text="Pause", command=self.toggle_pause)
         self.pause_button.pack(side=tk.LEFT, padx=4, pady=4)
         tk.Button(toolbar, text="Reset", command=self.reset).pack(side=tk.LEFT, padx=4)
-        tk.Button(toolbar, text="Zoom +", command=lambda: self.zoom(0.85)).pack(side=tk.LEFT, padx=4)
-        tk.Button(toolbar, text="Zoom -", command=lambda: self.zoom(1.18)).pack(side=tk.LEFT, padx=4)
+        tk.Button(toolbar, text="Zoom +", command=lambda: self.zoom(0.85)).pack(
+            side=tk.LEFT, padx=4
+        )
+        tk.Button(toolbar, text="Zoom -", command=lambda: self.zoom(1.18)).pack(
+            side=tk.LEFT, padx=4
+        )
         self.status = tk.Label(toolbar, text="running", anchor="w")
         self.status.pack(side=tk.LEFT, padx=12)
 
@@ -170,7 +174,9 @@ class SingleWindowViewer:
         self.pause_button.configure(text="Resume" if self.paused else "Pause")
 
     def zoom(self, factor: float) -> None:
-        self._free_camera.distance = float(np.clip(self._free_camera.distance * factor, 0.05, 5.0))
+        self._free_camera.distance = float(
+            np.clip(self._free_camera.distance * factor, 0.05, 5.0)
+        )
 
     def begin_drag(self, event) -> None:
         self._last_drag = (event.x, event.y)
@@ -181,7 +187,9 @@ class SingleWindowViewer:
         last_x, last_y = self._last_drag
         dx, dy = event.x - last_x, event.y - last_y
         self._free_camera.azimuth -= dx * 0.5
-        self._free_camera.elevation = float(np.clip(self._free_camera.elevation + dy * 0.5, -89.0, 89.0))
+        self._free_camera.elevation = float(
+            np.clip(self._free_camera.elevation + dy * 0.5, -89.0, 89.0)
+        )
         self._last_drag = (event.x, event.y)
 
     def end_drag(self, _event) -> None:
