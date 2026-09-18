@@ -124,7 +124,14 @@ function applyState(state) {
 function connect() {
   const protocol = location.protocol === "https:" ? "wss" : "ws";
   const socket = new WebSocket(`${protocol}://${location.host}/ws`);
-  socket.onmessage = (event) => applyState(JSON.parse(event.data));
+  socket.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    if (message.type === "error") {
+      status.textContent = message.message;
+      return;
+    }
+    applyState(message);
+  };
   socket.onopen = () => {
     status.textContent = "connected";
     socket.send(JSON.stringify({ type: "select_robot", robot: activeRobot }));
@@ -135,6 +142,11 @@ function connect() {
   };
   window.viewerSocket = socket;
 }
+window.addEventListener("beforeunload", () => {
+  if (window.viewerSocket?.readyState === WebSocket.OPEN) {
+    window.viewerSocket.send(JSON.stringify({ type: "release_control" }));
+  }
+});
 
 document.querySelector("#reset").onclick = () => {
   window.viewerSocket?.send(JSON.stringify({ type: "reset", robot: activeRobot }));
