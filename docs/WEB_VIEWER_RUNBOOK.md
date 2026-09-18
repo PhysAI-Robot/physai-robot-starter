@@ -1,58 +1,43 @@
 # Web Viewer
 
-The web console runs MuJoCo headlessly on the server and uses Three.js in the
-browser as the primary viewer. Physics, control resolution, and camera capture
-remain server-owned; the browser sends commands and renders the latest state.
+The web viewer is a client of an already running simulation host. The host
+owns the robot, task configuration, seed, policy, MuJoCo model, physics clock,
+and command arbitration. The desktop viewer and browser render the same state
+and send control intents to that one host.
 
-## Start
+## Start One Authoritative Simulation
 
-Install the web extra and start one robot:
-
-```bash
-uv sync --extra web
-MUJOCO_GL=egl uv run --extra web python scripts/run_web.py --robot so101
-```
-
-Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/). The `MUJOCO_GL=egl`
-setting selects the headless EGL renderer. Use another port when needed:
+Start the configured simulation with the desktop viewer and web server:
 
 ```bash
-MUJOCO_GL=egl uv run --extra web python scripts/run_web.py \
-  --robot so101 --port 8004
+MUJOCO_GL=egl uv run --extra web python scripts/run_sim.py \
+  --config configs/tasks/so101/pick_place.yaml \
+  --viewer \
+  --serve \
+  --seed 0
 ```
 
-The scripted SO-101 demo remains available as a single-robot workflow:
+The desktop GUI and web server now use the same MuJoCo engine. Open
+[http://127.0.0.1:8000/](http://127.0.0.1:8000/), or ask the client launcher to
+open it:
 
 ```bash
-MUJOCO_GL=egl uv run --extra web python scripts/run_web.py \
-  --robot so101 --demo
+uv run --extra web python scripts/run_web.py \
+  --connect http://127.0.0.1:8000
 ```
 
-`--demo` runs the SO-101 pick-and-place expert. It is intentionally not
-available when starting a multi-robot fleet.
-
-## Multi-Robot Fleet
-
-Pass `--robot` more than once. Every selected robot gets its own simulation
-session and physics loop, while the browser controls one selected robot at a
-time:
+Use another bind address or port on the host when needed:
 
 ```bash
-MUJOCO_GL=egl uv run --extra web python scripts/run_web.py \
-  --robot so101 \
-  --robot turtlebot4 \
-  --port 8004
+MUJOCO_GL=egl uv run --extra web python scripts/run_sim.py \
+  --config configs/tasks/so101/pick_place.yaml \
+  --viewer --serve --host 0.0.0.0 --port 8004
 ```
 
-Use the **Robot** selector in the page header to switch the active scene. The
-selector reloads that robot's compiled meshes, state stream, camera feeds, and
-capability-aware controls. Reset, pause, and keyboard commands target the
-currently selected robot only. All sessions continue running in the server.
-
-The web layer uses the shared robot registry and `RobotSpec`; it does not
-contain SO-101 or TurtleBot4 physics logic. A new registered robot can join
-the console without changing the viewer protocol. Robot-specific capabilities
-determine which action modes and cameras are available.
+The `--robot`, `--config`, `--seed`, and `--policy` options belong to the
+simulation host. `run_web.py` does not select a robot or create a simulation.
+For interactive viewer sessions, the host reuses the supplied `--seed` on each
+automatic reset so the scripted task returns to the same reproducible scene.
 
 ## Browser Controls
 
@@ -68,10 +53,22 @@ keyboard mapping:
 | `C` | Close gripper while held |
 | `O` | Open gripper while held |
 
-The last gripper aperture is preserved while other keys are used. Controls are
-sent over the WebSocket and resolved through the robot's declared action
-contract. Robots without a gripper or Cartesian resolver should expose their
-own capability-specific browser mapping before being driven from this UI.
+The browser sends actions over WebSocket. It never calls MuJoCo directly. The
+host validates each action against the registered robot capability contract
+and applies it on the physics tick.
+
+## Control Ownership
+
+State is readable by every connected viewer, but manual control uses a short
+lease. The first client sending a command becomes the active controller;
+commands from another client are rejected while that lease is alive. Jogging
+refreshes the lease, and releasing the connection or allowing the lease to
+expire returns the host to a safe hold action, or resumes its configured
+policy.
+
+Reset and pause are host operations and affect every viewer. The desktop GUI
+and browser therefore show the same step counter, transforms, camera frames,
+pause state, and reset result.
 
 ## Rendering And Cameras
 
@@ -81,31 +78,31 @@ become a second physics engine. MuJoCo primitive cylinders use the viewer's
 Z-up convention, while compiled robot meshes use the pose supplied by the
 compiled geometry contract.
 
-SO-101 front and wrist images are rendered offscreen and cached by the session.
-Web camera requests return the latest cached JPEG instead of rendering from an
-HTTP worker, so camera polling does not block the physics command path.
+SO-101 camera frames are rendered offscreen and cached by the host. Camera
+requests return the latest cached JPEG instead of stepping or rendering from
+an HTTP worker.
 
 ## API Surface
 
 - `/`: Three.js browser console
 - `/api/robots`: registered robots and their action/camera capabilities
-- `/api/scene?robot=<name>`: static geometry manifest for one robot
-- `/api/state?robot=<name>`: latest transform snapshot
-- `/api/mesh/<id>?robot=<name>`: compiled mesh binary payload
-- `/api/camera/<name>.jpg?robot=<name>`: cached camera JPEG
+- `/api/scene`: static geometry manifest
+- `/api/state`: latest transform snapshot
+- `/api/mesh/<id>`: compiled mesh binary payload
+- `/api/camera/<name>.jpg`: cached camera JPEG
 - `/ws`: state stream and command channel
 
 The WebSocket accepts `select_robot`, `command`, `reset`, and `pause` messages.
-Commands may include a `robot` field; otherwise they target the connection's
-currently selected robot.
+The current host runs one authoritative robot session; the robot identity is
+reported by `/api/robots` and is not created by the web client.
 
 ## Troubleshooting
 
-Press `Ctrl+C` in the server terminal to stop Uvicorn and close all sessions.
-If the page stays on `connecting`, check the server log and browser console.
-Hard-refresh after changing static viewer code with `Ctrl+Shift+R`.
+Press `Ctrl+C` in the `run_sim.py` terminal to stop the desktop viewer, host,
+and web server together. If the page stays on `connecting`, check the host
+terminal and browser console. Hard-refresh after changing static viewer code
+with `Ctrl+Shift+R`.
 
 Three.js is loaded from a CDN, so the browser needs network access on the first
 page load. Gamepad input, detections, labels, masks, and annotation overlays
-are not implemented yet. The viewer currently supports keyboard controls for
-robots whose capabilities match the supported jog contract.
+are not implemented yet.
