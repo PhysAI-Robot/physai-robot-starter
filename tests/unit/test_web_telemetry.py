@@ -76,9 +76,13 @@ def test_browser_commands_map_to_shared_actions():
 
 
 def test_websocket_route_resolves_fastapi_websocket_annotation():
+    from physai.robots import RobotSpec
     from physai.web.app import create_app
+    from physai.web.runtime import SimulationHost
+    from tests.support.fakes import FakeRobotPort
 
-    app = create_app(robot_name="so101")
+    spec = RobotSpec(name="test", kind="test", joint_names=("joint",))
+    app = create_app(host=SimulationHost(FakeRobotPort(spec), robot_name="test"))
     websocket_route = next(route for route in app.routes if route.path == "/ws")
 
     assert websocket_route.endpoint.__annotations__["websocket"].__name__ == "WebSocket"
