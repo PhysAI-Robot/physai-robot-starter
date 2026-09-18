@@ -17,15 +17,21 @@ from ..robots.base import RobotPort
 from .telemetry import build_scene_manifest, build_state_snapshot
 
 
-class SimulationSession:
-    """Own one robot and keep browser I/O away from the physics thread."""
+class SimulationHost:
+    """Own the authoritative robot state and keep clients off the physics thread."""
 
     def __init__(
-        self, robot: RobotPort, *, robot_name: str, policy: Any = None
+        self,
+        robot: RobotPort,
+        *,
+        robot_name: str,
+        policy: Any = None,
+        reset_seed: int | None = None,
     ) -> None:
         self.robot = robot
         self.robot_name = robot_name
         self.policy = policy
+        self.reset_seed = reset_seed
         self._commands: queue.Queue[Action] = queue.Queue(maxsize=1)
         self._lock = threading.Lock()
         self._physics_lock = threading.Lock()
@@ -35,7 +41,10 @@ class SimulationSession:
         self._paused = False
         self._observation = None
         self._gripper = GripperCommand()
-        self._camera_frames: dict[str, bytes] = {}
+        self._camera_images: dict[str, np.ndarray] = {}
+        self._control_owner: str | None = None
+        self._control_deadline = 0.0
+        self._control_timeout = 0.35
         self._twist_resolver = None
         if hasattr(robot, "kin") and hasattr(robot, "data"):
             self._twist_resolver = TwistToJointResolver(
@@ -51,6 +60,11 @@ class SimulationSession:
     @property
     def data(self):
         return self.robot.data
+
+    @property
+    def physics_lock(self) -> threading.Lock:
+        """Serialize renderer clients with MuJoCo access in the physics loop."""
+        return self._physics_lock
 
     def scene(self) -> dict[str, Any]:
         return build_scene_manifest(self.model, robot=self.robot_name)
@@ -73,9 +87,13 @@ class SimulationSession:
         with self._lock:
             return None if self._state is None else dict(self._state)
 
+    def _reset_episode(self):
+        return self.robot.reset(seed=self.reset_seed)
+
     def reset(self) -> None:
         with self._physics_lock:
-            self._observation = self.robot.reset()
+            self._discard_command()
+            self._observation = self._reset_episode()
             self._gripper = GripperCommand()
             if self.policy is not None:
                 self.policy.reset(self._observation)
@@ -84,7 +102,24 @@ class SimulationSession:
     def set_paused(self, paused: bool) -> None:
         self._paused = paused
 
-    def submit(self, action: Action) -> None:
+    @property
+    def paused(self) -> bool:
+        return self._paused
+
+    def release_control(self, source: str) -> None:
+        with self._lock:
+            if self._control_owner == source:
+                self._control_owner = None
+                self._control_deadline = 0.0
+        self._discard_command()
+
+    def _discard_command(self) -> None:
+        try:
+            self._commands.get_nowait()
+        except queue.Empty:
+            pass
+
+    def submit(self, action: Action, *, source: str = "local") -> None:
         if action.gripper is not None:
             self._gripper = action.gripper
         elif hasattr(self.robot, "joint_to_gripper") and self._observation is not None:
@@ -101,6 +136,15 @@ class SimulationSession:
                 action.gripper or self._gripper,
             )
         self.robot.robot_spec.validate_action(action)
+        now = time.monotonic()
+        with self._lock:
+            if (
+                self._control_owner not in (None, source)
+                and now < self._control_deadline
+            ):
+                raise PermissionError("simulation control is held by another client")
+            self._control_owner = source
+            self._control_deadline = now + self._control_timeout
         try:
             self._commands.get_nowait()
         except queue.Empty:
@@ -139,7 +183,7 @@ class SimulationSession:
                         if self.policy is not None and (
                             self.policy.done or result[2] or result[3]
                         ):
-                            self._observation = self.robot.reset()
+                            self._observation = self._reset_episode()
                             self.policy.reset(self._observation)
                             self._publish()
             self._stop.wait(max(0.0, period - (time.monotonic() - started)))
@@ -156,18 +200,30 @@ class SimulationSession:
         )
 
     def _latest_command(self) -> Action | None:
+        expired = False
+        with self._lock:
+            if (
+                self._control_owner is not None
+                and time.monotonic() >= self._control_deadline
+            ):
+                self._control_owner = None
+                self._control_deadline = 0.0
+                expired = True
+        if expired:
+            self._discard_command()
+            return None
         try:
             return self._commands.get_nowait()
         except queue.Empty:
             return None
 
     def _publish(self) -> None:
-        if self._observation is not None:
-            for name, image in self._observation.images.items():
-                buffer = BytesIO()
-                iio.imwrite(buffer, image.data, extension=".jpg", quality=82)
-                self._camera_frames[name] = buffer.getvalue()
         with self._lock:
+            if self._observation is not None:
+                for name, image in self._observation.images.items():
+                    self._camera_images[name] = np.asarray(
+                        image.data, dtype=np.uint8
+                    ).copy()
             self._state = build_state_snapshot(
                 self.model,
                 self.data,
@@ -176,11 +232,36 @@ class SimulationSession:
             )
 
     def camera_jpeg(self, name: str) -> bytes:
-        with self._physics_lock:
+        with self._lock:
             try:
-                return self._camera_frames[name]
+                image = self._camera_images[name].copy()
             except KeyError as exc:
                 raise ValueError(f"unknown camera {name!r}") from exc
+        buffer = BytesIO()
+        iio.imwrite(buffer, image, extension=".jpg", quality=82)
+        return buffer.getvalue()
+
+    def camera_image(self, name: str) -> np.ndarray:
+        with self._lock:
+            try:
+                return self._camera_images[name].copy()
+            except KeyError as exc:
+                raise ValueError(f"unknown camera {name!r}") from exc
+
+    def render_camera(self, name: str) -> np.ndarray:
+        """Return a cached frame, falling back to a direct render if needed."""
+        try:
+            return self.camera_image(name)
+        except ValueError:
+            pass
+        renderer = getattr(self.robot, "render_camera", None)
+        if renderer is None:
+            raise ValueError(f"robot {self.robot_name!r} has no camera renderer")
+        return np.asarray(renderer(name))
+
+
+# Kept as an import-compatible name for integrations that used the old class.
+SimulationSession = SimulationHost
 
 
 def action_from_payload(payload: dict[str, Any]) -> Action:

@@ -7,12 +7,14 @@ python scripts/run_sim.py --video --episodes 5 --seed 0
 python scripts/run_sim.py --policy constant    # baseline: do nothing
 python scripts/run_sim.py --policy lerobot --checkpoint outputs/act_ckpt
 python scripts/run_sim.py --viewer             # single-window scene + cameras UI
+python scripts/run_sim.py --viewer --serve     # GUI plus shared web host
 """
 
 from __future__ import annotations
 
 import argparse
 import tempfile
+import threading
 from dataclasses import replace
 from pathlib import Path
 
@@ -32,6 +34,7 @@ from physai.robots.so101 import EnvConfig
 from physai.robots.turtlebot import TurtleBot4Config
 from physai.sim import SceneConfig
 from physai.tasks import TaskRuntime, create_task
+from physai.web.runtime import SimulationHost
 
 
 def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
@@ -61,9 +64,9 @@ def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
 
 
 class SingleWindowViewer:
-    """Tk viewer containing one interactive scene and every model camera."""
+    """Tk client rendering an authoritative host and its model cameras."""
 
-    def __init__(self, env, policy, camera_names: list[str]) -> None:
+    def __init__(self, host: SimulationHost, camera_names: list[str]) -> None:
         try:
             import tkinter as tk
         except ImportError as exc:
@@ -73,19 +76,18 @@ class SingleWindowViewer:
         self._tk = tk
         self.root = tk.Tk()
         self.root.title("PhysAI MuJoCo Viewer")
-        self.env = env
-        self.policy = policy
+        self.host = host
         self.camera_names = camera_names
         self.closed = False
         self.paused = False
         self._last_drag: tuple[int, int] | None = None
-        scene_width = min(800, int(env.model.vis.global_.offwidth))
-        scene_height = min(600, int(env.model.vis.global_.offheight))
+        scene_width = min(800, int(host.model.vis.global_.offwidth))
+        scene_height = min(600, int(host.model.vis.global_.offheight))
         self._scene_renderer = mujoco.Renderer(
-            env.model, height=scene_height, width=scene_width
+            host.model, height=scene_height, width=scene_width
         )
         self._free_camera = mujoco.MjvCamera()
-        mujoco.mjv_defaultFreeCamera(env.model, self._free_camera)
+        mujoco.mjv_defaultFreeCamera(host.model, self._free_camera)
 
         toolbar = tk.Frame(self.root)
         toolbar.pack(fill=tk.X)
@@ -125,7 +127,6 @@ class SingleWindowViewer:
             self.camera_labels[name] = label
 
         self.root.protocol("WM_DELETE_WINDOW", self.close)
-        self.reset()
 
     def _photo(self, frame: np.ndarray):
         frame = np.ascontiguousarray(frame, dtype=np.uint8)
@@ -139,16 +140,24 @@ class SingleWindowViewer:
     def render(self) -> None:
         if self.closed:
             return
-        self._scene_renderer.update_scene(self.env.data, camera=self._free_camera)
-        scene_photo = self._photo(self._scene_renderer.render())
+        with self.host.physics_lock:
+            self._scene_renderer.update_scene(self.host.data, camera=self._free_camera)
+            scene_frame = self._scene_renderer.render()
+            camera_frames = [self.host.camera_image(name) for name in self.camera_names]
+        scene_photo = self._photo(scene_frame)
         self.scene_photo = scene_photo
         self.scene_label.configure(image=scene_photo, text="")
-        for name, label in self.camera_labels.items():
-            photo = self._photo(self.env.render_camera(name))
+        for name, label, frame in zip(
+            self.camera_names, self.camera_labels.values(), camera_frames
+        ):
+            photo = self._photo(frame)
             self.camera_photos[name] = photo
             label.configure(image=photo, text="")
+        state = self.host.latest_state()
+        step = state["step"] if state is not None else 0
+        self.paused = self.host.paused
         self.status.configure(
-            text=f"{'paused' if self.paused else 'running'}  step={self.env.step_count}"
+            text=f"{'paused' if self.paused else 'running'}  step={step}"
         )
         self.root.update_idletasks()
         self.root.update()
@@ -156,20 +165,18 @@ class SingleWindowViewer:
     def tick(self) -> None:
         if self.closed:
             return
-        if not self.paused:
-            obs, _, terminated, truncated, _ = self.env.step(self.policy.act(self.obs))
-            self.obs = obs
-            if terminated or truncated or self.policy.done:
-                self.reset()
         self.render()
-        self.root.after(max(1, round(1000 / self.env.cfg.control_hz)), self.tick)
+        control_hz = float(
+            getattr(getattr(self.host.robot, "cfg", None), "control_hz", 25.0)
+        )
+        self.root.after(max(1, round(1000 / control_hz)), self.tick)
 
     def reset(self) -> None:
-        self.obs = self.env.reset()
-        self.policy.reset(self.obs)
+        self.host.reset()
 
     def toggle_pause(self) -> None:
         self.paused = not self.paused
+        self.host.set_paused(self.paused)
         self.pause_button.configure(text="Resume" if self.paused else "Pause")
 
     def zoom(self, factor: float) -> None:
@@ -310,11 +317,21 @@ def main() -> int:
         help="open the single-window interactive scene and camera viewer",
     )
     ap.add_argument(
+        "--serve",
+        action="store_true",
+        help="serve the same authoritative simulation to the web viewer",
+    )
+    ap.add_argument("--host", default="127.0.0.1", help="web host bind address")
+    ap.add_argument("--port", type=int, default=8000, help="web host port")
+    ap.add_argument(
         "--camera-view",
         action="store_true",
         help="compatibility flag; --viewer already shows all cameras",
     )
     args = ap.parse_args()
+
+    if args.serve and not args.viewer:
+        ap.error("--serve requires --viewer")
 
     sim_config = load_sim_config(args.sim_config)
     task_config = load_task_config(args.config) if args.config else None
@@ -439,16 +456,21 @@ def run_viewer(
         )
         camera_names = ["free"]
     else:
+        viewer_config = build_so101_config(
+            args,
+            task_config,
+            seed,
+            max_steps,
+            render=True,
+            domain_randomization=domain_randomization,
+        )
+        viewer_config = replace(
+            viewer_config,
+            camera_stride=max(1, round(viewer_config.control_hz / 5)),
+        )
         env = create_robot(
             args.robot,
-            config=build_so101_config(
-                args,
-                task_config,
-                seed,
-                max_steps,
-                render=True,
-                domain_randomization=domain_randomization,
-            ),
+            config=viewer_config,
         )
     policy = build_policy(args.policy, env, args.checkpoint)
     if args.robot != "turtlebot4":
@@ -458,16 +480,52 @@ def run_viewer(
         ]
         camera_names = [name for name in camera_names if name]
 
+    host = SimulationHost(
+        env,
+        robot_name=args.robot,
+        policy=policy,
+        reset_seed=seed,
+    )
+    host.start()
+    server = None
+    server_thread = None
+    if args.serve:
+        try:
+            import uvicorn
+
+            from physai.web.app import create_app
+        except ImportError as exc:
+            host.stop()
+            raise SystemExit(
+                "install web dependencies with: uv sync --extra web"
+            ) from exc
+        server = uvicorn.Server(
+            uvicorn.Config(
+                create_app(host=host),
+                host=args.host,
+                port=args.port,
+                log_level="info",
+            )
+        )
+        server_thread = threading.Thread(target=server.run, daemon=True)
+        server_thread.start()
+
     app = None
     try:
         print("Custom viewer open. Close the window to exit.")
-        app = SingleWindowViewer(env, policy, camera_names)
+        if args.serve:
+            print(f"Web viewer: http://{args.host}:{args.port}/")
+        app = SingleWindowViewer(host, camera_names)
         app.tick()
         app.root.mainloop()
     finally:
         if app is not None and not app.closed:
             app.close()
-        env.close()
+        if server is not None:
+            server.should_exit = True
+        if server_thread is not None:
+            server_thread.join(timeout=2.0)
+        host.stop()
     return 0
 
 
