@@ -11,7 +11,22 @@
   </head>
   <body>
     <header><strong>PHYS<span>AI</span></strong><label>Robot <select id="robot-select" aria-label="Active robot"></select></label><span id="status">connecting</span></header>
-    <main><section id="viewport"></section><aside><h1>Simulation</h1><p id="telemetry">waiting for state</p><button id="reset">Reset</button><button id="pause">Pause</button><p class="hint">Drag to orbit · right-drag to pan · wheel to zoom.</p><div class="camera-grid"><figure><figcaption>front</figcaption><img data-camera="front" alt="Front camera feed" /></figure><figure><figcaption>wrist</figcaption><img data-camera="wrist" alt="Wrist camera feed" /></figure></div><p id="control-hint" class="hint"></p></aside></main>
+    <main><section id="viewport"><div class="control-pad" aria-label="Robot controls">
+      <div class="control-cluster movement-keys" aria-label="Movement">
+        <button class="control-key key-w" data-control-key="w" aria-label="Move forward">W</button>
+        <button class="control-key key-a" data-control-key="a" aria-label="Turn left">A</button>
+        <button class="control-key key-s" data-control-key="s" aria-label="Move backward">S</button>
+        <button class="control-key key-d" data-control-key="d" aria-label="Turn right">D</button>
+      </div>
+      <div class="control-cluster secondary-keys" aria-label="Arm controls">
+        <button class="control-key" data-control-key="q" aria-label="Move up">Q</button>
+        <button class="control-key" data-control-key="e" aria-label="Move down">E</button>
+        <button class="control-key" data-control-key="r" aria-label="Tilt grip right">R</button>
+        <button class="control-key" data-control-key="f" aria-label="Tilt grip left">F</button>
+        <button class="control-key" data-control-key="o" aria-label="Open gripper">O</button>
+        <button class="control-key" data-control-key="c" aria-label="Close gripper">C</button>
+      </div>
+    </div></section><aside><h1>Simulation</h1><p id="telemetry">waiting for state</p><button id="reset">Reset</button><button id="pause">Pause</button><p class="hint">Drag to orbit · right-drag to pan · wheel to zoom.</p><div class="camera-grid"><figure><figcaption>front</figcaption><img data-camera="front" alt="Front camera feed" /></figure><figure><figcaption>wrist</figcaption><img data-camera="wrist" alt="Wrist camera feed" /></figure></div><p id="control-hint" class="hint"></p></aside></main>
     <script type="module" src="/static/viewer.js"></script>
   </body>
 </html>

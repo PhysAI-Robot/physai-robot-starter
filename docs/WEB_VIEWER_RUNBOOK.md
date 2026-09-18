@@ -57,6 +57,11 @@ The browser sends actions over WebSocket. It never calls MuJoCo directly. The
 host validates each action against the registered robot capability contract
 and applies it on the physics tick.
 
+The large scene viewport also includes an on-screen control pad. Its movement,
+arm, and gripper keys mirror the keyboard controls, illuminate while held, and
+can be pressed with a mouse or touchscreen. Keys unsupported by the active
+robot are hidden.
+
 ## Control Ownership
 
 State is readable by every connected viewer, but manual control uses a short
@@ -76,11 +81,14 @@ The scene manifest contains MuJoCo compiled meshes and authored material
 colors. Dynamic geometry poses are streamed from MuJoCo; the browser does not
 become a second physics engine. MuJoCo primitive cylinders use the viewer's
 Z-up convention, while compiled robot meshes use the pose supplied by the
-compiled geometry contract.
+compiled geometry contract. The browser viewer presents that scene with a
+horizontal studio floor, a neutral light background, and lighting tuned to
+keep robot and task-object colors readable.
 
 SO-101 camera frames are rendered offscreen and cached by the host. Camera
 requests return the latest cached JPEG instead of stepping or rendering from
-an HTTP worker.
+an HTTP worker. Available camera feeds are shown in a full-width vertical
+stack in the control panel so front and wrist views remain legible.
 
 ## API Surface
 
