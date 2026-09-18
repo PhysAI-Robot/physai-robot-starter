@@ -6,23 +6,43 @@ const status = document.querySelector("#status");
 const telemetry = document.querySelector("#telemetry");
 const controlHint = document.querySelector("#control-hint");
 const robotSelect = document.querySelector("#robot-select");
+const controlButtons = new Map(
+  [...document.querySelectorAll("[data-control-key]")].map((button) => [button.dataset.controlKey, button]),
+);
 const heldKeys = new Set();
 const heldGripperKeys = new Set();
 let gripper = 1;
 let activeRobot = "";
 const robotInfo = new Map();
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x101412);
+scene.background = new THREE.Color(0xdfe6e2);
 const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
+camera.up.set(0, 0, 1);
 camera.position.set(0.7, -0.9, 0.55);
 const controls = new OrbitControls(camera, viewport);
 controls.target.set(0, 0, 0.2);
 controls.enableDamping = true;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 viewport.appendChild(renderer.domElement);
-scene.add(new THREE.HemisphereLight(0xdcebd6, 0x263329, 2.4));
-scene.add(new THREE.GridHelper(2, 20, 0x516454, 0x29352c));
+scene.add(new THREE.HemisphereLight(0xffffff, 0xaebcb4, 2.1));
+const keyLight = new THREE.DirectionalLight(0xffffff, 2.4);
+keyLight.position.set(2.5, -3, 4);
+scene.add(keyLight);
+const fillLight = new THREE.DirectionalLight(0xd7e7ff, 1.1);
+fillLight.position.set(-3, 1, 2.5);
+scene.add(fillLight);
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(6, 6),
+  new THREE.MeshStandardMaterial({ color: 0xcbd4cf, roughness: 0.9 }),
+);
+floor.position.z = -0.01;
+scene.add(floor);
+const grid = new THREE.GridHelper(6, 30, 0x71847b, 0xa8b5ae);
+grid.rotation.x = Math.PI / 2;
+grid.position.z = 0.002;
+scene.add(grid);
 const meshes = new Map();
 const targetTransforms = new Map();
 const geometryTypes = {
@@ -177,6 +197,27 @@ function configureControls(robot) {
   } else {
     controlHint.textContent = "Keyboard jog is not configured for this robot.";
   }
+  controlButtons.forEach((button, key) => {
+    const enabled = jogAxes[key] || yawAxes[key] || tiltAxes[key] || (gripperEnabled && (key === "o" || key === "c"));
+    button.hidden = !enabled;
+    button.classList.remove("is-pressed");
+    button.setAttribute("aria-disabled", String(!enabled));
+  });
+}
+function setKeyVisual(key, pressed) {
+  const button = controlButtons.get(key);
+  if (!button || button.hidden) return;
+  button.classList.toggle("is-pressed", pressed);
+  button.setAttribute("aria-pressed", String(pressed));
+}
+function setHeldKey(key, pressed) {
+  const isGripperKey = key === "o" || key === "c";
+  if (isGripperKey && !gripperEnabled) return;
+  if (!jogAxes[key] && !yawAxes[key] && !tiltAxes[key] && !isGripperKey) return;
+  const heldSet = isGripperKey ? heldGripperKeys : heldKeys;
+  if (pressed) heldSet.add(key);
+  else heldSet.delete(key);
+  setKeyVisual(key, pressed);
 }
 function sendJog(force = false) {
   if (!window.viewerSocket || window.viewerSocket.readyState !== WebSocket.OPEN) return;
@@ -201,17 +242,36 @@ function sendJog(force = false) {
 }
 window.addEventListener("keydown", (event) => {
   const key = event.key.toLowerCase();
-  if (jogAxes[key] || yawAxes[key] || tiltAxes[key]) { heldKeys.add(key); event.preventDefault(); sendJog(); }
-  if (gripperEnabled && (key === "o" || key === "c")) { heldGripperKeys.add(key); event.preventDefault(); sendJog(true); }
+  if (jogAxes[key] || yawAxes[key] || tiltAxes[key]) { setHeldKey(key, true); event.preventDefault(); sendJog(); }
+  if (gripperEnabled && (key === "o" || key === "c")) { setHeldKey(key, true); event.preventDefault(); sendJog(true); }
 });
 window.addEventListener("keyup", (event) => {
   const key = event.key.toLowerCase();
-  heldKeys.delete(key);
-  heldGripperKeys.delete(key);
+  setHeldKey(key, false);
   if (jogAxes[key] || yawAxes[key] || tiltAxes[key]) {
     if (heldKeys.size === 0) sendJog(true);
     else sendJog();
   }
+});
+controlButtons.forEach((button, key) => {
+  const release = () => {
+    setHeldKey(key, false);
+    sendJog(true);
+  };
+  button.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    button.setPointerCapture(event.pointerId);
+    setHeldKey(key, true);
+    sendJog(key === "o" || key === "c");
+  });
+  button.addEventListener("pointerup", release);
+  button.addEventListener("pointercancel", release);
+  button.addEventListener("lostpointercapture", release);
+});
+window.addEventListener("blur", () => {
+  [...heldKeys, ...heldGripperKeys].forEach((key) => setHeldKey(key, false));
+  sendJog(true);
 });
 setInterval(sendJog, 40);
 function refreshCameras() {
