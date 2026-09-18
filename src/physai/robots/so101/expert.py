@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum, auto
 
+import mujoco
 import numpy as np
 
 from ...contracts import Action, GripperCommand, Observation, PoseStamped
@@ -149,6 +150,35 @@ class SO101PickPlaceExpert(Policy):
         self._phase_steps = 0
         self._settle = 0
 
+    def _retry_grasp(self) -> None:
+        self.phase = Phase.APPROACH
+        self._phase_steps = 0
+        self._settle = 0
+        self._grasp_xy = None
+        self._grip = self.cfg.gripper_open
+
+    def _cube_grasped(self) -> bool:
+        cube_geom = mujoco.mj_name2id(
+            self.env.model, mujoco.mjtObj.mjOBJ_GEOM, "cube_geom"
+        )
+        pad_geoms = {
+            mujoco.mj_name2id(self.env.model, mujoco.mjtObj.mjOBJ_GEOM, name)
+            for name in ("pad_static", "pad_moving")
+        }
+        for index in range(self.env.data.ncon):
+            contact = self.env.data.contact[index]
+            if cube_geom in (contact.geom1, contact.geom2) and pad_geoms & {
+                contact.geom1,
+                contact.geom2,
+            }:
+                return True
+        return False
+
+    def _cube_lifted(self) -> bool:
+        table_top = self.env.cfg.scene.table_pos[2] + self.env.cfg.scene.table_size[2]
+        rest_z = table_top + self.env.cfg.scene.cube_half
+        return float(self.env.cube_pos[2]) > rest_z + 0.01
+
     def act(self, observation: Observation) -> Action:
         if self.phase is Phase.DONE:
             return Action(
@@ -183,7 +213,15 @@ class SO101PickPlaceExpert(Policy):
             if gripper_settled:
                 self._settle += 1
             if self._settle >= self.cfg.settle_steps:
+                if self.phase is Phase.SQUEEZE and not self._cube_grasped():
+                    self._retry_grasp()
+                else:
+                    self._advance()
+        elif self.phase is Phase.LIFT:
+            if reached and self._cube_lifted():
                 self._advance()
+            elif self._phase_steps >= self.cfg.max_phase_steps:
+                self._retry_grasp()
         elif reached or self._phase_steps >= self.cfg.max_phase_steps:
             self._advance()
 
