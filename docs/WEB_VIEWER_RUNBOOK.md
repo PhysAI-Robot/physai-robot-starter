@@ -64,6 +64,33 @@ The host has no authentication. Binding it to a non-loopback address with
 `--host 0.0.0.0` lets anything that can reach the port send control commands, so
 keep such a port on a private network or behind an authenticated tunnel.
 
+## Cloud Workspace (GitHub Codespaces)
+
+`.devcontainer/devcontainer.json` describes a Python 3.12 container for a
+cloud workspace. On creation it installs the OSMesa software-rendering
+libraries, syncs the locked `web` and `dev` extras with `uv`, and fetches the
+SO-101 assets. Codespaces machines have no GPU, so the container sets
+`MUJOCO_GL=osmesa`.
+
+Once the workspace is ready, start the headless host in its terminal:
+
+```bash
+uv run --extra web python scripts/run_sim.py \
+  --config configs/tasks/so101/pick_place.yaml \
+  --policy visual_servo \
+  --headless \
+  --serve \
+  --seed 0
+```
+
+Port 8000 is declared as forwarded. Open it from the Ports panel and leave its
+visibility `Private`, because the host has no authentication. If the asset
+fetch hit the unauthenticated GitHub rate limit during creation, rerun
+`uv run python scripts/fetch_assets.py --robot so101`.
+
+Status: the headless host is covered by an acceptance test, but this container
+configuration has not yet been run in a live Codespace.
+
 ## Browser Controls
 
 The viewer supports orbit, pan, and zoom with the mouse. For the SO-101
