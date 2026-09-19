@@ -55,6 +55,8 @@ jobs:
           key: robot-assets-${{ runner.os }}-${{ hashFiles('scripts/fetch_assets.py') }}
 
       - name: Fetch robot assets
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           uv run python scripts/fetch_assets.py --robot so101
           uv run python scripts/fetch_assets.py --robot turtlebot4
@@ -83,6 +85,8 @@ jobs:
           key: robot-assets-${{ runner.os }}-${{ hashFiles('scripts/fetch_assets.py') }}
 
       - name: Fetch robot assets
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           python scripts/fetch_assets.py --robot so101
           python scripts/fetch_assets.py --robot turtlebot4
