@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("fastapi", reason="install the web extra: uv sync --extra web")
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CAMERA_VARIANT = REPO_ROOT / "assets" / "so101" / "so101_new_calib_camera.xml"
 
