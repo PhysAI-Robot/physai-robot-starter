@@ -1,0 +1,183 @@
+name: Visual servo evaluation
+
+# Reproduces the Phase 2A claim on a clean Linux runner: the SO-101 visual servo
+# policy over a seed range with bounded camera jitter. Software rendering costs
+# about 130 seconds per episode, so the seeds are split across parallel shards
+# and merged by a final job that enforces the documented result. It runs on
+# demand and on pull requests that touch the code the result depends on, not on
+# every push.
+on:
+  workflow_dispatch:
+    inputs:
+      episodes:
+        description: Total number of episodes, seeds start at 0
+        default: "20"
+      camera_jitter:
+        description: Camera position jitter in metres
+        default: "0.005"
+  pull_request:
+    paths:
+      - "src/physai/robots/so101/**"
+      - "src/physai/sim/**"
+      - "src/physai/control/**"
+      - "configs/**"
+      - "scripts/eval_policy.py"
+      - "scripts/report_evaluation.py"
+      - ".github/workflows/visual-servo-eval.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-servo-eval-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EPISODES: ${{ inputs.episodes || '20' }}
+  CAMERA_JITTER: ${{ inputs.camera_jitter || '0.005' }}
+
+jobs:
+  evaluate:
+    name: Evaluate seeds, shard ${{ matrix.shard }} of 4
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    env:
+      MUJOCO_GL: osmesa
+      PYTHONUNBUFFERED: "1"
+      SHARD: ${{ matrix.shard }}
+      SHARDS: "4"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install headless rendering support
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libosmesa6-dev
+
+      - name: Cache robot assets
+        uses: actions/cache@v5
+        with:
+          path: assets
+          key: robot-assets-${{ runner.os }}-${{ hashFiles('scripts/fetch_assets.py') }}
+
+      - name: Install project dependencies
+        run: uv sync --locked
+
+      - name: Fetch SO-101 assets
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: uv run python scripts/fetch_assets.py --robot so101
+
+      - name: Work out this shard's seeds
+        id: seeds
+        run: |
+          start=$(( EPISODES * SHARD / SHARDS ))
+          end=$(( EPISODES * (SHARD + 1) / SHARDS ))
+          echo "start=$start" >> "$GITHUB_OUTPUT"
+          echo "count=$(( end - start ))" >> "$GITHUB_OUTPUT"
+
+      - name: Evaluate the visual servo policy
+        if: steps.seeds.outputs.count != '0'
+        env:
+          SEED_START: ${{ steps.seeds.outputs.start }}
+          SEED_COUNT: ${{ steps.seeds.outputs.count }}
+        run: |
+          uv run python scripts/eval_policy.py \
+            --policy visual_servo \
+            --episodes "$SEED_COUNT" \
+            --seed "$SEED_START" \
+            --max-steps 600 \
+            --camera-jitter "$CAMERA_JITTER" \
+            --json-out "outputs/shard-$SHARD.json"
+
+      - name: Record one episode
+        if: matrix.shard == 0
+        run: |
+          uv run python scripts/run_sim.py \
+            --config configs/tasks/so101/pick_place.yaml \
+            --policy visual_servo \
+            --video \
+            --episodes 1 \
+            --seed 0 \
+            --out outputs/video
+
+      - name: Upload this shard's result
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-servo-shard-${{ matrix.shard }}
+          path: outputs/shard-*.json
+          if-no-files-found: warn
+
+      - name: Upload the video
+        if: ${{ !cancelled() && matrix.shard == 0 }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-servo-video
+          path: outputs/video/*.mp4
+          if-no-files-found: warn
+          retention-days: 30
+
+  report:
+    name: Merge shards and enforce the result
+    needs: evaluate
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install project dependencies
+        run: uv sync --locked
+
+      - name: Download shard results
+        uses: actions/download-artifact@v8
+        with:
+          pattern: visual-servo-shard-*
+          path: shards
+          merge-multiple: true
+
+      - name: Merge and enforce the documented result
+        shell: bash
+        run: |
+          uv run python scripts/report_evaluation.py shards/*.json \
+            --expect-episodes "$EPISODES" \
+            --require-all-success \
+            --merged-out outputs/visual_servo_eval.json | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the merged result
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-servo-evaluation
+          path: outputs/visual_servo_eval.json
+          if-no-files-found: warn
+          retention-days: 30
