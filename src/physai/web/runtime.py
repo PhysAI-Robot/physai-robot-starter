@@ -79,9 +79,12 @@ class SimulationHost:
 
     def stop(self) -> None:
         self._stop.set()
-        if self._thread is not None:
-            self._thread.join(timeout=2.0)
-        self.robot.close()
+        if self._thread is None:
+            self.robot.close()
+            return
+        # The physics thread closes the robot itself as it exits (see _run), so
+        # closing here as well would free the renderer from the wrong thread.
+        self._thread.join(timeout=2.0)
 
     def latest_state(self) -> dict[str, Any] | None:
         with self._lock:
@@ -155,6 +158,15 @@ class SimulationHost:
             pass
 
     def _run(self) -> None:
+        try:
+            self._loop()
+        finally:
+            # Camera rendering happens on this thread, so the renderer and its
+            # OpenGL context belong to it. Freeing them from the thread that
+            # called stop() is an access violation on Windows.
+            self.robot.close()
+
+    def _loop(self) -> None:
         self.reset()
         hold_action = self._hold_action()
         control_hz = float(
