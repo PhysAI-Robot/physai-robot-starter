@@ -39,6 +39,31 @@ simulation host. `run_web.py` does not select a robot or create a simulation.
 For interactive viewer sessions, the host reuses the supplied `--seed` on each
 automatic reset so the scripted task returns to the same reproducible scene.
 
+## Run Without A Desktop Window
+
+On a server, in a container, or in any environment with no display, replace
+`--viewer` with `--headless`. The host and web server start exactly as above,
+but no desktop window is opened:
+
+```bash
+MUJOCO_GL=egl uv run --extra web python scripts/run_sim.py \
+  --config configs/tasks/so101/pick_place.yaml \
+  --policy visual_servo \
+  --headless \
+  --serve \
+  --seed 0
+```
+
+`--headless` requires `--serve` and cannot be combined with `--viewer`. The
+host runs until `Ctrl+C` or `SIGTERM`, then stops the web server and the
+physics thread in order. `SIGTERM` is handled like `Ctrl+C`, so a container or
+process manager stop request takes the same path. Use `MUJOCO_GL=osmesa` when
+the machine has no GPU or EGL device.
+
+The host has no authentication. Binding it to a non-loopback address with
+`--host 0.0.0.0` lets anything that can reach the port send control commands, so
+keep such a port on a private network or behind an authenticated tunnel.
+
 ## Browser Controls
 
 The viewer supports orbit, pan, and zoom with the mouse. For the SO-101
