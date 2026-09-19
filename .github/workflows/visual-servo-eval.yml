@@ -36,6 +36,7 @@ jobs:
     timeout-minutes: 30
     env:
       MUJOCO_GL: osmesa
+      PYTHONUNBUFFERED: "1"
       EPISODES: ${{ inputs.episodes || '20' }}
       CAMERA_JITTER: ${{ inputs.camera_jitter || '0.005' }}
 
