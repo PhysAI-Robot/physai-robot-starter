@@ -1,0 +1,110 @@
+name: Visual servo evaluation
+
+# Reproduces the Phase 2A claim on a clean Linux runner: the SO-101 visual servo
+# policy over a seed range with bounded camera jitter. It runs on demand and on
+# pull requests that touch the code the result depends on, not on every push.
+on:
+  workflow_dispatch:
+    inputs:
+      episodes:
+        description: Number of episodes, seeds start at 0
+        default: "20"
+      camera_jitter:
+        description: Camera position jitter in metres
+        default: "0.005"
+  pull_request:
+    paths:
+      - "src/physai/robots/so101/**"
+      - "src/physai/sim/**"
+      - "src/physai/control/**"
+      - "configs/**"
+      - "scripts/eval_policy.py"
+      - "scripts/report_evaluation.py"
+      - ".github/workflows/visual-servo-eval.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-servo-eval-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    name: SO-101 visual servo evaluation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      MUJOCO_GL: osmesa
+      EPISODES: ${{ inputs.episodes || '20' }}
+      CAMERA_JITTER: ${{ inputs.camera_jitter || '0.005' }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install headless rendering support
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libosmesa6-dev
+
+      - name: Cache robot assets
+        uses: actions/cache@v5
+        with:
+          path: assets
+          key: robot-assets-${{ runner.os }}-${{ hashFiles('scripts/fetch_assets.py') }}
+
+      - name: Install project dependencies
+        run: uv sync --locked
+
+      - name: Fetch SO-101 assets
+        run: uv run python scripts/fetch_assets.py --robot so101
+
+      - name: Evaluate the visual servo policy
+        run: |
+          uv run python scripts/eval_policy.py \
+            --policy visual_servo \
+            --episodes "$EPISODES" \
+            --seed 0 \
+            --max-steps 600 \
+            --camera-jitter "$CAMERA_JITTER" \
+            --json-out outputs/visual_servo_eval.json
+
+      - name: Record one episode
+        run: |
+          uv run python scripts/run_sim.py \
+            --config configs/tasks/so101/pick_place.yaml \
+            --policy visual_servo \
+            --video \
+            --episodes 1 \
+            --seed 0 \
+            --out outputs/video
+
+      - name: Summarize and enforce the result
+        if: ${{ !cancelled() && hashFiles('outputs/visual_servo_eval.json') != '' }}
+        shell: bash
+        run: |
+          uv run python scripts/report_evaluation.py \
+            outputs/visual_servo_eval.json \
+            --require-all-success | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload results and video
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-servo-evaluation
+          path: |
+            outputs/visual_servo_eval.json
+            outputs/video/*.mp4
+          if-no-files-found: warn
+          retention-days: 30
