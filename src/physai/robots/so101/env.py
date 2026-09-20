@@ -40,7 +40,7 @@ class EnvConfig:
     """SO-101-specific simulation and observation settings."""
 
     scene: SceneConfig = field(default_factory=lambda: SceneConfig(**scene_defaults()))
-    control_hz: float = 25.0
+    control_hz: float = 30.0
     render: bool = True
     cameras: tuple[str, ...] = ("front", "wrist")
     camera_stride: int = 1
@@ -343,6 +343,7 @@ class SO101Env(MuJoCoSimulationCore):
         images: dict[str, ImageFrame] = {}
         if (
             hasattr(self, "_camera_width")
+            and self.cfg.camera_stride > 0
             and self.step_count % self.cfg.camera_stride == 0
         ):
             for camera in self.cfg.cameras:

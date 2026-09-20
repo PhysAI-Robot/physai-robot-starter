@@ -11,6 +11,7 @@ import yaml
 from .robots import create_env_config
 from .sim.domain_randomization import DomainRandomizationConfig
 from .sim.scenes import create_scene, get_scene_definition
+from .sim.world import RobotInstanceConfig
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,16 @@ class TaskConfig:
     success_xy_tol: float = 0.04
     success_hold_steps: int = 10
     simulation: SimulationConfig = field(default_factory=SimulationConfig)
+
+
+@dataclass(frozen=True)
+class WorldConfig:
+    """Typed configuration for a heterogeneous shared MuJoCo world."""
+
+    instances: tuple[RobotInstanceConfig, ...]
+    timestep: float = 0.002
+    control_hz: float = 30.0
+    add_floor: bool = True
 
 
 _SCENE_TUPLE_FIELDS = {
@@ -155,6 +166,61 @@ def load_task_config(path: str | Path) -> TaskConfig:
     )
 
 
+def load_world_config(path: str | Path) -> WorldConfig:
+    """Load a shared-world manifest with namespaced robot instances."""
+    config_path = Path(path).resolve()
+    with config_path.open(encoding="utf-8") as stream:
+        data = yaml.safe_load(stream)
+    if not isinstance(data, dict):
+        raise ValueError(  # noqa: TRY004
+            f"configuration root must be a mapping: {config_path}"
+        )
+
+    raw_instances = data.get("robots")
+    if not isinstance(raw_instances, list) or not raw_instances:
+        raise ValueError("world configuration field 'robots' must be a non-empty list")
+    instances = []
+    for index, raw_instance in enumerate(raw_instances):
+        if not isinstance(raw_instance, dict):
+            raise ValueError(  # noqa: TRY004
+                f"world robots[{index}] must be a mapping"
+            )
+        instance_id = _required_string(raw_instance, "id")
+        robot_name = _required_string(raw_instance, "robot")
+        model_value = raw_instance.get("model")
+        model_path = _resolve_path(model_value, config_path)
+        position = _vector(raw_instance.get("position", (0.0, 0.0, 0.0)), 3, "position")
+        quaternion = _vector(
+            raw_instance.get("quaternion", (1.0, 0.0, 0.0, 0.0)),
+            4,
+            "quaternion",
+        )
+        instances.append(
+            RobotInstanceConfig(
+                instance_id=instance_id,
+                model_path=model_path,
+                robot_name=robot_name,
+                position=position,
+                quaternion=quaternion,
+            )
+        )
+    timestep = float(data.get("timestep", 0.002))
+    control_hz = float(data.get("control_hz", 30.0))
+    add_floor = data.get("add_floor", True)
+    if timestep <= 0 or control_hz <= 0:
+        raise ValueError("world timestep and control_hz must be positive")
+    if not isinstance(add_floor, bool):
+        raise ValueError(  # noqa: TRY004
+            "world add_floor must be a boolean"
+        )
+    return WorldConfig(
+        instances=tuple(instances),
+        timestep=timestep,
+        control_hz=control_hz,
+        add_floor=add_floor,
+    )
+
+
 def _required_mapping(data: dict[str, Any], key: str) -> dict[str, Any]:
     value = data.get(key)
     if not isinstance(value, dict):
@@ -183,6 +249,12 @@ def _resolve_path(value: Any, config_path: Path) -> Path:
     return (config_path.parent.parent / candidate).resolve()
 
 
+def _vector(value: Any, size: int, field_name: str) -> tuple[float, ...]:
+    if not isinstance(value, (list, tuple)) or len(value) != size:
+        raise ValueError(f"world robot {field_name} must contain {size} values")
+    return tuple(float(item) for item in value)
+
+
 def _convert_lists_to_tuples(data: dict[str, Any], keys: set[str]) -> None:
     for key in keys:
         if isinstance(data.get(key), list):
@@ -193,6 +265,8 @@ __all__ = [
     "DomainRandomizationConfig",
     "SimulationConfig",
     "TaskConfig",
+    "WorldConfig",
     "load_sim_config",
     "load_task_config",
+    "load_world_config",
 ]

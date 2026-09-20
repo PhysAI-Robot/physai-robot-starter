@@ -21,7 +21,7 @@ training = ["gymnasium>=1.3.0,<2.0"]
 vlm = ["anthropic>=1.4.0"]
 smolvlm = ["torch>=2.7,<2.12", "transformers>=4.45", "Pillow>=10.0", "huggingface-hub>=0.36.2"]
 vla = ["torch>=2.7,<2.12", "lerobot>=0.6.1"]
-web = ["fastapi>=0.115", "uvicorn[standard]>=0.34"]
+web = ["fastapi>=0.115", "uvicorn[standard]>=0.34", "httpx2>=2.13"]
 dev = ["pytest>=9.1.1", "lark>=1.2", "ruff>=0.16.8"]
 
 [tool.setuptools.packages.find]
