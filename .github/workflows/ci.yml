@@ -60,7 +60,7 @@ jobs:
           uv run python scripts/fetch_assets.py --robot turtlebot4
 
       - name: Install project and test dependencies
-        run: uv sync --locked --extra dev --extra training
+        run: uv sync --locked --extra dev --extra web --extra training
 
       - name: Run test suite
         run: uv run python -m pytest tests/ -q
