@@ -314,30 +314,34 @@ not encode an implementation filename.
 
 ### Web fleet composition
 
-The FastAPI console composes a `SimulationSession` per selected registry robot.
-Sessions run their own physics and camera loops, while each WebSocket
-connection selects one active session for browser rendering and keyboard
-control. The web layer consumes `RobotPort`, `RobotSpec`, and shared
-`Action`/`Observation` contracts; it must not import SO-101 or TurtleBot4
-physics implementations to decide how a robot works.
+The legacy web path can still compose a `SimulationSession` for one robot. The
+shared-world path composes one `SharedWorldHost` from a world manifest. It owns
+one MuJoCo model, one `MjData`, one physics clock, and one loop for all
+heterogeneous robot instances. Each instance has a namespaced binding,
+capability contract, action queue, and control lease; `/api/state` and
+`/api/scene` describe the complete world.
 
 ```text
-registered robot names
-          |
-          v
-{ robot_name: SimulationSession }
+world manifest
+     |
+     v
+SharedWorldHost
+     |
+     +-- { instance_id: SharedRobotInstance }
           |
           +-- /api/robots       capability discovery
-          +-- /api/scene        selected static geometry
-          +-- /api/state        selected dynamic state
-          +-- /ws               selected control and telemetry stream
+         +-- /api/scene        whole-world static geometry
+         +-- /api/state        whole-world dynamic state
+         +-- /ws               selected-instance control and whole-world telemetry
 ```
 
-The launcher accepts repeated `--robot` options. Multiple sessions may run
-concurrently, but one browser connection controls one selected robot at a
-time. Capability-specific controls belong at the presentation boundary; a
-robot without a gripper or twist resolver must not be forced through the
-SO-101 keyboard mapping.
+`scripts/run_sim.py --world <manifest> --viewer --serve` starts the shared-world
+path. The browser selector changes the active instance for commands; it does
+not hide or replace the other robots in the scene. Reset and pause are
+world-atomic, while commands and leases are instance-scoped. Capability-
+specific controls belong at the presentation boundary; a robot without a
+gripper or twist resolver must not be forced through the SO-101 keyboard
+mapping.
 
 The near-term instantiation is `so101 + pick_place`, but adding another robot
 must not require changing this composition model. Every robot/task combination
