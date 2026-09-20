@@ -62,7 +62,7 @@ class SO101PickPlaceExpert(Policy):
         self._q_cmd: np.ndarray | None = None
         self._grip = self.cfg.gripper_open
         self._grasp_xy: np.ndarray | None = None
-        control_hz = float(env.robot_spec.metadata.get("control_hz", 25.0))
+        control_hz = float(env.robot_spec.metadata.get("control_hz", 30.0))
         self._dt = 1.0 / control_hz
         self._limiter = JointRateLimiter(self.cfg.max_joint_rate, self._dt)
         self._joint_count = len(

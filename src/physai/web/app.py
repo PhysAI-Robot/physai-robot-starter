@@ -8,11 +8,12 @@ from typing import Any
 
 from .runtime import SimulationHost, action_from_payload
 from .telemetry import build_mesh_payload
+from .world_runtime import SharedWorldHost
 
 
 def create_app(
     *,
-    host: SimulationHost,
+    host: SimulationHost | SharedWorldHost,
 ):
     try:
         from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -23,8 +24,9 @@ def create_app(
             "web dependencies are missing; install with `uv sync --extra web`"
         ) from exc
 
-    names = (host.robot_name,)
-    sessions = {host.robot_name: host}
+    shared = isinstance(host, SharedWorldHost)
+    names = tuple(host.instances) if shared else (host.robot_name,)
+    sessions = host.instances if shared else {host.robot_name: host}
     static_dir = Path(__file__).with_name("static")
     assets_dir = Path(__file__).resolve().parents[3] / "assets"
 
@@ -40,7 +42,7 @@ def create_app(
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
     app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
-    def get_session(name: str | None) -> SimulationHost:
+    def get_session(name: str | None):
         selected = name or names[0]
         try:
             return sessions[selected]
@@ -52,32 +54,56 @@ def create_app(
         return [
             {
                 "name": name,
-                "kind": session.robot.robot_spec.kind,
-                "action_modes": list(session.robot.robot_spec.action_modes),
-                "capabilities": list(session.robot.robot_spec.capabilities),
-                "cameras": list(session.robot.robot_spec.camera_frames),
+                "kind": (
+                    session.robot_spec.kind if shared else session.robot.robot_spec.kind
+                ),
+                "robot": (
+                    session.robot_spec.name if shared else session.robot.robot_spec.name
+                ),
+                "action_modes": list(
+                    session.robot_spec.action_modes
+                    if shared
+                    else session.robot.robot_spec.action_modes
+                ),
+                "capabilities": list(
+                    session.robot_spec.capabilities
+                    if shared
+                    else session.robot.robot_spec.capabilities
+                ),
+                "cameras": list(
+                    session.robot_spec.camera_frames
+                    if shared
+                    else session.robot.robot_spec.camera_frames
+                ),
             }
             for name, session in sessions.items()
         ]
 
     @app.get("/api/scene")
     async def scene(robot: str | None = None) -> dict[str, Any]:
-        return get_session(robot).scene()
+        del robot
+        return host.scene() if shared else get_session(None).scene()
 
     @app.get("/api/state")
     async def state(robot: str | None = None) -> dict[str, Any] | None:
-        return get_session(robot).latest_state()
+        del robot
+        return host.latest_state()
 
     @app.get("/api/mesh/{mesh_id}")
     async def mesh(mesh_id: int, robot: str | None = None) -> Response:
-        selected = get_session(robot)
+        selected = host if shared else get_session(robot)
         return Response(
-            build_mesh_payload(selected.model, mesh_id),
+            build_mesh_payload(host.model if shared else selected.model, mesh_id),
             media_type="application/octet-stream",
         )
 
     @app.get("/api/camera/{name}.jpg")
     async def camera(name: str, robot: str | None = None) -> Response:
+        if shared:
+            return Response(
+                host.camera_jpeg(robot or names[0], name),
+                media_type="image/jpeg",
+            )
         return Response(get_session(robot).camera_jpeg(name), media_type="image/jpeg")
 
     @app.get("/")
@@ -105,11 +131,14 @@ def create_app(
                             active_robot = message["robot"]
                     elif message.get("type") == "command":
                         try:
-                            selected = get_session(message.get("robot", active_robot))
-                            selected.submit(
-                                action_from_payload(message["action"]),
-                                source=client_id,
-                            )
+                            target = message.get("robot", active_robot)
+                            if target != active_robot:
+                                raise ValueError("command target is not selected")
+                            action = action_from_payload(message["action"])
+                            if shared:
+                                host.submit(target, action, source=client_id)
+                            else:
+                                get_session(target).submit(action, source=client_id)
                         except (
                             KeyError,
                             TypeError,
@@ -118,11 +147,17 @@ def create_app(
                         ) as exc:
                             await errors.put({"type": "error", "message": str(exc)})
                     elif message.get("type") == "reset":
-                        get_session(message.get("robot", active_robot)).reset()
+                        if shared:
+                            host.reset()
+                        else:
+                            get_session(message.get("robot", active_robot)).reset()
                     elif message.get("type") == "pause":
-                        get_session(message.get("robot", active_robot)).set_paused(
-                            bool(message.get("value", True))
-                        )
+                        if shared:
+                            host.set_paused(bool(message.get("value", True)))
+                        else:
+                            get_session(message.get("robot", active_robot)).set_paused(
+                                bool(message.get("value", True))
+                            )
                     elif message.get("type") == "release_control":
                         host.release_control(client_id)
             except WebSocketDisconnect:
@@ -131,7 +166,11 @@ def create_app(
         receiver = asyncio.create_task(receive_commands())
         try:
             while True:
-                state = sessions[active_robot].latest_state()
+                state = (
+                    host.latest_state()
+                    if shared
+                    else sessions[active_robot].latest_state()
+                )
                 if state is not None:
                     await websocket.send_json(state)
                 while not errors.empty():
