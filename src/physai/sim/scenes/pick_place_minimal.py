@@ -17,16 +17,15 @@ class PickPlaceMinimalSceneConfig(ManipulationSceneConfig):
     cube_mass: float = 0.03
     cube_rgba: tuple[float, float, float, float] = (0.85, 0.25, 0.2, 1.0)
 
-
-def build_spec(cfg: PickPlaceMinimalSceneConfig | None = None) -> mujoco.MjSpec:
-    cfg = cfg or PickPlaceMinimalSceneConfig()
-    spec = build_manipulation_spec(cfg)
-    add_cube(
-        spec, cfg, "cube", cfg.cube_pos, cfg.cube_rgba, cfg.cube_half, cfg.cube_mass
-    )
-    return spec
-
-
-def build_model(cfg: PickPlaceMinimalSceneConfig | None = None):
-    spec = build_spec(cfg)
-    return spec.compile(), spec
+    def build_spec(self) -> mujoco.MjSpec:
+        spec = build_manipulation_spec(self)
+        add_cube(
+            spec,
+            self,
+            "cube",
+            self.cube_pos,
+            self.cube_rgba,
+            self.cube_half,
+            self.cube_mass,
+        )
+        return spec

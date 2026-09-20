@@ -325,10 +325,6 @@ class SimulationHost:
         return np.asarray(renderer(name))
 
 
-# Kept as an import-compatible name for integrations that used the old class.
-SimulationSession = SimulationHost
-
-
 def action_from_payload(payload: dict[str, Any]) -> Action:
     """Convert the browser command schema to the shared ``Action`` contract."""
     mode = payload.get("mode")

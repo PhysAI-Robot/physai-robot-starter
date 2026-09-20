@@ -30,7 +30,7 @@ Phase 2 answers one question: **why is learning needed for manipulation, and how
 
 | Method | Perception | Role |
 | --- | --- | --- |
-| Scripted expert | Privileged simulator state | Upper bound and demonstration teacher |
+| Scripted expert | Privileged simulator state | Intended upper bound and demonstration teacher — currently underperforms the classical baseline, see Phase 2.0 finding |
 | Classical vision + state machine | Camera only | What hand-engineered perception and control can do without cheating |
 | ACT (imitation learning) | Camera + proprioception | Does learning from pixels close the gap or extend beyond the classical limits? |
 
@@ -52,12 +52,14 @@ Phase 1 (done) -> Bridge (done) -> Phase 2: benchmark -> classical baseline -> A
 ## Phase 1: Foundation and ROS2 contract (complete)
 
 - [x] Capability-aware `Observation -> Action` contracts, robot registry, unit/frame validation, deterministic resets, seeded regression coverage.
-- [x] SO-101 MuJoCo baseline: scripted single-cube pick-and-place (20/20).
+- [x] SO-101 MuJoCo baseline: scripted single-cube pick-and-place. Measured
+      2026-09-20 at **9/20 over 20 seeds** (11 timeouts), not the 20/20
+      recorded earlier; see the Phase 2.0 finding below.
 - [x] SO-101 ROS2 bridge: joint, gripper, camera, TF, teleoperation, `rclpy` acceptance coverage.
 - [x] SO-101 FK, Jacobian, numerical IK, Cartesian targeting, joint-limit and collision safety validation.
 - [x] Seeded domain randomization (physics, visuals, cameras, clutter) with deterministic baseline preserved.
 - [x] TurtleBot4 navigation baseline and ROS2/Nav2 path (maintained only).
-- [x] Phase 1 runs without Phase 2+ dependencies (LeRobot, VLM, VLA).
+- [x] Phase 1 runs without Phase 2+ dependencies (LeRobot, VLA).
 
 ## Training bridge (complete)
 
@@ -77,15 +79,34 @@ Define what the SO-101 can do, with one fixed-seed evaluation per level.
 
 | Level | Task | Tests |
 | --- | --- | --- |
-| T0 | Single cube, fixed setup | Done: scripted 20/20 |
+| T0 | Single cube, fixed setup | Scripted 9/20 measured — needs work |
 | T1 | Single cube, randomized pose / color / lighting / camera | Perception robustness |
 | T2 | Cube size variation | Gripper aperture limits |
 | T3 | Shape variation (cylinder, sphere, prism) | Grasp difficulty |
 | T4 | Multi-object sorting: 3 colored cubes into 3 bins, then scale toward 9 | Multi-step planning and perception |
 | T5 (stretch) | Clutter, distractors, occlusion, stacking | Hard perception and contact |
 
+**Open finding (2026-09-20).** The scripted expert is weaker than previously
+recorded. Measured with the documented commands over 20 seeds:
+
+| Policy | Variant | Success | Failure mode |
+| --- | --- | --- | --- |
+| `scripted` | Single cube | 9/20 (45%) | 11 timeouts |
+| `scripted` | Sorting | 1/20 (5%) | 19 timeouts |
+| `visual_servo` | Single cube | **20/20 (100%)** | none |
+
+Timeouts, not collisions or drops, dominate the scripted failures.
+
+This inverts an assumption in the research story above. The camera-only
+`visual_servo` baseline outperforms the scripted expert that reads cube pose
+straight from the simulator, so the scripted expert is **not** currently an
+upper bound and is a poor demonstration teacher. Either the scripted expert is
+repaired before 2B collects demonstrations, or `visual_servo` becomes the
+teacher and the three-method comparison is restated.
+
 Deliverables:
 
+- [ ] Diagnose the scripted-expert timeouts and restore a high single-cube success rate.
 - [ ] Task definitions and scripted experts for T1-T4 (T5 stretch), each with fixed seeds.
 - [ ] `scripts/capability_report.py`: reachable workspace, min/max graspable size, placement repeatability.
 - [ ] Trajectory-quality metrics for the scripted expert: completion time, path length, jerk, joint-limit margin, peak speed.
@@ -101,8 +122,9 @@ Definition of done:
 
 A camera-only state-machine pipeline (color segmentation or fiducials, pose estimate, approach, grasp, place), all actions passing through the safety layer. This is the "before learning" reference.
 
-- [ ] Perception module without simulator ground truth.
-- [ ] State machine covering approach, grasp, lift, place, and recovery on failure.
+- [x] Perception module without simulator ground truth (`ColorBlobDetector` in `src/physai/robots/so101/visual_servo.py`; reads camera calibration only, never object pose).
+- [x] State machine covering approach, grasp, lift, place, and recovery on failure (`SO101VisualServoPolicy`, registered as the `visual_servo` policy).
+- [x] All actions pass the safety layer: `SafetyController` now gates the direct-MuJoCo path inside `DirectMuJoCoAdapter`, not only the ROS2 and Gymnasium paths.
 - [ ] Report position error, settling time, and categorized failure reasons.
 - [ ] Give it a fair tuning effort; it must not be a strawman.
 
@@ -152,5 +174,5 @@ Definition of done: identical seeds on both backends, a results table, and the m
 
 **Not in focus yet.** Listed only so the architecture keeps room for them.
 
-- **Phase 3, language and planning:** a planner contract with scripted, SmolVLM, and Claude backends exists and is experimental (`scripts/plan_task.py`). Speech input, plan schemas, error-recovery loops, and a ROS2 VLM node are not planned.
+- **Phase 3, language and planning:** only the planner *contract* and its scripted backend remain (`physai.planner`, `scripts/plan_task.py`). The SmolVLM and Claude backends were removed in the 2026-09-20 cleanup — they were untested, unrunnable without absent dependencies, and out of focus; git history has them. Speech input, plan schemas, error-recovery loops, and a ROS2 VLM node are not planned.
 - **Phase 4, scale and generalization:** VLA fine-tuning, parallel data generation, cross-simulator portability (for example Isaac Lab), a real SO-101 backend, and additional embodiments. These need compute and hardware beyond the current setup.

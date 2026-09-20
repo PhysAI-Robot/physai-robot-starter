@@ -6,10 +6,7 @@ from .domain_randomization import (
     DomainRandomizationEngine,
     RandomizationMetadata,
 )
-from .scene import SceneConfig, build_model, build_spec, export_xml
-from .world import RobotBinding, RobotInstanceConfig, SharedWorld
 from .scenes import (
-    CommonSceneConfig,
     ManipulationSceneConfig,
     PickPlaceMinimalSceneConfig,
     SortingMinimalSceneConfig,
@@ -17,10 +14,11 @@ from .scenes import (
     available_scenes,
     build_manipulation_spec,
     create_scene,
+    export_xml,
 )
+from .world import RobotBinding, RobotInstanceConfig, SharedWorld
 
 __all__ = [
-    "CommonSceneConfig",
     "DomainRandomizationConfig",
     "DomainRandomizationEngine",
     "ManipulationSceneConfig",
@@ -29,14 +27,11 @@ __all__ = [
     "RandomizationMetadata",
     "RobotBinding",
     "RobotInstanceConfig",
-    "SceneConfig",
     "SharedWorld",
     "SortingMinimalSceneConfig",
     "WorldSceneConfig",
     "available_scenes",
     "build_manipulation_spec",
-    "build_model",
-    "build_spec",
     "create_scene",
     "export_xml",
 ]

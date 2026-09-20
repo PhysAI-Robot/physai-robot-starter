@@ -33,7 +33,7 @@ from physai.policy import available_policies, create_policy
 from physai.robots import available_robots, create_robot
 from physai.robots.so101 import EnvConfig
 from physai.robots.turtlebot import TurtleBot4Config
-from physai.sim import SceneConfig, SharedWorld
+from physai.sim import PickPlaceMinimalSceneConfig, SharedWorld
 from physai.tasks import TaskRuntime, create_task
 from physai.web.runtime import SimulationHost
 from physai.web.world_runtime import SharedWorldHost
@@ -247,7 +247,7 @@ def build_so101_config(
             (args.camera_size, args.camera_size) if args.camera_size else (640, 480)
         )
         return EnvConfig(
-            scene=SceneConfig(camera_width=cam_w, camera_height=cam_h),
+            scene=PickPlaceMinimalSceneConfig(camera_width=cam_w, camera_height=cam_h),
             seed=seed,
             max_steps=max_steps,
             render=render,

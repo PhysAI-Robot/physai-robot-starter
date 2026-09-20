@@ -11,7 +11,6 @@ from .mujoco_ros_bridge import MuJoCoROSBridge, RclpyTransport
 from .ros2_contract import (
     ALL_ENDPOINTS,
     EXTERNAL_INPUTS,
-    PLANNER_ENDPOINTS,
     POLICY_ENDPOINTS,
     RECOMMENDED_DISTRO,
     ROBOT_ENDPOINTS,
@@ -24,7 +23,6 @@ from .ros2_contract import (
 __all__ = [
     "ALL_ENDPOINTS",
     "EXTERNAL_INPUTS",
-    "PLANNER_ENDPOINTS",
     "POLICY_ENDPOINTS",
     "RECOMMENDED_DISTRO",
     "ROBOT_ENDPOINTS",

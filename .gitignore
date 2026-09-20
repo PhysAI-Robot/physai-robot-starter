@@ -19,6 +19,9 @@ venv/
 .pytest_cache/
 .ruff_cache/
 
+# mujoco crash log, written next to the working directory
+MUJOCO_LOG.TXT
+
 # secrets
 .env
 

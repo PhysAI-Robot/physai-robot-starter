@@ -22,7 +22,7 @@ from ...sim.domain_randomization import (
     DomainRandomizationEngine,
     RandomizationMetadata,
 )
-from ...sim.scene import SceneConfig, build_model
+from ...sim.scenes import ManipulationSceneConfig, PickPlaceMinimalSceneConfig
 from .contracts import (
     ALL_JOINT_NAMES,
     ARM_JOINT_NAMES,
@@ -39,7 +39,9 @@ HOME_QPOS = np.array([0.0, -1.05, 1.25, 0.75, 0.0], dtype=np.float64)
 class EnvConfig:
     """SO-101-specific simulation and observation settings."""
 
-    scene: SceneConfig = field(default_factory=lambda: SceneConfig(**scene_defaults()))
+    scene: ManipulationSceneConfig = field(
+        default_factory=lambda: PickPlaceMinimalSceneConfig(**scene_defaults())
+    )
     control_hz: float = 30.0
     render: bool = True
     cameras: tuple[str, ...] = ("front", "wrist")
@@ -81,7 +83,7 @@ class SO101Env(MuJoCoSimulationCore):
                 self.cfg,
                 scene=replace(self.cfg.scene, **missing),
             )
-        self.model, self.spec = build_model(self.cfg.scene)
+        self.model, self.spec = self.cfg.scene.build_model()
         self.randomization = DomainRandomizationEngine(
             self.model, self.cfg.domain_randomization
         )
@@ -170,7 +172,12 @@ class SO101Env(MuJoCoSimulationCore):
                 name: tuple(float(value) for value in limit)
                 for name, limit in zip(ARM_JOINT_NAMES, self.arm_limits)
             },
-            max_joint_delta={name: 0.5 for name in ARM_JOINT_NAMES},
+            # JointRateLimiter caps command-to-command steps at 0.5 rad, but
+            # this gate compares a command against the *measured* position,
+            # which trails it by the servo's tracking error. Equal values would
+            # reject a command the limiter considers exactly legal, so leave
+            # headroom: the gate still catches IK teleports, not normal lag.
+            max_joint_delta={name: 0.75 for name in ARM_JOINT_NAMES},
             metadata={
                 "control_hz": self.cfg.control_hz,
                 "action_schema": "so101.joint_position.v1",

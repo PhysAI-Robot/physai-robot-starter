@@ -247,7 +247,7 @@ class TurtleBot4Env(MuJoCoSimulationCore):
         self.step_simulation()
         contacts = self.non_ground_contact_count()
         self.collision_count += contacts
-        info = {"pose": self._pose_array()}
+        info = {"pose": self.pose_array()}
         info["collision_contacts"] = contacts
         info["collision_count"] = self.collision_count
         info["randomization"] = self.randomization_metadata.as_dict()
@@ -353,7 +353,8 @@ class TurtleBot4Env(MuJoCoSimulationCore):
             sim_time=float(self.data.time),
         )
 
-    def _pose_array(self) -> np.ndarray:
+    def pose_array(self) -> np.ndarray:
+        """Return the base pose as ``[x, y, yaw]`` in the world frame."""
         body = self.data.body(self._base_body_id)
         yaw = float(
             np.arctan2(

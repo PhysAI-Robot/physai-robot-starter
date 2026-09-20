@@ -16,7 +16,7 @@ through message-shaped contracts.
 instruction + camera images
                     |
                     v
-     Planner (SmolVLM, Claude, or scripted)
+     Planner (scripted; model backends are not built)
                     |
                     v
      Plan: sub-goals + optional PoseStamped waypoints
@@ -187,11 +187,10 @@ bodies. The SO-101 provider supplies its calibrated pad positions and collision
 configuration, while another arm should provide its own attachment provider or
 builder. Robot model paths and end-effector anchors are configuration, not
 hardcoded task ownership. It must not own task reward, policy decisions, or ROS2
-transport. The legacy `sim/scene.py`
-facade may translate the old `SceneConfig(num_cubes=...)` API, but new code
-should select `PickPlaceMinimalSceneConfig` or `SortingMinimalSceneConfig`
-directly. This keeps task-specific object branches out of the shared scene
-builder and makes a future task scene additive.
+transport. Each scene config builds itself through `build_spec()` /
+`build_model()`, so selecting a scene is selecting a class rather than decoding
+an object-count flag. This keeps task-specific object branches out of the
+shared scene builder and makes a future task scene additive.
 
 ## Design patterns in use
 
@@ -210,7 +209,12 @@ builder and makes a future task scene additive.
      discover unrelated implementations.
 - **Safety Gate:** `SafetyController` validates action mode, joint order,
      finite values, timestamps, joint limits, and configured per-joint step
-     limits immediately before a robot port receives a command.
+     limits immediately before a robot port receives a command. The gate lives
+     inside the adapters (`DirectMuJoCoAdapter`, `MuJoCoROSBridge`, the
+     Gymnasium adapter), so every execution path shares it and no workflow can
+     reach the robot unchecked. `RobotSpec.max_joint_delta` bounds command
+     against *measured* position and must stay above `JointRateLimiter`'s
+     command-to-command clamp, or normal servo tracking lag trips the gate.
 
 These patterns are intentionally lightweight. A new abstraction is warranted
 only when it removes coupling at a boundary or makes a component replaceable;
@@ -275,17 +279,22 @@ language-grounded `SubGoal` values and optional `PoseStamped` waypoints.
 `Policy` maps an observation and optional goal to one `Action` per control tick.
 `Task` owns evaluation, reward, and termination around the backend state.
 
-`physai.runtime.create_runtime` is the direct composition entry point. It validates
-the task's declared capabilities against the selected `RobotSpec`, wraps the
-robot port with `TaskRuntime` when a task is selected, creates an optional
-registered policy, and routes actions through `SafetyController` before
-forwarding them to the robot port.
+`physai.runtime.create_runtime` composes a runtime in one call: it validates
+the task's declared capabilities against the selected `RobotSpec`, resolves the
+scene, wraps the robot port with `TaskRuntime` when a task is selected, and
+creates an optional registered policy. Safety is not its job — the adapter
+gates every action regardless of how the runtime was assembled.
+
+Known gap: the CLIs under `scripts/` still assemble these pieces by hand rather
+than calling `create_runtime`, so the same assembly exists in two places. They
+are safety-gated either way.
 
 Scene configs are selected through `physai.sim.scenes.create_scene` and the
 scene registry. Each registered scene declares supported robot kinds and task
 names. `create_runtime(scene_name=...)` resolves that config before building
-the robot and rejects task-scene mismatches during composition. The legacy
-`SceneConfig(num_cubes=...)` facade remains available for compatibility.
+the robot and rejects task-scene mismatches during composition. A scene's
+embodiment defaults come from the robot's `scene_defaults()` and are passed in
+explicitly; the scene layer never looks up a robot by name.
 
 ## Runtime compositions
 
@@ -308,14 +317,20 @@ direct RPP navigation, and a ROS2/Nav2 obstacle acceptance path.
 
 The current pick-and-place and sorting implementations are intentionally
 minimal baselines for smoke tests and early experiments. They live in
-`physai.tasks.pick_place_minimal` and `physai.tasks.sorting_minimal`; the
-registry keys `pick_place` and `sorting` remain stable so configuration does
-not encode an implementation filename.
+`physai.tasks.pick_place_minimal` and `physai.tasks.sorting_minimal`, where
+`SortingTask` extends `PickPlaceTask` with the target-color state; the registry
+keys `pick_place` and `sorting` remain stable so configuration does not encode
+an implementation filename.
 
 ### Web fleet composition
 
-The legacy web path can still compose a `SimulationSession` for one robot. The
-shared-world path composes one `SharedWorldHost` from a world manifest. It owns
+`SimulationHost` composes one robot port for the single-robot web path. The
+shared-world path composes one `SharedWorldHost` from a world manifest.
+
+Known gap: the two hosts duplicate their physics thread, camera thread, control
+lease, and publish loop, and `SharedRobotInstance` hardcodes a `so101` /
+`turtlebot4` whitelist instead of reading the robot registry. They should share
+one base. It owns
 one MuJoCo model, one `MjData`, one physics clock, and one loop for all
 heterogeneous robot instances. Each instance has a namespaced binding,
 capability contract, action queue, and control lease; `/api/state` and
@@ -375,18 +390,17 @@ Tasks and policies request capabilities, not robot names.
 
 ## Model roles
 
-SmolVLM is a local high-level VLM that reads simulated camera frames and
-returns a structured plan. Claude is an optional cloud backend for the same
-planner contract.
+No model-backed planner is built. `physai.planner` defines the `Planner`
+contract and a scripted backend; a future VLM backend implements the same
+contract and returns a `Plan`.
 
-SmolVLA and TurboVLA are low-level vision-language-action policy checkpoints.
-They predict control-rate actions and belong behind the policy boundary in
-`src/physai/policy/vla_adapter.py`. They must not be described as planners or
-be coupled directly to a robot environment.
+ACT is the low-level policy checkpoint format behind the policy boundary in
+`src/physai/policy/vla_adapter.py` (`LeRobotPolicy`). A policy checkpoint
+predicts control-rate actions; it must not be described as a planner or be
+coupled directly to a robot environment.
 
-Model snapshots belong in the ignored local `models/` directory and are loaded
-through an explicit local path. Model storage and path resolution are owned by
-`src/physai/model_store.py`.
+Checkpoints are written by `scripts/train_act.py` into the ignored local
+`outputs/` directory and loaded through an explicit path.
 
 ## Demonstration data
 
