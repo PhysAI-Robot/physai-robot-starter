@@ -41,22 +41,22 @@ testing. VLM and VLA workflows need more memory; CUDA is optional.
 ## Install
 
 Install `uv` using the instructions for your platform, then create the
-environment and install the base package from the project root:
+environment with the common web and training extras from the project root:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync
+uv sync --extra web --extra training
 ```
 
 The base install contains MuJoCo, NumPy, image/video support, and YAML
-configuration. It does not install ROS2, VLM, or VLA dependencies. Use the
-optional extras below when
-those later-phase features are needed.
+configuration. The command above also installs the browser viewer and
+Gymnasium training bridge. It does not install ROS2, VLM, or VLA dependencies.
+Use the optional extras below when those later-phase features are needed.
 
 Install development tools and run the test suite with:
 
 ```bash
-uv sync --extra dev
+uv sync --extra dev --extra web --extra training
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 ```
 
@@ -77,18 +77,44 @@ interactive MuJoCo viewer after the headless run succeeds:
 uv run python scripts/run_sim.py --viewer
 ```
 
-For the browser-based Three.js viewer, start the desktop viewer with `--serve`
-to expose the same authoritative simulation, then see the
-[Web Viewer runbook](docs/WEB_VIEWER_RUNBOOK.md) for the client command:
+For an idle browser-based Three.js viewer, start the SO-101 host with `--serve`
+and jog it from the browser. Without an explicit `--policy`, viewer and serve
+modes hold the current pose and do not run pick-and-place automatically. Add
+`--policy scripted` when you want the scripted task to drive the robot, and add
+`--viewer` only when you also want the local desktop window:
 
 ```bash
-MUJOCO_GL=egl uv run --extra web python scripts/run_web.py \
+MUJOCO_GL=egl uv run python scripts/run_sim.py \
+  --robot so101 \
+  --serve
+```
+
+In another terminal, open the browser client:
+
+```bash
+MUJOCO_GL=egl uv run python scripts/run_web.py \
   --connect http://127.0.0.1:8000
 ```
 
 The web layer remains robot-agnostic and discovers action modes and cameras
 from the host's `RobotSpec`. See the runbook for the host command, keyboard
 mapping, and WebSocket/API contract.
+
+To run multiple heterogeneous robots in one shared MuJoCo scene at the default
+30 Hz control rate, use the world manifest example:
+
+```bash
+MUJOCO_GL=egl uv run python scripts/run_sim.py \
+  --world configs/worlds/heterogeneous.yaml \
+  --serve
+```
+
+This uses one model, physics data object, and simulation clock. The shared
+world starts idle; the browser selector chooses which instance receives jog
+commands while the whole scene remains visible. Camera frames are rendered in
+a worker so camera capture does not block the physics loop. Add `--viewer` if
+you also want the desktop window. See the [Web Viewer runbook](docs/WEB_VIEWER_RUNBOOK.md)
+for the shared-world contract.
 
 ### Optional WSL2 viewer performance
 
@@ -177,9 +203,8 @@ those phases. See [Roadmap](ROADMAP.md) for the scope and definition of done
 for each phase.
 
 The Phase 1-to-Phase 2 bridge now includes canonical `ObservationSpec` and
-`ActionSpec` schemas plus a Gymnasium adapter. Install the training extra when
-you need this boundary; the adapter still routes actions through the existing
-safety gate:
+`ActionSpec` schemas plus a Gymnasium adapter. The standard setup above already
+installs its training dependency; for a base-only environment, add it with:
 
 ```bash
 uv sync --extra training
@@ -446,6 +471,8 @@ uv run python scripts/fetch_assets.py
 ```
 
 For a simulator-only check, use `--policy constant` or the default scripted
-SO-101 policy. Neither requires SmolVLM, Claude, a model download, or an API
-key. If video encoding is unavailable, the simulator falls back to a GIF;
-installing `imageio-ffmpeg` enables MP4 output.
+SO-101 policy. Viewer and serve modes are different: they stay idle unless a
+policy is explicitly supplied, so they can be controlled manually from the
+browser. None of these workflows requires SmolVLM, Claude, a model download,
+or an API key. If video encoding is unavailable, the simulator falls back to a
+GIF; installing `imageio-ffmpeg` enables MP4 output.
