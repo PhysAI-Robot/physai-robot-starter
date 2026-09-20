@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
 
 from ..contracts import Action, Observation
-from ..robots.base import RobotSpec
+
+if TYPE_CHECKING:
+    from ..robots.base import RobotSpec
 
 
 class SafetyController:

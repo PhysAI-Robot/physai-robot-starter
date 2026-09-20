@@ -9,9 +9,10 @@ pytestmark = [pytest.mark.acceptance, pytest.mark.assets, pytest.mark.slow]
 def test_scene_has_the_task_objects_and_cameras():
     import mujoco
 
-    from physai.sim import build_model
+    from physai.robots.registry import scene_defaults
+    from physai.sim import PickPlaceMinimalSceneConfig
 
-    model, _ = build_model()
+    model, _ = PickPlaceMinimalSceneConfig(**scene_defaults("so101")).build_model()
     names = lambda kind, n: {mujoco.mj_id2name(model, kind, i) for i in range(n)}
     assert {"front", "wrist"} <= names(mujoco.mjtObj.mjOBJ_CAMERA, model.ncam)
     assert {"cube", "table"} <= names(mujoco.mjtObj.mjOBJ_BODY, model.nbody)
@@ -25,9 +26,10 @@ def test_scene_has_the_task_objects_and_cameras():
 def test_calibrated_pads_replace_jaw_collision_meshes():
     import mujoco
 
-    from physai.sim import build_model
+    from physai.robots.registry import scene_defaults
+    from physai.sim import PickPlaceMinimalSceneConfig
 
-    model, _ = build_model()
+    model, _ = PickPlaceMinimalSceneConfig(**scene_defaults("so101")).build_model()
     jaw_bodies = {
         mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
         for name in ("gripper", "moving_jaw_so101_v1")
@@ -48,14 +50,12 @@ def test_calibrated_pads_replace_jaw_collision_meshes():
 def test_task_specific_scene_configs_have_separate_object_layouts():
     import mujoco
 
-    from physai.sim import (
-        PickPlaceMinimalSceneConfig,
-        SortingMinimalSceneConfig,
-        build_model,
-    )
+    from physai.robots.registry import scene_defaults
+    from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
 
-    pick_model, _ = build_model(PickPlaceMinimalSceneConfig())
-    sorting_model, _ = build_model(SortingMinimalSceneConfig())
+    defaults = scene_defaults("so101")
+    pick_model, _ = PickPlaceMinimalSceneConfig(**defaults).build_model()
+    sorting_model, _ = SortingMinimalSceneConfig(**defaults).build_model()
     body_names = lambda model: {
         mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, index)
         for index in range(model.nbody)
@@ -68,9 +68,9 @@ def test_task_specific_scene_configs_have_separate_object_layouts():
 
 @requires_assets
 def test_table_does_not_intersect_the_robot_base():
-    from physai.sim import SceneConfig
+    from physai.sim import PickPlaceMinimalSceneConfig
 
-    cfg = SceneConfig()
+    cfg = PickPlaceMinimalSceneConfig()
     table_near_edge = cfg.table_pos[0] - cfg.table_size[0]
     assert table_near_edge > 0.06
 
@@ -79,9 +79,10 @@ def test_table_does_not_intersect_the_robot_base():
 def test_sorting_scene_has_three_colored_cubes():
     import mujoco
 
-    from physai.sim import SceneConfig, build_model
+    from physai.robots.registry import scene_defaults
+    from physai.sim import SortingMinimalSceneConfig
 
-    model, _ = build_model(SceneConfig(num_cubes=3))
+    model, _ = SortingMinimalSceneConfig(**scene_defaults("so101")).build_model()
     names = {
         mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, i)
         for i in range(model.nbody)
@@ -93,11 +94,11 @@ def test_sorting_scene_has_three_colored_cubes():
 @requires_assets
 def test_sorting_env_exposes_target_color_and_all_cube_positions():
     from physai.robots.so101 import EnvConfig, SO101Env
-    from physai.sim import SceneConfig
+    from physai.sim import SortingMinimalSceneConfig
     from physai.tasks import TaskRuntime, create_task
 
     robot = SO101Env(
-        EnvConfig(scene=SceneConfig(num_cubes=3), render=False, max_steps=200)
+        EnvConfig(scene=SortingMinimalSceneConfig(), render=False, max_steps=200)
     )
     env = TaskRuntime(robot, create_task("sorting"))
     try:
@@ -113,10 +114,10 @@ def test_sorting_env_exposes_target_color_and_all_cube_positions():
 @requires_assets
 def test_sorting_reset_is_deterministic_for_a_given_seed():
     from physai.robots.so101 import EnvConfig, SO101Env
-    from physai.sim import SceneConfig
+    from physai.sim import SortingMinimalSceneConfig
 
     robot = SO101Env(
-        EnvConfig(scene=SceneConfig(num_cubes=3), render=False, max_steps=200)
+        EnvConfig(scene=SortingMinimalSceneConfig(), render=False, max_steps=200)
     )
     try:
         first = robot.reset(seed=17)

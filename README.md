@@ -6,8 +6,10 @@ policies through stable robot, task, observation, and action contracts.
 
 **Phase 1, the Classical Foundation and ROS2 Contract, is complete** for the
 supported SO-101 arm and TurtleBot4 differential-drive base in MuJoCo. The
-Phase 1-to-Phase 2 training bridge and the Phase 2A visual-servo baseline are
-available; Phase 2B learning workflows remain the next major work.
+Phase 1-to-Phase 2 training bridge is complete. Phase 2A, the classical vision
+baseline, is in progress: the camera-only `visual_servo` policy has landed, but
+2A is not done until it is evaluated across the T0-T4 task ladder and the
+difficulty sweep. See [Roadmap](ROADMAP.md) for the definition of done.
 
 The shortest way to inspect the completed foundation is model-free: run the
 scripted SO-101 pick-and-place baseline, inspect the contracts, then validate
@@ -189,12 +191,13 @@ The planned progression is:
 
 ```text
 Phase 1  Classical foundation + ROS2 contract
-        -> Phase 2  Learning-based motor skills
-          2A  Visual servoing baseline
-          2B  Imitation learning with LeRobot
-          2C  Deep reinforcement learning
-    -> Phase 3  High-level VLM orchestration
-    -> Phase 4  End-to-end VLA policy
+        -> Phase 2  Benchmark, baselines, and learning
+          2.0  Task ladder and capability report
+          2A   Classical vision baseline (camera-only)
+          2B   Imitation learning with ACT
+          2C   Backend comparison study
+          2D   Report and release (v0.2)
+    -> Phase 3 and 4  Not in focus yet
 ```
 
 Phase 2 and later are future direction. Their current scripts and adapters are
@@ -258,9 +261,10 @@ uv run python scripts/collect_demos.py --sorting --episodes 50 --out data/sortin
        alt="SO-101 arm selecting the blue cube from three colored cubes and placing it on the pad">
 </p>
 
-The scripted expert reaches roughly 72% on this variant against 100% on the
-documented 20-seed single-cube check, because three cubes on the same table
-leave less grasp clearance.
+Measured over 20 seeds, the scripted expert reaches 9/20 on the single-cube
+check (11 timeouts) and 1/20 on this sorting variant (19 timeouts); three
+cubes on the same table leave less grasp clearance. The scripted expert is therefore a
+partial teacher, not an upper bound — closing that gap is Phase 2.0 work.
 
 Failed demonstrations are discarded by default. Add `--keep-failures` when
 you are analyzing failure cases.
@@ -287,7 +291,7 @@ The repository contains early data and model workflows so they can be tested
 against the shared contracts. They belong to the roadmap's later phases and
 are not required for the completed Phase 1 baseline or its training bridge.
 
-### Phase 2B: LeRobot and ACT
+### Phase 2B: imitation learning with ACT
 
 Collect demonstrations and fine-tune an ACT policy after installing the VLA
 extra:
@@ -302,39 +306,6 @@ uv run python scripts/eval_policy.py --policy lerobot \
 The training script stores the checkpoint and metadata under
 `outputs/act_ckpt` by default. Use the same square image size during training
 and evaluation to avoid an image distribution mismatch.
-
-### Phase 3: VLM planning
-
-Check the planner-to-simulator path without a model or API key:
-
-```bash
-uv run python scripts/plan_task.py --planner scripted --dry-run
-```
-
-SmolVLM produces visual sub-goals from simulated camera images. Install its
-extra and download the model before running it:
-
-```bash
-uv sync --extra smolvlm
-uv run python scripts/download_models.py --model smolvlm
-uv run python scripts/plan_task.py --planner smolvlm --dry-run
-```
-
-Use `--instruction`, `--save-plan`, and `--save-frames` to customize or
-inspect a planning run. A planner proposes sub-goals; it is not the low-level
-motor policy.
-
-The distinction is visible on the sorting scene. Both runs below start from an
-identical cube layout and differ only in the instruction text, and the planner
-grounds the color word onto a different cube each time:
-
-| "put the **red** cube on the pad" | "put the **blue** cube on the pad" |
-| --- | --- |
-| <img src="docs/media/sorting/sorting_planner_red.gif" width="300" alt="Planner directing the arm to the red cube"> | <img src="docs/media/sorting/sorting_planner_blue.gif" width="300" alt="Planner directing the arm to the blue cube from the same starting layout"> |
-
-Sub-goal selection is where language grounding belongs in this architecture.
-The ACT policy in Phase 2 has no text input at all, so the same instruction
-swap leaves its behavior byte-for-byte identical.
 
 ## Python API
 
@@ -363,39 +334,19 @@ runtime = create_runtime(
 )
 ```
 
-## Optional models and APIs
+## Optional models
 
-Model snapshots are downloaded into the ignored local `models/` directory.
 Install the extra for the workflow you intend to use:
 
 ```bash
-# SmolVLM planner
-uv sync --extra smolvlm
-uv run python scripts/download_models.py --model smolvlm
-
-# LeRobot/VLA support
+# ACT / LeRobot policy support (Phase 2B)
 uv sync --extra vla
-uv run python scripts/download_models.py --model smolvla
-uv run python scripts/download_models.py --model turbovla
 ```
 
-The downloader also accepts a custom Hugging Face repository:
+Checkpoints are written by `scripts/train_act.py` into the ignored local
+`outputs/` directory and loaded from an explicit path.
 
-```bash
-uv run --with huggingface-hub python scripts/download_models.py \
-  --repo org/model --name my_model
-```
-
-Copy `.env.example` to `.env` when using gated or private Hugging Face models,
-or when the anonymous download limit is reached. Claude is an optional cloud
-planner; install its extra and provide `ANTHROPIC_API_KEY` in the environment:
-
-```bash
-uv sync --extra vlm
-export ANTHROPIC_API_KEY="your-key"
-uv run python scripts/plan_task.py --planner claude --dry-run
-```
-
+Copy `.env.example` to `.env` when using gated or private Hugging Face models.
 Do not commit `.env`, credentials, checkpoints, or downloaded assets.
 
 ## ROS2 Jazzy
@@ -442,7 +393,6 @@ The following local directories are ignored by Git and Docker:
 
 - `assets/`: downloaded robot descriptions and meshes
 - `data/`: recorded demonstrations
-- `models/`: local model snapshots
 - `outputs/`: videos, plans, checkpoints, and evaluation artifacts
 
 The PhysAI Robot Starter source code is licensed under the Apache License 2.0.
@@ -473,6 +423,5 @@ uv run python scripts/fetch_assets.py
 For a simulator-only check, use `--policy constant` or the default scripted
 SO-101 policy. Viewer and serve modes are different: they stay idle unless a
 policy is explicitly supplied, so they can be controlled manually from the
-browser. None of these workflows requires SmolVLM, Claude, a model download,
-or an API key. If video encoding is unavailable, the simulator falls back to a
+browser. None of these workflows requires a model download or an API key. If video encoding is unavailable, the simulator falls back to a
 GIF; installing `imageio-ffmpeg` enables MP4 output.

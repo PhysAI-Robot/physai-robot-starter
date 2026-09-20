@@ -120,10 +120,11 @@ def test_robot_spec_exposes_and_validates_si_unit_declarations():
         )
 
 
-def test_builtin_planners_are_discoverable():
-    from physai.planner import available_planners
+def test_scripted_planner_produces_pick_and_place_subgoals():
+    from physai.planner import ScriptedPlanner
 
-    assert {"scripted", "smolvlm", "claude"} <= set(available_planners())
+    plan = ScriptedPlanner((0.2, 0.08, 0.036), (0.2, -0.1, 0.021)).plan("", None)
+    assert [subgoal.skill for subgoal in plan.subgoals]
 
 
 def test_pick_place_task_is_discoverable():

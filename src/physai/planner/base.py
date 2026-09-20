@@ -75,10 +75,10 @@ class Planner(ABC):
 
 
 class ScriptedPlanner(Planner):
-    """Offline stand-in for the VLM: emits the canonical pick-and-place plan.
+    """Emits the canonical pick-and-place plan from known object poses.
 
-    Use it to develop and test the planner->policy plumbing without spending
-    API calls, then swap in ClaudePlanner with the same interface.
+    Use it to develop and test the planner->policy plumbing. A model-backed
+    planner implements the same `Planner` interface.
     """
 
     name = "scripted_planner"

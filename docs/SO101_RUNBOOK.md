@@ -85,8 +85,12 @@ uv run python scripts/eval_policy.py \
   --max-steps 600
 ```
 
-The current baseline is `success 20/20`. This depends on the calibrated jaw
-pads and deterministic scene; it is not a hardware or randomized result.
+The current baseline is `success 9/20`, with 11 timeouts (measured
+2026-09-20). This is an open finding tracked in [ROADMAP.md](../ROADMAP.md)
+under Phase 2.0, not a target. The deterministic `visual_servo` policy scores
+higher on the same seeds: `visual_servo` reaches 20/20 with no timeouts.
+Results depend on the calibrated jaw pads and the deterministic scene; they are
+not hardware or randomized results.
 
 Use the same seed when comparing parameter changes. Save local results when
 needed:
@@ -164,7 +168,7 @@ policy evaluation. It does not yet export the standard `LeRobotDataset` format
 or provide the planned unified training entry point. This is the Phase 2
 continuation of the SO-101 journey.
 
-## 6. Continue to Planner, VLM, and VLA
+## 6. Continue to the planner contract
 
 Inspect the planner workflow after the low-level policy path is understood:
 
@@ -172,9 +176,10 @@ Inspect the planner workflow after the low-level policy path is understood:
 uv run python scripts/plan_task.py --help
 ```
 
-The scripted planner is the deterministic starting point. SmolVLM and Claude
-backends are optional. Planner output must remain a validated plan and must
-pass robot capability and safety checks before producing commands.
+The scripted planner is the only backend that ships. A model-backed planner
+implements the same `Planner` contract. Planner output must remain a validated
+plan and must pass robot capability and safety checks before producing
+commands.
 
 ## 7. Phase 2A Visual Servoing Baseline
 

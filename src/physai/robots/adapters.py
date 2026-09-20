@@ -5,16 +5,24 @@ from __future__ import annotations
 from typing import Any
 
 from ..contracts import Action, Observation
+from ..control.safety import SafetyController
 from .base import RobotPort, RobotSpec
-
-ADAPTER_NAMES = ("direct_mujoco", "ros2_mujoco", "ros2_hardware")
 
 
 class DirectMuJoCoAdapter:
-    """Expose a MuJoCo-backed robot through the generic robot port."""
+    """Expose a MuJoCo-backed robot through the generic robot port.
 
-    def __init__(self, environment: RobotPort) -> None:
+    Every action passes the safety gate here, immediately before the robot
+    receives it, so direct-MuJoCo workflows get the same checks as the ROS2
+    and Gymnasium paths.
+    """
+
+    def __init__(
+        self, environment: RobotPort, *, safety: SafetyController | None = None
+    ) -> None:
         self._environment = environment
+        self.safety = safety or SafetyController(environment.robot_spec)
+        self._observation: Observation | None = None
 
     @property
     def robot_spec(self) -> RobotSpec:
@@ -23,21 +31,22 @@ class DirectMuJoCoAdapter:
     def reset(self, seed: int | None = None) -> Observation:
         observation = self._environment.reset(seed=seed)
         self.robot_spec.validate_observation(observation)
+        self._observation = observation
         return observation
 
     def observe(self) -> Observation:
         observation = self._environment.observe()
         self.robot_spec.validate_observation(observation)
+        self._observation = observation
         return observation
 
     def send_action(self, action: Action) -> None:
-        self.robot_spec.validate_action(action)
-        self._environment.send_action(action)
+        self._environment.send_action(self.safety.validate(self._observation, action))
 
     def step(self, action: Action) -> tuple[Observation, float, bool, bool, dict]:
-        self.robot_spec.validate_action(action)
-        result = self._environment.step(action)
+        result = self._environment.step(self.safety.validate(self._observation, action))
         self.robot_spec.validate_observation(result[0])
+        self._observation = result[0]
         return result
 
     def close(self) -> None:
@@ -77,5 +86,7 @@ def select_adapter(
         from ..bridge.adapters import ROS2HardwareAdapter
 
         return ROS2HardwareAdapter(hardware, transport, codec=codec)
-    choices = ", ".join(ADAPTER_NAMES)
-    raise ValueError(f"unknown adapter {name!r}; available: {choices}")
+    raise ValueError(
+        f"unknown adapter {name!r}; available: "
+        "direct_mujoco, ros2_mujoco, ros2_hardware"
+    )

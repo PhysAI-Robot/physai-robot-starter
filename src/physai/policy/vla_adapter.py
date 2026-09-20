@@ -1,8 +1,7 @@
 """Seam for dropping a real VLA checkpoint into the loop.
 
-Nothing here imports torch. When you `uv sync --extra vla` and load SmolVLA
-(or TurboVLA, or an ACT
-checkpoint you trained on the demos from `scripts/collect_demos.py`), the only
+Nothing here imports torch. When you `uv sync --extra vla` and load an ACT
+checkpoint trained on the demos from `scripts/collect_demos.py`, the only
 thing you write is `_infer`. Everything else — observation packing, action
 chunk buffering, unit conversion — is already handled and matches the format
 the recorder writes.
@@ -20,12 +19,12 @@ from __future__ import annotations
 from abc import abstractmethod
 from collections import deque
 from collections.abc import Callable
+from pathlib import Path
 
 import numpy as np
 
 from ..contracts import Action, GripperCommand, Observation, PoseStamped
 from ..data.metadata import CheckpointMetadata, validate_checkpoint_compatibility
-from ..model_store import resolve_local_model
 from ..robots.base import RobotPort
 from .base import Policy
 
@@ -228,7 +227,12 @@ class LeRobotPolicy(VLAPolicy):
         import torch
         from lerobot.policies.act import ACTPolicy, make_act_pre_post_processors
 
-        checkpoint_dir = resolve_local_model(str(checkpoint_dir))
+        checkpoint_dir = Path(checkpoint_dir)
+        if not checkpoint_dir.is_dir():
+            raise FileNotFoundError(
+                f"no ACT checkpoint at {checkpoint_dir}; "
+                "train one with scripts/train_act.py"
+            )
         device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         policy = ACTPolicy.from_pretrained(checkpoint_dir).to(device)
         policy.eval()
