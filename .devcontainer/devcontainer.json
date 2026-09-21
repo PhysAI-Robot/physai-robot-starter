@@ -1,0 +1,25 @@
+{
+  "name": "PhysAI Robot Starter",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "containerEnv": {
+    "MUJOCO_GL": "osmesa",
+    "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"
+  },
+  "remoteEnv": {
+    "PATH": "${containerEnv:PATH}:/home/vscode/.local/bin"
+  },
+  "onCreateCommand": "sudo apt-get update && sudo apt-get install --yes --no-install-recommends libosmesa6-dev libgl1 libegl1 && sudo rm -rf /var/lib/apt/lists/*",
+  "postCreateCommand": "pip install uv && uv sync --locked --extra web --extra dev && (uv run python scripts/fetch_assets.py --robot so101 || echo 'Asset fetch failed; rerun: uv run python scripts/fetch_assets.py --robot so101')",
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": {
+      "label": "PhysAI web viewer",
+      "onAutoForward": "notify"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python", "charliermarsh.ruff"]
+    }
+  }
+}
