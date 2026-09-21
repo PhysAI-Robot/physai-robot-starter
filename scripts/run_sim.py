@@ -13,7 +13,6 @@ python scripts/run_sim.py --viewer --serve     # GUI plus shared web host
 from __future__ import annotations
 
 import argparse
-import tempfile
 import threading
 from dataclasses import replace
 from pathlib import Path
@@ -136,10 +135,11 @@ class SingleWindowViewer:
         frame = np.ascontiguousarray(frame, dtype=np.uint8)
         height, width = frame.shape[:2]
         ppm = f"P6\n{width} {height}\n255\n".encode() + frame.tobytes()
-        with tempfile.NamedTemporaryFile(suffix=".ppm") as image_file:
-            image_file.write(ppm)
-            image_file.flush()
-            return self._tk.PhotoImage(file=image_file.name, format="PPM")
+        # Hand Tk the bytes directly. Writing them to a NamedTemporaryFile and
+        # passing its name fails on Windows, where a temporary file that is
+        # still open cannot be opened a second time by name ("permission
+        # denied"), and it also costs a disk write per frame.
+        return self._tk.PhotoImage(data=ppm, format="PPM")
 
     def render(self) -> None:
         if self.closed:
