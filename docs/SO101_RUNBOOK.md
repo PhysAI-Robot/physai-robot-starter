@@ -211,6 +211,22 @@ uv run python scripts/eval_policy.py \
   --json-out outputs/visual_servo_20seed_jitter.json
 ```
 
+The same evaluation runs on a clean Linux runner through the `Visual servo
+evaluation` workflow (`.github/workflows/visual-servo-eval.yml`). It starts on
+pull requests that touch the code the result depends on, and by hand from the
+Actions tab once the workflow is on the default branch, with the total episode
+count and the jitter as inputs. Software rendering takes about 130 seconds per
+episode, so the seeds are split across four parallel jobs and a final job merges
+them and fails unless every episode succeeded with no collision, timeout, or
+unsafe action. The result table is in the job summary, and the merged JSON, each
+shard's JSON, and one recorded episode are uploaded as artifacts.
+
+The 20-seed run on `ubuntu-24.04` with OSMesa reproduced the outcome above
+(`20/20`, no collisions, timeouts, or unsafe actions). It is not bit-identical
+to a Windows run: 17 of the 20 seeds took the same number of steps and the other
+three differed by one, which is expected from floating-point differences between
+platforms.
+
 The same policy can be inspected interactively with the MuJoCo viewer and live
 front-camera window:
 
