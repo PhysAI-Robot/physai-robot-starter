@@ -89,11 +89,12 @@ class SimulationHost:
 
     def stop(self) -> None:
         self._stop.set()
-        if self._thread is not None:
-            self._thread.join(timeout=2.0)
+        if self._thread is None:
+            self.robot.close()
+            return
+        self._thread.join(timeout=2.0)
         if self._camera_thread is not None:
             self._camera_thread.join(timeout=2.0)
-        self.robot.close()
 
     def latest_state(self) -> dict[str, Any] | None:
         with self._lock:
