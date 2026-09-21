@@ -8,7 +8,8 @@ python scripts/run_sim.py --policy constant    # baseline: do nothing
 python scripts/run_sim.py --policy lerobot --checkpoint outputs/act_ckpt
 python scripts/run_sim.py --viewer             # single-window scene + cameras UI
 python scripts/run_sim.py --viewer --serve     # GUI plus shared web host
-python scripts/run_sim.py --headless --serve   # web host only, no desktop window
+python scripts/run_sim.py --serve              # web host only, no desktop window
+python scripts/run_sim.py --headless --serve   # same as --serve, made explicit
 """
 
 from __future__ import annotations
@@ -70,19 +71,29 @@ class SingleWindowViewer:
     """Tk client rendering an authoritative host and its model cameras."""
 
     def __init__(
-        self, host: SimulationHost | SharedWorldHost, camera_names: list[str]
+        self,
+        host: SimulationHost | SharedWorldHost,
+        camera_names: list[str],
+        *,
+        serve_url: str | None = None,
     ) -> None:
         try:
             import tkinter as tk
+            from tkinter import ttk
         except ImportError as exc:
             raise RuntimeError(
                 "the custom viewer requires Tkinter; install python3-tk"
             ) from exc
         self._tk = tk
         self.root = tk.Tk()
-        self.root.title("PhysAI MuJoCo Viewer")
+        label = getattr(host, "robot_name", None) or (
+            f"shared world ({len(host.instances)} robots)"
+        )
+        self.root.title(f"PhysAI MuJoCo Viewer — {label}")
+        self.root.minsize(720, 480)
         self.host = host
         self.camera_names = camera_names
+        self.serve_url = serve_url
         self.closed = False
         self.paused = False
         self._last_drag: tuple[int, int] | None = None
@@ -94,19 +105,32 @@ class SingleWindowViewer:
         self._free_camera = mujoco.MjvCamera()
         mujoco.mjv_defaultFreeCamera(host.model, self._free_camera)
 
-        toolbar = tk.Frame(self.root)
+        style = ttk.Style(self.root)
+        # "clam" is the only built-in ttk theme that honors custom colors on every
+        # platform; the default themes ignore background/foreground overrides.
+        style.theme_use("clam")
+        style.configure("Toolbar.TFrame", background="#1c2224")
+        style.configure("StatusBar.TFrame", background="#eef2f0")
+        style.configure("StatusBar.TLabel", background="#eef2f0", foreground="#355448")
+        style.configure("TButton", padding=(10, 6))
+        style.configure("TLabelframe", background="#f0f3f1")
+        style.configure("TLabelframe.Label", background="#f0f3f1", foreground="#355448")
+
+        toolbar = ttk.Frame(self.root, style="Toolbar.TFrame")
         toolbar.pack(fill=tk.X)
-        self.pause_button = tk.Button(toolbar, text="Pause", command=self.toggle_pause)
-        self.pause_button.pack(side=tk.LEFT, padx=4, pady=4)
-        tk.Button(toolbar, text="Reset", command=self.reset).pack(side=tk.LEFT, padx=4)
-        tk.Button(toolbar, text="Zoom +", command=lambda: self.zoom(0.85)).pack(
+        self.pause_button = ttk.Button(
+            toolbar, text="Pause", command=self.toggle_pause
+        )
+        self.pause_button.pack(side=tk.LEFT, padx=4, pady=6)
+        ttk.Button(toolbar, text="Reset", command=self.reset).pack(
             side=tk.LEFT, padx=4
         )
-        tk.Button(toolbar, text="Zoom -", command=lambda: self.zoom(1.18)).pack(
+        ttk.Button(toolbar, text="Zoom +", command=lambda: self.zoom(0.85)).pack(
             side=tk.LEFT, padx=4
         )
-        self.status = tk.Label(toolbar, text="running", anchor="w")
-        self.status.pack(side=tk.LEFT, padx=12)
+        ttk.Button(toolbar, text="Zoom -", command=lambda: self.zoom(1.18)).pack(
+            side=tk.LEFT, padx=4
+        )
 
         content = tk.Frame(self.root)
         content.pack(fill=tk.BOTH, expand=True)
@@ -119,17 +143,25 @@ class SingleWindowViewer:
         self.scene_label.bind("<Button-4>", lambda _event: self.zoom(0.9))
         self.scene_label.bind("<Button-5>", lambda _event: self.zoom(1.1))
 
-        camera_panel = tk.Frame(content)
+        camera_panel = ttk.Frame(content)
         camera_panel.pack(side=tk.RIGHT, fill=tk.Y)
         self.camera_labels: dict[str, object] = {}
         self.camera_photos: dict[str, object] = {}
         for name in camera_names:
-            panel = tk.Frame(camera_panel, bd=1, relief=tk.GROOVE)
-            panel.pack(fill=tk.X, padx=4, pady=4)
-            tk.Label(panel, text=name, anchor="w").pack(fill=tk.X)
+            panel = ttk.LabelFrame(camera_panel, text=name)
+            panel.pack(fill=tk.X, padx=6, pady=6)
             label = tk.Label(panel, text="waiting", width=320, height=240)
             label.pack()
             self.camera_labels[name] = label
+
+        status_bar = ttk.Frame(self.root, style="StatusBar.TFrame")
+        status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        self.status = ttk.Label(status_bar, text="running", style="StatusBar.TLabel")
+        self.status.pack(side=tk.LEFT, padx=10, pady=4)
+        if self.serve_url is not None:
+            ttk.Label(
+                status_bar, text=f"Web viewer: {self.serve_url}", style="StatusBar.TLabel"
+            ).pack(side=tk.RIGHT, padx=10, pady=4)
 
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
@@ -149,13 +181,22 @@ class SingleWindowViewer:
         with self.host.physics_lock:
             self._scene_renderer.update_scene(self.host.data, camera=self._free_camera)
             scene_frame = self._scene_renderer.render()
-            camera_frames = [self.host.camera_image(name) for name in self.camera_names]
+            camera_frames = {}
+            for name in self.camera_names:
+                try:
+                    camera_frames[name] = self.host.camera_image(name)
+                except ValueError:
+                    # The camera worker thread has not captured its first
+                    # frame yet (it starts concurrently with the physics
+                    # thread); keep the "waiting" placeholder for this tick.
+                    pass
         scene_photo = self._photo(scene_frame)
         self.scene_photo = scene_photo
         self.scene_label.configure(image=scene_photo, text="")
-        for name, label, frame in zip(
-            self.camera_names, self.camera_labels.values(), camera_frames
-        ):
+        for name, label in self.camera_labels.items():
+            frame = camera_frames.get(name)
+            if frame is None:
+                continue
             photo = self._photo(frame)
             self.camera_photos[name] = photo
             label.configure(image=photo, text="")
@@ -337,13 +378,14 @@ def main() -> int:
     ap.add_argument(
         "--serve",
         action="store_true",
-        help="serve the same authoritative simulation to the web viewer",
+        help="serve the same authoritative simulation to the web viewer; "
+        "without --viewer, this runs with no desktop window",
     )
     ap.add_argument(
         "--headless",
         action="store_true",
-        help="with --serve, run the authoritative host without a desktop window, "
-        "for servers, containers, and cloud workspaces with no display",
+        help="explicit synonym for --serve without --viewer, for servers, "
+        "containers, and cloud workspaces with no display",
     )
     ap.add_argument("--host", default="127.0.0.1", help="web host bind address")
     ap.add_argument("--port", type=int, default=8000, help="web host port")
@@ -358,8 +400,6 @@ def main() -> int:
         ap.error("--headless and --viewer are mutually exclusive")
     if args.headless and not args.serve:
         ap.error("--headless requires --serve")
-    if args.serve and not (args.viewer or args.headless):
-        ap.error("--serve requires --viewer or --headless")
     if args.world and not (args.viewer or args.serve):
         ap.error("--world requires --viewer or --serve")
     if args.world and (args.config or args.robot):
@@ -584,7 +624,9 @@ def run_viewer(
 
     app = None
     try:
-        if args.headless:
+        if not args.viewer:
+            # No desktop window: true whether the caller passed --headless
+            # explicitly or just --serve on its own.
             print(f"Headless host running. Web viewer: http://{args.host}:{args.port}/")
             print("Press Ctrl+C to stop.")
             wait_for_shutdown()
@@ -592,7 +634,8 @@ def run_viewer(
             print("Custom viewer open. Close the window to exit.")
             if args.serve:
                 print(f"Web viewer: http://{args.host}:{args.port}/")
-            app = SingleWindowViewer(host, camera_names)
+            serve_url = f"http://{args.host}:{args.port}/" if args.serve else None
+            app = SingleWindowViewer(host, camera_names, serve_url=serve_url)
             app.tick()
             app.root.mainloop()
     except KeyboardInterrupt:

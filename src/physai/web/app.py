@@ -10,14 +10,16 @@ from .runtime import SimulationHost, action_from_payload
 from .telemetry import build_mesh_payload
 from .world_runtime import SharedWorldHost
 
+_CAMERA_STREAM_PERIOD = 0.2  # matches SimulationHost/SharedWorldHost's camera capture cadence
+
 
 def create_app(
     *,
     host: SimulationHost | SharedWorldHost,
 ):
     try:
-        from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-        from fastapi.responses import FileResponse, Response
+        from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+        from fastapi.responses import FileResponse, Response, StreamingResponse
         from fastapi.staticfiles import StaticFiles
     except ImportError as exc:
         raise RuntimeError(
@@ -105,6 +107,37 @@ def create_app(
                 media_type="image/jpeg",
             )
         return Response(get_session(robot).camera_jpeg(name), media_type="image/jpeg")
+
+    def camera_frame(robot: str | None, name: str) -> bytes:
+        if shared:
+            return host.camera_jpeg(robot or names[0], name)
+        return get_session(robot).camera_jpeg(name)
+
+    @app.get("/api/camera/{name}/stream")
+    async def camera_stream(name: str, robot: str | None = None) -> StreamingResponse:
+        try:
+            camera_frame(robot, name)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        async def frames():
+            while True:
+                try:
+                    frame = camera_frame(robot, name)
+                except ValueError:
+                    return
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n"
+                    b"Content-Length: " + str(len(frame)).encode() + b"\r\n\r\n"
+                    + frame
+                    + b"\r\n"
+                )
+                await asyncio.sleep(_CAMERA_STREAM_PERIOD)
+
+        return StreamingResponse(
+            frames(), media_type="multipart/x-mixed-replace; boundary=frame"
+        )
 
     @app.get("/")
     async def index():

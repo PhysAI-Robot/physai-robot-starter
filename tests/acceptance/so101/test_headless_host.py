@@ -93,6 +93,16 @@ def test_headless_host_serves_the_web_viewer_without_a_desktop_window():
                 status, content_type, body = get(f"{base}/api/camera/{camera}.jpg")
                 assert status == 200 and content_type == "image/jpeg"
                 assert body[:2] == b"\xff\xd8", f"{camera} is not a JPEG"
+
+            with urllib.request.urlopen(
+                f"{base}/api/camera/front/stream", timeout=5.0
+            ) as response:
+                assert response.status == 200
+                assert "multipart/x-mixed-replace" in response.headers.get(
+                    "content-type", ""
+                )
+                chunk = response.read(2048)
+                assert b"\xff\xd8" in chunk, "stream did not contain a JPEG frame"
         finally:
             if sys.platform == "win32":
                 # Windows cannot deliver SIGINT to a child that is not attached

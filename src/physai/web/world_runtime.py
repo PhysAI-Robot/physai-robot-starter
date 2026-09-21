@@ -262,8 +262,10 @@ class SharedWorldHost:
 
     def stop(self) -> None:
         self._stop.set()
-        if self._thread is not None:
-            self._thread.join(timeout=2.0)
+        if self._thread is None:
+            self.world.close()
+            return
+        self._thread.join(timeout=2.0)
         if self._camera_thread is not None:
             self._camera_thread.join(timeout=2.0)
         self.world.close()

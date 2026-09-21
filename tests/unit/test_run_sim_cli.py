@@ -16,11 +16,46 @@ def run_main(monkeypatch, capsys, *argv: str) -> tuple[int, str]:
     return exit_info.value.code, capsys.readouterr().err
 
 
-def test_serve_alone_names_both_ways_to_host(monkeypatch, capsys):
-    code, err = run_main(monkeypatch, capsys, "--serve")
+def test_serve_alone_runs_headless_without_desktop_window(monkeypatch, capsys):
+    monkeypatch.syspath_prepend(str(SCRIPTS))
+    import run_sim
 
-    assert code == 2
-    assert "--serve requires --viewer or --headless" in err
+    captured = {}
+
+    def fake_run_viewer(args, task_config, seed, max_steps, domain_randomization):
+        del task_config, seed, max_steps, domain_randomization
+        captured["viewer"] = args.viewer
+        captured["serve"] = args.serve
+        captured["headless"] = args.headless
+        return 0
+
+    monkeypatch.setattr(run_sim, "run_viewer", fake_run_viewer)
+    monkeypatch.setattr(sys, "argv", ["run_sim.py", "--serve"])
+
+    code = run_sim.main()
+
+    assert code == 0
+    assert captured == {"viewer": False, "serve": True, "headless": False}
+
+
+def test_headless_and_bare_serve_are_equivalent(monkeypatch, capsys):
+    monkeypatch.syspath_prepend(str(SCRIPTS))
+    import run_sim
+
+    captured = {}
+
+    def fake_run_viewer(args, task_config, seed, max_steps, domain_randomization):
+        del task_config, seed, max_steps, domain_randomization
+        captured["viewer"] = args.viewer
+        return 0
+
+    monkeypatch.setattr(run_sim, "run_viewer", fake_run_viewer)
+    monkeypatch.setattr(sys, "argv", ["run_sim.py", "--headless", "--serve"])
+
+    code = run_sim.main()
+
+    assert code == 0
+    assert captured == {"viewer": False}
 
 
 def test_headless_requires_serve(monkeypatch, capsys):

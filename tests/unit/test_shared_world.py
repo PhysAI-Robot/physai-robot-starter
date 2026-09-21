@@ -123,6 +123,21 @@ def test_shared_manifest_keeps_turtlebot_collision_enabled_meshes_visible():
     assert all(item["visual"] for item in meshes)
 
 
+def test_stop_is_safe_when_never_started():
+    world = make_world()
+    configs = (
+        RobotInstanceConfig("arm_1", SO101_MODEL, "so101", position=(0.3, 0.0, 0.0)),
+        RobotInstanceConfig(
+            "base_1", TURTLEBOT_MODEL, "turtlebot4", position=(-0.3, 0.0, 0.1)
+        ),
+    )
+    host = SharedWorldHost(world, configs)
+
+    host.stop()
+
+    assert host._thread is None
+
+
 def test_shared_so101_instance_exposes_front_and_wrist_cameras():
     world = SharedWorld((RobotInstanceConfig("arm_1", SO101_MODEL, "so101"),))
     camera_names = {
