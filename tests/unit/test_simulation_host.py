@@ -1,3 +1,5 @@
+import threading
+
 import numpy as np
 import pytest
 
@@ -73,3 +75,60 @@ def test_control_lease_expiry_discards_queued_action():
     host._control_deadline = 0.0
 
     assert host._latest_command() is None
+
+
+class ThreadRecordingRobot(FakeRobotPort):
+    def __init__(self, spec: RobotSpec) -> None:
+        super().__init__(spec)
+        self.close_thread: int | None = None
+
+    def close(self) -> None:
+        self.close_thread = threading.get_ident()
+        super().close()
+
+
+def test_stop_closes_the_robot_on_the_physics_thread():
+    """The renderer belongs to the thread that renders with it.
+
+    Freeing it from the thread that called stop() crashed the process with an
+    access violation on Windows, so the physics thread must close the robot.
+    """
+    spec = RobotSpec(
+        name="test", kind="test", joint_names=("joint",), action_joint_names=("joint",)
+    )
+    robot = ThreadRecordingRobot(spec)
+    host = NoPublishHost(robot, robot_name="test")
+
+    host.start()
+    physics_thread = host._thread
+    host.stop()
+    physics_thread.join(timeout=5.0)
+
+    assert robot.closed
+    assert robot.close_thread == physics_thread.ident
+    assert robot.close_thread != threading.get_ident()
+
+
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
+def test_physics_thread_closes_the_robot_even_when_the_loop_raises():
+    spec = RobotSpec(
+        name="test", kind="test", joint_names=("joint",), action_joint_names=("joint",)
+    )
+    robot = ThreadRecordingRobot(spec)  # no .model, so the default publish raises
+    host = SimulationHost(robot, robot_name="test")
+
+    host.start()
+    host._thread.join(timeout=5.0)
+
+    assert robot.closed
+
+
+def test_stop_closes_the_robot_directly_when_never_started():
+    spec = RobotSpec(name="test", kind="test", joint_names=("joint",))
+    robot = ThreadRecordingRobot(spec)
+    host = SimulationHost(robot, robot_name="test")
+
+    host.stop()
+
+    assert robot.closed
+    assert robot.close_thread == threading.get_ident()

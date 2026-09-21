@@ -169,6 +169,15 @@ class SimulationHost:
             pass
 
     def _run(self) -> None:
+        try:
+            self._loop()
+        finally:
+            # Camera rendering happens on this thread, so the renderer and its
+            # OpenGL context belong to it. Freeing them from the thread that
+            # called stop() is an access violation on Windows.
+            self.robot.close()
+
+    def _loop(self) -> None:
         self.reset()
         hold_action = self._hold_action()
         control_hz = float(

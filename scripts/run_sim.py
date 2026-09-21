@@ -8,11 +8,14 @@ python scripts/run_sim.py --policy constant    # baseline: do nothing
 python scripts/run_sim.py --policy lerobot --checkpoint outputs/act_ckpt
 python scripts/run_sim.py --viewer             # single-window scene + cameras UI
 python scripts/run_sim.py --viewer --serve     # GUI plus shared web host
+python scripts/run_sim.py --headless --serve   # web host only, no desktop window
 """
 
 from __future__ import annotations
 
 import argparse
+import signal
+import tempfile
 import threading
 from dataclasses import replace
 from pathlib import Path
@@ -337,6 +340,12 @@ def main() -> int:
         action="store_true",
         help="serve the same authoritative simulation to the web viewer",
     )
+    ap.add_argument(
+        "--headless",
+        action="store_true",
+        help="with --serve, run the authoritative host without a desktop window, "
+        "for servers, containers, and cloud workspaces with no display",
+    )
     ap.add_argument("--host", default="127.0.0.1", help="web host bind address")
     ap.add_argument("--port", type=int, default=8000, help="web host port")
     ap.add_argument(
@@ -346,6 +355,12 @@ def main() -> int:
     )
     args = ap.parse_args()
 
+    if args.headless and args.viewer:
+        ap.error("--headless and --viewer are mutually exclusive")
+    if args.headless and not args.serve:
+        ap.error("--headless requires --serve")
+    if args.serve and not (args.viewer or args.headless):
+        ap.error("--serve requires --viewer or --headless")
     if args.world and not (args.viewer or args.serve):
         ap.error("--world requires --viewer or --serve")
     if args.world and (args.config or args.robot):
@@ -376,6 +391,7 @@ def main() -> int:
         else (task_config.env.max_steps if task_config else 600)
     )
 
+    if args.viewer or args.headless:
     if args.viewer or args.serve:
         if args.camera_view and args.robot == "turtlebot4":
             ap.error("--camera-view currently supports the SO-101 viewer only")
@@ -454,6 +470,26 @@ def main() -> int:
     env.close()
     print(f"\n{successes}/{args.episodes} successful")
     return 0
+
+
+def wait_for_shutdown() -> None:
+    """Block the main thread until Ctrl+C or SIGTERM.
+
+    Containers and process managers stop a service with SIGTERM, so it is
+    handled like Ctrl+C: the caller's ``finally`` block then stops the web
+    server and the physics host in order instead of being killed mid-render.
+    The wait is polled with a timeout because an untimed ``Event.wait`` is not
+    reliably interrupted by signals on Windows.
+    """
+    stop = threading.Event()
+
+    def request_stop(signum, frame) -> None:
+        stop.set()
+
+    signal.signal(signal.SIGINT, request_stop)
+    signal.signal(signal.SIGTERM, request_stop)
+    while not stop.wait(0.5):
+        pass
 
 
 def run_viewer(
@@ -550,6 +586,15 @@ def run_viewer(
 
     app = None
     try:
+        if args.headless:
+            print(f"Headless host running. Web viewer: http://{args.host}:{args.port}/")
+            print("Press Ctrl+C to stop.")
+            wait_for_shutdown()
+        if args.serve:
+            print(f"Web viewer: http://{args.host}:{args.port}/")
+            app = SingleWindowViewer(host, camera_names)
+            app.tick()
+            app.root.mainloop()
         if args.viewer:
             print("Custom viewer open. Close the window to exit.")
         if args.serve:
