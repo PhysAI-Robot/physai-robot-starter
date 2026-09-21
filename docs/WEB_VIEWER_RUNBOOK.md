@@ -153,6 +153,12 @@ arm, and gripper keys mirror the keyboard controls, illuminate while held, and
 can be pressed with a mouse or touchscreen. Keys unsupported by the active
 robot are hidden.
 
+## Appearance
+
+The browser viewer follows the OS `prefers-color-scheme` by default (light or
+dark) and can be overridden per browser with the header's theme button; the
+choice persists in that browser's `localStorage`.
+
 ## Control Ownership
 
 State is readable by every connected viewer, but manual control uses a short
@@ -179,10 +185,18 @@ keep robot and task-object colors readable.
 SO-101 `front` and `wrist` camera frames are rendered offscreen and cached by
 the host, including in shared-world mode. In viewer/serve modes, a dedicated
 camera worker copies the latest MuJoCo state and renders the feeds at about
-5 FPS, so camera capture does not pause the 30 Hz physics loop. Camera
-requests return the latest cached JPEG instead of stepping or rendering from
-an HTTP worker. Available camera feeds are shown in the control panel so front
-and wrist views remain legible.
+5 FPS, so camera capture does not pause the 30 Hz physics loop. HTTP camera
+requests only read the latest cached JPEG; they never step or render from the
+request handler itself.
+
+The browser consumes camera feeds through `/api/camera/<name>/stream`, a
+`multipart/x-mixed-replace` MJPEG stream that a plain `<img>` decodes natively
+as a continuous feed. This replaced an earlier client that re-fetched
+`/api/camera/<name>.jpg` on a timer; the single-shot JPEG endpoint still exists
+for one-off snapshots (for example scripts or debugging), but the browser
+viewer no longer polls it. Available camera feeds are shown in the control
+panel, stacked vertically so each feed gets the sidebar's full width, and
+front/wrist views remain legible.
 
 ## API Surface
 
@@ -191,7 +205,9 @@ and wrist views remain legible.
 - `/api/scene`: static geometry manifest
 - `/api/state`: latest transform snapshot
 - `/api/mesh/<id>`: compiled mesh binary payload
-- `/api/camera/<name>.jpg`: cached camera JPEG
+- `/api/camera/<name>.jpg`: cached camera JPEG (single snapshot)
+- `/api/camera/<name>/stream`: cached camera frames as a continuous MJPEG
+  (`multipart/x-mixed-replace`) stream; 404 if the camera name is unknown
 - `/ws`: state stream and command channel
 
 The WebSocket accepts `select_robot`, `command`, `reset`, and `pause` messages.
@@ -205,6 +221,13 @@ Press `Ctrl+C` in the `run_sim.py` terminal to stop the desktop viewer, host,
 and web server together. If the page stays on `connecting`, check the host
 terminal and browser console. Hard-refresh after changing static viewer code
 with `Ctrl+Shift+R`.
+
+The browser client lives under `src/physai/web/static/`: `css/tokens.css`
+(design tokens/theme) and `css/viewer.css` (layout/components), plus plain ES
+modules under `js/` — `net.js` (WebSocket), `scene.js` (Three.js rendering),
+`controls.js` (keyboard/control-pad jog), `ui.js` (status/telemetry/toast/
+camera-panel DOM), and `main.js` (entry point). There is no build step; edit a
+module and reload the page.
 
 Three.js is loaded from a CDN, so the browser needs network access on the first
 page load. Gamepad input, detections, labels, masks, and annotation overlays

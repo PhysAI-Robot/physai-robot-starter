@@ -4,29 +4,80 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>PhysAI Viewer</title>
-    <link rel="stylesheet" href="/static/viewer.css" />
+    <link rel="stylesheet" href="/static/css/tokens.css" />
+    <link rel="stylesheet" href="/static/css/viewer.css" />
+    <script>
+      // Must run before first paint to avoid a flash of the wrong theme;
+      // a separate module file would load too late.
+      try {
+        const saved = localStorage.getItem("physai-theme");
+        if (saved === "light" || saved === "dark") {
+          document.documentElement.dataset.theme = saved;
+        }
+      } catch (_error) {
+        // Storage may be unavailable (private browsing); fall back to OS preference.
+      }
+    </script>
     <script type="importmap">
       {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.178.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/"}}
     </script>
   </head>
   <body>
-    <header><strong>PHYS<span>AI</span></strong><label>Robot <select id="robot-select" aria-label="Active robot"></select></label><span id="status">connecting</span></header>
-    <main><section id="viewport"><div class="control-pad" aria-label="Robot controls">
-      <div class="control-cluster movement-keys" aria-label="Movement">
-        <button class="control-key key-w" data-control-key="w" aria-label="Move forward">W</button>
-        <button class="control-key key-a" data-control-key="a" aria-label="Turn left">A</button>
-        <button class="control-key key-s" data-control-key="s" aria-label="Move backward">S</button>
-        <button class="control-key key-d" data-control-key="d" aria-label="Turn right">D</button>
-      </div>
-      <div class="control-cluster secondary-keys" aria-label="Arm controls">
-        <button class="control-key" data-control-key="q" aria-label="Move up">Q</button>
-        <button class="control-key" data-control-key="e" aria-label="Move down">E</button>
-        <button class="control-key" data-control-key="r" aria-label="Tilt grip right">R</button>
-        <button class="control-key" data-control-key="f" aria-label="Tilt grip left">F</button>
-        <button class="control-key" data-control-key="o" aria-label="Open gripper">O</button>
-        <button class="control-key" data-control-key="c" aria-label="Close gripper">C</button>
-      </div>
-    </div></section><aside><h1>Simulation</h1><p id="telemetry">waiting for state</p><button id="reset">Reset</button><button id="pause">Pause</button><p class="hint">Drag to orbit · right-drag to pan · wheel to zoom.</p><div class="camera-grid"><figure><figcaption>front</figcaption><img data-camera="front" alt="Front camera feed" /></figure><figure><figcaption>wrist</figcaption><img data-camera="wrist" alt="Wrist camera feed" /></figure></div><p id="control-hint" class="hint"></p></aside></main>
-    <script type="module" src="/static/viewer.js"></script>
+    <header>
+      <strong>PHYS<span>AI</span></strong>
+      <label>Robot <select id="robot-select" aria-label="Active robot"></select></label>
+      <span class="status"><span id="status-dot" class="status-dot" data-state="connecting"></span><span id="status" aria-live="polite">connecting</span></span>
+      <button id="theme-toggle" type="button" aria-label="Toggle color theme" aria-pressed="false">
+        <svg class="icon-sun" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden>
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden>
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+      </button>
+    </header>
+    <main>
+      <section id="viewport">
+        <div id="scene-loading" class="scene-loading"><span class="spinner"></span>Loading scene…</div>
+        <div class="control-pad" aria-label="Robot controls">
+          <div class="control-cluster movement-keys" aria-label="Movement">
+            <button class="control-key key-w" data-control-key="w" aria-label="Move forward">W</button>
+            <button class="control-key key-a" data-control-key="a" aria-label="Turn left">A</button>
+            <button class="control-key key-s" data-control-key="s" aria-label="Move backward">S</button>
+            <button class="control-key key-d" data-control-key="d" aria-label="Turn right">D</button>
+          </div>
+          <div class="control-cluster secondary-keys" aria-label="Arm controls">
+            <button class="control-key" data-control-key="q" aria-label="Move up">Q</button>
+            <button class="control-key" data-control-key="e" aria-label="Move down">E</button>
+            <button class="control-key" data-control-key="r" aria-label="Tilt grip right">R</button>
+            <button class="control-key" data-control-key="f" aria-label="Tilt grip left">F</button>
+            <button class="control-key" data-control-key="o" aria-label="Open gripper">O</button>
+            <button class="control-key" data-control-key="c" aria-label="Close gripper">C</button>
+          </div>
+        </div>
+      </section>
+      <aside>
+        <h1>Simulation</h1>
+        <p id="telemetry" aria-live="polite">waiting for state</p>
+        <button id="reset">Reset</button>
+        <button id="pause">Pause</button>
+        <p class="hint">Drag to orbit · right-drag to pan · wheel to zoom.</p>
+        <div class="camera-grid">
+          <figure><figcaption>front</figcaption><img data-camera="front" alt="Front camera feed" /></figure>
+          <figure><figcaption>wrist</figcaption><img data-camera="wrist" alt="Wrist camera feed" /></figure>
+        </div>
+        <p id="control-hint" class="hint"></p>
+      </aside>
+    </main>
+    <div id="toast-region" class="toast-region" role="log" aria-live="polite"></div>
+    <script type="module" src="/static/js/main.js"></script>
   </body>
 </html>
