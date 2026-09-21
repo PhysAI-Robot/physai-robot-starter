@@ -171,7 +171,7 @@ class SO101VisualServoPolicy(Policy):
         self.max_speed = float(max_speed)
         self.pixel_tolerance = float(pixel_tolerance)
         self.ee_tolerance = float(ee_tolerance)
-        control_dt = dt or (1.0 / float(getattr(env.cfg, "control_hz", 25.0)))
+        control_dt = dt or (1.0 / float(getattr(env.cfg, "control_hz", 30.0)))
         self._resolver = TwistToJointResolver(
             env.kin, data=env.data, dt=control_dt, max_joint_step=0.08
         )

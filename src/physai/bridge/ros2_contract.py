@@ -181,44 +181,13 @@ POLICY_ENDPOINTS: tuple[Endpoint, ...] = (
 )
 
 #: Topics fed from outside the robot stack (an operator UI, a bag, a test
-#: script). Nothing in this graph publishes them, and that is correct.
-EXTERNAL_INPUTS: frozenset[str] = frozenset({"/cmd_vel", "/task/instruction"})
-
-#: Node that runs the VLM planner. Slow, and allowed to be.
-PLANNER_ENDPOINTS: tuple[Endpoint, ...] = (
-    Endpoint(
-        "/camera/front/image_raw",
-        "sensor_msgs/msg/Image",
-        Direction.SUBSCRIBE,
-        1.0,
-        "vlm_planner",
-        "sampled, not streamed",
-    ),
-    Endpoint(
-        "/task/instruction",
-        "std_msgs/msg/String",
-        Direction.SUBSCRIBE,
-        0.1,
-        "vlm_planner",
-    ),
-    Endpoint(
-        "/task/subgoal",
-        "geometry_msgs/msg/PoseStamped",
-        Direction.PUBLISH,
-        0.2,
-        "vlm_planner",
-    ),
-    Endpoint(
-        "/task/plan",
-        "std_msgs/msg/String",
-        Direction.PUBLISH,
-        0.2,
-        "vlm_planner",
-        "JSON plan, for logging/debug",
-    ),
+#: script, or an in-process planner). Nothing in this graph publishes them,
+#: and that is correct.
+EXTERNAL_INPUTS: frozenset[str] = frozenset(
+    {"/cmd_vel", "/task/instruction", "/task/subgoal"}
 )
 
-ALL_ENDPOINTS = ROBOT_ENDPOINTS + POLICY_ENDPOINTS + PLANNER_ENDPOINTS
+ALL_ENDPOINTS = ROBOT_ENDPOINTS + POLICY_ENDPOINTS
 
 #: Frames, in the order they should appear in the TF tree.
 TF_FRAMES: tuple[str, ...] = (
@@ -241,7 +210,7 @@ RECOMMENDED_DISTRO = "jazzy"
 
 def describe() -> str:
     lines = [f"ROS2 contract (target distro: {RECOMMENDED_DISTRO})", ""]
-    for owner in ("so101_driver", "vla_policy", "vlm_planner"):
+    for owner in ("so101_driver", "vla_policy"):
         lines.append(f"[{owner}]")
         for e in ALL_ENDPOINTS:
             if e.owner != owner:

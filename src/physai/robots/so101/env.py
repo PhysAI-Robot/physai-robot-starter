@@ -22,7 +22,7 @@ from ...sim.domain_randomization import (
     DomainRandomizationEngine,
     RandomizationMetadata,
 )
-from ...sim.scene import SceneConfig, build_model
+from ...sim.scenes import ManipulationSceneConfig, PickPlaceMinimalSceneConfig
 from .contracts import (
     ALL_JOINT_NAMES,
     ARM_JOINT_NAMES,
@@ -39,8 +39,10 @@ HOME_QPOS = np.array([0.0, -1.05, 1.25, 0.75, 0.0], dtype=np.float64)
 class EnvConfig:
     """SO-101-specific simulation and observation settings."""
 
-    scene: SceneConfig = field(default_factory=lambda: SceneConfig(**scene_defaults()))
-    control_hz: float = 25.0
+    scene: ManipulationSceneConfig = field(
+        default_factory=lambda: PickPlaceMinimalSceneConfig(**scene_defaults())
+    )
+    control_hz: float = 30.0
     render: bool = True
     cameras: tuple[str, ...] = ("front", "wrist")
     camera_stride: int = 1
@@ -61,7 +63,15 @@ class EnvConfig:
     # its full rating against a rigid object, which loads the pad-cube contact
     # to 20-50x the cube's weight and makes it chatter and pop loose mid-carry.
     # Capping it here emulates a current-limited real servo and keeps the
-    # squeeze in the contact solver's stable range.
+    # squeeze in the contact solver's stable range. Needed by visual_servo,
+    # whose grip target (0.19) is shallow enough that uncapped force can
+    # destabilize the contact -- test_visual_servo_pick_place_settles_from_
+    # multiple_seeds fails without this cap. The scripted expert's much
+    # deeper default squeeze (ExpertConfig.gripper_grip=0.06) already keeps
+    # contact force low without help (~0.1-1N measured via mj_contactForce)
+    # and does slightly better with this cap disabled (96.0% vs 94.0% over a
+    # fair 300-seed sorting comparison) -- but that is a per-caller tradeoff,
+    # not a reason to change the shared default other callers rely on.
     gripper_force_limit: float = 0.3
 
 
@@ -81,7 +91,7 @@ class SO101Env(MuJoCoSimulationCore):
                 self.cfg,
                 scene=replace(self.cfg.scene, **missing),
             )
-        self.model, self.spec = build_model(self.cfg.scene)
+        self.model, self.spec = self.cfg.scene.build_model()
         self.randomization = DomainRandomizationEngine(
             self.model, self.cfg.domain_randomization
         )
@@ -170,7 +180,12 @@ class SO101Env(MuJoCoSimulationCore):
                 name: tuple(float(value) for value in limit)
                 for name, limit in zip(ARM_JOINT_NAMES, self.arm_limits)
             },
-            max_joint_delta={name: 0.5 for name in ARM_JOINT_NAMES},
+            # JointRateLimiter caps command-to-command steps at 0.5 rad, but
+            # this gate compares a command against the *measured* position,
+            # which trails it by the servo's tracking error. Equal values would
+            # reject a command the limiter considers exactly legal, so leave
+            # headroom: the gate still catches IK teleports, not normal lag.
+            max_joint_delta={name: 0.75 for name in ARM_JOINT_NAMES},
             metadata={
                 "control_hz": self.cfg.control_hz,
                 "action_schema": "so101.joint_position.v1",
@@ -343,6 +358,7 @@ class SO101Env(MuJoCoSimulationCore):
         images: dict[str, ImageFrame] = {}
         if (
             hasattr(self, "_camera_width")
+            and self.cfg.camera_stride > 0
             and self.step_count % self.cfg.camera_stride == 0
         ):
             for camera in self.cfg.cameras:
@@ -368,6 +384,12 @@ class SO101Env(MuJoCoSimulationCore):
             body_id, _ = self.sorting_cubes[self.target_color]
             return self.data.xpos[body_id].copy()
         return self.data.xpos[self.cube_bid].copy()
+
+    @property
+    def cube_geom_id(self) -> int:
+        """Collision geom of the cube the task is currently asking for."""
+        name = f"cube_{self.target_color}" if self.sorting_cubes else "cube"
+        return mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, f"{name}_geom")
 
     @property
     def cube_positions(self) -> dict[str, np.ndarray]:

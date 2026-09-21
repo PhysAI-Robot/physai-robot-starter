@@ -19,7 +19,7 @@ from physai.data import EpisodeRecorder
 from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
 from physai.robots.so101.expert import SO101PickPlaceExpert
-from physai.sim import SceneConfig
+from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
 from physai.tasks import TaskRuntime, create_task
 
 
@@ -59,15 +59,13 @@ def main() -> int:
         "max_steps": args.max_steps,
         "render": not args.no_images,
     }
-    if args.sorting:
-        # Task selection moved onto TaskRuntime below; EnvConfig no longer
-        # carries a `task` field, so setting one here raised a TypeError and
-        # made --sorting unusable.
-        scene_kwargs["num_cubes"] = 3
+    scene_type = (
+        SortingMinimalSceneConfig if args.sorting else PickPlaceMinimalSceneConfig
+    )
     robot = create_robot(
         args.robot,
         config=EnvConfig(
-            scene=SceneConfig(**scene_kwargs),
+            scene=scene_type(**scene_kwargs),
             **env_kwargs,
         ),
     )

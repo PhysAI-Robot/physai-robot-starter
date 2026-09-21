@@ -15,7 +15,7 @@ from physai.config import DomainRandomizationConfig
 from physai.policy import create_policy
 from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
-from physai.sim import SceneConfig
+from physai.sim import PickPlaceMinimalSceneConfig
 from physai.tasks import TaskRuntime, create_task
 
 
@@ -29,7 +29,7 @@ def evaluate_mode(args: argparse.Namespace, randomized: bool) -> dict:
     robot = create_robot(
         "so101",
         config=EnvConfig(
-            scene=SceneConfig(
+            scene=PickPlaceMinimalSceneConfig(
                 camera_width=128,
                 camera_height=128,
                 clutter_count=args.clutter_count,

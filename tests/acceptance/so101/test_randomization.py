@@ -7,14 +7,16 @@ pytestmark = [pytest.mark.acceptance, pytest.mark.assets, pytest.mark.slow]
 
 @requires_assets
 def test_domain_randomization_is_seeded_bounded_and_restores_baseline():
+    from physai.robots.registry import scene_defaults
     from physai.sim import (
         DomainRandomizationConfig,
         DomainRandomizationEngine,
-        SceneConfig,
-        build_model,
+        PickPlaceMinimalSceneConfig,
     )
 
-    model, _ = build_model(SceneConfig(clutter_count=2))
+    model, _ = PickPlaceMinimalSceneConfig(
+        clutter_count=2, **scene_defaults("so101")
+    ).build_model()
     baseline_friction = model.geom_friction.copy()
     baseline_mass = model.body_mass.copy()
     baseline_lighting = model.light_diffuse.copy()

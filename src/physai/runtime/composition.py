@@ -7,7 +7,6 @@ from typing import Any
 
 from ..contracts import Action, Observation
 from ..control.safety import SafetyController
-from ..planner.base import Planner
 from ..policy.base import Policy
 from ..policy.registry import create_policy
 from ..robots.base import RobotPort
@@ -24,7 +23,6 @@ class RuntimeComposition:
     robot: RobotPort
     task: Task | None = None
     policy: Policy | None = None
-    planner: Planner | None = None
     safety: SafetyController | None = None
     scene_name: str | None = None
     _observation: Observation | None = None
@@ -42,8 +40,6 @@ class RuntimeComposition:
     def step(self, action: Action) -> tuple[Observation, float, bool, bool, dict]:
         if self._observation is None:
             raise RuntimeError("call reset() before step()")
-        if self.safety is not None:
-            action = self.safety.validate(self._observation, action)
         result = self.robot.step(action)
         self._observation = result[0]
         return result
@@ -67,7 +63,6 @@ def create_runtime(
     hardware: RobotPort | None = None,
     policy_name: str | None = None,
     policy: Policy | None = None,
-    planner: Planner | None = None,
     safety: SafetyController | None = None,
     **policy_kwargs: Any,
 ) -> RuntimeComposition:
@@ -160,12 +155,16 @@ def create_runtime(
         if policy is None and policy_name is not None:
             policy = create_policy(policy_name, env=runtime_robot, **policy_kwargs)
 
-        safety = safety or SafetyController(robot.robot_spec)
+        # The adapter owns the gate so every path shares it; an explicit
+        # controller replaces the default the adapter built for itself.
+        if safety is not None:
+            robot.safety = safety
+        else:
+            safety = getattr(robot, "safety", None)
         return RuntimeComposition(
             robot=runtime_robot,
             task=task,
             policy=policy,
-            planner=planner,
             safety=safety,
             scene_name=selected_scene_name,
         )

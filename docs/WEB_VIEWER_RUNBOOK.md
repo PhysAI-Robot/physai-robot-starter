@@ -5,14 +5,34 @@ owns the robot, task configuration, seed, policy, MuJoCo model, physics clock,
 and command arbitration. The desktop viewer and browser render the same state
 and send control intents to that one host.
 
-## Start One Authoritative Simulation
-
-Start the configured simulation with the desktop viewer and web server:
+Install the web and training dependencies once from the project root:
 
 ```bash
-MUJOCO_GL=egl uv run --extra web python scripts/run_sim.py \
+uv sync --extra web --extra training
+```
+
+After that setup, the commands below use plain `uv run`.
+
+## Start One Authoritative Simulation
+
+Start an idle SO-101 simulation with the browser server. With no explicit
+`--policy`, the host holds its current pose and waits for browser jog commands;
+it does not start pick-and-place. The desktop viewer is optional; add
+`--viewer` when you want both clients attached to the same host:
+
+```bash
+MUJOCO_GL=egl uv run python scripts/run_sim.py \
+  --robot so101 \
+  --serve \
+  --seed 0
+```
+
+To run the scripted pick-and-place policy instead, make it explicit:
+
+```bash
+MUJOCO_GL=egl uv run python scripts/run_sim.py \
   --config configs/tasks/so101/pick_place.yaml \
-  --viewer \
+  --policy scripted \
   --serve \
   --seed 0
 ```
@@ -22,14 +42,14 @@ The desktop GUI and web server now use the same MuJoCo engine. Open
 open it:
 
 ```bash
-uv run --extra web python scripts/run_web.py \
+uv run python scripts/run_web.py \
   --connect http://127.0.0.1:8000
 ```
 
 Use another bind address or port on the host when needed:
 
 ```bash
-MUJOCO_GL=egl uv run --extra web python scripts/run_sim.py \
+MUJOCO_GL=egl uv run python scripts/run_sim.py \
   --config configs/tasks/so101/pick_place.yaml \
   --viewer --serve --host 0.0.0.0 --port 8004
 ```
@@ -37,7 +57,24 @@ MUJOCO_GL=egl uv run --extra web python scripts/run_sim.py \
 The `--robot`, `--config`, `--seed`, and `--policy` options belong to the
 simulation host. `run_web.py` does not select a robot or create a simulation.
 For interactive viewer sessions, the host reuses the supplied `--seed` on each
-automatic reset so the scripted task returns to the same reproducible scene.
+automatic reset. A policy is reset only when one was explicitly supplied.
+
+### Shared-world mode
+
+To place multiple heterogeneous robot instances in one MuJoCo scene and clock,
+use the world manifest:
+
+```bash
+MUJOCO_GL=egl uv run python scripts/run_sim.py \
+  --world configs/worlds/heterogeneous.yaml \
+  --serve
+```
+
+The manifest assigns each instance an ID, robot adapter, model path, and world
+transform. It uses a 30 Hz control rate and starts idle. The browser renders
+the complete scene. Selecting `arm_1` or `base_1` changes only which instance
+receives keyboard commands; it does not start another simulation or remove the
+other robot. Reset and pause affect the whole world.
 
 ## Run Without A Desktop Window
 
@@ -107,7 +144,9 @@ keyboard mapping:
 
 The browser sends actions over WebSocket. It never calls MuJoCo directly. The
 host validates each action against the registered robot capability contract
-and applies it on the physics tick.
+and applies it on the 30 Hz physics tick. When a policy is configured, manual
+control temporarily owns the selected robot and the host returns to its hold
+action or configured policy after the control lease expires.
 
 The large scene viewport also includes an on-screen control pad. Its movement,
 arm, and gripper keys mirror the keyboard controls, illuminate while held, and
@@ -137,10 +176,13 @@ compiled geometry contract. The browser viewer presents that scene with a
 horizontal studio floor, a neutral light background, and lighting tuned to
 keep robot and task-object colors readable.
 
-SO-101 camera frames are rendered offscreen and cached by the host. Camera
+SO-101 `front` and `wrist` camera frames are rendered offscreen and cached by
+the host, including in shared-world mode. In viewer/serve modes, a dedicated
+camera worker copies the latest MuJoCo state and renders the feeds at about
+5 FPS, so camera capture does not pause the 30 Hz physics loop. Camera
 requests return the latest cached JPEG instead of stepping or rendering from
-an HTTP worker. Available camera feeds are shown in a full-width vertical
-stack in the control panel so front and wrist views remain legible.
+an HTTP worker. Available camera feeds are shown in the control panel so front
+and wrist views remain legible.
 
 ## API Surface
 
@@ -153,8 +195,9 @@ stack in the control panel so front and wrist views remain legible.
 - `/ws`: state stream and command channel
 
 The WebSocket accepts `select_robot`, `command`, `reset`, and `pause` messages.
-The current host runs one authoritative robot session; the robot identity is
-reported by `/api/robots` and is not created by the web client.
+In shared-world mode, `/api/robots` reports instance IDs and their capability
+contracts, while `/api/scene` and `/api/state` always describe the whole
+world. The web client selects an existing instance and cannot create a robot.
 
 ## Troubleshooting
 

@@ -21,18 +21,15 @@ class SortingMinimalSceneConfig(ManipulationSceneConfig):
         (0.9, 0.8, 0.15, 1.0),
     )
 
-
-def build_spec(cfg: SortingMinimalSceneConfig | None = None) -> mujoco.MjSpec:
-    cfg = cfg or SortingMinimalSceneConfig()
-    if len(cfg.cube_names) != len(cfg.cube_rgba):
-        raise ValueError("sorting cube names and colors must have the same length")
-    spec = build_manipulation_spec(cfg)
-    for index, (name, rgba) in enumerate(zip(cfg.cube_names, cfg.cube_rgba)):
-        position = (cfg.cube_pos[0], cfg.cube_pos[1] + 0.06 * index, cfg.cube_pos[2])
-        add_cube(spec, cfg, name, position, rgba, cfg.cube_half, cfg.cube_mass)
-    return spec
-
-
-def build_model(cfg: SortingMinimalSceneConfig | None = None):
-    spec = build_spec(cfg)
-    return spec.compile(), spec
+    def build_spec(self) -> mujoco.MjSpec:
+        if len(self.cube_names) != len(self.cube_rgba):
+            raise ValueError("sorting cube names and colors must have the same length")
+        spec = build_manipulation_spec(self)
+        for index, (name, rgba) in enumerate(zip(self.cube_names, self.cube_rgba)):
+            position = (
+                self.cube_pos[0],
+                self.cube_pos[1] + 0.06 * index,
+                self.cube_pos[2],
+            )
+            add_cube(spec, self, name, position, rgba, self.cube_half, self.cube_mass)
+        return spec

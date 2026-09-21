@@ -8,12 +8,12 @@ pytestmark = [pytest.mark.acceptance, pytest.mark.assets, pytest.mark.slow]
 def test_visual_servo_pick_place_settles_from_multiple_seeds():
     from physai.robots.so101 import EnvConfig, SO101Env
     from physai.robots.so101.visual_servo import SO101VisualServoPolicy
-    from physai.sim import SceneConfig
+    from physai.sim import PickPlaceMinimalSceneConfig
     from physai.tasks import TaskRuntime, create_task
 
     robot = SO101Env(
         EnvConfig(
-            scene=SceneConfig(camera_width=224, camera_height=224),
+            scene=PickPlaceMinimalSceneConfig(camera_width=224, camera_height=224),
             seed=0,
             render=True,
             max_steps=400,

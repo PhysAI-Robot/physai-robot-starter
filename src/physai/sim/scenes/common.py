@@ -52,10 +52,23 @@ class ManipulationSceneConfig(WorldSceneConfig):
     clutter_count: int = 0
     clutter_size: tuple[float, float, float] = (0.018, 0.018, 0.025)
 
+    def build_spec(self) -> mujoco.MjSpec:
+        """Build the MuJoCo spec for this scene, objects included."""
+        return build_manipulation_spec(self)
 
-# Compatibility name for callers of the original shared-scene API. New code
-# should choose WorldSceneConfig or ManipulationSceneConfig explicitly.
-CommonSceneConfig = ManipulationSceneConfig
+    def build_model(self) -> tuple[mujoco.MjModel, mujoco.MjSpec]:
+        spec = self.build_spec()
+        return spec.compile(), spec
+
+
+def export_xml(path: Path, cfg: ManipulationSceneConfig) -> Path:
+    """Write a scene to disk as MJCF."""
+    spec = cfg.build_spec()
+    spec.compile()
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(spec.to_xml(), encoding="utf-8")
+    return path
 
 
 def _find_body(spec: mujoco.MjSpec, name: str):
@@ -267,11 +280,6 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
             fovy=62,
         )
     return spec
-
-
-def build_common_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
-    """Compatibility alias for the original manipulation scene builder."""
-    return build_manipulation_spec(cfg)
 
 
 def add_cube(

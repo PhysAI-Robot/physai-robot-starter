@@ -151,7 +151,7 @@ def navigate_to_goal(
         collision_count = 0
         reached = False
         for step in range(1, max_steps + 1):
-            pose = env._pose_array()
+            pose = env.pose_array()
             if pursuit.reached(pose, goal):
                 reached = True
                 break
@@ -159,7 +159,7 @@ def navigate_to_goal(
                 Action(ee_twist=pursuit.command(pose, goal))
             )
             collision_count += env.non_ground_contact_count()
-        pose = env._pose_array()
+        pose = env.pose_array()
         position_error = hypot(float(pose[0]) - goal.x, float(pose[1]) - goal.y)
         heading_error = abs(_wrap_angle(float(pose[2]) - goal.yaw))
         reached = reached or pursuit.reached(pose, goal)
