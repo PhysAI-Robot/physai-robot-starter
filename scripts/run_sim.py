@@ -588,22 +588,13 @@ def run_viewer(
             print(f"Headless host running. Web viewer: http://{args.host}:{args.port}/")
             print("Press Ctrl+C to stop.")
             wait_for_shutdown()
-        if args.serve:
-            print(f"Web viewer: http://{args.host}:{args.port}/")
-            app = SingleWindowViewer(host, camera_names)
-            app.tick()
-            app.root.mainloop()
-        if args.viewer:
-            print("Custom viewer open. Close the window to exit.")
-        if args.serve:
-            print(f"Web viewer: http://{args.host}:{args.port}/")
-        if args.viewer:
-            app = SingleWindowViewer(host, camera_names)
-            app.tick()
-            app.root.mainloop()
         else:
-            while server_thread is not None and server_thread.is_alive():
-                server_thread.join(timeout=0.5)
+            print("Custom viewer open. Close the window to exit.")
+            if args.serve:
+                print(f"Web viewer: http://{args.host}:{args.port}/")
+            app = SingleWindowViewer(host, camera_names)
+            app.tick()
+            app.root.mainloop()
     except KeyboardInterrupt:
         pass
     finally:
