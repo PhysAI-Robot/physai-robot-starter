@@ -85,8 +85,14 @@ uv run python scripts/eval_policy.py \
   --max-steps 600
 ```
 
-The current baseline is `success 20/20`. This depends on the calibrated jaw
-pads and deterministic scene; it is not a hardware or randomized result.
+The current baseline is **100%** over 100 seeds (95% CI [96%, 100%], measured
+2026-09-21), matching the deterministic `visual_servo` policy. Note that a
+20-seed run could not resolve the pre-fix policy — the same configuration
+scored 45% on seeds 0-19 and 60% on seeds 100-149 — so still use at least 100
+seeds when comparing changes. The root cause and fix are recorded as the
+resolved Phase 2.0 finding in [ROADMAP.md](../ROADMAP.md). Results depend on
+the calibrated jaw pads and the deterministic scene; they are not hardware or
+randomized results.
 
 Use the same seed when comparing parameter changes. Save local results when
 needed:
@@ -164,7 +170,7 @@ policy evaluation. It does not yet export the standard `LeRobotDataset` format
 or provide the planned unified training entry point. This is the Phase 2
 continuation of the SO-101 journey.
 
-## 6. Continue to Planner, VLM, and VLA
+## 6. Continue to the planner contract
 
 Inspect the planner workflow after the low-level policy path is understood:
 
@@ -172,9 +178,10 @@ Inspect the planner workflow after the low-level policy path is understood:
 uv run python scripts/plan_task.py --help
 ```
 
-The scripted planner is the deterministic starting point. SmolVLM and Claude
-backends are optional. Planner output must remain a validated plan and must
-pass robot capability and safety checks before producing commands.
+The scripted planner is the only backend that ships. A model-backed planner
+implements the same `Planner` contract. Planner output must remain a validated
+plan and must pass robot capability and safety checks before producing
+commands.
 
 ## 7. Phase 2A Visual Servoing Baseline
 
@@ -203,6 +210,22 @@ uv run python scripts/eval_policy.py \
   --camera-jitter 0.005 \
   --json-out outputs/visual_servo_20seed_jitter.json
 ```
+
+The same evaluation runs on a clean Linux runner through the `Visual servo
+evaluation` workflow (`.github/workflows/visual-servo-eval.yml`). It starts on
+pull requests that touch the code the result depends on, and by hand from the
+Actions tab once the workflow is on the default branch, with the total episode
+count and the jitter as inputs. Software rendering takes about 130 seconds per
+episode, so the seeds are split across four parallel jobs and a final job merges
+them and fails unless every episode succeeded with no collision, timeout, or
+unsafe action. The result table is in the job summary, and the merged JSON, each
+shard's JSON, and one recorded episode are uploaded as artifacts.
+
+The 20-seed run on `ubuntu-24.04` with OSMesa reproduced the outcome above
+(`20/20`, no collisions, timeouts, or unsafe actions). It is not bit-identical
+to a Windows run: 17 of the 20 seeds took the same number of steps and the other
+three differed by one, which is expected from floating-point differences between
+platforms.
 
 The same policy can be inspected interactively with the MuJoCo viewer and live
 front-camera window:

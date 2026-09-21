@@ -178,18 +178,3 @@ def test_training_specs_reject_shape_dtype_range_and_unknown_fields():
     spec = ActionSpec(fields=(value_spec,))
     with pytest.raises(ValueError, match="unexpected fields"):
         spec.validate({"action": np.zeros(2, dtype=np.float32), "extra": 0})
-
-
-def test_model_store_requires_a_local_model(tmp_path, monkeypatch):
-    from physai import model_store
-
-    monkeypatch.setattr(model_store, "MODEL_ROOT", tmp_path)
-    with pytest.raises(FileNotFoundError, match="download_models.py"):
-        model_store.resolve_local_model("org/missing-model")
-
-
-def test_model_download_presets_include_vla_models():
-    from scripts.download_models import MODEL_REPOS
-
-    assert MODEL_REPOS["smolvla"] == "lerobot/smolvla_base"
-    assert MODEL_REPOS["turbovla"] == "H-EmbodVis/TurboVLA"

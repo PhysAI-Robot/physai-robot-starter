@@ -41,7 +41,39 @@ def _quat_xyzw_from_wxyz(quaternion: Any) -> list[float]:
     return [float(values[1]), float(values[2]), float(values[3]), float(values[0])]
 
 
-def build_scene_manifest(model: mujoco.MjModel, *, robot: str = "") -> dict[str, Any]:
+def _owner(name: str, instance_prefixes: dict[str, str] | None) -> str | None:
+    if not instance_prefixes:
+        return None
+    for instance_id, prefix in instance_prefixes.items():
+        if name.startswith(prefix):
+            return instance_id
+    return None
+
+
+def _geom_owner(
+    model: mujoco.MjModel,
+    geom_id: int,
+    instance_prefixes: dict[str, str] | None,
+) -> str | None:
+    owner = _owner(_name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id), instance_prefixes)
+    if owner is not None:
+        return owner
+    return _owner(
+        _name(
+            model,
+            mujoco.mjtObj.mjOBJ_BODY,
+            int(model.geom_bodyid[geom_id]),
+        ),
+        instance_prefixes,
+    )
+
+
+def build_scene_manifest(
+    model: mujoco.MjModel,
+    *,
+    robot: str = "",
+    instance_prefixes: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Describe static MuJoCo geometry that the browser can instantiate."""
     geometries: list[dict[str, Any]] = []
     for geom_id in range(model.ngeom):
@@ -59,10 +91,20 @@ def build_scene_manifest(model: mujoco.MjModel, *, robot: str = "") -> dict[str,
             {
                 "id": geom_id,
                 "name": _name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id),
+                **(
+                    {"instance_id": _geom_owner(model, geom_id, instance_prefixes)}
+                    if instance_prefixes is not None
+                    else {}
+                ),
                 "type": _GEOM_TYPES.get(geom_type, "unknown"),
                 "size": [float(value) for value in model.geom_size[geom_id]],
                 "rgba": [float(value) for value in rgba],
-                "visual": bool(model.geom_contype[geom_id] == 0),
+                "visual": bool(
+                    model.geom_contype[geom_id] == 0
+                    or (
+                        instance_prefixes is not None and model.geom_group[geom_id] != 3
+                    )
+                ),
                 "asset": (
                     f"/assets/so101/assets/{mesh_name}.stl" if mesh_name else None
                 ),
@@ -115,6 +157,7 @@ def build_state_snapshot(
     *,
     step: int,
     robot: str = "",
+    instance_prefixes: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Serialize dynamic body and geometry transforms without copying meshes."""
     bodies = []
@@ -123,6 +166,16 @@ def build_state_snapshot(
             {
                 "id": body_id,
                 "name": _name(model, mujoco.mjtObj.mjOBJ_BODY, body_id),
+                **(
+                    {
+                        "instance_id": _owner(
+                            _name(model, mujoco.mjtObj.mjOBJ_BODY, body_id),
+                            instance_prefixes,
+                        )
+                    }
+                    if instance_prefixes is not None
+                    else {}
+                ),
                 "position": [float(value) for value in data.xpos[body_id]],
                 "quaternion": _quat_xyzw(data.xmat[body_id]),
             }
@@ -132,6 +185,11 @@ def build_state_snapshot(
         geometries.append(
             {
                 "id": geom_id,
+                **(
+                    {"instance_id": _geom_owner(model, geom_id, instance_prefixes)}
+                    if instance_prefixes is not None
+                    else {}
+                ),
                 "position": [float(value) for value in data.geom_xpos[geom_id]],
                 "quaternion": _quat_xyzw(data.geom_xmat[geom_id]),
             }
@@ -150,6 +208,16 @@ def build_state_snapshot(
             {
                 "id": joint_id,
                 "name": _name(model, mujoco.mjtObj.mjOBJ_JOINT, joint_id),
+                **(
+                    {
+                        "instance_id": _owner(
+                            _name(model, mujoco.mjtObj.mjOBJ_JOINT, joint_id),
+                            instance_prefixes,
+                        )
+                    }
+                    if instance_prefixes is not None
+                    else {}
+                ),
                 "qpos": [float(value) for value in data.qpos[start : start + width]],
             }
         )

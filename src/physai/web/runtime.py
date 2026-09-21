@@ -9,6 +9,7 @@ from io import BytesIO
 from typing import Any
 
 import imageio.v3 as iio
+import mujoco
 import numpy as np
 
 from ..contracts import Action, GripperCommand, Twist, Vector3
@@ -20,6 +21,8 @@ from .telemetry import build_scene_manifest, build_state_snapshot
 class SimulationHost:
     """Own the authoritative robot state and keep clients off the physics thread."""
 
+    _CAMERA_PERIOD = 0.2
+
     def __init__(
         self,
         robot: RobotPort,
@@ -27,11 +30,13 @@ class SimulationHost:
         robot_name: str,
         policy: Any = None,
         reset_seed: int | None = None,
+        async_cameras: bool = False,
     ) -> None:
         self.robot = robot
         self.robot_name = robot_name
         self.policy = policy
         self.reset_seed = reset_seed
+        self._async_cameras = async_cameras
         self._commands: queue.Queue[Action] = queue.Queue(maxsize=1)
         self._lock = threading.Lock()
         self._physics_lock = threading.Lock()
@@ -42,6 +47,10 @@ class SimulationHost:
         self._observation = None
         self._gripper = GripperCommand()
         self._camera_images: dict[str, np.ndarray] = {}
+        self._camera_data: Any = None
+        self._camera_thread: threading.Thread | None = None
+        self._camera_request = threading.Event()
+        self._camera_ready = threading.Event()
         self._control_owner: str | None = None
         self._control_deadline = 0.0
         self._control_timeout = 0.35
@@ -72,6 +81,7 @@ class SimulationHost:
     def start(self) -> None:
         if self._thread is not None:
             return
+        self._start_camera_thread()
         self._thread = threading.Thread(
             target=self._run, name="physai-sim", daemon=True
         )
@@ -79,12 +89,11 @@ class SimulationHost:
 
     def stop(self) -> None:
         self._stop.set()
-        if self._thread is None:
-            self.robot.close()
-            return
-        # The physics thread closes the robot itself as it exits (see _run), so
-        # closing here as well would free the renderer from the wrong thread.
-        self._thread.join(timeout=2.0)
+        if self._thread is not None:
+            self._thread.join(timeout=2.0)
+        if self._camera_thread is not None:
+            self._camera_thread.join(timeout=2.0)
+        self.robot.close()
 
     def latest_state(self) -> dict[str, Any] | None:
         with self._lock:
@@ -94,6 +103,7 @@ class SimulationHost:
         return self.robot.reset(seed=self.reset_seed)
 
     def reset(self) -> None:
+        self._start_camera_thread()
         with self._physics_lock:
             self._discard_command()
             self._observation = self._reset_episode()
@@ -101,6 +111,7 @@ class SimulationHost:
             if self.policy is not None:
                 self.policy.reset(self._observation)
             self._publish()
+        self._request_camera_capture(wait=True)
 
     def set_paused(self, paused: bool) -> None:
         self._paused = paused
@@ -170,7 +181,7 @@ class SimulationHost:
         self.reset()
         hold_action = self._hold_action()
         control_hz = float(
-            getattr(getattr(self.robot, "cfg", None), "control_hz", 25.0)
+            getattr(getattr(self.robot, "cfg", None), "control_hz", 30.0)
         )
         period = 1.0 / control_hz
         while not self._stop.is_set():
@@ -243,6 +254,57 @@ class SimulationHost:
                 robot=self.robot_name,
             )
 
+    def _start_camera_thread(self) -> None:
+        if not self._async_cameras or self._camera_thread is not None:
+            return
+        camera_names = tuple(self.robot.robot_spec.camera_frames)
+        if not camera_names:
+            return
+        mj_data_type = getattr(mujoco, "MjData")  # noqa: B009
+        self._camera_data = mj_data_type(self.model)
+        self._camera_thread = threading.Thread(
+            target=self._camera_loop,
+            args=(camera_names,),
+            name="physai-camera",
+            daemon=True,
+        )
+        self._camera_thread.start()
+
+    def _request_camera_capture(self, *, wait: bool = False) -> None:
+        if self._camera_thread is None:
+            return
+        self._camera_ready.clear()
+        self._camera_request.set()
+        if wait:
+            self._camera_ready.wait(timeout=2.0)
+
+    def _camera_loop(self, camera_names: tuple[str, ...]) -> None:
+        width = int(getattr(self.robot, "_camera_width", 640))
+        height = int(getattr(self.robot, "_camera_height", 480))
+        renderer = mujoco.Renderer(self.model, height=height, width=width)
+        next_capture = 0.0
+        try:
+            while not self._stop.is_set():
+                timeout = max(0.0, next_capture - time.monotonic())
+                requested = self._camera_request.wait(timeout=timeout)
+                self._camera_request.clear()
+                if self._stop.is_set():
+                    break
+                if not requested and time.monotonic() < next_capture:
+                    continue
+                with self._physics_lock:
+                    copy_data = getattr(mujoco, "mj_copyData")  # noqa: B009
+                    copy_data(self._camera_data, self.model, self.data)
+                for name in camera_names:
+                    renderer.update_scene(self._camera_data, camera=name)
+                    image = np.asarray(renderer.render(), dtype=np.uint8).copy()
+                    with self._lock:
+                        self._camera_images[name] = image
+                next_capture = time.monotonic() + self._CAMERA_PERIOD
+                self._camera_ready.set()
+        finally:
+            renderer.close()
+
     def camera_jpeg(self, name: str) -> bytes:
         with self._lock:
             try:
@@ -270,10 +332,6 @@ class SimulationHost:
         if renderer is None:
             raise ValueError(f"robot {self.robot_name!r} has no camera renderer")
         return np.asarray(renderer(name))
-
-
-# Kept as an import-compatible name for integrations that used the old class.
-SimulationSession = SimulationHost
 
 
 def action_from_payload(payload: dict[str, Any]) -> Action:

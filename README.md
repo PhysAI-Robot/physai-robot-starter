@@ -6,8 +6,10 @@ policies through stable robot, task, observation, and action contracts.
 
 **Phase 1, the Classical Foundation and ROS2 Contract, is complete** for the
 supported SO-101 arm and TurtleBot4 differential-drive base in MuJoCo. The
-Phase 1-to-Phase 2 training bridge and the Phase 2A visual-servo baseline are
-available; Phase 2B learning workflows remain the next major work.
+Phase 1-to-Phase 2 training bridge is complete. Phase 2A, the classical vision
+baseline, is in progress: the camera-only `visual_servo` policy has landed, but
+2A is not done until it is evaluated across the T0-T4 task ladder and the
+difficulty sweep. See [Roadmap](ROADMAP.md) for the definition of done.
 
 The shortest way to inspect the completed foundation is model-free: run the
 scripted SO-101 pick-and-place baseline, inspect the contracts, then validate
@@ -41,22 +43,22 @@ testing. VLM and VLA workflows need more memory; CUDA is optional.
 ## Install
 
 Install `uv` using the instructions for your platform, then create the
-environment and install the base package from the project root:
+environment with the common web and training extras from the project root:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync
+uv sync --extra web --extra training
 ```
 
 The base install contains MuJoCo, NumPy, image/video support, and YAML
-configuration. It does not install ROS2, VLM, or VLA dependencies. Use the
-optional extras below when
-those later-phase features are needed.
+configuration. The command above also installs the browser viewer and
+Gymnasium training bridge. It does not install ROS2, VLM, or VLA dependencies.
+Use the optional extras below when those later-phase features are needed.
 
 Install development tools and run the test suite with:
 
 ```bash
-uv sync --extra dev
+uv sync --extra dev --extra web --extra training
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 ```
 
@@ -77,18 +79,44 @@ interactive MuJoCo viewer after the headless run succeeds:
 uv run python scripts/run_sim.py --viewer
 ```
 
-For the browser-based Three.js viewer, start the desktop viewer with `--serve`
-to expose the same authoritative simulation, then see the
-[Web Viewer runbook](docs/WEB_VIEWER_RUNBOOK.md) for the client command:
+For an idle browser-based Three.js viewer, start the SO-101 host with `--serve`
+and jog it from the browser. Without an explicit `--policy`, viewer and serve
+modes hold the current pose and do not run pick-and-place automatically. Add
+`--policy scripted` when you want the scripted task to drive the robot, and add
+`--viewer` only when you also want the local desktop window:
 
 ```bash
-MUJOCO_GL=egl uv run --extra web python scripts/run_web.py \
+MUJOCO_GL=egl uv run python scripts/run_sim.py \
+  --robot so101 \
+  --serve
+```
+
+In another terminal, open the browser client:
+
+```bash
+MUJOCO_GL=egl uv run python scripts/run_web.py \
   --connect http://127.0.0.1:8000
 ```
 
 The web layer remains robot-agnostic and discovers action modes and cameras
 from the host's `RobotSpec`. See the runbook for the host command, keyboard
 mapping, and WebSocket/API contract.
+
+To run multiple heterogeneous robots in one shared MuJoCo scene at the default
+30 Hz control rate, use the world manifest example:
+
+```bash
+MUJOCO_GL=egl uv run python scripts/run_sim.py \
+  --world configs/worlds/heterogeneous.yaml \
+  --serve
+```
+
+This uses one model, physics data object, and simulation clock. The shared
+world starts idle; the browser selector chooses which instance receives jog
+commands while the whole scene remains visible. Camera frames are rendered in
+a worker so camera capture does not block the physics loop. Add `--viewer` if
+you also want the desktop window. See the [Web Viewer runbook](docs/WEB_VIEWER_RUNBOOK.md)
+for the shared-world contract.
 
 ### Optional WSL2 viewer performance
 
@@ -163,12 +191,13 @@ The planned progression is:
 
 ```text
 Phase 1  Classical foundation + ROS2 contract
-        -> Phase 2  Learning-based motor skills
-          2A  Visual servoing baseline
-          2B  Imitation learning with LeRobot
-          2C  Deep reinforcement learning
-    -> Phase 3  High-level VLM orchestration
-    -> Phase 4  End-to-end VLA policy
+        -> Phase 2  Benchmark, baselines, and learning
+          2.0  Task ladder and capability report
+          2A   Classical vision baseline (camera-only)
+          2B   Imitation learning with ACT
+          2C   Backend comparison study
+          2D   Report and release (v0.2)
+    -> Phase 3 and 4  Not in focus yet
 ```
 
 Phase 2 and later are future direction. Their current scripts and adapters are
@@ -177,9 +206,8 @@ those phases. See [Roadmap](ROADMAP.md) for the scope and definition of done
 for each phase.
 
 The Phase 1-to-Phase 2 bridge now includes canonical `ObservationSpec` and
-`ActionSpec` schemas plus a Gymnasium adapter. Install the training extra when
-you need this boundary; the adapter still routes actions through the existing
-safety gate:
+`ActionSpec` schemas plus a Gymnasium adapter. The standard setup above already
+installs its training dependency; for a base-only environment, add it with:
 
 ```bash
 uv sync --extra training
@@ -233,9 +261,13 @@ uv run python scripts/collect_demos.py --sorting --episodes 50 --out data/sortin
        alt="SO-101 arm selecting the blue cube from three colored cubes and placing it on the pad">
 </p>
 
-The scripted expert reaches roughly 72% on this variant against 100% on the
-documented 20-seed single-cube check, because three cubes on the same table
-leave less grasp clearance.
+Measured over held-out seeds, the scripted expert now reaches 100% on the
+single-cube check (300 seeds) and 98% on this sorting variant (900 seeds).
+The single-cube number matches the camera-only `visual_servo` baseline; see
+the Phase 2.0 finding in [ROADMAP.md](ROADMAP.md) for the two root causes
+behind the sorting gap and their fixes: a missing wrist-orientation
+constraint, and the wide-open jaws nudging a neighboring cube during
+approach and staling the expert's locked aim point.
 
 Failed demonstrations are discarded by default. Add `--keep-failures` when
 you are analyzing failure cases.
@@ -262,7 +294,7 @@ The repository contains early data and model workflows so they can be tested
 against the shared contracts. They belong to the roadmap's later phases and
 are not required for the completed Phase 1 baseline or its training bridge.
 
-### Phase 2B: LeRobot and ACT
+### Phase 2B: imitation learning with ACT
 
 Collect demonstrations and fine-tune an ACT policy after installing the VLA
 extra:
@@ -277,39 +309,6 @@ uv run python scripts/eval_policy.py --policy lerobot \
 The training script stores the checkpoint and metadata under
 `outputs/act_ckpt` by default. Use the same square image size during training
 and evaluation to avoid an image distribution mismatch.
-
-### Phase 3: VLM planning
-
-Check the planner-to-simulator path without a model or API key:
-
-```bash
-uv run python scripts/plan_task.py --planner scripted --dry-run
-```
-
-SmolVLM produces visual sub-goals from simulated camera images. Install its
-extra and download the model before running it:
-
-```bash
-uv sync --extra smolvlm
-uv run python scripts/download_models.py --model smolvlm
-uv run python scripts/plan_task.py --planner smolvlm --dry-run
-```
-
-Use `--instruction`, `--save-plan`, and `--save-frames` to customize or
-inspect a planning run. A planner proposes sub-goals; it is not the low-level
-motor policy.
-
-The distinction is visible on the sorting scene. Both runs below start from an
-identical cube layout and differ only in the instruction text, and the planner
-grounds the color word onto a different cube each time:
-
-| "put the **red** cube on the pad" | "put the **blue** cube on the pad" |
-| --- | --- |
-| <img src="docs/media/sorting/sorting_planner_red.gif" width="300" alt="Planner directing the arm to the red cube"> | <img src="docs/media/sorting/sorting_planner_blue.gif" width="300" alt="Planner directing the arm to the blue cube from the same starting layout"> |
-
-Sub-goal selection is where language grounding belongs in this architecture.
-The ACT policy in Phase 2 has no text input at all, so the same instruction
-swap leaves its behavior byte-for-byte identical.
 
 ## Python API
 
@@ -338,39 +337,19 @@ runtime = create_runtime(
 )
 ```
 
-## Optional models and APIs
+## Optional models
 
-Model snapshots are downloaded into the ignored local `models/` directory.
 Install the extra for the workflow you intend to use:
 
 ```bash
-# SmolVLM planner
-uv sync --extra smolvlm
-uv run python scripts/download_models.py --model smolvlm
-
-# LeRobot/VLA support
+# ACT / LeRobot policy support (Phase 2B)
 uv sync --extra vla
-uv run python scripts/download_models.py --model smolvla
-uv run python scripts/download_models.py --model turbovla
 ```
 
-The downloader also accepts a custom Hugging Face repository:
+Checkpoints are written by `scripts/train_act.py` into the ignored local
+`outputs/` directory and loaded from an explicit path.
 
-```bash
-uv run --with huggingface-hub python scripts/download_models.py \
-  --repo org/model --name my_model
-```
-
-Copy `.env.example` to `.env` when using gated or private Hugging Face models,
-or when the anonymous download limit is reached. Claude is an optional cloud
-planner; install its extra and provide `ANTHROPIC_API_KEY` in the environment:
-
-```bash
-uv sync --extra vlm
-export ANTHROPIC_API_KEY="your-key"
-uv run python scripts/plan_task.py --planner claude --dry-run
-```
-
+Copy `.env.example` to `.env` when using gated or private Hugging Face models.
 Do not commit `.env`, credentials, checkpoints, or downloaded assets.
 
 ## ROS2 Jazzy
@@ -417,7 +396,6 @@ The following local directories are ignored by Git and Docker:
 
 - `assets/`: downloaded robot descriptions and meshes
 - `data/`: recorded demonstrations
-- `models/`: local model snapshots
 - `outputs/`: videos, plans, checkpoints, and evaluation artifacts
 
 The PhysAI Robot Starter source code is licensed under the Apache License 2.0.
@@ -446,6 +424,7 @@ uv run python scripts/fetch_assets.py
 ```
 
 For a simulator-only check, use `--policy constant` or the default scripted
-SO-101 policy. Neither requires SmolVLM, Claude, a model download, or an API
-key. If video encoding is unavailable, the simulator falls back to a GIF;
-installing `imageio-ffmpeg` enables MP4 output.
+SO-101 policy. Viewer and serve modes are different: they stay idle unless a
+policy is explicitly supplied, so they can be controlled manually from the
+browser. None of these workflows requires a model download or an API key. If video encoding is unavailable, the simulator falls back to a
+GIF; installing `imageio-ffmpeg` enables MP4 output.

@@ -29,14 +29,16 @@ from physai.config import (
     TaskConfig,
     load_sim_config,
     load_task_config,
+    load_world_config,
 )
 from physai.policy import available_policies, create_policy
 from physai.robots import available_robots, create_robot
 from physai.robots.so101 import EnvConfig
 from physai.robots.turtlebot import TurtleBot4Config
-from physai.sim import SceneConfig
+from physai.sim import PickPlaceMinimalSceneConfig, SharedWorld
 from physai.tasks import TaskRuntime, create_task
 from physai.web.runtime import SimulationHost
+from physai.web.world_runtime import SharedWorldHost
 
 
 def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
@@ -68,7 +70,9 @@ def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
 class SingleWindowViewer:
     """Tk client rendering an authoritative host and its model cameras."""
 
-    def __init__(self, host: SimulationHost, camera_names: list[str]) -> None:
+    def __init__(
+        self, host: SimulationHost | SharedWorldHost, camera_names: list[str]
+    ) -> None:
         try:
             import tkinter as tk
         except ImportError as exc:
@@ -134,10 +138,11 @@ class SingleWindowViewer:
         frame = np.ascontiguousarray(frame, dtype=np.uint8)
         height, width = frame.shape[:2]
         ppm = f"P6\n{width} {height}\n255\n".encode() + frame.tobytes()
-        with tempfile.NamedTemporaryFile(suffix=".ppm") as image_file:
-            image_file.write(ppm)
-            image_file.flush()
-            return self._tk.PhotoImage(file=image_file.name, format="PPM")
+        # Hand Tk the bytes directly. Writing them to a NamedTemporaryFile and
+        # passing its name fails on Windows, where a temporary file that is
+        # still open cannot be opened a second time by name ("permission
+        # denied"), and it also costs a disk write per frame.
+        return self._tk.PhotoImage(data=ppm, format="PPM")
 
     def render(self) -> None:
         if self.closed:
@@ -169,7 +174,13 @@ class SingleWindowViewer:
             return
         self.render()
         control_hz = float(
-            getattr(getattr(self.host.robot, "cfg", None), "control_hz", 25.0)
+            getattr(
+                self.host,
+                "control_hz",
+                getattr(getattr(self.host, "robot", None), "cfg", None)
+                and getattr(self.host.robot.cfg, "control_hz", 30.0)
+                or 30.0,
+            )
         )
         self.root.after(max(1, round(1000 / control_hz)), self.tick)
 
@@ -239,7 +250,7 @@ def build_so101_config(
             (args.camera_size, args.camera_size) if args.camera_size else (640, 480)
         )
         return EnvConfig(
-            scene=SceneConfig(camera_width=cam_w, camera_height=cam_h),
+            scene=PickPlaceMinimalSceneConfig(camera_width=cam_w, camera_height=cam_h),
             seed=seed,
             max_steps=max_steps,
             render=render,
@@ -278,6 +289,11 @@ def main() -> int:
         help="YAML task configuration (for example configs/tasks/so101/pick_place.yaml)",
     )
     ap.add_argument(
+        "--world",
+        type=Path,
+        help="shared-world YAML manifest; use with --viewer and/or --serve",
+    )
+    ap.add_argument(
         "--robot",
         choices=available_robots(),
         help="override the robot selected by --config",
@@ -287,8 +303,9 @@ def main() -> int:
     # reject the documented command before it ever got there.
     ap.add_argument(
         "--policy",
-        default="scripted",
+        default=None,
         choices=[name for name in available_policies() if name != "replay"],
+        help="policy to run; viewer/serve stays idle unless this is specified",
     )
     ap.add_argument("--episodes", type=int, default=1)
     ap.add_argument(
@@ -344,6 +361,10 @@ def main() -> int:
         ap.error("--headless requires --serve")
     if args.serve and not (args.viewer or args.headless):
         ap.error("--serve requires --viewer or --headless")
+    if args.world and not (args.viewer or args.serve):
+        ap.error("--world requires --viewer or --serve")
+    if args.world and (args.config or args.robot):
+        ap.error("--world cannot be combined with --config or --robot")
 
     sim_config = load_sim_config(args.sim_config)
     task_config = load_task_config(args.config) if args.config else None
@@ -371,6 +392,7 @@ def main() -> int:
     )
 
     if args.viewer or args.headless:
+    if args.viewer or args.serve:
         if args.camera_view and args.robot == "turtlebot4":
             ap.error("--camera-view currently supports the SO-101 viewer only")
         return run_viewer(
@@ -412,7 +434,7 @@ def main() -> int:
     successes = 0
 
     # Built once — a lerobot checkpoint is expensive to reload per episode.
-    policy = build_policy(args.policy, env, args.checkpoint)
+    policy = build_policy(args.policy or "scripted", env, args.checkpoint)
 
     for ep in range(args.episodes):
         obs = env.reset(seed=seed + ep)
@@ -477,7 +499,19 @@ def run_viewer(
     max_steps: int,
     domain_randomization: DomainRandomizationConfig,
 ) -> int:
-    if args.robot == "turtlebot4":
+    if args.world:
+        world_config = load_world_config(args.world)
+        host = SharedWorldHost(
+            SharedWorld(
+                world_config.instances,
+                timestep=world_config.timestep,
+                control_hz=world_config.control_hz,
+                add_floor=world_config.add_floor,
+            ),
+            world_config.instances,
+        )
+        camera_names = []
+    elif args.robot == "turtlebot4":
         env = create_robot(
             args.robot,
             config=TurtleBot4Config(
@@ -500,24 +534,32 @@ def run_viewer(
             viewer_config,
             camera_stride=max(1, round(viewer_config.control_hz / 5)),
         )
+        if args.policy in (None, "scripted"):
+            viewer_config = replace(viewer_config, camera_stride=0)
         env = create_robot(
             args.robot,
             config=viewer_config,
         )
-    policy = build_policy(args.policy, env, args.checkpoint)
-    if args.robot != "turtlebot4":
-        camera_names = [
-            mujoco.mj_id2name(env.model, mujoco.mjtObj.mjOBJ_CAMERA, camera_id)
-            for camera_id in range(env.model.ncam)
-        ]
-        camera_names = [name for name in camera_names if name]
+    if not args.world:
+        policy = (
+            build_policy(args.policy, env, args.checkpoint)
+            if args.policy is not None
+            else None
+        )
+        if args.robot != "turtlebot4":
+            camera_names = [
+                mujoco.mj_id2name(env.model, mujoco.mjtObj.mjOBJ_CAMERA, camera_id)
+                for camera_id in range(env.model.ncam)
+            ]
+            camera_names = [name for name in camera_names if name]
 
-    host = SimulationHost(
-        env,
-        robot_name=args.robot,
-        policy=policy,
-        reset_seed=seed,
-    )
+        host = SimulationHost(
+            env,
+            robot_name=args.robot,
+            policy=policy,
+            reset_seed=seed,
+            async_cameras=args.robot == "so101" and args.policy in (None, "scripted"),
+        )
     host.start()
     server = None
     server_thread = None
@@ -548,13 +590,24 @@ def run_viewer(
             print(f"Headless host running. Web viewer: http://{args.host}:{args.port}/")
             print("Press Ctrl+C to stop.")
             wait_for_shutdown()
-        else:
-            print("Custom viewer open. Close the window to exit.")
-            if args.serve:
-                print(f"Web viewer: http://{args.host}:{args.port}/")
+        if args.serve:
+            print(f"Web viewer: http://{args.host}:{args.port}/")
             app = SingleWindowViewer(host, camera_names)
             app.tick()
             app.root.mainloop()
+        if args.viewer:
+            print("Custom viewer open. Close the window to exit.")
+        if args.serve:
+            print(f"Web viewer: http://{args.host}:{args.port}/")
+        if args.viewer:
+            app = SingleWindowViewer(host, camera_names)
+            app.tick()
+            app.root.mainloop()
+        else:
+            while server_thread is not None and server_thread.is_alive():
+                server_thread.join(timeout=0.5)
+    except KeyboardInterrupt:
+        pass
     finally:
         if app is not None and not app.closed:
             app.close()
