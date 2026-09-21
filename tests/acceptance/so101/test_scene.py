@@ -136,3 +136,23 @@ def test_sorting_reset_is_deterministic_for_a_given_seed():
         assert second.sim_time == first.sim_time == 0.0
     finally:
         robot.close()
+
+
+@requires_assets
+def test_target_cube_geom_resolves_in_both_scenes():
+    """Grasp detection needs the *target* cube's geom, not a fixed name.
+
+    The sorting scene names its cubes `cube_red`/`cube_blue`/`cube_yellow`, so
+    a hardcoded `cube_geom` lookup returned -1 there and no grasp was ever
+    detected, which made the scripted expert retry until it timed out.
+    """
+    from physai.robots.so101 import EnvConfig, SO101Env
+    from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
+
+    for scene in (PickPlaceMinimalSceneConfig(), SortingMinimalSceneConfig()):
+        robot = SO101Env(EnvConfig(scene=scene, render=False, max_steps=200))
+        try:
+            robot.reset(seed=0)
+            assert robot.cube_geom_id >= 0
+        finally:
+            robot.close()

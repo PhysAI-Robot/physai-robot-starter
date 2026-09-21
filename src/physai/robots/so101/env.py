@@ -63,7 +63,15 @@ class EnvConfig:
     # its full rating against a rigid object, which loads the pad-cube contact
     # to 20-50x the cube's weight and makes it chatter and pop loose mid-carry.
     # Capping it here emulates a current-limited real servo and keeps the
-    # squeeze in the contact solver's stable range.
+    # squeeze in the contact solver's stable range. Needed by visual_servo,
+    # whose grip target (0.19) is shallow enough that uncapped force can
+    # destabilize the contact -- test_visual_servo_pick_place_settles_from_
+    # multiple_seeds fails without this cap. The scripted expert's much
+    # deeper default squeeze (ExpertConfig.gripper_grip=0.06) already keeps
+    # contact force low without help (~0.1-1N measured via mj_contactForce)
+    # and does slightly better with this cap disabled (96.0% vs 94.0% over a
+    # fair 300-seed sorting comparison) -- but that is a per-caller tradeoff,
+    # not a reason to change the shared default other callers rely on.
     gripper_force_limit: float = 0.3
 
 
@@ -376,6 +384,12 @@ class SO101Env(MuJoCoSimulationCore):
             body_id, _ = self.sorting_cubes[self.target_color]
             return self.data.xpos[body_id].copy()
         return self.data.xpos[self.cube_bid].copy()
+
+    @property
+    def cube_geom_id(self) -> int:
+        """Collision geom of the cube the task is currently asking for."""
+        name = f"cube_{self.target_color}" if self.sorting_cubes else "cube"
+        return mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, f"{name}_geom")
 
     @property
     def cube_positions(self) -> dict[str, np.ndarray]:

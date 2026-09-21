@@ -85,12 +85,14 @@ uv run python scripts/eval_policy.py \
   --max-steps 600
 ```
 
-The current baseline is `success 9/20`, with 11 timeouts (measured
-2026-09-20). This is an open finding tracked in [ROADMAP.md](../ROADMAP.md)
-under Phase 2.0, not a target. The deterministic `visual_servo` policy scores
-higher on the same seeds: `visual_servo` reaches 20/20 with no timeouts.
-Results depend on the calibrated jaw pads and the deterministic scene; they are
-not hardware or randomized results.
+The current baseline is **100%** over 100 seeds (95% CI [96%, 100%], measured
+2026-09-21), matching the deterministic `visual_servo` policy. Note that a
+20-seed run could not resolve the pre-fix policy — the same configuration
+scored 45% on seeds 0-19 and 60% on seeds 100-149 — so still use at least 100
+seeds when comparing changes. The root cause and fix are recorded as the
+resolved Phase 2.0 finding in [ROADMAP.md](../ROADMAP.md). Results depend on
+the calibrated jaw pads and the deterministic scene; they are not hardware or
+randomized results.
 
 Use the same seed when comparing parameter changes. Save local results when
 needed:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
 
 import mujoco
@@ -12,6 +12,7 @@ from ...contracts import Action, GripperCommand, Observation, PoseStamped
 from ...control.resolver import JointRateLimiter
 from ...policy.base import Policy
 from ..base import KinematicsPort
+from .kinematics import TOP_DOWN
 
 
 class Phase(Enum):
@@ -29,14 +30,25 @@ class Phase(Enum):
 
 @dataclass
 class ExpertConfig:
-    approach_dir: np.ndarray | None = None
+    # Constrains the wrist to a top-down grasp during IK, matching
+    # visual_servo. Left unconstrained, the redundant arm can satisfy the
+    # pinch-point target with the wrist at an arbitrary tilt: the moving jaw
+    # sits farther from the wrist than the static one, so a few degrees of
+    # unwanted tilt was enough to swing it clear of the cube at squeeze time.
+    approach_dir: np.ndarray | None = field(default_factory=lambda: TOP_DOWN)
     hover_height: float = 0.045
     grasp_height: float = 0.000
     lift_height: float = 0.035
     place_height: float = 0.016
     gripper_open: float = 0.55
     gripper_touch: float = 0.21
-    gripper_grip: float = 0.19
+    # Deeper than a bare first-touch close: the pads are position-controlled,
+    # so the squeeze force against a rigid cube comes entirely from how far
+    # past contact the target sits. 0.19 (barely past gripper_touch=0.21) let
+    # the position controller settle for the timeout gate but only produced
+    # ~0.1-1N of grip force -- measurable directly via mj_contactForce -- so
+    # the held cube gradually slipped free during TRANSFER's acceleration.
+    gripper_grip: float = 0.06
     pos_tol: float = 0.012
     settle_steps: int = 8
     max_phase_steps: int = 120
@@ -90,6 +102,14 @@ class SO101PickPlaceExpert(Policy):
         return self.phase is Phase.DONE
 
     def _solve(self, target_xyz: np.ndarray) -> np.ndarray:
+        # kinematics.py's PINCH_OFFSET (a fixed constant) is used as-is here.
+        # Replacing it with an offset computed from the live pad geoms'
+        # positions was tried, on the theory that a constant calibrated near
+        # one gripper aperture drifts at others -- it measurably regressed
+        # sorting instead (98.7% -> ~85% on a 150-seed check): the geometric
+        # midpoint of the pad geoms' origins is not the same reference point
+        # the calibrated constant represents, so "exact" was exact for the
+        # wrong target. See ROADMAP.md's Phase 2.0 finding.
         res = self.kin.ik_pinch(target_xyz, self.cfg.approach_dir, q_init=self._q_cmd)
         if not res.converged:
             return self._q_cmd
@@ -134,6 +154,18 @@ class SO101PickPlaceExpert(Policy):
         return np.array([target[0], target[1], carry_z]), cfg.gripper_open
 
     def _advance(self) -> None:
+        if self.phase is Phase.APPROACH:
+            # One-time correction, not continuous tracking: APPROACH sweeps
+            # the wide-open jaws laterally into position, which can nudge a
+            # neighboring cube (sorting scenes) enough that the cube position
+            # locked at the start of APPROACH goes stale, so later phases aim
+            # at where the cube used to be. Refreshing once here -- right as
+            # APPROACH hands off to the closer, gated DESCEND phase -- fixes
+            # that without the feedback loop continuous per-step retargeting
+            # caused when tried earlier (the arm chasing a cube it was itself
+            # still pushing). Sorting: 94% -> 98% over 900 held-out seeds;
+            # pick-place, which has nothing nearby to nudge, is unaffected.
+            self._grasp_xy = self.env.cube_pos[:2].copy()
         order = [
             Phase.APPROACH,
             Phase.DESCEND,
@@ -158,9 +190,7 @@ class SO101PickPlaceExpert(Policy):
         self._grip = self.cfg.gripper_open
 
     def _cube_grasped(self) -> bool:
-        cube_geom = mujoco.mj_name2id(
-            self.env.model, mujoco.mjtObj.mjOBJ_GEOM, "cube_geom"
-        )
+        cube_geom = self.env.cube_geom_id
         pad_geoms = {
             mujoco.mj_name2id(self.env.model, mujoco.mjtObj.mjOBJ_GEOM, name)
             for name in ("pad_static", "pad_moving")
