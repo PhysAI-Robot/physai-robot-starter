@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import argparse
 import signal
-import tempfile
 import threading
 from dataclasses import replace
 from pathlib import Path
@@ -391,7 +390,6 @@ def main() -> int:
         else (task_config.env.max_steps if task_config else 600)
     )
 
-    if args.viewer or args.headless:
     if args.viewer or args.serve:
         if args.camera_view and args.robot == "turtlebot4":
             ap.error("--camera-view currently supports the SO-101 viewer only")
