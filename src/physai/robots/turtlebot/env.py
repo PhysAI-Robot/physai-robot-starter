@@ -26,6 +26,7 @@ from ...sim.domain_randomization import (
     DomainRandomizationEngine,
     RandomizationMetadata,
 )
+from ...sim.scenes.common import add_studio_sky
 from ..base import RobotSpec, RobotTrainingContract
 from .contracts import turtlebot4_training_contract
 
@@ -76,6 +77,7 @@ def _compile_scene(
     starts providing its own.
     """
     spec = mujoco.MjSpec.from_file(str(model_path))
+    add_studio_sky(spec)
 
     has_plane = any(
         geom.type == mujoco.mjtGeom.mjGEOM_PLANE

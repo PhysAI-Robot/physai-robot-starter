@@ -10,6 +10,26 @@ import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
+# Matches the web viewer's Three.js scene background exactly
+# (`scene.background = new THREE.Color(0xdfe6e2)` in
+# src/physai/web/static/js/scene.js), so a MuJoCo render (the Tk viewer's
+# free camera, a captured camera frame, an exported video) and the browser
+# viewer show the same background color instead of MuJoCo's own default sky.
+STUDIO_SKY_RGB: tuple[float, float, float] = (0.8745, 0.9020, 0.8863)
+
+
+def add_studio_sky(spec: mujoco.MjSpec) -> None:
+    """Add a flat skybox matching the web viewer's background color."""
+    spec.add_texture(
+        name="physai_studio_sky",
+        type=mujoco.mjtTexture.mjTEXTURE_SKYBOX,
+        builtin=mujoco.mjtBuiltin.mjBUILTIN_FLAT,
+        rgb1=list(STUDIO_SKY_RGB),
+        rgb2=list(STUDIO_SKY_RGB),
+        width=256,
+        height=256,
+    )
+
 
 @dataclass
 class WorldSceneConfig:
@@ -145,6 +165,7 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
     _replace_jaw_collision(spec, cfg)
     world = spec.worldbody
 
+    add_studio_sky(spec)
     spec.add_texture(
         name="physai_grid",
         type=mujoco.mjtTexture.mjTEXTURE_2D,
