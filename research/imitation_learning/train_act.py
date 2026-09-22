@@ -5,7 +5,7 @@ name was verified against the installed library before this script was
 written (see conversation history / commit message), not guessed from memory.
 
     python scripts/collect_demos.py --episodes 50 --out data/pickplace_v1
-    python scripts/train_act.py --dataset data/pickplace_v1 --steps 4000
+    python research/imitation_learning/train_act.py --dataset data/pickplace_v1 --steps 4000
 
 Chosen over SmolVLA for this hardware: SmolVLA carries a VLM backbone and
 needs far more than 4 GB of VRAM to fine-tune. ACT is the standard
@@ -17,15 +17,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import time
 from pathlib import Path
 
-import _bootstrap  # noqa: F401
+_ROOT = Path(__file__).resolve().parents[2]
+for _path in (_ROOT / "src", _ROOT):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
+
 import torch
 from torch.utils.data import DataLoader
 
 from physai.data import CheckpointMetadata
-from physai.policy.act_dataset import ACTEpisodeDataset
+from research.imitation_learning.act_dataset import ACTEpisodeDataset
 
 
 def main() -> int:

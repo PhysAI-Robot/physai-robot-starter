@@ -161,7 +161,7 @@ After the scripted task is reliable, inspect demonstration collection and ACT:
 
 ```bash
 uv run python scripts/collect_demos.py --help
-uv run python scripts/train_act.py --help
+uv run python research/imitation_learning/train_act.py --help
 uv run python scripts/eval_policy.py --help
 ```
 

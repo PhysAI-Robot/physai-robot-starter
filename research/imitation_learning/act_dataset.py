@@ -7,6 +7,10 @@ layout ACT expects (`data/recorder.py` was written to match), so this reads
 them directly into a `torch.utils.data.Dataset`. The actual model
 (`ACTPolicy`) and its pre/post-processing pipeline are the real LeRobot
 library code — only the on-disk packaging is swapped out.
+
+Research module (imitation learning): imports `torch` at module scope, so
+only `research/imitation_learning/train_act.py` imports this directly. Core
+never imports this module (see research/README.md).
 """
 
 from __future__ import annotations
@@ -19,7 +23,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from ..data.recorder import load_episode
+from physai.data.recorder import load_episode
 
 
 @dataclass

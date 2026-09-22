@@ -7,8 +7,14 @@ def test_builtin_policies_are_discoverable():
         "scripted",
         "visual_servo",
         "replay",
-        "lerobot",
     } <= set(available_policies())
+
+
+def test_lerobot_policy_registers_itself_when_its_research_module_is_imported():
+    import research.imitation_learning.vla_adapter  # noqa: F401
+    from physai.policy import available_policies
+
+    assert "lerobot" in available_policies()
 
 
 def test_constant_policy_is_created_through_registry():

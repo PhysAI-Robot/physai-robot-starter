@@ -40,9 +40,11 @@ from physai.tasks import TaskRuntime, create_task
 from physai.web.runtime import SimulationHost
 from physai.web.world_runtime import SharedWorldHost
 
-# Registers so101's "scripted"/"visual_servo" policies with the robot
-# registry; --policy may select either, so both load eagerly.
+# Registers so101's "scripted"/"visual_servo" policies and the checkpoint-
+# backed "lerobot" policy with their registries; --policy may select any of
+# them, so all load eagerly (none import torch/lerobot at module scope).
 import research.classical_control.so101_visual_servo  # noqa: E402,F401
+import research.imitation_learning.vla_adapter  # noqa: E402,F401
 import research.scripted_experts.so101_pick_place_expert  # noqa: E402,F401
 
 

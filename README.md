@@ -301,7 +301,7 @@ extra:
 
 ```bash
 uv sync --extra vla
-uv run python scripts/train_act.py --dataset data/pickplace_v1 --steps 4000
+uv run python research/imitation_learning/train_act.py --dataset data/pickplace_v1 --steps 4000
 uv run python scripts/eval_policy.py --policy lerobot \
   --checkpoint outputs/act_ckpt --camera-size 128
 ```
@@ -346,7 +346,7 @@ Install the extra for the workflow you intend to use:
 uv sync --extra vla
 ```
 
-Checkpoints are written by `scripts/train_act.py` into the ignored local
+Checkpoints are written by `research/imitation_learning/train_act.py` into the ignored local
 `outputs/` directory and loaded from an explicit path.
 
 Copy `.env.example` to `.env` when using gated or private Hugging Face models.
