@@ -16,6 +16,10 @@ Keep each document focused on one audience:
   restructuring (old path -> new path); it is not a plan to execute.
 - `docs/adr/` records the decisions behind the frozen design, one file per
   decision.
+- `research/<topic>/README.md` is that research topic's own runbook (setup,
+  commands, workflow). Detailed research workflows belong there, not in a
+  `docs/*_RUNBOOK.md` file — a robot runbook links to the relevant
+  `research/<topic>/README.md` instead of embedding its commands.
 - `CONTRIBUTING.md` is the contributor-facing source of truth for workflow and
   commit message conventions.
 - `AGENTS.md` is the agent-facing workflow, validation, and repository hygiene
