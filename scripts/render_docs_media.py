@@ -34,6 +34,9 @@ from physai.sim import (
 )
 from physai.tasks import TaskRuntime, create_task
 
+# Registers so101's "scripted" policy with the robot registry.
+import research.scripted_experts.so101_pick_place_expert  # noqa: E402,F401
+
 MEDIA = Path(__file__).resolve().parents[1] / "docs" / "media"
 
 

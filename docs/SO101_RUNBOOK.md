@@ -260,7 +260,7 @@ The policy exposes `metrics.visual_error_px`, `metrics.ee_error_m`,
 
 Main files are `configs/tasks/so101/pick_place.yaml`,
 `src/physai/robots/so101/env.py`, `src/physai/sim/scenes/common.py`, and
-`src/physai/robots/so101/expert.py`.
+`research/scripted_experts/so101_pick_place_expert.py`.
 
 Run the reproducible FK, Jacobian, and IK benchmark with:
 

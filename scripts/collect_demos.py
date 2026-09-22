@@ -18,9 +18,9 @@ import _bootstrap  # noqa: F401
 from physai.data import EpisodeRecorder
 from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
-from physai.robots.so101.expert import SO101PickPlaceExpert
 from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
 from physai.tasks import TaskRuntime, create_task
+from research.scripted_experts.so101_pick_place_expert import SO101PickPlaceExpert
 
 
 def main() -> int:
