@@ -94,7 +94,9 @@ def test_list_robots_includes_policy_debug_camera_names():
     spec = RobotSpec(
         name="test", kind="test", joint_names=("joint",), action_joint_names=("joint",)
     )
-    host = Host.for_robot(FakeRobotPort(spec), robot_name="test", policy=FakeDebugPolicy())
+    host = Host.for_robot(
+        FakeRobotPort(spec), robot_name="test", policy=FakeDebugPolicy()
+    )
 
     robots = {entry["name"]: entry for entry in host.list_robots()}
 
@@ -120,7 +122,8 @@ def test_publish_debug_frames_merges_into_camera_cache():
     host._publish_debug_frames()
 
     np.testing.assert_array_equal(
-        host._camera_images["test:front:detections"], np.zeros((2, 2, 3), dtype=np.uint8)
+        host._camera_images["test:front:detections"],
+        np.zeros((2, 2, 3), dtype=np.uint8),
     )
 
 
