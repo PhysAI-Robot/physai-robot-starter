@@ -45,6 +45,26 @@ class NoPublishHost(Host):
         pass
 
 
+def test_sync_observation_images_merges_the_async_camera_cache():
+    """A vision-dependent policy must still see a camera frame in interactive
+    mode even though the env itself never renders one there (camera_stride=0
+    keeps physics stepping stutter-free; the async camera thread is the only
+    renderer, and this is how its output reaches Observation.images)."""
+    host = make_host()
+    host._observation = host.robot.observe()
+    assert host._observation.images == {}
+
+    fake_frame = np.zeros((4, 4, 3), dtype=np.uint8)
+    host._camera_images[f"{host.robot_name}:front"] = fake_frame
+
+    host._sync_observation_images()
+
+    assert "front" in host._observation.images
+    frame = host._observation.images["front"]
+    assert frame.camera_name == "front"
+    np.testing.assert_array_equal(frame.data, fake_frame)
+
+
 def test_control_lease_allows_one_client_and_releases_cleanly():
     host = make_host()
     action = Action(joint_position=np.array([0.2]))

@@ -22,7 +22,7 @@ import imageio.v3 as iio
 import mujoco
 import numpy as np
 
-from ..contracts import Action, GripperCommand, Twist
+from ..contracts import Action, GripperCommand, Header, ImageFrame, Twist
 from ..control.resolver import TwistToJointResolver
 from ..robots.base import RobotPort
 from ..robots.registry import create_shared_instance
@@ -372,6 +372,7 @@ class Host:
     def _tick_single(self, hold_action: Action) -> Action:
         action = self._latest_command(self.robot_name)
         if action is None and self.policy is not None and self._observation is not None:
+            self._sync_observation_images()
             action = self.policy.act(self._observation)
         if action is None:
             action = hold_action
@@ -383,6 +384,37 @@ class Host:
             self._observation = self._reset_episode()
             self.policy.reset(self._observation)
         return hold_action
+
+    def _sync_observation_images(self) -> None:
+        """Merge the async camera worker's latest frames into `_observation`.
+
+        The env's own `observe()` never renders images itself in interactive
+        (viewer/serve) mode — that used to happen inline on the physics
+        thread every `camera_stride` ticks, stalling it for the length of a
+        render. The async camera thread (`_camera_loop`) is the only
+        renderer now, decoupled onto its own thread; this is what lets a
+        vision-dependent policy (e.g. visual_servo) still see a reasonably
+        fresh image without that render blocking physics stepping.
+        """
+        if self._observation is None:
+            return
+        prefix = f"{self.robot_name}:"
+        with self._lock:
+            cached = {
+                name[len(prefix) :]: image
+                for name, image in self._camera_images.items()
+                if name.startswith(prefix)
+            }
+        if not cached:
+            return
+        data_obj = getattr(self.robot, "data", None)
+        stamp = float(data_obj.time) if data_obj is not None else 0.0
+        for name, data in cached.items():
+            self._observation.images[name] = ImageFrame(
+                data=data,
+                camera_name=name,
+                header=Header(stamp=stamp, frame_id=f"camera_{name}"),
+            )
 
     def _hold_action(self) -> Action:
         if "twist" in self.robot.robot_spec.action_modes:

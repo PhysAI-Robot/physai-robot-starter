@@ -640,12 +640,15 @@ def run_viewer(
             render=True,
             domain_randomization=domain_randomization,
         )
-        viewer_config = replace(
-            viewer_config,
-            camera_stride=max(1, round(viewer_config.control_hz / 5)),
-        )
-        if args.policy in (None, "scripted"):
-            viewer_config = replace(viewer_config, camera_stride=0)
+        # camera_stride=0: the env never renders cameras inline on the
+        # physics thread in interactive mode, for any policy. Rendering is
+        # comparatively expensive, so doing it inline stalled physics
+        # stepping every stride'th tick; the async camera thread below
+        # (async_cameras=True) is the one source of camera frames instead —
+        # Host._sync_observation_images() feeds a policy that needs vision
+        # from that same cache. This is now the standard for so101 in
+        # --viewer/--serve, not just the idle/scripted case.
+        viewer_config = replace(viewer_config, camera_stride=0)
         env = create_robot(
             args.robot,
             config=viewer_config,
@@ -668,7 +671,7 @@ def run_viewer(
             robot_name=args.robot,
             policy=policy,
             reset_seed=seed,
-            async_cameras=args.robot == "so101" and args.policy in (None, "scripted"),
+            async_cameras=args.robot == "so101",
         )
     host.start()
     server = None
