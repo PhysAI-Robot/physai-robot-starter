@@ -590,11 +590,11 @@ def run_viewer(
             else None
         )
         if args.robot != "turtlebot4":
-            camera_names = [
-                mujoco.mj_id2name(env.model, mujoco.mjtObj.mjOBJ_CAMERA, camera_id)
-                for camera_id in range(env.model.ncam)
-            ]
-            camera_names = [name for name in camera_names if name]
+            # RobotSpec.camera_frames' keys are the robot's own MuJoCo camera
+            # names (see Host._camera_specs's docstring for why the dict's
+            # values are not); driving the viewer's camera list from here
+            # instead of introspecting env.model keeps it capability-driven.
+            camera_names = list(env.robot_spec.camera_frames)
 
         host = Host.for_robot(
             env,
