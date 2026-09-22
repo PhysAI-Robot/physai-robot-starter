@@ -10,6 +10,8 @@ from typing import Any
 import mujoco
 import numpy as np
 
+from .scenes.common import add_studio_sky
+
 
 @dataclass(frozen=True)
 class RobotInstanceConfig:
@@ -79,15 +81,7 @@ class SharedWorld:
 
         spec = mujoco.MjSpec()
         spec.option.timestep = timestep
-        spec.add_texture(
-            name="physai_shared_sky",
-            type=mujoco.mjtTexture.mjTEXTURE_SKYBOX,
-            builtin=mujoco.mjtBuiltin.mjBUILTIN_GRADIENT,
-            rgb1=[0.96, 0.98, 1.0],
-            rgb2=[0.76, 0.84, 0.92],
-            width=256,
-            height=256,
-        )
+        add_studio_sky(spec)
         spec.visual.headlight.ambient = [0.35, 0.35, 0.35]
         spec.visual.headlight.diffuse = [0.65, 0.65, 0.65]
         spec.worldbody.add_light(
