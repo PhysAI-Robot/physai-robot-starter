@@ -272,7 +272,14 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
             size=list(cfg.pad_size),
             pos=list(position),
             quat=list(quaternion),
-            rgba=[0.12, 0.12, 0.14, 1.0],
+            # alpha=0: a collision-only proxy for the jaw mesh (see
+            # _replace_jaw_collision), not meant to be seen. contype/
+            # conaffinity below still make it collide normally — only its
+            # rendered alpha is 0, which both MuJoCo's own renderer and the
+            # web viewer's Three.js client (scene.js sets
+            # transparent/opacity from rgba[3]) respect, so it disappears
+            # from every render without touching contact behavior.
+            rgba=[0.12, 0.12, 0.14, 0.0],
             friction=list(cfg.pad_friction),
             condim=4,
             solimp=[0.95, 0.99, 0.001, 0.5, 2.0],
