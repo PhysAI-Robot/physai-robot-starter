@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from physai.robots import RobotSpec
-from physai.web.runtime import SimulationHost
+from physai.web.host import Host
 from tests.support.fakes import FakeRobotPort
 
 pytest.importorskip("fastapi")
@@ -13,10 +13,12 @@ from fastapi.testclient import TestClient  # noqa: E402
 from physai.web.app import create_app  # noqa: E402
 
 
-def make_host_with_camera(name: str = "front") -> SimulationHost:
+def make_host_with_camera(name: str = "front") -> Host:
     spec = RobotSpec(name="test", kind="test", joint_names=("joint",))
-    host = SimulationHost(FakeRobotPort(spec), robot_name="test")
-    host._camera_images[name] = np.zeros((4, 4, 3), dtype=np.uint8)
+    host = Host.for_robot(FakeRobotPort(spec), robot_name="test")
+    host._camera_images[f"{host.robot_name}:{name}"] = np.zeros(
+        (4, 4, 3), dtype=np.uint8
+    )
     return host
 
 

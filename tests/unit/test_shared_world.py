@@ -6,9 +6,7 @@ import pytest
 
 from physai.robots import shared_attach
 from physai.sim import RobotInstanceConfig, SharedWorld
-from physai.web.runtime import action_from_payload
 from physai.web.telemetry import build_scene_manifest
-from physai.web.world_runtime import SharedWorldHost
 
 ROOT = Path(__file__).resolve().parents[2]
 SO101_MODEL = ROOT / "assets" / "so101" / "so101_new_calib_camera.xml"
@@ -74,41 +72,6 @@ def test_unknown_or_invalid_instance_controls_fail_clearly():
         world.set_controls("base_1", {"forward": np.nan})
 
 
-def test_shared_host_routes_heterogeneous_actions_into_one_state_snapshot():
-    world = make_world()
-    configs = (
-        RobotInstanceConfig("arm_1", SO101_MODEL, "so101", position=(0.3, 0.0, 0.0)),
-        RobotInstanceConfig(
-            "base_1", TURTLEBOT_MODEL, "turtlebot4", position=(-0.3, 0.0, 0.1)
-        ),
-    )
-    host = SharedWorldHost(world, configs)
-    host.reset()
-    host.submit(
-        "arm_1",
-        action_from_payload({"mode": "twist", "linear": {"x": 0.01}, "angular": {}}),
-    )
-    host.submit(
-        "base_1",
-        action_from_payload(
-            {"mode": "twist", "linear": {"x": 0.1}, "angular": {"z": 0.2}}
-        ),
-    )
-
-    with host.physics_lock:
-        for instance_id, instance in host.instances.items():
-            action = host._pending.pop(instance_id)
-            instance.submit(action)
-        world.step()
-        host._publish()
-
-    state = host.latest_state()
-    assert state is not None
-    assert state["step"] == 1
-    owners = {item["instance_id"] for item in state["geometries"]}
-    assert {"arm_1", "base_1"} <= owners
-
-
 def test_shared_manifest_keeps_turtlebot_collision_enabled_meshes_visible():
     world = SharedWorld(
         (RobotInstanceConfig("base_1", TURTLEBOT_MODEL, "turtlebot4"),),
@@ -126,21 +89,6 @@ def test_shared_manifest_keeps_turtlebot_collision_enabled_meshes_visible():
     ]
     assert meshes
     assert all(item["visual"] for item in meshes)
-
-
-def test_stop_is_safe_when_never_started():
-    world = make_world()
-    configs = (
-        RobotInstanceConfig("arm_1", SO101_MODEL, "so101", position=(0.3, 0.0, 0.0)),
-        RobotInstanceConfig(
-            "base_1", TURTLEBOT_MODEL, "turtlebot4", position=(-0.3, 0.0, 0.1)
-        ),
-    )
-    host = SharedWorldHost(world, configs)
-
-    host.stop()
-
-    assert host._thread is None
 
 
 def test_shared_so101_instance_exposes_front_and_wrist_cameras():
