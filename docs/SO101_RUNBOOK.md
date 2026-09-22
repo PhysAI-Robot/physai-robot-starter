@@ -14,16 +14,18 @@ The fetch includes the upstream `so101_new_calib_camera.xml` variant and its
 wrist camera mount meshes. When that file is present, the simulator selects it
 automatically; otherwise it falls back to the base SO-101 model.
 
-Open the robot in MuJoCo:
+Open the robot interactively in the browser (see the shared
+[Web Viewer Runbook](WEB_VIEWER_RUNBOOK.md) for the full workflow, keyboard
+mapping, and camera-panel configuration):
 
 ```bash
-uv run python scripts/run_sim.py --robot so101 --viewer --seed 0
+uv run python scripts/run_sim.py --robot so101 --serve --seed 0
 ```
 
-Open the checked-in pick-and-place scene:
+Open the checked-in pick-and-place scene the same way:
 
 ```bash
-uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --viewer --seed 0
+uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --serve --seed 0
 ```
 
 For headless execution:
@@ -33,54 +35,31 @@ uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --
 ```
 
 Video recording is opt-in. Add `--video` when you want frames written under
-`outputs/`; use `--viewer` only for interactive local runs.
+`outputs/`; use `--serve` (or the Tk fallback below) only for interactive
+local runs.
 
-The interactive viewer is a single Tk window containing the MuJoCo scene and
-all named cameras discovered in the loaded model. Drag the scene to orbit,
-scroll to zoom, and use the toolbar to pause, resume, or reset:
+A minimal Tk desktop window is also available as a fallback when a browser
+isn't convenient: a single window containing the MuJoCo scene and all named
+cameras discovered in the loaded model, generated automatically so `front`
+and `wrist` appear without selecting one manually (`--camera-view` is a
+retained no-op compatibility flag). It never grows features beyond this — see
+[ADR 4](adr/0004-tk-viewer-frozen.md) — so use the browser viewer above for
+per-camera selection or debug overlays. Drag the scene to orbit, scroll to
+zoom, and use the toolbar to pause, resume, or reset:
 
 ```bash
 uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --viewer --seed 0
 ```
 
-The camera panels are generated automatically, so `front` and `wrist` appear
-without selecting one manually. `--camera-view` is retained as a compatibility
-flag and is no longer required. This mode requires a desktop display and
-Tkinter (`python3-tk` on Debian/Ubuntu).
-
-For the headless browser console, including keyboard jog and multi-robot
-selection, use the shared [Web Viewer Runbook](WEB_VIEWER_RUNBOOK.md).
+This mode requires a desktop display and Tkinter (`python3-tk` on
+Debian/Ubuntu).
 
 ## 2. Run the Basic Task
 
-Run the scripted pick-and-place policy:
-
-```bash
-uv run python scripts/eval_policy.py --policy scripted --episodes 5 --seed 0 --max-steps 500
-```
-
-Run the documented deterministic reliability check:
-
-```bash
-uv run python scripts/eval_policy.py --policy scripted --episodes 20 --seed 0 --max-steps 600
-```
-
-The current baseline is **100%** over 100 seeds (95% CI [96%, 100%], measured
-2026-09-21), matching the deterministic `visual_servo` policy. Note that a
-20-seed run could not resolve the pre-fix policy — the same configuration
-scored 45% on seeds 0-19 and 60% on seeds 100-149 — so still use at least 100
-seeds when comparing changes. The root cause and fix are recorded as the
-resolved Phase 2.0 finding in [ROADMAP.md](../ROADMAP.md). Results depend on
-the calibrated jaw pads and the deterministic scene; they are not hardware or
-randomized results.
-
-Use the same seed when comparing parameter changes. Save local results when
-needed:
-
-```bash
-mkdir -p outputs/local
-uv run python scripts/eval_policy.py --policy scripted --episodes 5 --seed 0 --max-steps 500 --json-out outputs/local/so101_scripted_seed0.json
-```
+The scripted pick-and-place policy is a privileged-ground-truth expert — see
+[research/scripted_experts/README.md](../research/scripted_experts/README.md)
+for the full run/evaluate workflow, reliability numbers, and interactive
+inspection command.
 
 ## 3. Validate SO-101 Contracts
 
