@@ -17,9 +17,31 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 # viewer show the same background color instead of MuJoCo's own default sky.
 STUDIO_SKY_RGB: tuple[float, float, float] = (0.8745, 0.9020, 0.8863)
 
+# Matches the web viewer's floor plane and grid-line colors (`0xcbd4cf` /
+# `0xa8b5ae` in scene.js). A robot-mounted camera (e.g. so101's "front")
+# often frames the floor rather than open sky, so the floor's own texture —
+# not just the skybox — needs to be in the same light palette for a MuJoCo
+# render to look consistent with the browser viewer.
+STUDIO_FLOOR_RGB1: tuple[float, float, float] = (0.796, 0.831, 0.812)
+STUDIO_FLOOR_RGB2: tuple[float, float, float] = (0.659, 0.710, 0.682)
+
 
 def add_studio_sky(spec: mujoco.MjSpec) -> None:
-    """Add a flat skybox matching the web viewer's background color."""
+    """Make the spec's skybox match the web viewer's background color.
+
+    A robot's own MJCF (e.g. the upstream SO-101 `scene.xml`) may already
+    define a skybox texture. A second `TEXTURE_SKYBOX` in the same model is
+    not reliably overridden — different cameras in the same render can end
+    up showing different skybox textures — so this overwrites the existing
+    one in place instead of adding a second, and only adds a new one when
+    the spec has none.
+    """
+    for texture in spec.textures:
+        if texture.type == mujoco.mjtTexture.mjTEXTURE_SKYBOX:
+            texture.builtin = mujoco.mjtBuiltin.mjBUILTIN_FLAT
+            texture.rgb1 = list(STUDIO_SKY_RGB)
+            texture.rgb2 = list(STUDIO_SKY_RGB)
+            return
     spec.add_texture(
         name="physai_studio_sky",
         type=mujoco.mjtTexture.mjTEXTURE_SKYBOX,
@@ -170,8 +192,8 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
         name="physai_grid",
         type=mujoco.mjtTexture.mjTEXTURE_2D,
         builtin=mujoco.mjtBuiltin.mjBUILTIN_CHECKER,
-        rgb1=[0.22, 0.24, 0.28],
-        rgb2=[0.16, 0.18, 0.22],
+        rgb1=list(STUDIO_FLOOR_RGB1),
+        rgb2=list(STUDIO_FLOOR_RGB2),
         width=300,
         height=300,
     )

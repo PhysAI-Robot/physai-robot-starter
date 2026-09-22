@@ -10,7 +10,7 @@ from typing import Any
 import mujoco
 import numpy as np
 
-from .scenes.common import add_studio_sky
+from .scenes.common import STUDIO_FLOOR_RGB1, STUDIO_FLOOR_RGB2, add_studio_sky
 
 
 @dataclass(frozen=True)
@@ -99,10 +99,27 @@ class SharedWorld:
             diffuse=[0.45, 0.5, 0.55],
         )
         if add_floor:
+            spec.add_texture(
+                name="physai_grid",
+                type=mujoco.mjtTexture.mjTEXTURE_2D,
+                builtin=mujoco.mjtBuiltin.mjBUILTIN_CHECKER,
+                rgb1=list(STUDIO_FLOOR_RGB1),
+                rgb2=list(STUDIO_FLOOR_RGB2),
+                width=300,
+                height=300,
+            )
+            spec.add_material(
+                name="physai_grid",
+                textures=["", "physai_grid"],
+                texuniform=True,
+                texrepeat=[6, 6],
+                reflectance=0.1,
+            )
             spec.worldbody.add_geom(
                 name="physai_shared_floor",
                 type=mujoco.mjtGeom.mjGEOM_PLANE,
                 size=[0.0, 0.0, 0.05],
+                material="physai_grid",
             )
 
         prefixes: dict[str, str] = {}
