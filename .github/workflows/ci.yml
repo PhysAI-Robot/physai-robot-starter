@@ -17,10 +17,21 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
-      - name: Check Python formatting
-        uses: astral-sh/ruff-action@v3
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
         with:
-          args: "format --check --exclude .venv --exclude venv"
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install formatting dependencies
+        run: uv sync --locked --extra dev
+
+      - name: Check Python formatting
+        run: uv run ruff format --check --exclude .venv --exclude venv
 
   test:
     name: Python 3.12 tests
