@@ -18,6 +18,7 @@ venv/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
+.import_linter_cache/
 
 # mujoco crash log, written next to the working directory
 MUJOCO_LOG.TXT
