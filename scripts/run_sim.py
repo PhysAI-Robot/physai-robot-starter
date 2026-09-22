@@ -73,6 +73,24 @@ def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
     return gif
 
 
+# VS Code's current default dark theme ("Dark Modern"). Chrome only — the
+# rendered scene and camera feeds stay exactly as MuJoCo produces them, so
+# they keep matching the light studio background the web viewer also uses.
+_INK = {
+    "bg": "#1f1f1f",
+    "bg_panel": "#181818",
+    "bg_elevated": "#252526",
+    "border": "#2b2b2b",
+    "text": "#cccccc",
+    "text_muted": "#9d9d9d",
+    "accent": "#0078d4",
+    "accent_hover": "#1a86dd",
+    "accent_pressed": "#005a9e",
+    "good": "#89d185",
+    "warn": "#cca700",
+}
+
+
 class SingleWindowViewer:
     """Tk client rendering an authoritative host and its model cameras."""
 
@@ -111,33 +129,74 @@ class SingleWindowViewer:
         self._free_camera = mujoco.MjvCamera()
         mujoco.mjv_defaultFreeCamera(host.model, self._free_camera)
 
+        self.root.configure(bg=_INK["bg"])
         style = ttk.Style(self.root)
         # "clam" is the only built-in ttk theme that honors custom colors on every
         # platform; the default themes ignore background/foreground overrides.
         style.theme_use("clam")
-        style.configure("Toolbar.TFrame", background="#1c2224")
-        style.configure("StatusBar.TFrame", background="#eef2f0")
-        style.configure("StatusBar.TLabel", background="#eef2f0", foreground="#355448")
-        style.configure("TButton", padding=(10, 6))
-        style.configure("TLabelframe", background="#f0f3f1")
-        style.configure("TLabelframe.Label", background="#f0f3f1", foreground="#355448")
+        style.configure("Toolbar.TFrame", background=_INK["bg_panel"])
+        style.configure("StatusBar.TFrame", background=_INK["bg_panel"])
+        style.configure(
+            "StatusBar.TLabel", background=_INK["bg_panel"], foreground=_INK["text"]
+        )
+        style.configure(
+            "Muted.StatusBar.TLabel",
+            background=_INK["bg_panel"],
+            foreground=_INK["text_muted"],
+        )
+        style.configure(
+            "TButton",
+            background=_INK["accent"],
+            foreground="white",
+            bordercolor=_INK["accent"],
+            padding=(16, 9),
+            font=("Segoe UI", 10),
+            relief="flat",
+            focuscolor=_INK["bg_panel"],
+        )
+        style.map(
+            "TButton",
+            background=[
+                ("pressed", _INK["accent_pressed"]),
+                ("active", _INK["accent_hover"]),
+            ],
+            bordercolor=[
+                ("pressed", _INK["accent_pressed"]),
+                ("active", _INK["accent_hover"]),
+            ],
+        )
+        style.configure(
+            "TLabelframe",
+            background=_INK["bg_elevated"],
+            bordercolor=_INK["border"],
+            relief="flat",
+        )
+        style.configure(
+            "TLabelframe.Label",
+            background=_INK["bg_elevated"],
+            foreground=_INK["text_muted"],
+        )
 
         toolbar = ttk.Frame(self.root, style="Toolbar.TFrame")
         toolbar.pack(fill=tk.X)
         self.pause_button = ttk.Button(toolbar, text="Pause", command=self.toggle_pause)
-        self.pause_button.pack(side=tk.LEFT, padx=4, pady=6)
-        ttk.Button(toolbar, text="Reset", command=self.reset).pack(side=tk.LEFT, padx=4)
+        self.pause_button.pack(side=tk.LEFT, padx=(12, 6), pady=10)
+        ttk.Button(toolbar, text="Reset", command=self.reset).pack(side=tk.LEFT, padx=6)
         ttk.Button(toolbar, text="Zoom +", command=lambda: self.zoom(0.85)).pack(
-            side=tk.LEFT, padx=4
+            side=tk.LEFT, padx=6
         )
         ttk.Button(toolbar, text="Zoom -", command=lambda: self.zoom(1.18)).pack(
-            side=tk.LEFT, padx=4
+            side=tk.LEFT, padx=6
         )
 
-        content = tk.Frame(self.root)
+        content = tk.Frame(self.root, bg=_INK["bg_panel"])
         content.pack(fill=tk.BOTH, expand=True)
-        self.scene_label = tk.Label(content, text="Rendering scene...", bg="#202124")
-        self.scene_label.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.scene_label = tk.Label(
+            content, text="Rendering scene...", bg=_INK["bg"], fg=_INK["text_muted"]
+        )
+        self.scene_label.pack(
+            side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 1), pady=1
+        )
         self.scene_label.bind("<ButtonPress-1>", self.begin_drag)
         self.scene_label.bind("<B1-Motion>", self.drag_scene)
         self.scene_label.bind("<ButtonRelease-1>", self.end_drag)
@@ -145,27 +204,34 @@ class SingleWindowViewer:
         self.scene_label.bind("<Button-4>", lambda _event: self.zoom(0.9))
         self.scene_label.bind("<Button-5>", lambda _event: self.zoom(1.1))
 
-        camera_panel = ttk.Frame(content)
+        camera_panel = ttk.Frame(content, style="Toolbar.TFrame")
         camera_panel.pack(side=tk.RIGHT, fill=tk.Y)
         self.camera_labels: dict[str, object] = {}
         self.camera_photos: dict[str, object] = {}
         for name in camera_names:
-            panel = ttk.LabelFrame(camera_panel, text=name)
-            panel.pack(fill=tk.X, padx=6, pady=6)
-            label = tk.Label(panel, text="waiting", width=320, height=240)
-            label.pack()
+            panel = ttk.LabelFrame(camera_panel, text=name.upper())
+            panel.pack(fill=tk.X, padx=8, pady=8)
+            label = tk.Label(
+                panel,
+                text="waiting",
+                width=320,
+                height=240,
+                bg=_INK["bg"],
+                fg=_INK["text_muted"],
+            )
+            label.pack(padx=1, pady=(0, 1))
             self.camera_labels[name] = label
 
         status_bar = ttk.Frame(self.root, style="StatusBar.TFrame")
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
         self.status = ttk.Label(status_bar, text="running", style="StatusBar.TLabel")
-        self.status.pack(side=tk.LEFT, padx=10, pady=4)
+        self.status.pack(side=tk.LEFT, padx=10, pady=6)
         if self.serve_url is not None:
             ttk.Label(
                 status_bar,
                 text=f"Web viewer: {self.serve_url}",
-                style="StatusBar.TLabel",
-            ).pack(side=tk.RIGHT, padx=10, pady=4)
+                style="Muted.StatusBar.TLabel",
+            ).pack(side=tk.RIGHT, padx=10, pady=6)
 
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
@@ -208,7 +274,8 @@ class SingleWindowViewer:
         step = state["step"] if state is not None else 0
         self.paused = self.host.paused
         self.status.configure(
-            text=f"{'paused' if self.paused else 'running'}  step={step}"
+            text=f"{'paused' if self.paused else 'running'}  step={step}",
+            foreground=_INK["warn"] if self.paused else _INK["good"],
         )
         self.root.update_idletasks()
         self.root.update()
