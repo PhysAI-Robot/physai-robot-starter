@@ -19,24 +19,14 @@ machine through the existing IK and joint-position safety path.
 Run one episode:
 
 ```bash
-uv run python scripts/eval_policy.py \
-  --policy visual_servo \
-  --episodes 1 \
-  --seed 0 \
-  --max-steps 400
+uv run python scripts/eval_policy.py --policy visual_servo --episodes 1 --seed 0 --max-steps 400
 ```
 
 Run the bounded camera-jitter robustness check and save its per-episode
 metrics as JSON:
 
 ```bash
-uv run python scripts/eval_policy.py \
-  --policy visual_servo \
-  --episodes 20 \
-  --seed 0 \
-  --max-steps 600 \
-  --camera-jitter 0.005 \
-  --json-out outputs/visual_servo_20seed_jitter.json
+uv run python scripts/eval_policy.py --policy visual_servo --episodes 20 --seed 0 --max-steps 600 --camera-jitter 0.005 --json-out outputs/visual_servo_20seed_jitter.json
 ```
 
 The same evaluation runs on a clean Linux runner through the `Visual servo
@@ -61,13 +51,7 @@ Inspect the policy interactively with the MuJoCo viewer and live
 front-camera window:
 
 ```bash
-uv run python scripts/run_sim.py \
-  --config configs/tasks/so101/pick_place.yaml \
-  --policy visual_servo \
-  --viewer \
-  --camera-view \
-  --camera front \
-  --seed 0
+uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --policy visual_servo --viewer --camera-view --camera front --seed 0
 ```
 
 The default detector targets the red pick cube. The fixed front camera

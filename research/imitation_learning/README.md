@@ -19,10 +19,8 @@ demonstrations and fine-tune an ACT policy:
 
 ```bash
 uv run python scripts/collect_demos.py --episodes 50 --out data/pickplace_v1
-uv run python research/imitation_learning/train_act.py \
-  --dataset data/pickplace_v1 --steps 4000
-uv run python scripts/eval_policy.py \
-  --policy lerobot --checkpoint outputs/act_ckpt --camera-size 128
+uv run python research/imitation_learning/train_act.py --dataset data/pickplace_v1 --steps 4000
+uv run python scripts/eval_policy.py --policy lerobot --checkpoint outputs/act_ckpt --camera-size 128
 ```
 
 `collect_demos.py` drives the scripted expert

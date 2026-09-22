@@ -17,28 +17,19 @@ automatically; otherwise it falls back to the base SO-101 model.
 Open the robot in MuJoCo:
 
 ```bash
-uv run python scripts/run_sim.py \
-  --robot so101 \
-  --viewer \
-  --seed 0
+uv run python scripts/run_sim.py --robot so101 --viewer --seed 0
 ```
 
 Open the checked-in pick-and-place scene:
 
 ```bash
-uv run python scripts/run_sim.py \
-  --config configs/tasks/so101/pick_place.yaml \
-  --viewer \
-  --seed 0
+uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --viewer --seed 0
 ```
 
 For headless execution:
 
 ```bash
-uv run python scripts/run_sim.py \
-  --config configs/tasks/so101/pick_place.yaml \
-  --seed 0 \
-  --max-steps 500
+uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --seed 0 --max-steps 500
 ```
 
 Video recording is opt-in. Add `--video` when you want frames written under
@@ -49,10 +40,7 @@ all named cameras discovered in the loaded model. Drag the scene to orbit,
 scroll to zoom, and use the toolbar to pause, resume, or reset:
 
 ```bash
-uv run python scripts/run_sim.py \
-  --config configs/tasks/so101/pick_place.yaml \
-  --viewer \
-  --seed 0
+uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --viewer --seed 0
 ```
 
 The camera panels are generated automatically, so `front` and `wrist` appear
@@ -68,21 +56,13 @@ selection, use the shared [Web Viewer Runbook](WEB_VIEWER_RUNBOOK.md).
 Run the scripted pick-and-place policy:
 
 ```bash
-uv run python scripts/eval_policy.py \
-  --policy scripted \
-  --episodes 5 \
-  --seed 0 \
-  --max-steps 500
+uv run python scripts/eval_policy.py --policy scripted --episodes 5 --seed 0 --max-steps 500
 ```
 
 Run the documented deterministic reliability check:
 
 ```bash
-uv run python scripts/eval_policy.py \
-  --policy scripted \
-  --episodes 20 \
-  --seed 0 \
-  --max-steps 600
+uv run python scripts/eval_policy.py --policy scripted --episodes 20 --seed 0 --max-steps 600
 ```
 
 The current baseline is **100%** over 100 seeds (95% CI [96%, 100%], measured
@@ -99,28 +79,19 @@ needed:
 
 ```bash
 mkdir -p outputs/local
-uv run python scripts/eval_policy.py \
-  --policy scripted \
-  --episodes 5 \
-  --seed 0 \
-  --max-steps 500 \
-  --json-out outputs/local/so101_scripted_seed0.json
+uv run python scripts/eval_policy.py --policy scripted --episodes 5 --seed 0 --max-steps 500 --json-out outputs/local/so101_scripted_seed0.json
 ```
 
 ## 3. Validate SO-101 Contracts
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest \
-  tests/acceptance/so101/test_kinematics.py \
-  tests/acceptance/so101/test_scene.py \
-  tests/unit/test_robot_registry.py -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/acceptance/so101/test_kinematics.py tests/acceptance/so101/test_scene.py tests/unit/test_robot_registry.py -q
 ```
 
 The transport-level ROS2 check does not require a ROS2 installation:
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest \
-  tests/integration/test_ros2_adapters.py::test_ros2_mujoco_teleop_command_moves_so101 -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/integration/test_ros2_adapters.py::test_ros2_mujoco_teleop_command_moves_so101 -q
 ```
 
 ## 4. Run the Real ROS2 Node
@@ -129,19 +100,14 @@ Real message and executor coverage requires ROS2 Jazzy:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest \
-  tests/robots/so101/test_ros2_node.py -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/robots/so101/test_ros2_node.py -q
 ```
 
 Run a bounded ROS2 MuJoCo smoke test:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-MUJOCO_GL=egl uv run python scripts/run_ros2_sim.py \
-  --robot so101 \
-  --config configs/tasks/so101/pick_place.yaml \
-  --seed 0 \
-  --max-ticks 500
+MUJOCO_GL=egl uv run python scripts/run_ros2_sim.py --robot so101 --config configs/tasks/so101/pick_place.yaml --seed 0 --max-ticks 500
 ```
 
 The node accepts joint trajectory and gripper commands and publishes joint

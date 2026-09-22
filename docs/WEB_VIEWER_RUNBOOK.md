@@ -27,20 +27,13 @@ it does not start pick-and-place. The desktop viewer is optional; add
 `--viewer` when you want both clients attached to the same host:
 
 ```bash
-MUJOCO_GL=egl uv run python scripts/run_sim.py \
-  --robot so101 \
-  --serve \
-  --seed 0
+MUJOCO_GL=egl uv run python scripts/run_sim.py --robot so101 --serve --seed 0
 ```
 
 To run the scripted pick-and-place policy instead, make it explicit:
 
 ```bash
-MUJOCO_GL=egl uv run python scripts/run_sim.py \
-  --config configs/tasks/so101/pick_place.yaml \
-  --policy scripted \
-  --serve \
-  --seed 0
+MUJOCO_GL=egl uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --policy scripted --serve --seed 0
 ```
 
 The desktop GUI and web server now use the same MuJoCo engine. Open
@@ -48,16 +41,13 @@ The desktop GUI and web server now use the same MuJoCo engine. Open
 open it:
 
 ```bash
-uv run python scripts/run_web.py \
-  --connect http://127.0.0.1:8000
+uv run python scripts/run_web.py --connect http://127.0.0.1:8000
 ```
 
 Use another bind address or port on the host when needed:
 
 ```bash
-MUJOCO_GL=egl uv run python scripts/run_sim.py \
-  --config configs/tasks/so101/pick_place.yaml \
-  --viewer --serve --host 0.0.0.0 --port 8004
+MUJOCO_GL=egl uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --viewer --serve --host 0.0.0.0 --port 8004
 ```
 
 The `--robot`, `--config`, `--seed`, and `--policy` options belong to the
@@ -71,9 +61,7 @@ To place multiple heterogeneous robot instances in one MuJoCo scene and clock,
 use the world manifest:
 
 ```bash
-MUJOCO_GL=egl uv run python scripts/run_sim.py \
-  --world configs/worlds/heterogeneous.yaml \
-  --serve
+MUJOCO_GL=egl uv run python scripts/run_sim.py --world configs/worlds/heterogeneous.yaml --serve
 ```
 
 The manifest assigns each instance an ID, robot adapter, model path, and world
@@ -89,12 +77,7 @@ On a server, in a container, or in any environment with no display, replace
 but no desktop window is opened:
 
 ```bash
-MUJOCO_GL=egl uv run --extra web python scripts/run_sim.py \
-  --config configs/tasks/so101/pick_place.yaml \
-  --policy visual_servo \
-  --headless \
-  --serve \
-  --seed 0
+MUJOCO_GL=egl uv run --extra web python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --policy visual_servo --headless --serve --seed 0
 ```
 
 `--headless` requires `--serve` and cannot be combined with `--viewer`. The
@@ -118,12 +101,7 @@ SO-101 assets. Codespaces machines have no GPU, so the container sets
 Once the workspace is ready, start the headless host in its terminal:
 
 ```bash
-uv run --extra web python scripts/run_sim.py \
-  --config configs/tasks/so101/pick_place.yaml \
-  --policy visual_servo \
-  --headless \
-  --serve \
-  --seed 0
+uv run --extra web python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --policy visual_servo --headless --serve --seed 0
 ```
 
 Port 8000 is declared as forwarded. Open it from the Ports panel and leave its

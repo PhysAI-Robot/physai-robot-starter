@@ -86,16 +86,13 @@ modes hold the current pose and do not run pick-and-place automatically. Add
 `--viewer` only when you also want the local desktop window:
 
 ```bash
-MUJOCO_GL=egl uv run python scripts/run_sim.py \
-  --robot so101 \
-  --serve
+MUJOCO_GL=egl uv run python scripts/run_sim.py --robot so101 --serve
 ```
 
 In another terminal, open the browser client:
 
 ```bash
-MUJOCO_GL=egl uv run python scripts/run_web.py \
-  --connect http://127.0.0.1:8000
+MUJOCO_GL=egl uv run python scripts/run_web.py --connect http://127.0.0.1:8000
 ```
 
 The web layer remains robot-agnostic and discovers action modes and cameras
@@ -106,9 +103,7 @@ To run multiple heterogeneous robots in one shared MuJoCo scene at the default
 30 Hz control rate, use the world manifest example:
 
 ```bash
-MUJOCO_GL=egl uv run python scripts/run_sim.py \
-  --world configs/worlds/heterogeneous.yaml \
-  --serve
+MUJOCO_GL=egl uv run python scripts/run_sim.py --world configs/worlds/heterogeneous.yaml --serve
 ```
 
 This uses one model, physics data object, and simulation clock. The shared
@@ -302,8 +297,7 @@ extra:
 ```bash
 uv sync --extra vla
 uv run python research/imitation_learning/train_act.py --dataset data/pickplace_v1 --steps 4000
-uv run python scripts/eval_policy.py --policy lerobot \
-  --checkpoint outputs/act_ckpt --camera-size 128
+uv run python scripts/eval_policy.py --policy lerobot --checkpoint outputs/act_ckpt --camera-size 128
 ```
 
 The training script stores the checkpoint and metadata under
