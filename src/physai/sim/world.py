@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import mujoco
 import numpy as np
@@ -52,6 +53,11 @@ class SharedWorld:
     Robot-specific adapters consume the returned bindings and remain responsible
     for translating local observations and actions. This class deliberately does
     not merge heterogeneous robot action or observation spaces.
+
+    `shared_attach`, if given, is called as ``shared_attach(robot_name, child)``
+    for every instance being attached, letting a robot inject shared-world-only
+    MJCF (e.g. extra cameras) without this class knowing any robot's name; pass
+    `physai.robots.shared_attach` to wire in whatever robots have registered.
     """
 
     def __init__(
@@ -61,6 +67,7 @@ class SharedWorld:
         timestep: float = 0.002,
         control_hz: float = 30.0,
         add_floor: bool = True,
+        shared_attach: Callable[[str, Any], None] | None = None,
     ) -> None:
         if not instances:
             raise ValueError("shared world requires at least one robot instance")
@@ -108,24 +115,8 @@ class SharedWorld:
         for instance in instances:
             child = mujoco.MjSpec.from_file(str(instance.model_path))
             prefix = f"{instance.instance_id}__"
-            if instance.robot_name == "so101":
-                child.worldbody.add_camera(
-                    name="front",
-                    pos=[0.62, 0.0, 0.38],
-                    xyaxes=[0.0, 1.0, 0.0, -0.45, 0.0, 0.9],
-                    fovy=48,
-                )
-                camera_body = next(
-                    (body for body in child.bodies if body.name == "wrist_camera"),
-                    None,
-                )
-                if camera_body is not None:
-                    camera_body.add_camera(
-                        name="wrist",
-                        pos=[0.0, 0.0, 0.025],
-                        xyaxes=[1.0, 0.0, 0.0, 0.0, -1.0, 0.0],
-                        fovy=62,
-                    )
+            if shared_attach is not None:
+                shared_attach(instance.robot_name, child)
             frame = spec.worldbody.add_frame(
                 name=f"{instance.instance_id}__root",
                 pos=list(instance.position),

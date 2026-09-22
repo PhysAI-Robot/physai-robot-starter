@@ -4,6 +4,7 @@ import mujoco
 import numpy as np
 import pytest
 
+from physai.robots import shared_attach
 from physai.sim import RobotInstanceConfig, SharedWorld
 from physai.web.runtime import action_from_payload
 from physai.web.telemetry import build_scene_manifest
@@ -31,6 +32,7 @@ def make_world() -> SharedWorld:
             ),
         ),
         control_hz=10.0,
+        shared_attach=shared_attach,
     )
 
 
@@ -108,7 +110,10 @@ def test_shared_host_routes_heterogeneous_actions_into_one_state_snapshot():
 
 
 def test_shared_manifest_keeps_turtlebot_collision_enabled_meshes_visible():
-    world = SharedWorld((RobotInstanceConfig("base_1", TURTLEBOT_MODEL, "turtlebot4"),))
+    world = SharedWorld(
+        (RobotInstanceConfig("base_1", TURTLEBOT_MODEL, "turtlebot4"),),
+        shared_attach=shared_attach,
+    )
     manifest = build_scene_manifest(
         world.model,
         instance_prefixes={"base_1": "base_1__"},
@@ -139,7 +144,10 @@ def test_stop_is_safe_when_never_started():
 
 
 def test_shared_so101_instance_exposes_front_and_wrist_cameras():
-    world = SharedWorld((RobotInstanceConfig("arm_1", SO101_MODEL, "so101"),))
+    world = SharedWorld(
+        (RobotInstanceConfig("arm_1", SO101_MODEL, "so101"),),
+        shared_attach=shared_attach,
+    )
     camera_names = {
         mujoco.mj_id2name(world.model, mujoco.mjtObj.mjOBJ_CAMERA, camera_id)
         for camera_id in range(world.model.ncam)

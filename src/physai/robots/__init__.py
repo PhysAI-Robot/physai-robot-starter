@@ -16,6 +16,7 @@ from .registry import (
     create_robot,
     create_robot_policy,
     create_ros2_node,
+    create_shared_instance,
     navigate,
     register_embodiment,
     register_env_config,
@@ -23,6 +24,9 @@ from .registry import (
     register_robot,
     register_robot_policy,
     register_ros2_node,
+    register_shared_attach,
+    register_shared_instance,
+    shared_attach,
 )
 
 __all__ = [
@@ -40,6 +44,7 @@ __all__ = [
     "create_robot",
     "create_robot_policy",
     "create_ros2_node",
+    "create_shared_instance",
     "navigate",
     "register_adapter",
     "register_embodiment",
@@ -48,5 +53,8 @@ __all__ = [
     "register_robot",
     "register_robot_policy",
     "register_ros2_node",
+    "register_shared_attach",
+    "register_shared_instance",
     "select_adapter",
+    "shared_attach",
 ]
