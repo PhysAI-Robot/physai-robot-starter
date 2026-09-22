@@ -1,5 +1,11 @@
 # Web Viewer
 
+This is the operational runbook: how to run the viewer, keyboard/control-pad
+mapping, appearance, cloud workspace setup, and troubleshooting. The host's
+API surface, threading model, and control-lease contract are architecture
+reference material and live in
+[docs/ARCHITECTURE.md](ARCHITECTURE.md#host--client-api) instead.
+
 The web viewer is a client of an already running simulation host. The host
 owns the robot, task configuration, seed, policy, MuJoCo model, physics clock,
 and command arbitration. The desktop viewer and browser render the same state
@@ -159,61 +165,16 @@ The browser viewer follows the OS `prefers-color-scheme` by default (light or
 dark) and can be overridden per browser with the header's theme button; the
 choice persists in that browser's `localStorage`.
 
-## Control Ownership
+## Control Ownership, Rendering, And The API Surface
 
-State is readable by every connected viewer, but manual control uses a short
-lease. The first client sending a command becomes the active controller;
-commands from another client are rejected while that lease is alive. Jogging
-refreshes the lease, and releasing the connection or allowing the lease to
-expire returns the host to a safe hold action, or resumes its configured
-policy.
-
-Reset and pause are host operations and affect every viewer. The desktop GUI
-and browser therefore show the same step counter, transforms, camera frames,
-pause state, and reset result.
-
-## Rendering And Cameras
-
-The scene manifest contains MuJoCo compiled meshes and authored material
-colors. Dynamic geometry poses are streamed from MuJoCo; the browser does not
-become a second physics engine. MuJoCo primitive cylinders use the viewer's
-Z-up convention, while compiled robot meshes use the pose supplied by the
-compiled geometry contract. The browser viewer presents that scene with a
-horizontal studio floor, a neutral light background, and lighting tuned to
-keep robot and task-object colors readable.
-
-SO-101 `front` and `wrist` camera frames are rendered offscreen and cached by
-the host, including in shared-world mode. In viewer/serve modes, a dedicated
-camera worker copies the latest MuJoCo state and renders the feeds at about
-5 FPS, so camera capture does not pause the 30 Hz physics loop. HTTP camera
-requests only read the latest cached JPEG; they never step or render from the
-request handler itself.
-
-The browser consumes camera feeds through `/api/camera/<name>/stream`, a
-`multipart/x-mixed-replace` MJPEG stream that a plain `<img>` decodes natively
-as a continuous feed. This replaced an earlier client that re-fetched
-`/api/camera/<name>.jpg` on a timer; the single-shot JPEG endpoint still exists
-for one-off snapshots (for example scripts or debugging), but the browser
-viewer no longer polls it. Available camera feeds are shown in the control
-panel, stacked vertically so each feed gets the sidebar's full width, and
-front/wrist views remain legible.
-
-## API Surface
-
-- `/`: Three.js browser console
-- `/api/robots`: registered robots and their action/camera capabilities
-- `/api/scene`: static geometry manifest
-- `/api/state`: latest transform snapshot
-- `/api/mesh/<id>`: compiled mesh binary payload
-- `/api/camera/<name>.jpg`: cached camera JPEG (single snapshot)
-- `/api/camera/<name>/stream`: cached camera frames as a continuous MJPEG
-  (`multipart/x-mixed-replace`) stream; 404 if the camera name is unknown
-- `/ws`: state stream and command channel
-
-The WebSocket accepts `select_robot`, `command`, `reset`, and `pause` messages.
-In shared-world mode, `/api/robots` reports instance IDs and their capability
-contracts, while `/api/scene` and `/api/state` always describe the whole
-world. The web client selects an existing instance and cannot create a robot.
+Covered in [docs/ARCHITECTURE.md](ARCHITECTURE.md#host--client-api): the
+control-lease contract, the physics-thread/camera-worker threading model, and
+the full REST/WebSocket route table. In short: reset and pause affect every
+viewer; manual control uses a short per-instance lease; camera frames are
+rendered by a decoupled worker thread and streamed over
+`/api/camera/<name>/stream` (`multipart/x-mixed-replace`, consumed natively by
+a plain `<img>` tag); the single-shot `/api/camera/<name>.jpg` snapshot
+endpoint still exists for scripts and debugging.
 
 ## Troubleshooting
 
