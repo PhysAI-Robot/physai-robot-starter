@@ -1,0 +1,24 @@
+# Two robot instances, one MuJoCo model, one clock: the multi-embodiment
+# session the shared-world web path is built for. Only so101 has a task and
+# policy here; turtlebot4 stays idle. No `scene:` is set because the
+# pick-and-place scenes are so101-only (fixed_base_manipulator) — a session
+# spanning two embodiment kinds either omits `scene.name` or picks one that
+# declares both kinds as compatible.
+schema_version: 1
+
+backend: direct
+
+robots:
+  - id: arm_1
+    robot: so101
+    pose:
+      position: [0.3, 0.0, 0.0]
+    task: pick_place
+    policy: scripted
+  - id: base_1
+    robot: turtlebot4
+    pose:
+      position: [-0.3, 0.0, 0.1]
+
+viewer:
+  mode: web
