@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from ..contracts import Action, Observation
@@ -57,6 +58,46 @@ class DirectMuJoCoAdapter:
         return getattr(self._environment, name)
 
 
+AdapterBuilder = Callable[..., RobotPort]
+_ADAPTERS: dict[str, AdapterBuilder] = {}
+
+
+def register_adapter(name: str, builder: AdapterBuilder) -> AdapterBuilder:
+    """Register a backend under a stable name for `create_adapter()`.
+
+    This is the seam for adding a new backend (e.g. a future simulator):
+    write a builder with the same shape as the three below and register it
+    here, without editing any existing builder.
+    """
+    if name in _ADAPTERS:
+        raise ValueError(f"adapter {name!r} is already registered")
+    _ADAPTERS[name] = builder
+    return builder
+
+
+def available_adapters() -> tuple[str, ...]:
+    _load_builtins()
+    return tuple(sorted(_ADAPTERS))
+
+
+def create_adapter(
+    name: str,
+    direct: RobotPort | None,
+    *,
+    transport: Any = None,
+    hardware: RobotPort | None = None,
+    codec: Any = None,
+) -> RobotPort:
+    """Build the named backend adapter through the registry."""
+    _load_builtins()
+    try:
+        builder = _ADAPTERS[name]
+    except KeyError as exc:
+        choices = ", ".join(available_adapters())
+        raise ValueError(f"unknown adapter {name!r}; available: {choices}") from exc
+    return builder(direct, transport=transport, hardware=hardware, codec=codec)
+
+
 def select_adapter(
     name: str,
     direct: RobotPort | None,
@@ -66,27 +107,46 @@ def select_adapter(
     codec: Any = None,
 ) -> RobotPort:
     """Select a robot adapter without changing policy or task code."""
-    if name == "direct_mujoco":
-        if direct is None:
-            raise ValueError("adapter='direct_mujoco' requires a MuJoCo port")
-        return DirectMuJoCoAdapter(direct)
-    if name == "ros2_mujoco":
-        if transport is None:
-            raise ValueError("adapter='ros2_mujoco' requires a ROS2 transport")
-        if direct is None:
-            raise ValueError("adapter='ros2_mujoco' requires a MuJoCo port")
-        from ..bridge.adapters import ROS2MuJoCoAdapter
-
-        return ROS2MuJoCoAdapter(direct, transport, codec=codec)
-    if name == "ros2_hardware":
-        if transport is None:
-            raise ValueError("adapter='ros2_hardware' requires a ROS2 transport")
-        if hardware is None:
-            raise ValueError("adapter='ros2_hardware' requires a hardware port")
-        from ..bridge.adapters import ROS2HardwareAdapter
-
-        return ROS2HardwareAdapter(hardware, transport, codec=codec)
-    raise ValueError(
-        f"unknown adapter {name!r}; available: "
-        "direct_mujoco, ros2_mujoco, ros2_hardware"
+    return create_adapter(
+        name, direct, transport=transport, hardware=hardware, codec=codec
     )
+
+
+def _build_direct_mujoco(
+    direct: RobotPort | None, *, transport: Any, hardware: RobotPort | None, codec: Any
+) -> RobotPort:
+    if direct is None:
+        raise ValueError("adapter='direct_mujoco' requires a MuJoCo port")
+    return DirectMuJoCoAdapter(direct)
+
+
+def _build_ros2_mujoco(
+    direct: RobotPort | None, *, transport: Any, hardware: RobotPort | None, codec: Any
+) -> RobotPort:
+    if transport is None:
+        raise ValueError("adapter='ros2_mujoco' requires a ROS2 transport")
+    if direct is None:
+        raise ValueError("adapter='ros2_mujoco' requires a MuJoCo port")
+    from ..bridge.adapters import ROS2MuJoCoAdapter
+
+    return ROS2MuJoCoAdapter(direct, transport, codec=codec)
+
+
+def _build_ros2_hardware(
+    direct: RobotPort | None, *, transport: Any, hardware: RobotPort | None, codec: Any
+) -> RobotPort:
+    if transport is None:
+        raise ValueError("adapter='ros2_hardware' requires a ROS2 transport")
+    if hardware is None:
+        raise ValueError("adapter='ros2_hardware' requires a hardware port")
+    from ..bridge.adapters import ROS2HardwareAdapter
+
+    return ROS2HardwareAdapter(hardware, transport, codec=codec)
+
+
+def _load_builtins() -> None:
+    if _ADAPTERS:
+        return
+    register_adapter("direct_mujoco", _build_direct_mujoco)
+    register_adapter("ros2_mujoco", _build_ros2_mujoco)
+    register_adapter("ros2_hardware", _build_ros2_hardware)
