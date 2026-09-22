@@ -43,7 +43,12 @@ function checkerTexture(colorA, colorB, tileSize = 64) {
   return texture;
 }
 const floorTexture = checkerTexture("#e3e9e4", "#9fb0a8");
-floorTexture.repeat.set(6, 6);
+// ~0.3 m per tile, matching MuJoCo's actual tile size (measured against the
+// 0.4x0.5 m pick-place table as a ruler: MuJoCo's texrepeat=6 on an
+// "infinite" plane does not mean 6 tiles per meter, it scales off the
+// model's auto-computed extent). A plain repeat=6 here gave ~1 m tiles,
+// about 3x too big next to a MuJoCo render of the same scene.
+floorTexture.repeat.set(20, 20);
 const floor = new THREE.Mesh(
   new THREE.PlaneGeometry(6, 6),
   new THREE.MeshStandardMaterial({ map: floorTexture, roughness: 0.9 }),
