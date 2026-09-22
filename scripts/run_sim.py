@@ -32,7 +32,7 @@ from physai.config import (
     load_world_config,
 )
 from physai.policy import available_policies, create_policy
-from physai.robots import available_robots, create_robot
+from physai.robots import available_robots, create_robot, shared_attach
 from physai.robots.so101 import EnvConfig
 from physai.robots.turtlebot import TurtleBot4Config
 from physai.sim import PickPlaceMinimalSceneConfig, SharedWorld
@@ -125,13 +125,9 @@ class SingleWindowViewer:
 
         toolbar = ttk.Frame(self.root, style="Toolbar.TFrame")
         toolbar.pack(fill=tk.X)
-        self.pause_button = ttk.Button(
-            toolbar, text="Pause", command=self.toggle_pause
-        )
+        self.pause_button = ttk.Button(toolbar, text="Pause", command=self.toggle_pause)
         self.pause_button.pack(side=tk.LEFT, padx=4, pady=6)
-        ttk.Button(toolbar, text="Reset", command=self.reset).pack(
-            side=tk.LEFT, padx=4
-        )
+        ttk.Button(toolbar, text="Reset", command=self.reset).pack(side=tk.LEFT, padx=4)
         ttk.Button(toolbar, text="Zoom +", command=lambda: self.zoom(0.85)).pack(
             side=tk.LEFT, padx=4
         )
@@ -167,7 +163,9 @@ class SingleWindowViewer:
         self.status.pack(side=tk.LEFT, padx=10, pady=4)
         if self.serve_url is not None:
             ttk.Label(
-                status_bar, text=f"Web viewer: {self.serve_url}", style="StatusBar.TLabel"
+                status_bar,
+                text=f"Web viewer: {self.serve_url}",
+                style="StatusBar.TLabel",
             ).pack(side=tk.RIGHT, padx=10, pady=4)
 
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -552,6 +550,7 @@ def run_viewer(
                 timestep=world_config.timestep,
                 control_hz=world_config.control_hz,
                 add_floor=world_config.add_floor,
+                shared_attach=shared_attach,
             ),
             world_config.instances,
         )

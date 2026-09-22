@@ -22,6 +22,8 @@ EnvConfigFactory = Callable[..., Any]
 NavigationFactory = Callable[..., Any]
 SceneDefaultsFactory = Callable[[], dict[str, Any]]
 RobotPolicyFactory = Callable[..., Any]
+SharedAttachHook = Callable[[Any], None]
+SharedInstanceFactory = Callable[[Any, Any], Any]
 
 
 @dataclass(frozen=True)
@@ -34,6 +36,8 @@ class RobotDescriptor:
     env_config: EnvConfigFactory | None = None
     ros2_node: ROS2NodeFactory | None = None
     navigation: NavigationFactory | None = None
+    shared_attach: SharedAttachHook | None = None
+    shared_instance: SharedInstanceFactory | None = None
 
 
 _FACTORIES: dict[str, RobotFactory] = {}
@@ -43,6 +47,8 @@ _ENV_CONFIG_FACTORIES: dict[str, EnvConfigFactory] = {}
 _NAVIGATION_FACTORIES: dict[str, NavigationFactory] = {}
 _SCENE_DEFAULT_FACTORIES: dict[str, SceneDefaultsFactory] = {}
 _POLICY_FACTORIES: dict[tuple[str, str], RobotPolicyFactory] = {}
+_SHARED_ATTACH_HOOKS: dict[str, SharedAttachHook] = {}
+_SHARED_INSTANCE_FACTORIES: dict[str, SharedInstanceFactory] = {}
 
 
 def register_robot(
@@ -63,8 +69,8 @@ def register_embodiment(name: str, descriptor: RobotDescriptor) -> RobotDescript
     This is the seam for adding a new robot: build one `RobotDescriptor` and
     call this once. It is equivalent to calling `register_robot()` plus
     whichever of `register_scene_defaults()`, `register_env_config()`,
-    `register_ros2_node()`, and `register_navigation()` the descriptor
-    supplies.
+    `register_ros2_node()`, `register_navigation()`, `register_shared_attach()`,
+    and `register_shared_instance()` the descriptor supplies.
     """
     register_robot(name, descriptor.factory, kind=descriptor.kind)
     if descriptor.scene_defaults is not None:
@@ -75,6 +81,10 @@ def register_embodiment(name: str, descriptor: RobotDescriptor) -> RobotDescript
         register_ros2_node(name, descriptor.ros2_node)
     if descriptor.navigation is not None:
         register_navigation(name, descriptor.navigation)
+    if descriptor.shared_attach is not None:
+        register_shared_attach(name, descriptor.shared_attach)
+    if descriptor.shared_instance is not None:
+        register_shared_instance(name, descriptor.shared_instance)
     return descriptor
 
 
@@ -207,6 +217,51 @@ def available_ros2_robots() -> tuple[str, ...]:
     return tuple(sorted(_ROS2_NODE_FACTORIES))
 
 
+def register_shared_attach(name: str, hook: SharedAttachHook) -> SharedAttachHook:
+    """Register a hook letting a robot inject shared-world-only MJCF (e.g.
+    extra cameras) into its spec at attach time."""
+    if name in _SHARED_ATTACH_HOOKS:
+        raise ValueError(
+            f"shared-world attach hook for robot {name!r} is already registered"
+        )
+    _SHARED_ATTACH_HOOKS[name] = hook
+    return hook
+
+
+def shared_attach(name: str, spec: Any) -> None:
+    """Call the robot's shared-world attach hook, if it registered one."""
+    _load_builtins()
+    hook = _SHARED_ATTACH_HOOKS.get(name)
+    if hook is not None:
+        hook(spec)
+
+
+def register_shared_instance(
+    name: str, factory: SharedInstanceFactory
+) -> SharedInstanceFactory:
+    """Register a robot-owned adapter for one binding in a shared world."""
+    if name in _SHARED_INSTANCE_FACTORIES:
+        raise ValueError(
+            f"shared-world instance for robot {name!r} is already registered"
+        )
+    _SHARED_INSTANCE_FACTORIES[name] = factory
+    return factory
+
+
+def create_shared_instance(name: str, world: Any, config: Any) -> Any:
+    """Build a robot's shared-world instance adapter through the registry."""
+    _load_builtins()
+    try:
+        factory = _SHARED_INSTANCE_FACTORIES[name]
+    except KeyError as exc:
+        choices = ", ".join(sorted(_SHARED_INSTANCE_FACTORIES)) or "none"
+        raise ValueError(
+            f"robot {name!r} has no registered shared-world instance; "
+            f"available: {choices}"
+        ) from exc
+    return factory(world, config)
+
+
 def _load_builtins() -> None:
     # so101's "scripted" and "visual_servo" policies are research modules
     # (research/scripted_experts, research/classical_control); they register
@@ -217,6 +272,7 @@ def _load_builtins() -> None:
         from .so101.factory import make_so101
         from .so101.ros2_node import SO101ROS2Node
         from .so101.scene import scene_defaults as so101_scene_defaults
+        from .so101.shared import SO101SharedInstance, so101_shared_attach
 
         register_embodiment(
             "so101",
@@ -226,6 +282,8 @@ def _load_builtins() -> None:
                 scene_defaults=so101_scene_defaults,
                 env_config=EnvConfig,
                 ros2_node=SO101ROS2Node,
+                shared_attach=so101_shared_attach,
+                shared_instance=SO101SharedInstance,
             ),
         )
     if "turtlebot4" not in _FACTORIES:
@@ -233,6 +291,7 @@ def _load_builtins() -> None:
         from .turtlebot.factory import make_turtlebot4
         from .turtlebot.navigation import navigate_to_coordinates
         from .turtlebot.ros2_node import TurtleBot4ROS2Node
+        from .turtlebot.shared import TurtleBot4SharedInstance
 
         register_embodiment(
             "turtlebot4",
@@ -242,5 +301,6 @@ def _load_builtins() -> None:
                 env_config=TurtleBot4Config,
                 ros2_node=TurtleBot4ROS2Node,
                 navigation=navigate_to_coordinates,
+                shared_instance=TurtleBot4SharedInstance,
             ),
         )
