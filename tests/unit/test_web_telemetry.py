@@ -2,7 +2,7 @@ import mujoco
 import numpy as np
 
 from physai.contracts import Action
-from physai.web.runtime import action_from_payload
+from physai.web.actions import action_from_payload
 from physai.web.telemetry import build_scene_manifest, build_state_snapshot
 
 XML = """
@@ -78,11 +78,11 @@ def test_browser_commands_map_to_shared_actions():
 def test_websocket_route_resolves_fastapi_websocket_annotation():
     from physai.robots import RobotSpec
     from physai.web.app import create_app
-    from physai.web.runtime import SimulationHost
+    from physai.web.host import Host
     from tests.support.fakes import FakeRobotPort
 
     spec = RobotSpec(name="test", kind="test", joint_names=("joint",))
-    app = create_app(host=SimulationHost(FakeRobotPort(spec), robot_name="test"))
+    app = create_app(host=Host.for_robot(FakeRobotPort(spec), robot_name="test"))
     websocket_route = next(route for route in app.routes if route.path == "/ws")
 
     assert websocket_route.endpoint.__annotations__["websocket"].__name__ == "WebSocket"

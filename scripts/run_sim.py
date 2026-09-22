@@ -37,8 +37,7 @@ from physai.robots.so101 import EnvConfig
 from physai.robots.turtlebot import TurtleBot4Config
 from physai.sim import PickPlaceMinimalSceneConfig, SharedWorld
 from physai.tasks import TaskRuntime, create_task
-from physai.web.runtime import SimulationHost
-from physai.web.world_runtime import SharedWorldHost
+from physai.web.host import Host
 
 # Registers so101's "scripted"/"visual_servo" policies and the checkpoint-
 # backed "lerobot" policy with their registries; --policy may select any of
@@ -79,7 +78,7 @@ class SingleWindowViewer:
 
     def __init__(
         self,
-        host: SimulationHost | SharedWorldHost,
+        host: Host,
         camera_names: list[str],
         *,
         serve_url: str | None = None,
@@ -544,7 +543,7 @@ def run_viewer(
 ) -> int:
     if args.world:
         world_config = load_world_config(args.world)
-        host = SharedWorldHost(
+        host = Host.for_world(
             SharedWorld(
                 world_config.instances,
                 timestep=world_config.timestep,
@@ -597,7 +596,7 @@ def run_viewer(
             ]
             camera_names = [name for name in camera_names if name]
 
-        host = SimulationHost(
+        host = Host.for_robot(
             env,
             robot_name=args.robot,
             policy=policy,
