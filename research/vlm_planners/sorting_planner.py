@@ -12,6 +12,7 @@ import numpy as np
 
 from physai.contracts import Observation
 from physai.planner.base import Plan, Planner, SubGoal
+from physai.planner.registry import register_planner
 
 
 class SortingPlanner(Planner):
@@ -74,6 +75,9 @@ class SortingPlanner(Planner):
                 ),
             ],
         )
+
+
+register_planner("sorting_planner", SortingPlanner)
 
 
 __all__ = ["SortingPlanner"]
