@@ -1,7 +1,10 @@
 import numpy as np
 
 from physai.contracts import ImageFrame
-from physai.robots.so101.visual_servo import CameraCalibration, ColorBlobDetector
+from research.classical_control.so101_visual_servo import (
+    CameraCalibration,
+    ColorBlobDetector,
+)
 
 
 def test_color_blob_detector_returns_weighted_centroid():

@@ -172,11 +172,10 @@ def _load_builtins() -> None:
         from .so101.scene import scene_defaults as so101_scene_defaults
 
         register_scene_defaults("so101", so101_scene_defaults)
-    if ("so101", "scripted") not in _POLICY_FACTORIES:
-        from .so101.policy import make_scripted_policy, make_visual_servo_policy
-
-        register_robot_policy("so101", "scripted", make_scripted_policy)
-        register_robot_policy("so101", "visual_servo", make_visual_servo_policy)
+    # so101's "scripted" and "visual_servo" policies are research modules
+    # (research/scripted_experts, research/classical_control); they register
+    # themselves with register_robot_policy() on import. This registry never
+    # imports them directly (core must not import research/).
     if "so101" not in _ENV_CONFIG_FACTORIES:
         from .so101.env import EnvConfig
 

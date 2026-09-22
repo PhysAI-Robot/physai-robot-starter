@@ -18,6 +18,9 @@ from physai.robots.so101 import EnvConfig
 from physai.sim import PickPlaceMinimalSceneConfig
 from physai.tasks import TaskRuntime, create_task
 
+# Registers so101's "scripted" policy with the robot registry.
+import research.scripted_experts.so101_pick_place_expert  # noqa: E402,F401
+
 
 def evaluate_mode(args: argparse.Namespace, randomized: bool) -> dict:
     config = DomainRandomizationConfig(

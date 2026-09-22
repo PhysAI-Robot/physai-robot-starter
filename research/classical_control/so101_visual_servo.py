@@ -5,18 +5,23 @@ usual pinhole convention (x right, y down, z forward); ``rotation_base_camera``
 maps that frame into the robot base frame and ``translation_base_camera`` is
 the camera origin in the base frame. The wrist camera is moving, so callers
 must update its calibration from TF before using it for metric control.
+
+Research module: registers itself with ``physai.robots.registry`` on import.
+Core never imports this module directly (see research/README.md).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
+from typing import Any
 
 import numpy as np
 
-from ...contracts import Action, GripperCommand, ImageFrame, Observation
-from ...control.resolver import JointRateLimiter, TwistToJointResolver
-from ...policy.base import Policy
+from physai.contracts import Action, GripperCommand, ImageFrame, Observation
+from physai.control.resolver import JointRateLimiter, TwistToJointResolver
+from physai.policy.base import Policy
+from physai.robots.registry import register_robot_policy
 
 
 @dataclass(frozen=True)
@@ -355,10 +360,24 @@ class SO101VisualServoPolicy(Policy):
         )
 
 
+def make_visual_servo_policy(
+    *, env, cfg: Any = None, **kwargs: Any
+) -> SO101VisualServoPolicy:
+    """Build the deterministic SO-101 camera-feedback baseline."""
+    options = dict(kwargs)
+    if cfg is not None:
+        options.update(cfg if isinstance(cfg, dict) else vars(cfg))
+    return SO101VisualServoPolicy(env, **options)
+
+
+register_robot_policy("so101", "visual_servo", make_visual_servo_policy)
+
+
 __all__ = [
     "CameraCalibration",
     "ColorBlobDetector",
     "SO101VisualServoPolicy",
     "VisualFeature",
     "VisualServoMetrics",
+    "make_visual_servo_policy",
 ]

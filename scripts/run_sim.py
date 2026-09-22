@@ -40,6 +40,11 @@ from physai.tasks import TaskRuntime, create_task
 from physai.web.runtime import SimulationHost
 from physai.web.world_runtime import SharedWorldHost
 
+# Registers so101's "scripted"/"visual_servo" policies with the robot
+# registry; --policy may select either, so both load eagerly.
+import research.classical_control.so101_visual_servo  # noqa: E402,F401
+import research.scripted_experts.so101_pick_place_expert  # noqa: E402,F401
+
 
 def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
     """Write mp4 if an H.264 encoder is available, otherwise fall back to GIF.

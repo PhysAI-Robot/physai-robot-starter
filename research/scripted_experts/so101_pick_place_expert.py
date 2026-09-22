@@ -1,18 +1,24 @@
-"""Privileged SO-101 pick-and-place expert for demonstration collection."""
+"""Privileged SO-101 pick-and-place expert for demonstration collection.
+
+Research module: registers itself with ``physai.robots.registry`` on import.
+Core never imports this module directly (see research/README.md).
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from typing import Any
 
 import mujoco
 import numpy as np
 
-from ...contracts import Action, GripperCommand, Observation, PoseStamped
-from ...control.resolver import JointRateLimiter
-from ...policy.base import Policy
-from ..base import KinematicsPort
-from .kinematics import TOP_DOWN
+from physai.contracts import Action, GripperCommand, Observation, PoseStamped
+from physai.control.resolver import JointRateLimiter
+from physai.policy.base import Policy
+from physai.robots.base import KinematicsPort
+from physai.robots.so101.kinematics import TOP_DOWN
+from physai.robots.registry import register_robot_policy
 
 
 class Phase(Enum):
@@ -261,4 +267,17 @@ class SO101PickPlaceExpert(Policy):
         )
 
 
-__all__ = ["ExpertConfig", "Phase", "SO101PickPlaceExpert"]
+def make_scripted_policy(*, env, cfg: Any = None, **_: Any) -> SO101PickPlaceExpert:
+    """Build the deterministic SO-101 pick-and-place expert."""
+    return SO101PickPlaceExpert(env.kin, env, cfg=cfg)
+
+
+register_robot_policy("so101", "scripted", make_scripted_policy)
+
+
+__all__ = [
+    "ExpertConfig",
+    "Phase",
+    "SO101PickPlaceExpert",
+    "make_scripted_policy",
+]
