@@ -1,11 +1,15 @@
-"""Instruction-to-plan implementations."""
+"""Instruction-to-plan implementations.
 
-from .base import Plan, Planner, ScriptedPlanner, SortingPlanner, SubGoal
+``SortingPlanner`` is a research module (see
+``research/vlm_planners/sorting_planner.py``) and is not exported here;
+core must not import research code.
+"""
+
+from .base import Plan, Planner, ScriptedPlanner, SubGoal
 
 __all__ = [
     "Plan",
     "Planner",
     "ScriptedPlanner",
-    "SortingPlanner",
     "SubGoal",
 ]
