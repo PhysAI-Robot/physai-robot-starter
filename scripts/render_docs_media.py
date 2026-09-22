@@ -22,7 +22,6 @@ import imageio.v3 as iio
 import numpy as np
 
 from physai.contracts import Action, Twist, Vector3
-from physai.planner import SortingPlanner
 from physai.policy import create_policy
 from physai.policy.plan_runner import PlanRunner
 from physai.robots.so101 import EnvConfig, SO101Env
@@ -36,6 +35,7 @@ from physai.tasks import TaskRuntime, create_task
 
 # Registers so101's "scripted" policy with the robot registry.
 import research.scripted_experts.so101_pick_place_expert  # noqa: E402,F401
+from research.vlm_planners.sorting_planner import SortingPlanner  # noqa: E402
 
 MEDIA = Path(__file__).resolve().parents[1] / "docs" / "media"
 
