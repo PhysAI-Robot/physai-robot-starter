@@ -154,6 +154,25 @@ rendered by a decoupled worker thread and streamed over
 a plain `<img>` tag); the single-shot `/api/camera/<name>.jpg` snapshot
 endpoint still exists for scripts and debugging.
 
+### Camera panels
+
+The sidebar's camera grid is a configurable list of panels, not a fixed
+"front + wrist" pair: each panel has a dropdown of every camera name
+`/api/robots` reports for the selected robot, "+ Camera" adds another panel,
+and each panel has a remove button (at least one panel always stays). The
+per-robot layout persists in that browser's `localStorage`, mirroring the
+theme preference.
+
+A policy may optionally publish extra named "debug" camera feeds alongside
+the physical ones — for example, `visual_servo` (see
+`research/classical_control/so101_visual_servo.py`) exposes
+`front:detections` and `wrist:detections`, each an annotated copy of that
+camera's frame with a crosshair at the last detected pixel, useful for
+telling a detection failure apart from a control failure while tuning
+visual servoing. These entries only appear once that policy is active, and
+their panel stays on its last frame (retrying in the background) until the
+first successful detection.
+
 ## Troubleshooting
 
 Press `Ctrl+C` in the `run_sim.py` terminal to stop the desktop viewer, host,
@@ -164,10 +183,10 @@ with `Ctrl+Shift+R`.
 The browser client lives under `src/physai/web/static/`: `css/tokens.css`
 (design tokens/theme) and `css/viewer.css` (layout/components), plus plain ES
 modules under `js/` — `net.js` (WebSocket), `scene.js` (Three.js rendering),
-`controls.js` (keyboard/control-pad jog), `ui.js` (status/telemetry/toast/
-camera-panel DOM), and `main.js` (entry point). There is no build step; edit a
-module and reload the page.
+`controls.js` (keyboard/control-pad jog), `ui.js` (status/telemetry/toast),
+`cameras.js` (the multi-panel camera grid), and `main.js` (entry point).
+There is no build step; edit a module and reload the page.
 
-Three.js is loaded from a CDN, so the browser needs network access on the first
-page load. Gamepad input, detections, labels, masks, and annotation overlays
-are not implemented yet.
+Three.js is loaded from a CDN, so the browser needs network access on the
+first page load. Gamepad input, labels, and segmentation masks are not
+implemented yet.

@@ -123,6 +123,7 @@ button {
   cursor: pointer;
 }
 button:hover { background: var(--color-border); }
+button:disabled { opacity: 0.4; cursor: not-allowed; background: var(--color-surface-alt); }
 .hint { margin-top: var(--space-5); font: 12px var(--font-mono); }
 
 :focus-visible {
@@ -176,11 +177,18 @@ button:hover { background: var(--color-border); }
 }
 .control-key[hidden] { display: none; }
 
+.camera-toolbar {
+  margin-top: var(--space-5);
+}
+.camera-toolbar button {
+  margin: 0;
+  font: 11px var(--font-mono);
+}
 .camera-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--space-3);
-  margin-top: var(--space-5);
+  margin-top: var(--space-3);
 }
 .camera-grid figure {
   min-width: 0;
@@ -191,11 +199,32 @@ button:hover { background: var(--color-border); }
   background: var(--color-surface-alt);
 }
 .camera-grid figcaption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   color: var(--color-text-muted);
   font: 11px var(--font-mono);
   margin-bottom: 5px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+.camera-grid figcaption select {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+  font: 11px var(--font-mono);
+  text-transform: none;
+  letter-spacing: normal;
+}
+.camera-grid figcaption .camera-remove {
+  margin: 0;
+  padding: 2px 8px;
+  line-height: 1;
+  font: 12px var(--font-mono);
 }
 .camera-grid img {
   display: block;

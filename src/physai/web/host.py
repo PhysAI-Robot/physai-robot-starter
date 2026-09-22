@@ -172,6 +172,12 @@ class Host:
         result = []
         for instance_id in self.instances:
             spec = self._robot_spec(instance_id)
+            cameras = list(spec.camera_frames)
+            if not self._shared:
+                # Duck-typed extension point: a policy may optionally publish
+                # named debug/annotated frames (e.g. detection overlays)
+                # through the same camera cache; see `_publish_debug_frames`.
+                cameras += list(getattr(self.policy, "debug_camera_names", ()))
             result.append(
                 {
                     "name": instance_id,
@@ -179,7 +185,7 @@ class Host:
                     "robot": spec.name,
                     "action_modes": list(spec.action_modes),
                     "capabilities": list(spec.capabilities),
-                    "cameras": list(spec.camera_frames),
+                    "cameras": cameras,
                 }
             )
         return result
@@ -374,6 +380,7 @@ class Host:
         if action is None and self.policy is not None and self._observation is not None:
             self._sync_observation_images()
             action = self.policy.act(self._observation)
+            self._publish_debug_frames()
         if action is None:
             action = hold_action
         result = self.robot.step(action)
@@ -415,6 +422,27 @@ class Host:
                 camera_name=name,
                 header=Header(stamp=stamp, frame_id=f"camera_{name}"),
             )
+
+    def _publish_debug_frames(self) -> None:
+        """Merge a policy's optional annotated frames into the camera cache.
+
+        `Policy` (`policy/base.py`) is a frozen port, so this is a duck-typed
+        convention rather than an abstract method: a concrete policy may
+        define `debug_frames() -> dict[str, np.ndarray]` to publish extra
+        named views (e.g. a detection overlay) through the same cache that
+        backs every other camera, with no change to core contracts.
+        """
+        debug_frames = getattr(self.policy, "debug_frames", None)
+        if debug_frames is None:
+            return
+        frames = debug_frames()
+        if not frames:
+            return
+        with self._lock:
+            for local_name, image in frames.items():
+                self._camera_images[f"{self.robot_name}:{local_name}"] = np.asarray(
+                    image, dtype=np.uint8
+                )
 
     def _hold_action(self) -> Action:
         if "twist" in self.robot.robot_spec.action_modes:

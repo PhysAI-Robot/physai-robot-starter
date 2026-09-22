@@ -2,10 +2,13 @@ import * as net from "./net.js";
 import * as scene from "./scene.js";
 import * as controls from "./controls.js";
 import * as ui from "./ui.js";
+import * as cameras from "./cameras.js";
 
 const robotSelect = document.querySelector("#robot-select");
 const robotInfo = new Map();
 let activeRobot = "";
+
+cameras.init(document.querySelector("#camera-grid"), document.querySelector("#camera-add"));
 
 net.on("open", () => {
   ui.setStatus("connected", "connected");
@@ -29,7 +32,7 @@ async function selectRobot(name) {
   controls.setActiveRobot(name);
   controls.configureControls(robotInfo.get(name));
   await scene.loadScene(name);
-  ui.updateCameras(name, robotInfo.get(name)?.cameras || []);
+  cameras.setAvailableCameras(name, robotInfo.get(name)?.cameras || []);
   net.send({ type: "select_robot", robot: name });
 }
 

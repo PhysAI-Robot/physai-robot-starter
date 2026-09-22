@@ -65,6 +65,73 @@ def test_sync_observation_images_merges_the_async_camera_cache():
     np.testing.assert_array_equal(frame.data, fake_frame)
 
 
+class FakeDebugPolicy:
+    """A policy exposing the optional duck-typed debug-camera hook."""
+
+    debug_camera_names = ("front:detections",)
+
+    def __init__(self) -> None:
+        self.acted = False
+
+    def act(self, observation):
+        self.acted = True
+        return Action(joint_position=np.array([0.0]))
+
+    def reset(self, observation, goal=None, instruction=None) -> None:
+        pass
+
+    @property
+    def done(self) -> bool:
+        return False
+
+    def debug_frames(self):
+        if not self.acted:
+            return {}
+        return {"front:detections": np.zeros((2, 2, 3), dtype=np.uint8)}
+
+
+def test_list_robots_includes_policy_debug_camera_names():
+    spec = RobotSpec(
+        name="test", kind="test", joint_names=("joint",), action_joint_names=("joint",)
+    )
+    host = Host.for_robot(FakeRobotPort(spec), robot_name="test", policy=FakeDebugPolicy())
+
+    robots = {entry["name"]: entry for entry in host.list_robots()}
+
+    assert robots["test"]["cameras"] == ["front:detections"]
+
+
+def test_list_robots_omits_debug_cameras_without_a_policy():
+    host = make_host()
+
+    robots = {entry["name"]: entry for entry in host.list_robots()}
+
+    assert robots["test"]["cameras"] == []
+
+
+def test_publish_debug_frames_merges_into_camera_cache():
+    spec = RobotSpec(
+        name="test", kind="test", joint_names=("joint",), action_joint_names=("joint",)
+    )
+    policy = FakeDebugPolicy()
+    policy.acted = True
+    host = Host.for_robot(FakeRobotPort(spec), robot_name="test", policy=policy)
+
+    host._publish_debug_frames()
+
+    np.testing.assert_array_equal(
+        host._camera_images["test:front:detections"], np.zeros((2, 2, 3), dtype=np.uint8)
+    )
+
+
+def test_publish_debug_frames_noop_without_a_policy():
+    host = make_host()
+
+    host._publish_debug_frames()
+
+    assert host._camera_images == {}
+
+
 def test_control_lease_allows_one_client_and_releases_cleanly():
     host = make_host()
     action = Action(joint_position=np.array([0.2]))

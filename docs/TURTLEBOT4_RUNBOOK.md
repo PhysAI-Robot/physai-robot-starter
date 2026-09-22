@@ -10,10 +10,11 @@ baseline before using Nav2.
 uv run python scripts/fetch_assets.py --robot turtlebot4
 ```
 
-Open the robot in MuJoCo:
+Open the robot interactively in the browser (see the shared
+[Web Viewer Runbook](WEB_VIEWER_RUNBOOK.md) for the full workflow):
 
 ```bash
-uv run python scripts/run_sim.py --robot turtlebot4 --viewer --seed 0
+uv run python scripts/run_sim.py --robot turtlebot4 --serve --seed 0
 ```
 
 Run headless for repeatable checks:
@@ -25,8 +26,9 @@ uv run python scripts/run_sim.py --robot turtlebot4 --seed 0 --max-steps 300
 At yaw zero, positive linear velocity drives along the model's world `-Y`
 direction. The navigation controller and tests use this model convention.
 
-To inspect TurtleBot4 in the Three.js console through the same authoritative
-host workflow, see the [Web Viewer Runbook](WEB_VIEWER_RUNBOOK.md).
+A minimal Tk desktop window is also available as a fallback when a browser
+isn't convenient (see [ADR 4](adr/0004-tk-viewer-frozen.md)); add `--viewer`
+in place of `--serve` above.
 
 ## 2. Validate Basic Differential-Drive Control
 

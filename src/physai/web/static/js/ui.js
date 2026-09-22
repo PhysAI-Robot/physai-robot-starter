@@ -70,26 +70,12 @@ darkMediaQuery.addEventListener("change", () => {
 });
 syncThemeIcon();
 
-function startCameraStream(image, name, robotName) {
+export function startCameraStream(image, name, robotName) {
   image.onerror = null;
-  image.src = `/api/camera/${name}/stream?robot=${encodeURIComponent(robotName)}`;
+  const url = `/api/camera/${encodeURIComponent(name)}/stream?robot=${encodeURIComponent(robotName)}`;
+  image.src = url;
   image.onerror = () => {
-    if (image.closest("figure").hidden) return;
+    if (image.closest("figure")?.hidden) return;
     setTimeout(() => startCameraStream(image, name, robotName), 1500);
   };
-}
-
-export function updateCameras(robotName, cameras) {
-  const visible = new Set(cameras);
-  document.querySelectorAll("[data-camera]").forEach((image) => {
-    const name = image.dataset.camera;
-    const isVisible = visible.has(name);
-    image.closest("figure").hidden = !isVisible;
-    image.onerror = null;
-    if (!isVisible) {
-      image.removeAttribute("src");
-      return;
-    }
-    startCameraStream(image, name, robotName);
-  });
 }

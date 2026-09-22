@@ -72,18 +72,14 @@ uv run python scripts/run_sim.py
 ```
 
 The command runs headlessly by default and writes evaluation output to
-`outputs/`. Add `--video` when you want a recorded episode. Open the
-interactive MuJoCo viewer after the headless run succeeds:
+`outputs/`. Add `--video` when you want a recorded episode.
 
-```bash
-uv run python scripts/run_sim.py --viewer
-```
-
-For an idle browser-based Three.js viewer, start the SO-101 host with `--serve`
-and jog it from the browser. Without an explicit `--policy`, viewer and serve
-modes hold the current pose and do not run pick-and-place automatically. Add
-`--policy scripted` when you want the scripted task to drive the robot, and add
-`--viewer` only when you also want the local desktop window:
+For an interactive session, start the SO-101 host with `--serve` and open the
+browser-based Three.js viewer — this is the actively developed client, with
+configurable camera panels and per-policy debug overlays. Without an explicit
+`--policy`, serve mode holds the current pose and does not run pick-and-place
+automatically. Add `--policy scripted` when you want the scripted task to
+drive the robot:
 
 ```bash
 MUJOCO_GL=egl uv run python scripts/run_sim.py --robot so101 --serve
@@ -93,6 +89,16 @@ In another terminal, open the browser client:
 
 ```bash
 MUJOCO_GL=egl uv run python scripts/run_web.py --connect http://127.0.0.1:8000
+```
+
+A minimal Tk desktop window is also available as a fallback when a browser
+isn't convenient; it never grows features beyond a live scene and camera
+panels (see [ADR 4](docs/adr/0004-tk-viewer-frozen.md)). Add `--viewer` in
+place of `--serve` above, or alongside it to attach both clients to the same
+host:
+
+```bash
+uv run python scripts/run_sim.py --viewer
 ```
 
 The web layer remains robot-agnostic and discovers action modes and cameras

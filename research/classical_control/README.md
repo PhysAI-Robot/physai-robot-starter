@@ -47,11 +47,14 @@ timeouts, or unsafe actions); it is not bit-identical to a Windows run — 17 of
 the 20 seeds took the same number of steps and the other three differed by
 one, which is expected from floating-point differences between platforms.
 
-Inspect the policy interactively with the MuJoCo viewer and live
-front-camera window:
+Inspect the policy interactively in the browser — the front and wrist camera
+panels are configurable, and a `front:detections`/`wrist:detections` debug
+overlay shows the last detected pixel as a crosshair, useful for telling a
+detection failure apart from a control failure (see the
+[Web Viewer Runbook](../../docs/WEB_VIEWER_RUNBOOK.md#camera-panels)):
 
 ```bash
-uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --policy visual_servo --viewer --camera-view --camera front --seed 0
+uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --policy visual_servo --serve --seed 0
 ```
 
 The default detector targets the red pick cube. The fixed front camera

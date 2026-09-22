@@ -75,6 +75,26 @@ class ColorBlobDetector:
         return VisualFeature(pixel=pixel, area=len(xs), confidence=confidence)
 
 
+def draw_crosshair(
+    image: np.ndarray,
+    pixel: np.ndarray,
+    *,
+    size: int = 10,
+    color: tuple[int, int, int] = (0, 255, 0),
+) -> np.ndarray:
+    """Return a copy of `image` (H, W, 3) uint8 with a crosshair at `pixel` (x, y)."""
+    annotated = np.array(image, dtype=np.uint8, copy=True)
+    height, width = annotated.shape[:2]
+    x, y = int(round(float(pixel[0]))), int(round(float(pixel[1])))
+    if 0 <= y < height:
+        x0, x1 = max(0, x - size), min(width, x + size + 1)
+        annotated[max(0, y - 1) : min(height, y + 2), x0:x1] = color
+    if 0 <= x < width:
+        y0, y1 = max(0, y - size), min(height, y + size + 1)
+        annotated[y0:y1, max(0, x - 1) : min(width, x + 2)] = color
+    return annotated
+
+
 @dataclass(frozen=True)
 class CameraCalibration:
     """Pinhole intrinsics and a camera-to-base rigid transform."""
@@ -192,6 +212,7 @@ class SO101VisualServoPolicy(Policy):
         self._elapsed_steps = 0
         self._settling_time_s: float | None = None
         self._last_visual_error_px: float | None = None
+        self._last_detections: dict[str, tuple[np.ndarray, VisualFeature]] = {}
 
     def _calibration_from_env(self, camera: str | None = None) -> CameraCalibration:
         camera = camera or self.camera
@@ -229,16 +250,21 @@ class SO101VisualServoPolicy(Policy):
         self._elapsed_steps = 0
         self._settling_time_s = None
         self._last_visual_error_px = None
+        self._last_detections = {}
 
-    def _refine_from_final_camera(self) -> None:
+    def _refine_from_final_camera(self, observation: Observation) -> None:
         if self._target_xy is None:
             return
-        frame = self.env.observe().images.get(self.final_camera)
+        frame = observation.images.get(self.final_camera)
         if frame is None:
             return
         feature = self.detector.detect(frame)
         if feature is None:
             return
+        self._last_detections[self.final_camera] = (
+            np.asarray(frame.data, dtype=np.uint8).copy(),
+            feature,
+        )
         target_pixel = (
             self.target_pixel
             or (np.array([frame.width, frame.height], dtype=np.float64) - 1.0) / 2.0
@@ -256,6 +282,18 @@ class SO101VisualServoPolicy(Policy):
     @property
     def done(self) -> bool:
         return self._phase is VisualServoPhase.DONE
+
+    @property
+    def debug_camera_names(self) -> tuple[str, ...]:
+        """Optional debug-camera hook the web `Host` discovers via duck typing."""
+        return (f"{self.camera}:detections", f"{self.final_camera}:detections")
+
+    def debug_frames(self) -> dict[str, np.ndarray]:
+        """Optional debug-camera hook: latest detection overlay per camera."""
+        return {
+            f"{name}:detections": draw_crosshair(frame, feature.pixel)
+            for name, (frame, feature) in self._last_detections.items()
+        }
 
     def _solve(self, target: np.ndarray) -> np.ndarray:
         result = self.env.kin.ik_pinch(target, q_init=self._q_cmd)
@@ -309,6 +347,10 @@ class SO101VisualServoPolicy(Policy):
                 return Action(
                     joint_position=self._q_cmd, gripper=GripperCommand(position=1.0)
                 )
+            self._last_detections[self.camera] = (
+                np.asarray(frame.data, dtype=np.uint8).copy(),
+                feature,
+            )
             target_pixel = (
                 self.target_pixel
                 or (np.array([frame.width, frame.height], dtype=np.float64) - 1.0) / 2.0
@@ -327,7 +369,7 @@ class SO101VisualServoPolicy(Policy):
                 )
 
         if self._phase is VisualServoPhase.DESCEND:
-            self._refine_from_final_camera()
+            self._refine_from_final_camera(observation)
         target, grip_goal = self._waypoint()
         self._grip = float(
             np.clip(grip_goal, self._grip - 0.9 * self._dt, self._grip + 0.9 * self._dt)
@@ -379,5 +421,6 @@ __all__ = [
     "SO101VisualServoPolicy",
     "VisualFeature",
     "VisualServoMetrics",
+    "draw_crosshair",
     "make_visual_servo_policy",
 ]
