@@ -22,16 +22,34 @@ scene.add(keyLight);
 const fillLight = new THREE.DirectionalLight(0xd7e7ff, 1.1);
 fillLight.position.set(-3, 1, 2.5);
 scene.add(fillLight);
+
+// Matches MuJoCo's own floor checker exactly (STUDIO_FLOOR_RGB1/2 in
+// src/physai/sim/scenes/common.py), so a robot-mounted camera view (which
+// mostly frames the floor, not the sky) looks consistent with this 3D
+// viewport instead of the flat-plus-grid-lines floor this replaced.
+function checkerTexture(colorA, colorB, tileSize = 64) {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = tileSize * 2;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = colorA;
+  ctx.fillRect(0, 0, tileSize * 2, tileSize * 2);
+  ctx.fillStyle = colorB;
+  ctx.fillRect(0, 0, tileSize, tileSize);
+  ctx.fillRect(tileSize, tileSize, tileSize, tileSize);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.magFilter = THREE.NearestFilter;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+const floorTexture = checkerTexture("#e3e9e4", "#9fb0a8");
+floorTexture.repeat.set(6, 6);
 const floor = new THREE.Mesh(
   new THREE.PlaneGeometry(6, 6),
-  new THREE.MeshStandardMaterial({ color: 0xcbd4cf, roughness: 0.9 }),
+  new THREE.MeshStandardMaterial({ map: floorTexture, roughness: 0.9 }),
 );
 floor.position.z = -0.01;
 scene.add(floor);
-const grid = new THREE.GridHelper(6, 30, 0x71847b, 0xa8b5ae);
-grid.rotation.x = Math.PI / 2;
-grid.position.z = 0.002;
-scene.add(grid);
 const meshes = new Map();
 const targetTransforms = new Map();
 const geometryTypes = {
