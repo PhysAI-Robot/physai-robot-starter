@@ -47,6 +47,14 @@
     <main>
       <section id="viewport">
         <div id="scene-loading" class="scene-loading"><span class="spinner"></span>Loading scene…</div>
+        <div class="state-panel" id="joint-panel" aria-label="Joint state">
+          <h2>Joints</h2>
+          <div class="joint-rows" id="joint-rows"></div>
+          <div class="contact-rows" id="contact-rows" hidden>
+            <div class="contact-row" data-pad="static"><span class="contact-dot"></span>Static pad</div>
+            <div class="contact-row" data-pad="moving"><span class="contact-dot"></span>Moving pad</div>
+          </div>
+        </div>
         <div class="control-pad" aria-label="Robot controls">
           <div class="control-cluster movement-keys" aria-label="Movement">
             <button class="control-key key-w" data-control-key="w" aria-label="Move forward">W</button>

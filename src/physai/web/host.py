@@ -178,6 +178,8 @@ class Host:
                 # named debug/annotated frames (e.g. detection overlays)
                 # through the same camera cache; see `_publish_debug_frames`.
                 cameras += list(getattr(self.policy, "debug_camera_names", ()))
+            prefix = getattr(self.instances[instance_id], "prefix", "")
+            joint_names = [prefix + name for name in spec.joint_names]
             result.append(
                 {
                     "name": instance_id,
@@ -186,9 +188,31 @@ class Host:
                     "action_modes": list(spec.action_modes),
                     "capabilities": list(spec.capabilities),
                     "cameras": cameras,
+                    "joint_names": joint_names,
+                    "joint_limits": {
+                        prefix + name: self._joint_limit(spec, name, prefix + name)
+                        for name in spec.joint_names
+                    },
                 }
             )
         return result
+
+    def _joint_limit(self, spec, name: str, compiled_name: str) -> list[float]:
+        limit = spec.joint_limits.get(name)
+        if limit is not None:
+            return [float(limit[0]), float(limit[1])]
+        try:
+            model = self.model
+        except AttributeError:
+            model = None
+        joint_id = (
+            mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, compiled_name)
+            if model is not None
+            else -1
+        )
+        if joint_id >= 0 and bool(model.jnt_limited[joint_id]):
+            return [float(value) for value in model.jnt_range[joint_id]]
+        return [-3.14159265, 3.14159265]
 
     # -- lifecycle --------------------------------------------------------
     def start(self) -> None:
