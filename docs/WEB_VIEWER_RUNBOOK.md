@@ -72,16 +72,15 @@ other robot. Reset and pause affect the whole world.
 
 ## Run Without A Desktop Window
 
-On a server, in a container, or in any environment with no display, replace
-`--viewer` with `--headless`. The host and web server start exactly as above,
+On a server, in a container, or in any environment with no display, drop
+`--viewer` and pass only `--serve`. The web server starts exactly as above,
 but no desktop window is opened:
 
 ```bash
-MUJOCO_GL=egl uv run --extra web python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --policy visual_servo --headless --serve --seed 0
+MUJOCO_GL=egl uv run --extra web python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --policy visual_servo --serve --seed 0
 ```
 
-`--headless` requires `--serve` and cannot be combined with `--viewer`. The
-host runs until `Ctrl+C` or `SIGTERM`, then stops the web server and the
+The host runs until `Ctrl+C` or `SIGTERM`, then stops the web server and the
 physics thread in order. `SIGTERM` is handled like `Ctrl+C`, so a container or
 process manager stop request takes the same path. Use `MUJOCO_GL=osmesa` when
 the machine has no GPU or EGL device.
@@ -101,7 +100,7 @@ SO-101 assets. Codespaces machines have no GPU, so the container sets
 Once the workspace is ready, start the headless host in its terminal:
 
 ```bash
-uv run --extra web python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --policy visual_servo --headless --serve --seed 0
+uv run --extra web python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --policy visual_servo --serve --seed 0
 ```
 
 Port 8000 is declared as forwarded. Open it from the Ports panel and leave its

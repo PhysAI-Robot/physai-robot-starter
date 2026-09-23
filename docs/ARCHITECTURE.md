@@ -344,7 +344,7 @@ robots:
 task: pick_place                  # optional session-wide default
 policy: idle
 viewer:
-  mode: none                      # none | tk | web | both
+  mode: none                      # none | native | web | both
 ```
 
 Validation resolves every `robot`/`task`/`policy` name through the existing
@@ -385,8 +385,8 @@ One physics thread runs the control loop (30 Hz by default); a separate
 camera worker thread renders named cameras at a slower, decoupled cadence
 (0.2 s) so camera capture never pauses the physics loop. `Host.physics_lock`
 serializes MuJoCo access between the two threads and any renderer client
-(e.g. the Tk viewer). HTTP camera requests only read the latest cached JPEG;
-they never step or render from the request handler itself.
+(e.g. the native `--viewer`). HTTP camera requests only read the latest
+cached JPEG; they never step or render from the request handler itself.
 
 Reset and pause are world-atomic and affect every connected client. Manual
 control uses a short per-instance lease: the first client to submit a command
@@ -415,12 +415,12 @@ surface is stable across single- and multi-robot sessions:
 Both clients depend only on this API plus `RobotSpec` capabilities, never on
 MuJoCo or robot internals:
 
-- **`--viewer` (Tk):** frozen scope — simulation render, live camera panels,
-  basic status. It never grows features (see
-  [ADR 4](adr/0004-tk-viewer-frozen.md)). Its camera-panel list is driven by
-  `RobotSpec.camera_frames`, not by introspecting the MuJoCo model; the free
-  3D scene view still uses `mujoco.Renderer` directly against `Host.model`,
-  which is inherent to rendering the physics scene itself.
+- **`--viewer` (native MuJoCo):** `mujoco.viewer.launch_passive` rendering
+  `Host.model`/`Host.data` directly, synced from the physics thread's state
+  under `Host.physics_lock` (see [ADR 4](adr/0004-tk-viewer-frozen.md), which
+  replaced the former Tk implementation). It has no multi-camera panel
+  of its own; combine it with `--serve` and use the web viewer's camera grid
+  for that.
 - **`--serve` (FastAPI + Three.js):** the sophisticated client. All new UI
   features (jog controls, instance selection, telemetry, overlays) go here.
   The browser talks only to the REST/WebSocket surface above; see

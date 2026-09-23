@@ -37,10 +37,9 @@ Schema (YAML)::
     policy: idle                     # optional global default policy
 
     viewer:
-      mode: none                     # none | tk | web | both
+      mode: none                     # none | native | web | both
       host: 127.0.0.1
       port: 8000
-      camera_view: null
 
 Validation performed at load time (see `load_manifest`):
 
@@ -59,7 +58,7 @@ Validation performed at load time (see `load_manifest`):
    ``ros2_real`` is accepted by the schema for forward compatibility but
    raises a clear "not yet implemented" error (see ROADMAP.md: simulation
    only for now).
-8. ``viewer.mode`` must be one of ``none``, ``tk``, ``web``, ``both``.
+8. ``viewer.mode`` must be one of ``none``, ``native``, ``web``, ``both``.
 """
 
 from __future__ import annotations
@@ -78,7 +77,7 @@ from .legacy import SimulationConfig, _parse_simulation_config
 
 SCHEMA_VERSION = 1
 _BACKENDS = ("direct", "ros2_sim", "ros2_real")
-_VIEWER_MODES = ("none", "tk", "web", "both")
+_VIEWER_MODES = ("none", "native", "web", "both")
 
 
 @dataclass(frozen=True)
@@ -112,7 +111,6 @@ class SessionViewerConfig:
     mode: str = "none"
     host: str = "127.0.0.1"
     port: int = 8000
-    camera_view: str | None = None
 
 
 @dataclass(frozen=True)
@@ -236,7 +234,6 @@ def load_manifest(path: str | Path) -> SessionManifest:
         mode=viewer_mode,
         host=viewer_data.get("host", "127.0.0.1"),
         port=int(viewer_data.get("port", 8000)),
-        camera_view=viewer_data.get("camera_view"),
     )
 
     manifest = SessionManifest(
