@@ -34,6 +34,12 @@ from _common_args import (
     add_seed,
 )
 
+# Registers so101's "scripted"/"visual_servo" policies and the checkpoint-
+# backed "lerobot" policy with their registries; --policy may select any of
+# them, so all load eagerly (none import torch/lerobot at module scope).
+import research.classical_control.so101_visual_servo
+import research.imitation_learning.vla_adapter
+import research.scripted_experts.so101_pick_place_expert  # noqa: F401
 from physai.config import (
     DomainRandomizationConfig,
     TaskConfig,
@@ -48,13 +54,6 @@ from physai.robots.turtlebot import TurtleBot4Config
 from physai.sim import PickPlaceMinimalSceneConfig, SharedWorld
 from physai.tasks import TaskRuntime, create_task
 from physai.web.host import Host
-
-# Registers so101's "scripted"/"visual_servo" policies and the checkpoint-
-# backed "lerobot" policy with their registries; --policy may select any of
-# them, so all load eagerly (none import torch/lerobot at module scope).
-import research.classical_control.so101_visual_servo  # noqa: E402,F401
-import research.imitation_learning.vla_adapter  # noqa: E402,F401
-import research.scripted_experts.so101_pick_place_expert  # noqa: E402,F401
 
 
 def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
@@ -371,7 +370,20 @@ def run_viewer(
         # Host._sync_observation_images() feeds a policy that needs vision
         # from that same cache. This is now the standard for so101 in
         # --viewer/--serve, not just the idle/scripted case.
-        viewer_config = replace(viewer_config, camera_stride=0)
+        #
+        # gripper_force_limit=None: EnvConfig's default 0.3 N*m only exists
+        # to keep visual_servo's shallow (0.19) hardcoded squeeze from
+        # destabilizing under full actuator force (research/scripted_experts/
+        # README.md's tuning notes) — with a deeper squeeze it measurably
+        # hurts grip success (96.0% uncapped vs 92.7-94.7% capped over a
+        # 300-seed comparison). A human jogging the gripper closed by hand
+        # isn't that specific shallow-squeeze policy, and a weak, uncapped-
+        # for-a-reason-that-doesn't-apply-here grip was exactly why objects
+        # were slipping out under gravity. Scoped to the viewer/serve path
+        # only, so scripted_expert/visual_servo keep the tuned default.
+        viewer_config = replace(
+            viewer_config, camera_stride=0, gripper_force_limit=None
+        )
         env = create_robot(
             args.robot,
             config=viewer_config,

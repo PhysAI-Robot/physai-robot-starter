@@ -63,6 +63,36 @@ const geometryTypes = {
   cylinder: THREE.CylinderGeometry,
 };
 
+// A translucent red disk that stamps onto whatever surface a gripper pad is
+// touching (table, cube, ...), oriented flush against it via the contact
+// normal the server derives from MuJoCo's contact frame. Grows in on
+// contact and disappears the tick the contact ends, so it reads as "touch
+// feedback" rather than a persistent marker.
+const CONTACT_RING_RADIUS = 0.016;
+const CONTACT_RING_GROW_MS = 220;
+const CONTACT_RING_OFFSET = 0.0015; // along the surface normal, to avoid z-fighting
+const contactRingGeometry = new THREE.CircleGeometry(CONTACT_RING_RADIUS, 24);
+const contactRings = new Map();
+
+function contactKey(contact) {
+  return `${contact.instance_id ?? ""}:${contact.pad}:${contact.other_geom}`;
+}
+
+function spawnContactRing() {
+  const material = new THREE.MeshBasicMaterial({
+    color: 0xdc2626,
+    transparent: true,
+    opacity: 0.55,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(contactRingGeometry, material);
+  mesh.renderOrder = 10;
+  mesh.scale.setScalar(0);
+  scene.add(mesh);
+  return { mesh, spawnTime: performance.now() };
+}
+
 let activeRobot = "";
 
 function resize() {
@@ -136,6 +166,11 @@ export async function loadScene(robotName) {
   meshes.forEach((mesh) => scene.remove(mesh));
   meshes.clear();
   targetTransforms.clear();
+  contactRings.forEach((ring) => {
+    scene.remove(ring.mesh);
+    ring.mesh.material.dispose();
+  });
+  contactRings.clear();
   ui.showLoading();
   try {
     const manifest = await fetch(`/api/scene?robot=${encodeURIComponent(activeRobot)}`).then((response) => response.json());
@@ -158,6 +193,29 @@ export function applyState(state) {
     target.quaternion.fromArray(item.quaternion);
     targetTransforms.set(item.id, target);
   });
+
+  const seenKeys = new Set();
+  (state.gripper_contacts || []).forEach((contact) => {
+    if (!contact.pos || !contact.quaternion) return;
+    const key = contactKey(contact);
+    seenKeys.add(key);
+    let ring = contactRings.get(key);
+    if (!ring) {
+      ring = spawnContactRing();
+      contactRings.set(key, ring);
+    }
+    const normal = new THREE.Vector3(0, 0, 1)
+      .applyQuaternion(ring.mesh.quaternion.fromArray(contact.quaternion))
+      .multiplyScalar(CONTACT_RING_OFFSET);
+    ring.mesh.position.fromArray(contact.pos).add(normal);
+  });
+  contactRings.forEach((ring, key) => {
+    if (seenKeys.has(key)) return;
+    scene.remove(ring.mesh);
+    ring.mesh.material.dispose();
+    contactRings.delete(key);
+  });
+
   ui.setTelemetry(`step ${state.step} · sim ${state.sim_time.toFixed(2)}s · ${state.geometries.length} geometries`);
 }
 
@@ -167,6 +225,10 @@ export function render() {
     if (!target) return;
     mesh.position.lerp(target.position, 0.7);
     mesh.quaternion.slerp(target.quaternion, 0.7);
+  });
+  contactRings.forEach((ring) => {
+    const grow = Math.min(1, (performance.now() - ring.spawnTime) / CONTACT_RING_GROW_MS);
+    ring.mesh.scale.setScalar(1 - (1 - grow) ** 3); // ease-out cubic
   });
   controls.update();
   renderer.render(scene, camera);

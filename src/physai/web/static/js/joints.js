@@ -1,4 +1,8 @@
 const RAD_TO_DEG = 180 / Math.PI;
+// How close to either end of a joint's range counts as "hit the limit",
+// as a fraction of the full range -- percentage-based so it works the same
+// for a wide-range joint and a narrow one like wrist_flex.
+const NEAR_LIMIT_MARGIN = 0.04;
 
 let rowsEl = null;
 let contactSectionEl = null;
@@ -67,8 +71,12 @@ export function applyState(state, activeRobot) {
     if (!entry) return;
     const position = joint.qpos[0];
     const [min, max] = jointLimits[joint.name] || [-Math.PI, Math.PI];
-    entry.fill.style.width = `${(clamp01((position - min) / (max - min)) * 100).toFixed(1)}%`;
+    const ratio = clamp01((position - min) / (max - min));
+    entry.fill.style.width = `${(ratio * 100).toFixed(1)}%`;
     entry.value.textContent = `${(position * RAD_TO_DEG).toFixed(0)}°`;
+    const nearLimit = ratio <= NEAR_LIMIT_MARGIN || ratio >= 1 - NEAR_LIMIT_MARGIN;
+    entry.value.classList.toggle("is-near-limit", nearLimit);
+    entry.fill.classList.toggle("is-near-limit", nearLimit);
   });
 
   if (contactSectionEl.hidden) return;

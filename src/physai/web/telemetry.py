@@ -36,6 +36,33 @@ def _quat_xyzw(matrix: Any) -> list[float]:
     ]
 
 
+def _contact_ring_quat(frame: Any, *, pad_is_geom1: bool) -> list[float]:
+    """Orient a flat ring so its face lies flush against the contacted surface.
+
+    `mjContact.frame` is documented as rows [normal, tangent1, tangent2], the
+    opposite convention from `xmat`/`geom_xmat` (whose *columns* are the
+    local axes in world coordinates, which `_quat_xyzw` assumes). Rebuilding
+    the matrix with the normal as the third column -- verified numerically
+    against a known flat-table contact -- makes a Three.js ring (whose local
+    +Z is its face normal) land exactly on the contact surface.
+
+    MuJoCo's normal points from geom1 to geom2, a detail of internal geom
+    ordering the caller has no control over -- verified empirically that for
+    a real pad/table contact the pad ends up as geom1, so the raw normal
+    points *into* the table. The browser nudges the ring along local +Z to
+    avoid z-fighting, so an unflipped normal there buries it invisibly
+    inside the surface instead of sitting on top where the pad touched it.
+    Swapping the tangents when negating the normal keeps the frame a proper
+    (det=+1) rotation, since tangent2 x tangent1 = -normal exactly when
+    tangent1 x tangent2 = normal.
+    """
+    normal, tangent1, tangent2 = np.asarray(frame, dtype=np.float64).reshape(3, 3)
+    if pad_is_geom1:
+        normal, tangent1, tangent2 = -normal, tangent2, tangent1
+    matrix = np.column_stack([tangent1, tangent2, normal])
+    return _quat_xyzw(matrix)
+
+
 def _quat_xyzw_from_wxyz(quaternion: Any) -> list[float]:
     values = np.asarray(quaternion, dtype=np.float64).reshape(4)
     return [float(values[1]), float(values[2]), float(values[3]), float(values[0])]
@@ -221,7 +248,14 @@ def build_state_snapshot(
                 "qpos": [float(value) for value in data.qpos[start : start + width]],
             }
         )
-    gripper_contacts = []
+    # Keyed by (instance, pad, other_geom): a single real touch (e.g. a
+    # flat pad resting on the table) commonly shows up as several nearby
+    # MuJoCo contact points, and reporting each separately would make the
+    # browser's contact-ring indicator jitter between them frame to frame.
+    # Averaging position keeps it at one stable spot; the surfaces involved
+    # are near-flat at that scale, so the first point's frame (orientation)
+    # is representative of the rest too.
+    contact_groups: dict[tuple[str | None, str, str], dict[str, Any]] = {}
     for contact_index in range(data.ncon):
         contact = data.contact[contact_index]
         for geom_id, other_id in (
@@ -235,17 +269,35 @@ def build_state_snapshot(
                 pad = "moving"
             else:
                 continue
-            gripper_contacts.append(
+            instance_id = (
+                _geom_owner(model, geom_id, instance_prefixes)
+                if instance_prefixes is not None
+                else None
+            )
+            other_geom = _name(model, mujoco.mjtObj.mjOBJ_GEOM, other_id)
+            key = (instance_id, pad, other_geom)
+            group = contact_groups.setdefault(
+                key,
                 {
                     "pad": pad,
-                    "other_geom": _name(model, mujoco.mjtObj.mjOBJ_GEOM, other_id),
+                    "other_geom": other_geom,
                     **(
-                        {"instance_id": _geom_owner(model, geom_id, instance_prefixes)}
+                        {"instance_id": instance_id}
                         if instance_prefixes is not None
                         else {}
                     ),
-                }
+                    "quaternion": _contact_ring_quat(
+                        contact.frame, pad_is_geom1=(geom_id == contact.geom1)
+                    ),
+                    "_positions": [],
+                },
             )
+            group["_positions"].append(np.asarray(contact.pos, dtype=np.float64))
+    gripper_contacts = []
+    for group in contact_groups.values():
+        positions = group.pop("_positions")
+        group["pos"] = [float(value) for value in np.mean(positions, axis=0)]
+        gripper_contacts.append(group)
     return {
         "type": "state",
         "version": 1,

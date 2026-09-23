@@ -16,14 +16,19 @@ from ...contracts import Action, GripperCommand, Header, JointState, Observation
 from ...control.resolver import TwistToJointResolver
 from ..base import RobotSpec
 from .contracts import ALL_JOINT_NAMES, ARM_JOINT_NAMES
+from .jog import resolve_jog
 from .kinematics import ArmKinematics
 
 
 def so101_shared_attach(child_spec) -> None:
-    """Add the front/wrist cameras a shared-world attachment needs.
+    """Add the front/wrist cameras and the wrist jog site a shared-world
+    attachment needs.
 
-    The standalone SO-101 model (`SO101Env`) defines these itself; a shared
-    world attaches the bare arm model and needs them added at attach time.
+    The standalone SO-101 model (`SO101Env`, via `sim/scenes/common.py`)
+    builds these itself; a shared world attaches the bare fetched arm model
+    (see `assets/so101/README.md` and `scripts/fetch_assets.py` — the raw
+    MJCF is downloaded and not committed to the repo) and needs them added at
+    attach time instead.
     """
     child_spec.worldbody.add_camera(
         name="front",
@@ -42,6 +47,12 @@ def so101_shared_attach(child_spec) -> None:
             xyaxes=[1.0, 0.0, 0.0, 0.0, -1.0, 0.0],
             fovy=62,
         )
+    wrist_body = next(
+        (body for body in child_spec.bodies if body.name == "wrist"),
+        None,
+    )
+    if wrist_body is not None:
+        wrist_body.add_site(name="wristframe", pos=[0.0, 0.0, 0.0])
 
 
 class SO101SharedInstance:
@@ -60,7 +71,23 @@ class SO101SharedInstance:
         )
         self._gripper_joint = self.binding.joint_ids["gripper"]
         self._gripper_limits = world.model.jnt_range[self._gripper_joint]
-        self._resolver = TwistToJointResolver(self.kin, world.data, dt=0.04)
+        jog_names = qualified[1:3]
+        self.jog_kin = ArmKinematics(
+            world.model,
+            ee_site=self.prefix + "wristframe",
+            joint_names=jog_names,
+        )
+        self._jog_resolver = TwistToJointResolver(
+            # See the matching comment in env.py: lower damping keeps the
+            # Cartesian solve direction-accurate; jog.py's MAX_TARGET_LEAD
+            # is what actually keeps wrist coupling safe now.
+            self.jog_kin,
+            world.data,
+            dt=0.04,
+            position_only=True,
+            damping=0.03,
+        )
+        self._jog_target = np.array([0.0, -1.05, 1.25, 0.75, 0.0])
         self.robot_spec = RobotSpec(
             name="so101",
             kind="fixed_base_manipulator",
@@ -96,6 +123,7 @@ class SO101SharedInstance:
             self._gripper_limits[1]
         )
         self._last_action = Action(joint_position=qpos, gripper=GripperCommand())
+        self._jog_target = qpos.copy()
 
     def _joint_state(self) -> JointState:
         names = self.robot_spec.joint_names
@@ -135,8 +163,16 @@ class SO101SharedInstance:
 
     def prepare_action(self, action: Action) -> Action:
         if action.mode == "twist":
-            action = self._resolver(
-                action.ee_twist, self._joint_state(), action.gripper
+            action = resolve_jog(
+                action.ee_twist,
+                self._joint_state(),
+                cartesian_resolver=self._jog_resolver,
+                target=self._jog_target,
+                shoulder_pan_limits=self.robot_spec.joint_limits["shoulder_pan"],
+                wrist_flex_limits=self.robot_spec.joint_limits["wrist_flex"],
+                wrist_roll_limits=self.robot_spec.joint_limits["wrist_roll"],
+                dt=0.04,
+                gripper=action.gripper,
             )
         self.robot_spec.validate_action(action)
         return action
