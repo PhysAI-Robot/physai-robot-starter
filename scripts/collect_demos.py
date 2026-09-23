@@ -14,6 +14,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
+from _common_args import add_episodes, add_max_steps, add_out, add_robot, add_seed
 
 from physai.data import EpisodeRecorder
 from physai.robots import create_robot
@@ -25,16 +26,16 @@ from research.scripted_experts.so101_pick_place_expert import SO101PickPlaceExpe
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument(
-        "--robot",
+    add_robot(
+        ap,
         default="so101",
         choices=["so101"],
         help="collect_demos currently supports the SO-101 manipulation workflow",
     )
-    ap.add_argument("--episodes", type=int, default=20)
-    ap.add_argument("--out", type=Path, default=Path("data/pickplace_v1"))
-    ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--max-steps", type=int, default=600)
+    add_episodes(ap, default=20)
+    add_out(ap, default=Path("data/pickplace_v1"))
+    add_seed(ap)
+    add_max_steps(ap, default=600)
     ap.add_argument("--width", type=int, default=224)
     ap.add_argument("--height", type=int, default=224)
     ap.add_argument("--keep-failures", action="store_true")

@@ -14,6 +14,14 @@ import argparse
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
+from _common_args import (
+    add_checkpoint,
+    add_episodes,
+    add_max_steps,
+    add_policy,
+    add_robot,
+    add_seed,
+)
 
 from physai.data import EvaluationReport, load_episode
 from physai.policy import available_policies, create_policy
@@ -33,16 +41,16 @@ import research.scripted_experts.so101_pick_place_expert  # noqa: E402,F401
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument(
-        "--robot",
+    add_robot(
+        ap,
         default="so101",
         choices=["so101"],
         help="eval_policy currently supports the SO-101 manipulation workflow",
     )
-    ap.add_argument("--policy", default="scripted", choices=available_policies())
-    ap.add_argument("--episodes", type=int, default=20)
-    ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--max-steps", type=int, default=600)
+    add_policy(ap, default="scripted", choices=available_policies())
+    add_episodes(ap, default=20)
+    add_seed(ap)
+    add_max_steps(ap, default=600)
     ap.add_argument(
         "--camera-jitter",
         type=float,
@@ -50,7 +58,7 @@ def main() -> int:
         help="enable seeded camera-position jitter in metres for robustness evaluation",
     )
     ap.add_argument("--dataset", type=Path, help="required for --policy replay")
-    ap.add_argument("--checkpoint", type=Path, help="required for --policy lerobot")
+    add_checkpoint(ap, help="required for --policy lerobot")
     ap.add_argument(
         "--camera-size",
         type=int,

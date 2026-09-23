@@ -13,6 +13,7 @@ from pathlib import Path
 import _bootstrap  # noqa: F401
 import mujoco
 import numpy as np
+from _common_args import add_seed
 
 from physai.robots.so101 import EnvConfig, SO101Env
 from physai.robots.so101.kinematics import top_down_quat
@@ -114,7 +115,7 @@ def benchmark(args: argparse.Namespace) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--targets", type=int, default=20)
-    parser.add_argument("--seed", type=int, default=0)
+    add_seed(parser)
     parser.add_argument("--json-out", type=Path)
     args = parser.parse_args()
     if args.targets < 1:
