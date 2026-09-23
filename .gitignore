@@ -10,6 +10,15 @@ outputs/
 *.mp4
 *.npz
 
+# model checkpoints / training run tracking
+*.ckpt
+*.pt
+*.pkl
+wandb/
+
+# editor config (personal, not shared)
+.vscode/
+
 # python
 __pycache__/
 *.py[cod]
@@ -19,6 +28,7 @@ venv/
 .pytest_cache/
 .ruff_cache/
 .import_linter_cache/
+.claude/
 
 # mujoco crash log, written next to the working directory
 MUJOCO_LOG.TXT
