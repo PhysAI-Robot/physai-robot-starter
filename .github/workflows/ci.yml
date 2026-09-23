@@ -76,7 +76,18 @@ jobs:
         run: uv sync --locked --extra dev --extra web --extra training
 
       - name: Run test suite
-        run: uv run python -m pytest tests/ -q
+        run: |
+          uv run python - <<'PY'
+          import os
+
+          import pytest
+
+          # mujoco.Renderer under MUJOCO_GL=osmesa segfaults during CPython's
+          # normal interpreter shutdown on this runner, after pytest has
+          # already reported its result. os._exit() reports pytest's real
+          # exit code while skipping that unsafe native-library teardown.
+          os._exit(pytest.main(["tests/", "-q"]))
+          PY
 
   ros2-acceptance:
     name: ROS2 Jazzy robot acceptance
