@@ -182,9 +182,83 @@ with `Ctrl+Shift+R`.
 The browser client lives under `src/physai/web/static/`: `css/tokens.css`
 (design tokens/theme) and `css/viewer.css` (layout/components), plus plain ES
 modules under `js/` — `net.js` (WebSocket), `scene.js` (Three.js rendering),
-`controls.js` (keyboard/control-pad jog), `ui.js` (status/telemetry/toast),
-`cameras.js` (the multi-panel camera grid), and `main.js` (entry point).
-There is no build step; edit a module and reload the page.
+`controls.js` (keyboard/control-pad jog), `joints.js` (the joint-state and
+gripper-contact HUD), `ui.js` (status/telemetry/toast), `cameras.js` (the
+multi-panel camera grid), and `main.js` (entry point). There is no build
+step; edit a module and reload the page.
+
+### Laggy camera feed on a Windows laptop with two GPUs
+
+The 3D viewport can look smooth while the camera panels feel choppy even
+though the machine has a capable discrete GPU. The 3D view stays smooth
+regardless, because the browser interpolates received joint/geometry
+transforms every animation frame; a raw camera JPEG has no such
+interpolation, so any rendering slowdown shows up directly as choppiness.
+
+On a laptop with both an integrated and a discrete GPU, Windows decides
+per-executable which GPU handles rendering, and it does not know about
+MuJoCo's offscreen renderer. Unless the *exact* Python executable that runs
+the simulation is explicitly pointed at the discrete GPU, Windows silently
+defaults it to the integrated one, which is far slower at the
+`renderer.render()` calls `Host._camera_loop` does every capture (see
+[docs/ARCHITECTURE.md](ARCHITECTURE.md#host--client-api)).
+
+Check which GPU is actually rendering:
+
+```bash
+uv run python -c "
+import ctypes
+from mujoco.gl_context import GLContext
+
+ctx = GLContext(320, 240)
+ctx.make_current()
+opengl32 = ctypes.windll.opengl32
+glGetString = opengl32.glGetString
+glGetString.restype = ctypes.c_char_p
+print('GL_VENDOR:  ', glGetString(0x1F00))
+print('GL_RENDERER:', glGetString(0x1F01))
+"
+```
+
+If `GL_RENDERER` names the integrated GPU (for example `Intel(R) UHD
+Graphics`) instead of the discrete one, find the exact interpreter path to
+target. Don't trust `sys.executable` for this: on a `uv`-managed venv,
+`.venv\Scripts\python.exe` is a small launcher (tens of KB, not a full
+interpreter) that reports itself as `sys.executable` for compatibility, but
+when running a script file it re-launches the real, long-running interpreter
+as a *child process* from uv's own cache — and it's that child's path
+Windows' GPU preference actually keys off, not the launcher's. Confirmed by
+inspecting the live process tree while `--serve` is running: `uv.exe` →
+`.venv\Scripts\python.exe` → `%APPDATA%\uv\python\<version>\python.exe`, with
+only the last one doing any rendering work. With the host already running,
+find that real path directly:
+
+```powershell
+Get-CimInstance Win32_Process | Where-Object {
+  $_.Name -eq 'python.exe' -and $_.CommandLine -like '*run_sim.py*' -and $_.ExecutablePath -notlike '*\.venv\*'
+} | Select-Object -ExpandProperty ExecutablePath -Unique
+```
+
+Then point that exact path at the discrete GPU, either through Windows
+Settings (Settings → System → Display → Graphics → Add an app → browse to
+that path → set it to "High performance"), or from PowerShell:
+
+```powershell
+$py = "<paste the path found above>"
+New-ItemProperty -Path "HKCU:\Software\Microsoft\DirectX\UserGpuPreferences" `
+  -Name $py -Value "GpuPreference=2;" -PropertyType String -Force
+```
+
+This takes effect immediately for new processes; no reboot or `uv` reinstall
+needed. Re-run the `GL_RENDERER` check above to confirm. This is a per-machine
+Windows setting, not a repository file, so it does not travel with the repo
+and must be set again on any other Windows machine that hits the same
+symptom.
+
+Even with the correct GPU in use, the camera stream is still capped by
+`Host._CAMERA_PERIOD`/`app.py`'s `_CAMERA_STREAM_PERIOD` (kept in sync) — the
+default targets 30 fps, but the actually achieved rate depends on readback
+and JPEG-encoding overhead, not just the GPU.
 
 Three.js is loaded from a CDN, so the browser needs network access on the
 first page load. Gamepad input, labels, and segmentation masks are not
