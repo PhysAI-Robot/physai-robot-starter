@@ -33,7 +33,10 @@ from .telemetry import build_scene_manifest, build_state_snapshot
 class Host:
     """Own the authoritative simulation state; keep clients off the physics thread."""
 
-    _CAMERA_PERIOD = 0.2
+    # Camera rendering runs on its own thread (see _camera_loop), decoupled
+    # from physics stepping, so this is a plain frame-rate choice rather than
+    # a physics-stall guard. Must match app.py's _CAMERA_STREAM_PERIOD.
+    _CAMERA_PERIOD = 1.0 / 30
 
     def __init__(
         self,
