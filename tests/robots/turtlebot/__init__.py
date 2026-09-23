@@ -1,1 +1,0 @@
-"""TurtleBot4 acceptance tests."""

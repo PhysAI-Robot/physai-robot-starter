@@ -93,6 +93,16 @@ changes, check links and command names against the current files and scripts.
 A documentation change must not claim a workflow that has not been verified
 in the repository.
 
+Before finishing a Python change, also run:
+
+```bash
+uv run ruff format --exclude .venv --exclude venv
+```
+
+`.github/workflows/ci.yml`'s `format` job runs `ruff format --check` on every
+push and fails the build on any unformatted file; running the non-`--check`
+form locally fixes formatting instead of just reporting it.
+
 ## Commit messages
 
 Follow [CONTRIBUTING.md](CONTRIBUTING.md) for the shared commit message format
