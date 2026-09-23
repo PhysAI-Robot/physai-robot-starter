@@ -45,9 +45,13 @@ function resolvedTheme() {
 }
 
 function syncThemeIcon() {
+  // sunIcon/moonIcon are <svg> elements: unlike HTMLElement, SVGElement
+  // does not reflect the `.hidden` IDL property to the `hidden` attribute,
+  // so plain assignment silently no-ops and both icons stay hidden.
+  // toggleAttribute works on any Element regardless of HTML vs SVG.
   const isDark = resolvedTheme() === "dark";
-  sunIcon.hidden = !isDark;
-  moonIcon.hidden = isDark;
+  sunIcon.toggleAttribute("hidden", !isDark);
+  moonIcon.toggleAttribute("hidden", isDark);
   themeToggle.setAttribute("aria-pressed", String(isDark));
 }
 
