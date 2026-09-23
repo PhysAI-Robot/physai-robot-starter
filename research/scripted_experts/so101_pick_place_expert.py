@@ -115,7 +115,7 @@ class SO101PickPlaceExpert(Policy):
         # sorting instead (98.7% -> ~85% on a 150-seed check): the geometric
         # midpoint of the pad geoms' origins is not the same reference point
         # the calibrated constant represents, so "exact" was exact for the
-        # wrong target. See ROADMAP.md's Phase 2.0 finding.
+        # wrong target. See README.md's root-cause investigation.
         res = self.kin.ik_pinch(target_xyz, self.cfg.approach_dir, q_init=self._q_cmd)
         if not res.converged:
             return self._q_cmd

@@ -265,10 +265,11 @@ uv run python scripts/collect_demos.py --sorting --episodes 50 --out data/sortin
 Measured over held-out seeds, the scripted expert now reaches 100% on the
 single-cube check (300 seeds) and 98% on this sorting variant (900 seeds).
 The single-cube number matches the camera-only `visual_servo` baseline; see
-the Phase 2.0 finding in [ROADMAP.md](ROADMAP.md) for the two root causes
-behind the sorting gap and their fixes: a missing wrist-orientation
-constraint, and the wide-open jaws nudging a neighboring cube during
-approach and staling the expert's locked aim point.
+[research/scripted_experts/README.md](research/scripted_experts/README.md)
+for the root causes behind the sorting gap and their fixes: a missing
+wrist-orientation constraint, an under-squeezed grip, and the wide-open jaws
+nudging a neighboring cube during approach and staling the expert's locked
+aim point.
 
 Failed demonstrations are discarded by default. Add `--keep-failures` when
 you are analyzing failure cases.
