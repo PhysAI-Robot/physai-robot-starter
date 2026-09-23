@@ -160,7 +160,13 @@ button:disabled { opacity: 0.4; cursor: not-allowed; background: var(--color-sur
 .movement-keys .key-a { grid-column: 1; }
 .movement-keys .key-s { grid-column: 2; }
 .movement-keys .key-d { grid-column: 3; }
-.secondary-keys { grid-template-columns: repeat(3, 32px); }
+.z-keys { grid-template-columns: repeat(1, 32px); }
+.wrist-keys { grid-template-columns: repeat(3, 32px); }
+.wrist-keys .key-i { grid-column: 2; }
+.wrist-keys .key-q { grid-column: 1; }
+.wrist-keys .key-k { grid-column: 2; }
+.wrist-keys .key-e { grid-column: 3; }
+.gripper-keys { grid-template-columns: repeat(2, 32px); }
 .control-key {
   width: 32px;
   height: 28px;
@@ -239,9 +245,15 @@ button:disabled { opacity: 0.4; cursor: not-allowed; background: var(--color-sur
   width: 0%;
   background: var(--color-accent);
 }
+.joint-bar-fill.is-near-limit {
+  background: var(--color-danger);
+}
 .joint-value {
   text-align: right;
   color: var(--color-text);
+}
+.joint-value.is-near-limit {
+  color: var(--color-danger);
 }
 .contact-rows {
   display: flex;
@@ -362,7 +374,9 @@ button:disabled { opacity: 0.4; cursor: not-allowed; background: var(--color-sur
   #viewport { height: 65vh; min-height: 360px; }
   aside { border-left: 0; border-top: 1px solid var(--color-border); }
   .control-pad { left: var(--space-3); bottom: var(--space-3); gap: 6px; padding: 6px; }
-  .movement-keys, .secondary-keys { grid-template-columns: repeat(3, 28px); gap: 4px; }
+  .movement-keys, .wrist-keys { grid-template-columns: repeat(3, 28px); gap: 4px; }
+  .z-keys { grid-template-columns: repeat(1, 28px); gap: 4px; }
+  .gripper-keys { grid-template-columns: repeat(2, 28px); gap: 4px; }
   .control-key { width: 28px; height: 26px; }
   .state-panel { left: var(--space-3); top: var(--space-3); width: 180px; max-height: 45%; padding: var(--space-2); }
 }

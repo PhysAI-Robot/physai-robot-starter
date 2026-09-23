@@ -66,7 +66,9 @@ class Host:
             self._async_cameras = async_cameras
             self._gripper = GripperCommand()
             self._twist_resolver = None
-            if hasattr(robot, "kin") and hasattr(robot, "data"):
+            if hasattr(robot, "resolve_twist_jog"):
+                self._twist_resolver = robot.resolve_twist_jog
+            elif hasattr(robot, "kin") and hasattr(robot, "data"):
                 self._twist_resolver = TwistToJointResolver(
                     robot.kin,
                     robot.data,
@@ -84,6 +86,7 @@ class Host:
         self._stop = threading.Event()
         self._paused = False
         self._observation = None
+        self._hold_action_value: Action | None = None
         self._camera_images: dict[str, np.ndarray] = {}
         self._camera_data: Any = None
         self._camera_thread: threading.Thread | None = None
@@ -133,7 +136,7 @@ class Host:
 
     def _robot_spec(self, instance_id: str):
         instance = self.instances[instance_id]
-        return instance.robot_spec if self._shared else instance.robot_spec
+        return instance.robot_spec
 
     @property
     def model(self):
@@ -264,6 +267,12 @@ class Host:
             else:
                 self._observation = self._reset_episode()
                 self._gripper = GripperCommand()
+                # The tick loop's hold target otherwise keeps whatever the
+                # robot was last told to do before this reset (e.g. mid-jog),
+                # which can be far from the freshly-reset pose -- resubmitting
+                # it on the next idle tick then fails the safety gate's
+                # max-step check against the new observation.
+                self._hold_action_value = self._hold_action()
                 if self.policy is not None:
                     self.policy.reset(self._observation)
             self._publish()
@@ -381,7 +390,6 @@ class Host:
     def _loop(self) -> None:
         self.reset()
         period = 1.0 / self.control_hz
-        hold_action = None if self._shared else self._hold_action()
         while not self._stop.is_set():
             started = time.monotonic()
             if not self._paused:
@@ -389,7 +397,7 @@ class Host:
                     if self._shared:
                         self._tick_shared()
                     else:
-                        hold_action = self._tick_single(hold_action)
+                        self._tick_single()
                     self._publish()
             self._stop.wait(max(0.0, period - (time.monotonic() - started)))
 
@@ -402,22 +410,31 @@ class Host:
                 instance.hold()
         self.world.step()
 
-    def _tick_single(self, hold_action: Action) -> Action:
+    def _tick_single(self) -> None:
         action = self._latest_command(self.robot_name)
         if action is None and self.policy is not None and self._observation is not None:
             self._sync_observation_images()
             action = self.policy.act(self._observation)
             self._publish_debug_frames()
         if action is None:
-            action = hold_action
+            action = self._hold_action_value
+        elif self.policy is None and action.mode == "joint_position":
+            # Anchor future idle ticks to the target this command actually
+            # resolved to, not a live re-read of the observation after
+            # stepping: re-deriving the hold target from the observation
+            # every tick re-affirms that tick's small gravity/servo sag as
+            # the new floor, so an idle arm never actually settles -- it
+            # ratchets into a slow, continuous fall instead.
+            self._hold_action_value = action
         result = self.robot.step(action)
         self._observation = result[0]
-        if self.policy is None:
-            hold_action = self._hold_action()
         if self.policy is not None and (self.policy.done or result[2] or result[3]):
             self._observation = self._reset_episode()
+            # Same reason as Host.reset(): resync the hold target to the new
+            # episode's pose so a later idle tick doesn't resubmit wherever
+            # the robot was when the previous episode ended.
+            self._hold_action_value = self._hold_action()
             self.policy.reset(self._observation)
-        return hold_action
 
     def _sync_observation_images(self) -> None:
         """Merge the async camera worker's latest frames into `_observation`.

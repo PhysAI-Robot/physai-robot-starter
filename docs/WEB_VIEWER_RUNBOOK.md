@@ -119,11 +119,19 @@ keyboard mapping:
 | Keys | Action |
 | --- | --- |
 | `W` / `S` | Cartesian X jog |
-| `A` / `D` | Base yaw |
 | `Q` / `E` | Cartesian Z jog |
-| `R` / `F` | Gripper tilt/orientation |
-| `C` | Close gripper while held |
-| `O` | Open gripper while held |
+| `A` / `D` | Shoulder pan (`shoulder_pan`), direct joint jog |
+| `I` / `K` | Wrist tilt (`wrist_flex`), direct joint jog |
+| `J` / `L` | Wrist roll (`wrist_roll`), direct joint jog |
+| `R` / `F` | Open/close gripper while held |
+
+The X/Z jog (`W`/`S`/`Q`/`E`) targets a point at the wrist rather than the
+gripper tip, and is solved only over `shoulder_lift`/`elbow_flex`, so it
+never moves `shoulder_pan`, `wrist_flex`, or `wrist_roll`; those three are
+jogged directly with `A`/`D`, `I`/`K`, and `J`/`L` instead. All of these ramp
+up the longer a key is held — a quick tap gives a small, precise nudge, and a
+sustained hold ramps up to a faster sweep over about 600ms. The gripper
+(`R`/`F`) does not ramp; it steps at a fixed rate while held.
 
 The browser sends actions over WebSocket. It never calls MuJoCo directly. The
 host validates each action against the registered robot capability contract

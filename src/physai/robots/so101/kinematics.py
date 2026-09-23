@@ -230,7 +230,7 @@ class ArmKinematics:
         return self.ik(target, approach_dir, q_init=first.qpos, **ik_kwargs)
 
     def clip_to_limits(self, q) -> np.ndarray:
-        q = np.asarray(q, dtype=np.float64).reshape(5)
+        q = np.asarray(q, dtype=np.float64).reshape(len(self.joint_names))
         return np.clip(q, self.limits[:, 0], self.limits[:, 1])
 
 

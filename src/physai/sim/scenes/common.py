@@ -80,8 +80,9 @@ class ManipulationSceneConfig(WorldSceneConfig):
     gripper_joint: str | None = None
     static_pad_body: str | None = None
     moving_pad_body: str | None = None
+    wrist_body: str | None = None
     pad_friction: tuple[float, float, float] = (2.0, 0.02, 0.001)
-    pad_size: tuple[float, float, float] = (0.011, 0.009, 0.0015)
+    pad_size: tuple[float, float, float] = (0.006, 0.005, 0.0015)
     replace_jaw_collision: bool = True
     pad_align_gripper_q: float = 0.25
     static_pad_pos: tuple[float, float, float] = (-0.0090, -0.0050, -0.1000)
@@ -176,6 +177,17 @@ def _replace_jaw_collision(spec: mujoco.MjSpec, cfg: ManipulationSceneConfig) ->
                 geom.conaffinity = 0
 
 
+def _add_wrist_jog_site(spec: mujoco.MjSpec, cfg: ManipulationSceneConfig) -> None:
+    """Add a zero-offset "wristframe" site so a restricted-joint jog IK can
+    target the wrist rather than the gripper tip. Added here (not hand-edited
+    into the fetched MJCF) because `assets/` is downloaded by
+    `scripts/fetch_assets.py` and not committed to the repo.
+    """
+    if cfg.wrist_body is None:
+        return
+    _find_body(spec, cfg.wrist_body).add_site(name="wristframe", pos=[0, 0, 0])
+
+
 def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
     _validate_robot_attachment(cfg)
     """Build a manipulation world with configurable robot attachments."""
@@ -187,6 +199,7 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
     spec = mujoco.MjSpec.from_file(str(cfg.robot_xml))
     spec.option.timestep = cfg.timestep
     _replace_jaw_collision(spec, cfg)
+    _add_wrist_jog_site(spec, cfg)
     world = spec.worldbody
 
     add_studio_sky(spec)
