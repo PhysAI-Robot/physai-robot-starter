@@ -3,12 +3,14 @@ import * as scene from "./scene.js";
 import * as controls from "./controls.js";
 import * as ui from "./ui.js";
 import * as cameras from "./cameras.js";
+import * as joints from "./joints.js";
 
 const robotSelect = document.querySelector("#robot-select");
 const robotInfo = new Map();
 let activeRobot = "";
 
 cameras.init(document.querySelector("#camera-grid"), document.querySelector("#camera-add"));
+joints.init(document.querySelector("#joint-panel"));
 
 net.on("open", () => {
   ui.setStatus("connected", "connected");
@@ -16,7 +18,10 @@ net.on("open", () => {
 });
 net.on("close", () => ui.setStatus("reconnecting", "reconnecting"));
 net.on("error", (message) => ui.pushToast(message, "error"));
-net.on("state", (state) => scene.applyState(state));
+net.on("state", (state) => {
+  scene.applyState(state);
+  joints.applyState(state, activeRobot);
+});
 
 document.querySelector("#reset").onclick = () => {
   net.send({ type: "reset", robot: activeRobot });
@@ -31,6 +36,7 @@ async function selectRobot(name) {
   activeRobot = name;
   controls.setActiveRobot(name);
   controls.configureControls(robotInfo.get(name));
+  joints.configureForRobot(robotInfo.get(name));
   await scene.loadScene(name);
   cameras.setAvailableCameras(name, robotInfo.get(name)?.cameras || []);
   net.send({ type: "select_robot", robot: name });

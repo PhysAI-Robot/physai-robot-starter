@@ -221,6 +221,31 @@ def build_state_snapshot(
                 "qpos": [float(value) for value in data.qpos[start : start + width]],
             }
         )
+    gripper_contacts = []
+    for contact_index in range(data.ncon):
+        contact = data.contact[contact_index]
+        for geom_id, other_id in (
+            (contact.geom1, contact.geom2),
+            (contact.geom2, contact.geom1),
+        ):
+            name = _name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id)
+            if name.endswith("pad_static"):
+                pad = "static"
+            elif name.endswith("pad_moving"):
+                pad = "moving"
+            else:
+                continue
+            gripper_contacts.append(
+                {
+                    "pad": pad,
+                    "other_geom": _name(model, mujoco.mjtObj.mjOBJ_GEOM, other_id),
+                    **(
+                        {"instance_id": _geom_owner(model, geom_id, instance_prefixes)}
+                        if instance_prefixes is not None
+                        else {}
+                    ),
+                }
+            )
     return {
         "type": "state",
         "version": 1,
@@ -230,4 +255,5 @@ def build_state_snapshot(
         "bodies": bodies,
         "joints": joints,
         "geometries": geometries,
+        "gripper_contacts": gripper_contacts,
     }
