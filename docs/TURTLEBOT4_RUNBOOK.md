@@ -26,9 +26,9 @@ uv run python scripts/run_sim.py --robot turtlebot4 --seed 0 --max-steps 300
 At yaw zero, positive linear velocity drives along the model's world `-Y`
 direction. The navigation controller and tests use this model convention.
 
-A minimal Tk desktop window is also available as a fallback when a browser
-isn't convenient (see [ADR 4](adr/0004-tk-viewer-frozen.md)); add `--viewer`
-in place of `--serve` above.
+MuJoCo's own desktop viewer is also available as a fallback when a browser
+isn't convenient (see [ADR 4](adr/0004-tk-viewer-frozen.md)); add
+`--viewer` in place of `--serve` above.
 
 ## 2. Validate Basic Differential-Drive Control
 

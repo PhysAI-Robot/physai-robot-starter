@@ -35,24 +35,20 @@ uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --
 ```
 
 Video recording is opt-in. Add `--video` when you want frames written under
-`outputs/`; use `--serve` (or the Tk fallback below) only for interactive
+`outputs/`; use `--serve` (or the native viewer below) only for interactive
 local runs.
 
-A minimal Tk desktop window is also available as a fallback when a browser
-isn't convenient: a single window containing the MuJoCo scene and all named
-cameras discovered in the loaded model, generated automatically so `front`
-and `wrist` appear without selecting one manually (`--camera-view` is a
-retained no-op compatibility flag). It never grows features beyond this — see
-[ADR 4](adr/0004-tk-viewer-frozen.md) — so use the browser viewer above for
-per-camera selection or debug overlays. Drag the scene to orbit, scroll to
-zoom, and use the toolbar to pause, resume, or reset:
+MuJoCo's own desktop viewer is also available as a fallback when a browser
+isn't convenient — see [ADR 4](adr/0004-tk-viewer-frozen.md). It
+opens a native window with MuJoCo's built-in scene navigation (drag to orbit,
+scroll to zoom); combine it with `--serve` and use the browser viewer's
+camera grid for per-camera views or debug overlays:
 
 ```bash
 uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --viewer --seed 0
 ```
 
-This mode requires a desktop display and Tkinter (`python3-tk` on
-Debian/Ubuntu).
+This mode requires a desktop display.
 
 ## 2. Run the Basic Task
 
