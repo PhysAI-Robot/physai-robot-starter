@@ -22,6 +22,8 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
+from _common_args import add_robot
+
 
 @dataclass(frozen=True)
 class AssetSource:
@@ -122,7 +124,7 @@ def walk(
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--robot", choices=sorted(SOURCES), default="so101")
+    add_robot(ap, choices=sorted(SOURCES), default="so101")
     ap.add_argument("--force", action="store_true", help="re-download existing files")
     ap.add_argument("--dest", type=Path)
     args = ap.parse_args()

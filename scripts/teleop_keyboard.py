@@ -17,6 +17,7 @@ import argparse
 
 import _bootstrap  # noqa: F401
 import numpy as np
+from _common_args import add_seed
 
 from physai.contracts import GripperCommand, Twist, Vector3
 from physai.control import TwistToJointResolver
@@ -35,7 +36,7 @@ KEYMAP = {
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--speed", type=float, default=0.06, help="m/s per key press")
-    ap.add_argument("--seed", type=int, default=0)
+    add_seed(ap)
     args = ap.parse_args()
 
     import mujoco.viewer
