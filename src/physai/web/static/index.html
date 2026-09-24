@@ -51,8 +51,18 @@
           <h2>Joints</h2>
           <div class="joint-rows" id="joint-rows"></div>
           <div class="contact-rows" id="contact-rows" hidden>
-            <div class="contact-row" data-pad="static"><span class="contact-dot"></span>Static pad</div>
-            <div class="contact-row" data-pad="moving"><span class="contact-dot"></span>Moving pad</div>
+            <div class="contact-row" data-pad="static"><span class="contact-dot"></span>Static pad<span class="contact-force" data-force>–</span></div>
+            <div class="contact-row" data-pad="moving"><span class="contact-dot"></span>Moving pad<span class="contact-force" data-force>–</span></div>
+          </div>
+          <div class="pose-rows" id="pose-rows" hidden>
+            <div class="pose-title" title="0° roll/pitch/yaw = gripper pointing straight down">Tip pose <span id="pose-frame"></span></div>
+            <div class="pose-row"><span>x</span><span data-pose="x">–</span><span class="pose-unit">mm</span></div>
+            <div class="pose-row"><span>y</span><span data-pose="y">–</span><span class="pose-unit">mm</span></div>
+            <div class="pose-row"><span>z</span><span data-pose="z">–</span><span class="pose-unit">mm</span></div>
+            <div class="pose-row"><span>roll</span><span data-pose="roll">–</span><span class="pose-unit">°</span></div>
+            <div class="pose-row"><span>pitch</span><span data-pose="pitch">–</span><span class="pose-unit">°</span></div>
+            <div class="pose-row"><span>yaw</span><span data-pose="yaw">–</span><span class="pose-unit">°</span></div>
+            <div class="pose-lock" id="pose-lock" hidden>near gimbal lock: roll and yaw are unreliable</div>
           </div>
         </div>
         <div class="control-pad" aria-label="Robot controls">
@@ -83,6 +93,32 @@
         <p id="telemetry" aria-live="polite">waiting for state</p>
         <button id="reset">Reset</button>
         <button id="pause">Pause</button>
+        <section id="record-panel" class="record-panel" aria-label="Episode recording" hidden>
+          <h1>Recording</h1>
+          <button id="record-start" type="button">● Record</button>
+          <button id="record-success" type="button" data-record-stop hidden>Save ✓ success</button>
+          <button id="record-fail" type="button" data-record-stop hidden>Save ✗ fail</button>
+          <button id="record-discard" type="button" data-record-stop hidden>Discard</button>
+          <p id="record-status" class="hint" aria-live="polite"></p>
+        </section>
+        <section id="playback-panel" class="playback-panel" aria-label="Episode playback" hidden>
+          <h1>Playback</h1>
+          <div id="playback-load-section">
+            <select id="playback-episode" aria-label="Recorded episode"></select>
+            <button id="playback-load" type="button">Load</button>
+          </div>
+          <div id="playback-active-section" hidden>
+            <div class="playback-transport">
+              <button id="playback-prev" type="button" aria-label="Previous frame">◀</button>
+              <button id="playback-play" type="button">Play</button>
+              <button id="playback-next" type="button" aria-label="Next frame">▶</button>
+              <select id="playback-speed" aria-label="Playback speed"></select>
+              <button id="playback-exit" type="button">Exit</button>
+            </div>
+            <input id="playback-scrubber" type="range" min="0" max="0" value="0" step="1" aria-label="Frame" />
+          </div>
+          <p id="playback-status" class="hint" aria-live="polite"></p>
+        </section>
         <p class="hint">Drag to orbit · right-drag to pan · wheel to zoom.</p>
         <div class="camera-toolbar">
           <button id="camera-add" type="button">+ Camera</button>

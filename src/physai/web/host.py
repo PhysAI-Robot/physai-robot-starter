@@ -16,6 +16,7 @@ import queue
 import threading
 import time
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 
 import imageio.v3 as iio
@@ -27,6 +28,8 @@ from ..control.resolver import TwistToJointResolver
 from ..robots.base import RobotPort
 from ..robots.registry import create_shared_instance
 from ..sim.world import RobotInstanceConfig, SharedWorld
+from .playback import Playback
+from .recording import SessionRecorder
 from .telemetry import build_scene_manifest, build_state_snapshot
 
 
@@ -37,6 +40,9 @@ class Host:
     # from physics stepping, so this is a plain frame-rate choice rather than
     # a physics-stall guard. Must match app.py's _CAMERA_STREAM_PERIOD.
     _CAMERA_PERIOD = 1.0 / 30
+    # Longest wall-clock gap one playback tick may advance by (see
+    # `_advance_playback`).
+    _MAX_PLAYBACK_STEP = 0.25
 
     def __init__(
         self,
@@ -48,8 +54,13 @@ class Host:
         async_cameras: bool = False,
         world: SharedWorld | None = None,
         instances: tuple[RobotInstanceConfig, ...] | None = None,
+        record_dir: Path | str | None = None,
     ) -> None:
         self._shared = world is not None
+        self._recorder: SessionRecorder | None = None
+        self._playback: Playback | None = None
+        self._playback_status: dict[str, Any] = {"active": False}
+        self._playback_clock: float | None = None
         if self._shared:
             self.world = world
             self.instances = {
@@ -75,6 +86,14 @@ class Host:
                     dt=float(getattr(getattr(robot, "cfg", None), "control_dt", 0.04)),
                 )
             self.instances = {robot_name: robot}
+            if record_dir is not None:
+                data = getattr(robot, "data", None)
+                self._recorder = SessionRecorder(
+                    record_dir,
+                    robot=robot,
+                    fps=self.control_hz,
+                    environment_state_dim=None if data is None else int(data.qpos.size),
+                )
 
         self._commands: dict[str, queue.Queue[Action]] = {
             instance_id: queue.Queue(maxsize=1) for instance_id in self.instances
@@ -105,14 +124,20 @@ class Host:
         policy: Any = None,
         reset_seed: int | None = None,
         async_cameras: bool = False,
+        record_dir: Path | str | None = None,
     ) -> Host:
-        """A single-robot session: direct MuJoCo, one `RobotPort`, optional policy."""
+        """A single-robot session: direct MuJoCo, one `RobotPort`, optional policy.
+
+        `record_dir` enables browser-driven episode recording into that
+        dataset directory (see `start_recording`).
+        """
         return cls(
             robot=robot,
             robot_name=robot_name,
             policy=policy,
             reset_seed=reset_seed,
             async_cameras=async_cameras,
+            record_dir=record_dir,
         )
 
     @classmethod
@@ -249,7 +274,15 @@ class Host:
 
     def latest_state(self) -> dict[str, Any] | None:
         with self._lock:
-            return None if self._state is None else dict(self._state)
+            if self._state is None:
+                return None
+            state = dict(self._state)
+        # Merged at read time, not published by the tick loop, so a paused
+        # world (no ticks) still reports pause/recording changes immediately.
+        state["paused"] = self._paused
+        state["recording"] = self.recording_status()
+        state["playback"] = self._playback_status
+        return state
 
     # -- reset/pause/lease (world-atomic) ---------------------------------
     def _reset_episode(self):
@@ -258,7 +291,9 @@ class Host:
     def reset(self) -> None:
         self._start_camera_thread()
         with self._physics_lock:
+            self._require_not_playing_back("reset the world")
             self._discard_commands()
+            self._abort_recording("world reset")
             if self._shared:
                 self.world.reset()
                 for instance in self.instances.values():
@@ -279,7 +314,179 @@ class Host:
         self._request_camera_capture(wait=True)
 
     def set_paused(self, paused: bool) -> None:
+        if not paused:
+            self._require_not_playing_back("resume the simulation")
         self._paused = paused
+
+    # -- recording ---------------------------------------------------------
+    def recording_status(self) -> dict[str, Any]:
+        if self._recorder is None:
+            return {"enabled": False}
+        return self._recorder.status()
+
+    def start_recording(self) -> None:
+        """Begin an episode; frames are captured on every unpaused tick."""
+        recorder = self._require_recorder()
+        self._require_not_playing_back("record")
+        recorder.start()
+
+    def stop_recording(self, success: bool | None) -> None:
+        """End the episode as a success/fail take, or discard it with `None`."""
+        self._require_recorder().stop(success)
+
+    def _require_recorder(self) -> SessionRecorder:
+        if self._shared:
+            raise ValueError("recording is not available for shared-world hosts")
+        if self._recorder is None:
+            raise ValueError("recording is disabled; start the host with --record-dir")
+        return self._recorder
+
+    def _abort_recording(self, reason: str) -> None:
+        if self._recorder is not None:
+            self._recorder.abort(reason)
+
+    def _record_tick(self, action: Action) -> None:
+        """Capture the observation the action was chosen from, with its action."""
+        if (
+            self._recorder is None
+            or not self._recorder.active
+            or self._observation is None
+        ):
+            return
+        self._sync_observation_images()
+        data = getattr(self.robot, "data", None)
+        self._recorder.record_tick(
+            self._observation, action, None if data is None else data.qpos
+        )
+
+    # -- playback ------------------------------------------------------------
+    def list_episodes(self) -> list[dict[str, Any]]:
+        """Saved episodes of the record directory, with success tags."""
+        if self._recorder is None:
+            return []
+        return self._recorder.episodes()
+
+    def load_episode(self, file: str) -> None:
+        """Pause the world and show frame 0 of a saved episode.
+
+        Playback restores recorded simulator state on the paused world; it
+        never re-simulates. Loading another episode while one is open keeps
+        the snapshot of the original live world.
+        """
+        recorder = self._require_recorder()
+        if recorder.active:
+            raise ValueError("stop recording before loading an episode")
+        states, entry = recorder.load_states(file)
+        if states.ndim != 2 or states.shape[1] != self.data.qpos.size:
+            raise ValueError(
+                f"episode {file!r} was recorded for a different model "
+                f"({states.shape[-1]} vs {self.data.qpos.size} qpos values)"
+            )
+        with self._physics_lock:
+            previous = self._playback
+            if previous is None:
+                live_data = mujoco.MjData(self.model)
+                mujoco.mj_copyData(live_data, self.model, self.data)
+                live = (live_data, self._observation, self._hold_action_value)
+            else:
+                live = (
+                    previous.live_data,
+                    previous.live_observation,
+                    previous.live_hold_action,
+                )
+            self._paused = True
+            self._discard_commands()
+            self._playback = Playback(
+                file=file,
+                states=states,
+                fps=float(entry.get("fps") or self.control_hz),
+                success=entry.get("success"),
+                live_data=live[0],
+                live_observation=live[1],
+                live_hold_action=live[2],
+            )
+            self._show_playback_frame()
+
+    def seek(self, frame: int, *, relative: bool = False) -> None:
+        """Jump to a frame, or step by `frame` frames when `relative`.
+
+        Stepping stops playback (frame-by-frame inspection); scrubbing to an
+        absolute frame leaves it running.
+        """
+        with self._physics_lock:
+            playback = self._require_playback()
+            if relative:
+                playback.playing = False
+                playback.seek(playback.frame + int(frame))
+            else:
+                playback.seek(int(frame))
+            self._show_playback_frame()
+
+    def set_playback(self, playing: bool, speed: float | None = None) -> None:
+        with self._physics_lock:
+            playback = self._require_playback()
+            if speed is not None:
+                playback.set_speed(float(speed))
+            if playing and playback.position >= playback.length - 1:
+                playback.seek(0)  # replay from the start after reaching the end
+            playback.playing = bool(playing)
+            self._playback_clock = None  # restart timing from the next tick
+            self._show_playback_frame()
+
+    def exit_playback(self) -> None:
+        """Restore the live world that playback interrupted; stay paused."""
+        with self._physics_lock:
+            playback = self._require_playback()
+            mujoco.mj_copyData(self.data, self.model, playback.live_data)
+            mujoco.mj_forward(self.model, self.data)
+            self._observation = playback.live_observation
+            self._hold_action_value = playback.live_hold_action
+            self._playback = None
+            self._playback_status = {"active": False}
+            self._discard_commands()
+            self._publish()
+
+    def _require_playback(self) -> Playback:
+        if self._playback is None:
+            raise ValueError("no episode is loaded for playback")
+        return self._playback
+
+    def _require_not_playing_back(self, action: str) -> None:
+        if self._playback is not None:
+            raise ValueError(f"exit playback before you {action}")
+
+    def _show_playback_frame(self) -> None:
+        """Write the current frame's recorded state into the paused world."""
+        playback = self._playback
+        if playback.frame != playback.shown:
+            self.data.qpos[:] = playback.states[playback.frame]
+            self.data.qvel[:] = 0.0
+            mujoco.mj_forward(self.model, self.data)
+            playback.shown = playback.frame
+            self._playback_status = playback.status()
+            self._publish()
+        else:
+            self._playback_status = playback.status()
+
+    def _advance_playback(self, now: float) -> None:
+        """One paused-loop tick of an ongoing playback (no separate engine).
+
+        Advances by measured wall time, so 1x is real time even when the loop
+        runs slower than `control_hz`; a stall is capped so it cannot skip
+        far ahead.
+        """
+        with self._physics_lock:
+            playback = self._playback
+            if playback is None or not playback.playing:
+                self._playback_clock = None
+                return
+            elapsed = (
+                0.0 if self._playback_clock is None else now - self._playback_clock
+            )
+            self._playback_clock = now
+            elapsed = min(max(elapsed, 0.0), self._MAX_PLAYBACK_STEP)
+            playback.advance(playback.speed * playback.fps * elapsed)
+            self._show_playback_frame()
 
     def release_control(self, source: str) -> None:
         with self._lock:
@@ -308,6 +515,7 @@ class Host:
     def submit(
         self, action: Action, *, instance_id: str | None = None, source: str = "local"
     ) -> None:
+        self._require_not_playing_back("send commands")
         instance_id = self._resolve(instance_id)
         if self._shared:
             # SharedRobotInstance.prepare_action() reads the world's live MuJoCo
@@ -399,6 +607,8 @@ class Host:
                     else:
                         self._tick_single()
                     self._publish()
+            elif self._playback is not None:
+                self._advance_playback(started)
             self._stop.wait(max(0.0, period - (time.monotonic() - started)))
 
     def _tick_shared(self) -> None:
@@ -426,9 +636,11 @@ class Host:
             # the new floor, so an idle arm never actually settles -- it
             # ratchets into a slow, continuous fall instead.
             self._hold_action_value = action
+        self._record_tick(action)
         result = self.robot.step(action)
         self._observation = result[0]
         if self.policy is not None and (self.policy.done or result[2] or result[3]):
+            self._abort_recording("episode ended by the policy")
             self._observation = self._reset_episode()
             # Same reason as Host.reset(): resync the hold target to the new
             # episode's pose so a later idle tick doesn't resubmit wherever
@@ -513,7 +725,7 @@ class Host:
                     },
                 )
             else:
-                if self._observation is not None:
+                if self._observation is not None and self._playback is None:
                     for name, image in self._observation.images.items():
                         self._camera_images[f"{self.robot_name}:{name}"] = np.asarray(
                             image.data, dtype=np.uint8
@@ -524,6 +736,33 @@ class Host:
                     step=self.robot.step_count,
                     robot=self.robot_name,
                 )
+                self._state["ee_pose"] = self._ee_pose_payload()
+                if self._playback is not None:
+                    # Restored qpos cannot reproduce the actuator state that
+                    # produced the recorded squeeze, so a force would be fiction.
+                    for contact in self._state["gripper_contacts"]:
+                        contact["force_n"] = None
+
+    def _ee_pose_payload(self) -> dict[str, Any] | None:
+        """The gripper tip pose for the HUD, or None if the robot has none.
+
+        A robot whose kinematics offers `tool_pose(data)` (an optional
+        extension outside the frozen `KinematicsPort`) supplies the pose it
+        wants shown, e.g. the pinch centre where objects are held; otherwise
+        the observation's `ee_pose` is passed through unchanged. Called from
+        `_publish`, so `data` is consistent under `physics_lock`.
+        """
+        tool_pose = getattr(getattr(self.robot, "kin", None), "tool_pose", None)
+        data = getattr(self.robot, "data", None)
+        if tool_pose is not None and data is not None:
+            return {**tool_pose(data).to_dict(), "reference": "tool"}
+        if (
+            self._playback is not None
+            or self._observation is None
+            or self._observation.ee_pose is None
+        ):
+            return None
+        return {**self._observation.ee_pose.to_dict(), "reference": "ee_pose"}
 
     # -- cameras --------------------------------------------------------------
     def _camera_specs(self) -> list[tuple[str, str, str]]:

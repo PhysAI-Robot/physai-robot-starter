@@ -42,6 +42,10 @@ def create_app(*, host: Host):
     async def robots() -> list[dict[str, Any]]:
         return host.list_robots()
 
+    @app.get("/api/episodes")
+    async def episodes() -> list[dict[str, Any]]:
+        return host.list_episodes()
+
     @app.get("/api/scene")
     async def scene(robot: str | None = None) -> dict[str, Any]:
         del robot
@@ -105,6 +109,22 @@ def create_app(*, host: Host):
         active_robot = host.default_instance_id
         client_id = uuid.uuid4().hex
 
+        async def handle_playback(message: dict[str, Any]) -> None:
+            kind = message["type"]
+            if kind == "playback_load":
+                # Reads the episode's state array from disk; keep it off the loop.
+                await asyncio.to_thread(host.load_episode, message["file"])
+            elif kind == "playback_seek":
+                host.seek(int(message["frame"]))
+            elif kind == "playback_step":
+                host.seek(int(message["delta"]), relative=True)
+            elif kind == "playback_play":
+                host.set_playback(bool(message["playing"]), message.get("speed"))
+            elif kind == "playback_exit":
+                host.exit_playback()
+            else:
+                raise ValueError(f"unknown message type {kind!r}")
+
         async def receive_commands() -> None:
             try:
                 while True:
@@ -132,9 +152,35 @@ def create_app(*, host: Host):
                         ) as exc:
                             await errors.put({"type": "error", "message": str(exc)})
                     elif message.get("type") == "reset":
-                        host.reset()
+                        try:
+                            host.reset()
+                        except ValueError as exc:  # e.g. during playback
+                            await errors.put({"type": "error", "message": str(exc)})
                     elif message.get("type") == "pause":
-                        host.set_paused(bool(message.get("value", True)))
+                        try:
+                            host.set_paused(bool(message.get("value", True)))
+                        except ValueError as exc:
+                            await errors.put({"type": "error", "message": str(exc)})
+                    elif str(message.get("type")).startswith("playback_"):
+                        try:
+                            await handle_playback(message)
+                        except (KeyError, TypeError, ValueError, RuntimeError) as exc:
+                            await errors.put({"type": "error", "message": str(exc)})
+                    elif message.get("type") == "record_start":
+                        try:
+                            host.start_recording()
+                        except (RuntimeError, ValueError) as exc:
+                            await errors.put({"type": "error", "message": str(exc)})
+                    elif message.get("type") == "record_stop":
+                        success = message.get("success")
+                        try:
+                            if success is not None and not isinstance(success, bool):
+                                raise ValueError("success must be true, false or null")
+                            # Saving compresses the whole take; keep it off the
+                            # event loop so the state stream doesn't stall.
+                            await asyncio.to_thread(host.stop_recording, success)
+                        except (RuntimeError, ValueError) as exc:
+                            await errors.put({"type": "error", "message": str(exc)})
                     elif message.get("type") == "release_control":
                         host.release_control(client_id)
             except WebSocketDisconnect:

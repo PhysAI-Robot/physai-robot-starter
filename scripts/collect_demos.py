@@ -10,7 +10,6 @@ default — behaviour cloning on failures teaches failure.
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
@@ -83,6 +82,9 @@ def main() -> int:
         store_images=not args.no_images,
         robot_spec=robot.robot_spec,
         training_contract=training_contract,
+        # Full simulator qpos per step, so the web viewer can replay an
+        # episode (see docs/adr/0009). Extra key; training code ignores it.
+        environment_state_dim=robot.data.qpos.size,
         simulator_config={
             "control_hz": env.cfg.control_hz,
             "max_steps": env.cfg.max_steps,
@@ -94,7 +96,7 @@ def main() -> int:
             for name in env.cfg.cameras
         },
         scene_name="sorting_minimal" if args.sorting else "pick_place_minimal",
-        scene_config=asdict(env.cfg.scene),
+        scene_config=env.cfg.scene.to_metadata(),
     )
 
     attempted = kept = 0
@@ -113,6 +115,7 @@ def main() -> int:
             action = policy.act(obs)
             grip_rad = env.gripper_to_joint(action.gripper.clipped())
             prev_obs = obs
+            state = robot.data.qpos.copy()  # the world prev_obs was observed in
             obs, reward, terminated, truncated, info = env.step(action)
             rec.record(
                 prev_obs,
@@ -121,6 +124,7 @@ def main() -> int:
                 done=terminated or truncated,
                 phase=policy.phase.name,
                 gripper_joint=grip_rad,
+                environment_state=state,
             )
             if terminated or truncated:
                 break

@@ -377,6 +377,10 @@ Host
  ├── camera_jpeg(name, instance_id=None)   cached camera JPEG
  ├── submit(action, instance_id=None, ...) command + control lease
  ├── reset() / set_paused(paused)          world-atomic, affects every client
+ ├── start_recording() / stop_recording(success)   browser episode capture
+ │   / recording_status()                    (single-instance, needs record_dir)
+ ├── list_episodes() / load_episode(file)   replay a saved episode on the paused
+ │   / seek(frame, relative) / set_playback(playing, speed) / exit_playback()
  ├── release_control(source)               drop every instance a source owns
  └── start() / stop()                      physics-thread lifecycle
 ```
@@ -406,11 +410,26 @@ surface is stable across single- and multi-robot sessions:
 | `GET /` | Three.js browser console (static file) |
 | `GET /api/robots` | Every instance's id, kind, action modes, capabilities, and cameras |
 | `GET /api/scene` | Static geometry manifest for the whole session |
+| `GET /api/episodes` | Saved episodes of the record directory (file, length, `success`, `playable`); `[]` when recording is disabled |
 | `GET /api/state` | Latest transform snapshot for the whole session |
 | `GET /api/mesh/{id}` | Compiled mesh binary payload |
 | `GET /api/camera/{name}.jpg` | Cached camera JPEG (single snapshot), optionally `?robot=<instance_id>` |
 | `GET /api/camera/{name}/stream` | MJPEG `multipart/x-mixed-replace` stream; 404 on an unknown camera |
-| `WS /ws` | Accepts `select_robot`, `command`, `reset`, `pause`, `release_control`; streams state + errors |
+| `WS /ws` | Accepts `select_robot`, `command`, `reset`, `pause`, `release_control`, `record_start`, `record_stop`, `playback_load`/`_seek`/`_step`/`_play`/`_exit`; streams state + errors |
+
+Each `gripper_contacts` entry carries `force_n`, the pad's summed contact
+normal force in newtons. The streamed state also carries the robot's `ee_pose` (a `PoseStamped`-shaped
+dict plus a `reference` of `tool` or `ee_pose`, or `null`; `tool` is the pose
+the robot's kinematics reports through the optional `tool_pose(data)`
+extension, which for the SO-101 is the pinch centre oriented relative to a
+top-down grasp), the live `paused` flag and
+a `recording` status block (episodes saved, frames, errors) and a `playback`
+status block (file, frame, length, playing, speed, success). During playback
+each `gripper_contacts` entry's `force_n` is `null`: a restored `qpos` cannot
+reproduce the actuator state that produced the recorded squeeze. `paused` and `recording` are merged in at read
+time by `Host.latest_state()`, so a paused world still reports changes.
+Recording and playback are specified in
+[ADR 9](adr/0009-web-session-recording-and-playback.md).
 
 Both clients depend only on this API plus `RobotSpec` capabilities, never on
 MuJoCo or robot internals:
@@ -543,6 +562,13 @@ contracts rather than defining a second joint or camera layout. The current
 recorder writes a compact internal `.npz` format with LeRobot-shaped feature
 keys; a future standard `LeRobotDataset` exporter must consume the same
 metadata and must not introduce a parallel action contract.
+
+A recording may add one optional per-step key,
+`observation.environment_state` (`(T, nq)` float64, the full simulator qpos),
+declared in `meta.json`'s `features` when present. The web viewer's recorder
+writes it, as does `scripts/collect_demos.py` (see
+[ADR 9](adr/0009-web-session-recording-and-playback.md)); datasets recorded
+before that change lack it and keep the layout above.
 
 Dataset and checkpoint metadata also record the selected scene name and scene
 configuration snapshot. This makes training and evaluation reproducible when

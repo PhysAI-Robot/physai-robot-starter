@@ -85,6 +85,10 @@ drive the robot:
 MUJOCO_GL=egl uv run python scripts/run_sim.py --robot so101 --serve
 ```
 
+Add `--record-dir data/web_session` to record episodes from the browser with
+success/fail tags (see
+[docs/WEB_VIEWER_RUNBOOK.md](docs/WEB_VIEWER_RUNBOOK.md#recording-episodes)).
+
 In another terminal, open the browser client:
 
 ```bash

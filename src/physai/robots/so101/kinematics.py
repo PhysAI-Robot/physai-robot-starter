@@ -56,6 +56,10 @@ class ArmKinematics:
         self.dof_adr = model.jnt_dofadr[self.joint_ids]
         self.limits = model.jnt_range[self.joint_ids].copy()
         self._scratch = mujoco.MjData(model)
+        # Site orientation of the reference top-down grasp; see tool_pose().
+        reference = np.zeros(9)
+        mujoco.mju_quat2Mat(reference, top_down_quat())
+        self._top_down_rotation = reference.reshape(3, 3)
 
     def fk(self, data: mujoco.MjData) -> PoseStamped:
         pos = data.site_xpos[self.site_id].copy()
@@ -65,6 +69,31 @@ class ArmKinematics:
         return PoseStamped(
             pose=Pose(
                 position=Vector3.from_array(pos),
+                orientation=Quaternion.from_mujoco(quat),
+            ),
+            header=Header(frame_id="base"),
+        )
+
+    def tool_pose(self, data: mujoco.MjData) -> PoseStamped:
+        """Where the gripper tip is, and how it is oriented relative to top-down.
+
+        Position is the pinch centre. Orientation is the end-effector site's,
+        expressed relative to the reference top-down grasp (`top_down_quat`),
+        so straight down reads as the identity and a pan of the arm changes
+        only yaw. That puts the Euler-angle singularity, where the jaw axis
+        is vertical, at a horizontal approach that table-top grasping does
+        not use, instead of at the top-down grasp itself.
+
+        An optional extension of this concrete class (not part of the frozen
+        `KinematicsPort`); readers should look it up with `getattr`.
+        """
+        site_rotation = data.site_xmat[self.site_id].reshape(3, 3)
+        tool_rotation = site_rotation @ self._top_down_rotation.T
+        quat = np.zeros(4)
+        mujoco.mju_mat2Quat(quat, tool_rotation.reshape(9))
+        return PoseStamped(
+            pose=Pose(
+                position=Vector3.from_array(self.pinch_center(data)),
                 orientation=Quaternion.from_mujoco(quat),
             ),
             header=Header(frame_id="base"),

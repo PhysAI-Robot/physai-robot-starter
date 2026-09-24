@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import mujoco
@@ -69,6 +69,24 @@ class WorldSceneConfig:
     camera_height: int = 240
     front_cam_pos: tuple[float, float, float] = (0.62, 0.0, 0.38)
     front_cam_xyaxes: tuple[float, ...] = (0.0, 1.0, 0.0, -0.45, 0.0, 0.9)
+
+    def to_metadata(self) -> dict:
+        """This config as JSON-safe data for dataset metadata.
+
+        Paths inside the repository are stored relative to it, so a dataset
+        neither leaks the collecting machine's directory layout nor depends
+        on where the repository was checked out. A path outside the
+        repository has no portable form and is kept as given (forward-slash).
+        """
+        data = asdict(self)
+        for key, value in data.items():
+            if isinstance(value, Path):
+                try:
+                    value = value.relative_to(REPO_ROOT)
+                except ValueError:
+                    pass
+                data[key] = value.as_posix()
+        return data
 
 
 @dataclass

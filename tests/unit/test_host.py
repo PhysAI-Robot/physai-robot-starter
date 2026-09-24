@@ -2,13 +2,16 @@
 (`for_world`) sessions are both instances of it, exercised here side by side
 since a single robot is just a session with one instance."""
 
+import json
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
-from physai.contracts import Action
+from physai.contracts import Action, Header, Pose, PoseStamped, Vector3
+from physai.data import load_episode
 from physai.robots import RobotSpec, shared_attach
 from physai.sim import RobotInstanceConfig, SharedWorld
 from physai.web.actions import action_from_payload
@@ -303,3 +306,200 @@ def test_shared_stop_is_safe_when_never_started():
     host.stop()
 
     assert host._thread is None
+
+
+class QposRobot(FakeRobotPort):
+    """A fake robot exposing `data.qpos`, as MuJoCo-backed robots do."""
+
+    def __init__(self, spec: RobotSpec) -> None:
+        super().__init__(spec)
+        self.data = SimpleNamespace(qpos=np.array([0.1, 0.2, 0.3]), time=0.0)
+
+
+def make_recording_host(record_dir, host_cls=Host) -> Host:
+    spec = RobotSpec(
+        name="test",
+        kind="test",
+        joint_names=("joint",),
+        action_joint_names=("joint",),
+    )
+    host = host_cls.for_robot(QposRobot(spec), robot_name="test", record_dir=record_dir)
+    host._observation = host.robot.observe()
+    host._hold_action_value = host._hold_action()
+    return host
+
+
+def test_recording_saves_tagged_episodes_and_counts_them(tmp_path):
+    host = make_recording_host(tmp_path)
+
+    host.start_recording()
+    for _ in range(3):
+        host._tick_single()
+    assert host.recording_status()["frames"] == 3
+    host.stop_recording(True)
+    host.start_recording()
+    host._tick_single()
+    host.stop_recording(False)
+
+    status = host.recording_status()
+    assert (status["episodes_saved"], status["successes"], status["active"]) == (
+        2,
+        1,
+        False,
+    )
+    episode = load_episode(tmp_path / "episode_00000.npz")
+    assert episode["observation.state"].shape == (3, 1)
+    np.testing.assert_allclose(
+        episode["observation.environment_state"], [[0.1, 0.2, 0.3]] * 3
+    )
+    meta = json.loads((tmp_path / "meta.json").read_text())
+    assert [e["success"] for e in meta["episodes"]] == [True, False]
+    assert meta["episodes"][0]["length"] == 3
+
+
+def test_stop_recording_with_none_discards_the_take(tmp_path):
+    host = make_recording_host(tmp_path)
+
+    host.start_recording()
+    host._tick_single()
+    host.stop_recording(None)
+
+    status = host.recording_status()
+    assert (status["episodes_saved"], status["discarded"]) == (0, 1)
+    assert list(tmp_path.glob("*.npz")) == []
+
+
+def test_reset_discards_an_in_progress_recording(tmp_path):
+    host = make_recording_host(tmp_path, NoPublishHost)
+    host.start_recording()
+    host._tick_single()
+
+    host.reset()
+
+    status = host.recording_status()
+    assert (status["active"], status["discarded"]) == (False, 1)
+    assert "reset" in status["error"]
+
+
+def test_new_session_continues_numbering_an_existing_dataset(tmp_path):
+    first = make_recording_host(tmp_path)
+    first.start_recording()
+    first._tick_single()
+    first.stop_recording(True)
+
+    second = make_recording_host(tmp_path)
+    assert second.recording_status()["episodes_saved"] == 1
+    second.start_recording()
+    second._tick_single()
+    second.stop_recording(True)
+
+    assert (tmp_path / "episode_00001.npz").exists()
+    meta = json.loads((tmp_path / "meta.json").read_text())
+    assert meta["num_episodes"] == 2
+
+
+def test_recording_state_is_merged_into_the_live_snapshot(tmp_path):
+    host = make_recording_host(tmp_path)
+    host._state = {"type": "state"}
+
+    host.set_paused(True)
+    host.start_recording()
+    state = host.latest_state()
+
+    assert state["paused"] is True
+    assert state["recording"]["active"] is True
+
+
+def test_recording_requires_a_record_dir():
+    host = make_host()
+
+    assert host.recording_status() == {"enabled": False}
+    with pytest.raises(ValueError, match="--record-dir"):
+        host.start_recording()
+
+
+def test_stop_recording_without_a_take_is_an_error(tmp_path):
+    host = make_recording_host(tmp_path)
+
+    with pytest.raises(RuntimeError, match="not recording"):
+        host.stop_recording(True)
+
+
+def test_recording_waits_for_every_camera_before_recording_frames(tmp_path):
+    spec = RobotSpec(
+        name="test",
+        kind="test",
+        joint_names=("joint",),
+        action_joint_names=("joint",),
+        camera_frames={"front": "camera_front"},
+    )
+    host = Host.for_robot(QposRobot(spec), robot_name="test", record_dir=tmp_path)
+    host._observation = host.robot.observe()
+    host._hold_action_value = host._hold_action()
+
+    host.start_recording()
+    host._tick_single()
+    status = host.recording_status()
+    assert (status["frames"], status["waiting_for"]) == (0, ["front"])
+
+    host._camera_images["test:front"] = np.full((4, 4, 3), 7, dtype=np.uint8)
+    host._tick_single()
+    host._tick_single()
+    assert host.recording_status()["frames"] == 2
+    host.stop_recording(True)
+
+    images = load_episode(tmp_path / "episode_00000.npz")["observation.images.front"]
+    assert images.shape == (2, 4, 4, 3)
+
+
+def test_stop_recording_with_no_frames_reports_an_error(tmp_path):
+    host = make_recording_host(tmp_path)
+
+    host.start_recording()
+    with pytest.raises(RuntimeError, match="no frames"):
+        host.stop_recording(True)
+
+    assert host.recording_status()["episodes_saved"] == 0
+    assert host.recording_status()["active"] is False
+
+
+def test_ee_pose_payload_reports_the_observation_pose_or_none():
+    host = make_host()
+    assert host._ee_pose_payload() is None
+
+    host._observation = host.robot.observe()
+    assert host._ee_pose_payload() is None
+
+    host._observation.ee_pose = PoseStamped(
+        pose=Pose(position=Vector3(0.1, 0.2, 0.3)),
+        header=Header(frame_id="base"),
+    )
+    assert host._ee_pose_payload() == {
+        "frame_id": "base",
+        "position": [0.1, 0.2, 0.3],
+        "orientation_xyzw": [0.0, 0.0, 0.0, 1.0],
+        "reference": "ee_pose",
+    }
+
+
+class ToolPoseKinematics:
+    """Kinematics offering the optional `tool_pose` extension."""
+
+    def tool_pose(self, data):
+        return PoseStamped(
+            pose=Pose(position=Vector3(1.0, 2.0, 3.5)),
+            header=Header(frame_id="base"),
+        )
+
+
+def test_ee_pose_payload_prefers_the_kinematics_tool_pose():
+    host = make_host()
+    host.robot.kin = ToolPoseKinematics()
+    host.robot.data = SimpleNamespace()
+
+    assert host._ee_pose_payload() == {
+        "frame_id": "base",
+        "position": [1.0, 2.0, 3.5],
+        "orientation_xyzw": [0.0, 0.0, 0.0, 1.0],
+        "reference": "tool",
+    }

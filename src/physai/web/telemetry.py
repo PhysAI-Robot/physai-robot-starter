@@ -254,8 +254,10 @@ def build_state_snapshot(
     # browser's contact-ring indicator jitter between them frame to frame.
     # Averaging position keeps it at one stable spot; the surfaces involved
     # are near-flat at that scale, so the first point's frame (orientation)
-    # is representative of the rest too.
+    # is representative of the rest too. The same reasoning applies to force:
+    # a group's `force_n` sums the normal force over its contact points.
     contact_groups: dict[tuple[str | None, str, str], dict[str, Any]] = {}
+    contact_force = np.zeros(6)
     for contact_index in range(data.ncon):
         contact = data.contact[contact_index]
         for geom_id, other_id in (
@@ -290,13 +292,19 @@ def build_state_snapshot(
                         contact.frame, pad_is_geom1=(geom_id == contact.geom1)
                     ),
                     "_positions": [],
+                    "_normal_force": 0.0,
                 },
             )
             group["_positions"].append(np.asarray(contact.pos, dtype=np.float64))
+            # Force is in the contact frame, so component 0 is the normal
+            # force in newtons; it is zero for contacts MuJoCo excluded.
+            mujoco.mj_contactForce(model, data, contact_index, contact_force)
+            group["_normal_force"] += float(contact_force[0])
     gripper_contacts = []
     for group in contact_groups.values():
         positions = group.pop("_positions")
         group["pos"] = [float(value) for value in np.mean(positions, axis=0)]
+        group["force_n"] = group.pop("_normal_force")
         gripper_contacts.append(group)
     return {
         "type": "state",
