@@ -100,11 +100,40 @@ class ManipulationSceneConfig(WorldSceneConfig):
     moving_pad_body: str | None = None
     wrist_body: str | None = None
     pad_friction: tuple[float, float, float] = (2.0, 0.02, 0.001)
-    pad_size: tuple[float, float, float] = (0.006, 0.005, 0.0015)
+    # MuJoCo models friction as a soft constraint, so a held object under a
+    # constant load (a cube's own weight, ~0.3 N, against ~4 N of squeeze)
+    # creeps out of the fingers at about 1 mm/s even though the friction
+    # force is a small fraction of its limit; a cube held for ~15 s falls out
+    # regardless of grip force. The no-slip post-solver removes that creep
+    # (0.0 mm over 30 s) for ~30% more solver time. 0 restores the default.
+    noslip_iterations: int = 5
+    # The grasp pads are collision boxes standing in for the finger meshes (see
+    # replace_jaw_collision). They are fitted to the SO-101 fingertips: each
+    # pad's outer face is flush with the tip's inner face, its 12 x 12 mm
+    # footprint is the bounding square of the tapered tip face and sits on the
+    # finger centre line, and it is 6 mm thick so a squeezed cube cannot pass
+    # through it into the finger. Only the last ~6 mm of each fingertip is a
+    # flat face (behind it the lattice is recessed), so the pads are fitted to
+    # that zone. `pad_align_gripper_q` (0.16 rad) is the gripper angle at
+    # which the pad faces are one cube width (28 mm) apart at the pad
+    # centres. Narrower pads (8-10 mm) fit the tip more tightly but make
+    # `visual_servo` miss the cube on some seeds: it grasps up to ~15 mm off
+    # the pinch centre.
+    pad_size: tuple[float, float, float] = (0.006, 0.006, 0.003)
     replace_jaw_collision: bool = True
-    pad_align_gripper_q: float = 0.25
-    static_pad_pos: tuple[float, float, float] = (-0.0090, -0.0050, -0.1000)
-    moving_pad_pos: tuple[float, float, float] = (-0.0117, -0.0700, 0.0228)
+    pad_align_gripper_q: float = 0.16
+    static_pad_pos: tuple[float, float, float] = (-0.0109, -0.0002, -0.0979)
+    moving_pad_pos: tuple[float, float, float] = (-0.0093, -0.0753, 0.0190)
+    # Rotation of the moving pad about its lateral axis, on top of being
+    # parallel to the static pad at `pad_align_gripper_q`. The moving finger's
+    # face is not parallel to the static one (the fingers form a V, about 8
+    # degrees apart here), so this lays the pad along that face. Positive
+    # raises the face toward the tip.
+    moving_pad_tilt: float = 0.1348
+    # The pads render in the web viewer (a group-3 box drawn by its rgba) so
+    # their fit can be checked by eye; MuJoCo camera renders skip group 3, so
+    # dataset images are unaffected. Set the alpha (last value) to 0 to hide.
+    pad_rgba: tuple[float, float, float, float] = (0.95, 0.6, 0.1, 0.6)
     # The wrist camera looks along -z of its own frame. With x = (-1, 0, 0) the
     # derived view direction pointed backwards and up, away from the workspace,
     # so this camera rendered a black frame for the whole episode. Negating the
@@ -178,6 +207,11 @@ def _pad_quats(cfg: ManipulationSceneConfig) -> dict[str, np.ndarray]:
     ):
         body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name)
         local_rotation = data.xmat[body_id].reshape(3, 3).T @ site_rotation
+        if key == "moving":
+            c, s = np.cos(cfg.moving_pad_tilt), np.sin(cfg.moving_pad_tilt)
+            local_rotation = local_rotation @ np.array(
+                [[c, 0.0, -s], [0.0, 1.0, 0.0], [s, 0.0, c]]
+            )
         quaternion = np.zeros(4)
         mujoco.mju_mat2Quat(quaternion, local_rotation.reshape(9))
         quaternions[key] = quaternion
@@ -216,6 +250,7 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
 
     spec = mujoco.MjSpec.from_file(str(cfg.robot_xml))
     spec.option.timestep = cfg.timestep
+    spec.option.noslip_iterations = cfg.noslip_iterations
     _replace_jaw_collision(spec, cfg)
     _add_wrist_jog_site(spec, cfg)
     world = spec.worldbody
@@ -303,17 +338,18 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
             size=list(cfg.pad_size),
             pos=list(position),
             quat=list(quaternion),
-            # alpha=0: a collision-only proxy for the jaw mesh (see
-            # _replace_jaw_collision), not meant to be seen. contype/
-            # conaffinity below still make it collide normally — only its
-            # rendered alpha is 0, which both MuJoCo's own renderer and the
-            # web viewer's Three.js client (scene.js sets
-            # transparent/opacity from rgba[3]) respect, so it disappears
-            # from every render without touching contact behavior.
-            rgba=[0.12, 0.12, 0.14, 0.0],
+            # A collision-only proxy for the jaw mesh (see
+            # _replace_jaw_collision). Its rgba only affects the web viewer
+            # (scene.js sets transparent/opacity from rgba[3]); alpha 0 hides
+            # it without touching contact behavior. Its solref time constant
+            # is already at the stability floor (2 x timestep): a stiffer
+            # direct solref throws the cube out of the grasp or blows up the
+            # arm at this timestep. The high impedance (solimp) is the safe
+            # remaining lever.
+            rgba=list(cfg.pad_rgba),
             friction=list(cfg.pad_friction),
             condim=4,
-            solimp=[0.95, 0.99, 0.001, 0.5, 2.0],
+            solimp=[0.99, 0.999, 0.001, 0.5, 2.0],
             solref=[0.004, 1.0],
             group=3,
         )
