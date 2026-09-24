@@ -184,10 +184,29 @@ not included. Contact with the table counts the same as contact with an
 object.
 
 Sanity reference from the scripted pick-and-place: the two pads read the same
-force while holding the cube, and their net vertical force equals the cube's
-weight. In `--serve` the gripper force is deliberately uncapped, so a held
-30 g cube reads roughly 30 N per pad, about ten times what the capped default
-configuration used by the evaluation scripts produces.
+force while holding the cube (about 3.8 N each), and their net vertical force
+equals the cube's weight. The gripper torque is capped at 0.3 N·m in every
+mode. The cap matters: the model's own limit is 3.35 N·m, which drives about
+34 N per pad against a 0.29 N cube and pushes the cube roughly 10 mm into the
+pads and fingers, and below roughly 0.1 N·m (about 1 N per pad) the scripted
+grasp drops the cube.
+
+Holding the gripper key (`G`) on a lifted cube used to let it slide slowly
+out of the fingers and fall after ~15 s, at any grip force. That is friction
+creep, not slip: the contact reported only 0.13-0.19 N of friction against
+a limit of about 8 N. MuJoCo softens friction, so a constant load (the cube's
+weight) moves the contact at ~1 mm/s. Manipulation scenes now run the
+solver's no-slip pass (`noslip_iterations = 5` in `ManipulationSceneConfig`),
+after which a held cube moves 0.0 mm over 30 s, for ~30% more solver time.
+
+The translucent orange boxes on the fingertips are those pads: the only parts
+of the fingers that collide. They are fitted to the flat face at each fingertip
+(the last ~6 mm; behind it the lattice is recessed): flush with it, along its
+angle, and one cube width apart at their centres when the gripper is at
+0.16 rad. The moving finger's face is tilted about 8 degrees from the static
+one (the fingers form a V), and its pad is tilted to match. To hide them, set the alpha of
+`pad_rgba` in `ManipulationSceneConfig`
+([common.py](../src/physai/sim/scenes/common.py)) to 0.
 
 ## Recording Episodes
 

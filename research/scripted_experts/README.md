@@ -159,6 +159,23 @@ were reverted:
   rating against a rigid cube and destabilize the contact, which is exactly
   what the cap exists to prevent. The shared default was kept at `0.3` to
   keep `visual_servo` correct.
+- **The grasp pads were later refitted to the fingertips** (flush with each
+  tip's inner face and along its angle, centred on the finger, 12 x 12 x 6 mm,
+  one 28 mm cube apart at the pad centres; the moving pad is tilted ~8
+  degrees to follow its finger's face; see `ManipulationSceneConfig`), and the web viewer stopped
+  overriding the torque cap. First touch of the cube moved from about 0.21 to
+  about 0.176 normalized aperture, so the hardcoded 0.19 above no longer
+  squeezed at all (`visual_servo` dropped the cube on every seed) and became
+  `SQUEEZE_GRIP = 0.15` in `so101_visual_servo.py`; the expert's deep 0.06
+  squeeze is unaffected, and its `gripper_touch=0.21` now just stops a little
+  short of contact. The refit also exposed friction creep (a held cube slid out at ~1 mm/s
+  under its own weight whatever the grip force, which the old ~3 mm
+  "drift in hand" figures had been hiding); manipulation scenes now enable
+  MuJoCo's no-slip solver (`noslip_iterations = 5`). Both policies were
+  rechecked afterwards (expert 20/20,
+  `visual_servo` 12/12 seeds). Narrower 8-10 mm pads matched the tip more
+  tightly but cost `visual_servo` one seed in twelve, because it grasps up to
+  about 15 mm off the pinch centre.
 - **Requiring both pads in contact before accepting a grasp** (tightening
   `_cube_grasped()`, which currently accepts either pad touching) was tried
   on the theory that a one-sided contact — measured directly on one failing

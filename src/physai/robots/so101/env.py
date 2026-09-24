@@ -67,7 +67,7 @@ class EnvConfig:
     # to 20-50x the cube's weight and makes it chatter and pop loose mid-carry.
     # Capping it here emulates a current-limited real servo and keeps the
     # squeeze in the contact solver's stable range. Needed by visual_servo,
-    # whose grip target (0.19) is shallow enough that uncapped force can
+    # whose grip target (SQUEEZE_GRIP, 0.15) is shallow enough that uncapped force can
     # destabilize the contact -- test_visual_servo_pick_place_settles_from_
     # multiple_seeds fails without this cap. The scripted expert's much
     # deeper default squeeze (ExpertConfig.gripper_grip=0.06) already keeps

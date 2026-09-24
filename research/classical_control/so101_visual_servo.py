@@ -23,6 +23,14 @@ from physai.control.resolver import JointRateLimiter, TwistToJointResolver
 from physai.policy.base import Policy
 from physai.robots.registry import register_robot_policy
 
+# Normalized gripper aperture commanded while carrying the cube. It must sit
+# past the aperture where the fingertip pads first touch the 28 mm cube
+# (about 0.176, with the pads fitted to the fingertips) so the position
+# controller keeps squeezing at the torque cap, yet within 0.06 of where the
+# jaws actually stop or the CLOSE phase never counts as settled. Tuned to the
+# old, proud pads as 0.19; 0.13-0.17 all work with the current ones.
+SQUEEZE_GRIP = 0.15
+
 
 @dataclass(frozen=True)
 class VisualFeature:
@@ -316,17 +324,17 @@ class SO101VisualServoPolicy(Policy):
         if self._phase in (VisualServoPhase.DESCEND, VisualServoPhase.CLOSE):
             return np.array(
                 [*self._target_xy, cube_z]
-            ), 1.0 if self._phase is VisualServoPhase.DESCEND else 0.19
+            ), 1.0 if self._phase is VisualServoPhase.DESCEND else SQUEEZE_GRIP
         if self._phase is VisualServoPhase.LIFT:
-            return np.array([*self._target_xy, rest_z + 0.035]), 0.19
+            return np.array([*self._target_xy, rest_z + 0.035]), SQUEEZE_GRIP
         if self._phase is VisualServoPhase.TRANSFER:
             return np.array(
                 [self.env.target_pos[0], self.env.target_pos[1], rest_z + 0.035]
-            ), 0.19
+            ), SQUEEZE_GRIP
         if self._phase in (VisualServoPhase.LOWER, VisualServoPhase.RELEASE):
             return np.array(
                 [self.env.target_pos[0], self.env.target_pos[1], rest_z + 0.016]
-            ), 0.19 if self._phase is VisualServoPhase.LOWER else 1.0
+            ), SQUEEZE_GRIP if self._phase is VisualServoPhase.LOWER else 1.0
         return np.array(
             [self.env.target_pos[0], self.env.target_pos[1], rest_z + 0.035]
         ), 1.0

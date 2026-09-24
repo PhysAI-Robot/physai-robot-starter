@@ -381,19 +381,11 @@ def run_viewer(
         # from that same cache. This is now the standard for so101 in
         # --viewer/--serve, not just the idle/scripted case.
         #
-        # gripper_force_limit=None: EnvConfig's default 0.3 N*m only exists
-        # to keep visual_servo's shallow (0.19) hardcoded squeeze from
-        # destabilizing under full actuator force (research/scripted_experts/
-        # README.md's tuning notes) — with a deeper squeeze it measurably
-        # hurts grip success (96.0% uncapped vs 92.7-94.7% capped over a
-        # 300-seed comparison). A human jogging the gripper closed by hand
-        # isn't that specific shallow-squeeze policy, and a weak, uncapped-
-        # for-a-reason-that-doesn't-apply-here grip was exactly why objects
-        # were slipping out under gravity. Scoped to the viewer/serve path
-        # only, so scripted_expert/visual_servo keep the tuned default.
-        viewer_config = replace(
-            viewer_config, camera_stride=0, gripper_force_limit=None
-        )
+        # The gripper torque keeps EnvConfig's tuned 0.3 N*m cap here too. The
+        # model's own limit (3.35 N*m) drives ~34 N per pad against a 0.29 N
+        # cube and sinks it ~10 mm into the pads and fingers; the scripted
+        # grasp drops the cube below ~0.1 N*m, so 0.3 keeps a 3x margin.
+        viewer_config = replace(viewer_config, camera_stride=0)
         env = create_robot(
             args.robot,
             config=viewer_config,
