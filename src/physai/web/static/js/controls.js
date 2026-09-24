@@ -12,6 +12,7 @@ let shoulderPanAxis = {};
 let wristFlexAxis = {};
 let wristRollAxis = {};
 let gripperEnabled = false;
+let enabled = true;
 
 const JOG_RAMP_MS = 600; // ms of continuous hold to reach max speed
 const JOG_LINEAR_MIN = 0.06; // m/s at a tap
@@ -100,8 +101,17 @@ function rampedSpeed(holdStart, min, max) {
   return min + (max - min) * rampFactor;
 }
 
+// Playback owns the world: jog input must not reach the host meanwhile.
+export function setEnabled(value) {
+  enabled = value;
+  if (!enabled) heldKeys.clear();
+  controlButtons.forEach((button) => {
+    button.disabled = !enabled;
+  });
+}
+
 function sendJog(force = false) {
-  if (!net.isOpen()) return;
+  if (!net.isOpen() || !enabled) return;
   if (!force && heldKeys.size === 0) return;
   const linear = [0, 0, 0];
   let shoulderPanRate = 0;

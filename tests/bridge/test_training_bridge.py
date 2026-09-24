@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -15,6 +16,7 @@ from physai.data import (
     CheckpointMetadata,
     EpisodeRecorder,
     EvaluationReport,
+    load_episode,
     validate_checkpoint_compatibility,
 )
 from physai.robots.so101.contracts import (
@@ -107,6 +109,106 @@ def test_recorder_writes_versioned_training_metadata(tmp_path):
     assert meta["seeds"] == [4]
     assert meta["task_name"] == "pick_place"
     assert meta["camera_config"]["front"]["width"] == 224
+
+
+def _joint_observation() -> Observation:
+    return Observation(
+        joint_state=JointState(
+            name=("joint",),
+            position=np.zeros(1),
+            velocity=np.zeros(1),
+            effort=np.zeros(1),
+            header=Header(frame_id="base"),
+        )
+    )
+
+
+def test_recorder_stores_environment_state_when_configured(tmp_path):
+    recorder = EpisodeRecorder(tmp_path, store_images=False, environment_state_dim=3)
+    recorder.start_episode()
+    for step in range(2):
+        recorder.record(
+            _joint_observation(),
+            Action(joint_position=np.zeros(1)),
+            environment_state=np.array([step, 0.5, -1.0]),
+        )
+    path = recorder.end_episode(success=True)
+
+    episode = load_episode(path)
+    np.testing.assert_array_equal(
+        episode["observation.environment_state"], [[0, 0.5, -1.0], [1, 0.5, -1.0]]
+    )
+    meta = json.loads(recorder.write_meta().read_text())
+    assert meta["features"]["observation.environment_state"]["shape"] == [3]
+
+
+def test_recorder_without_environment_state_keeps_the_original_layout(tmp_path):
+    recorder = EpisodeRecorder(tmp_path, store_images=False)
+    recorder.start_episode()
+    recorder.record(_joint_observation(), Action(joint_position=np.zeros(1)))
+    episode = load_episode(recorder.end_episode(success=True))
+
+    assert set(episode) == {"observation.state", "action", "reward", "done", "phase"}
+    meta = json.loads(recorder.write_meta().read_text())
+    assert "observation.environment_state" not in meta["features"]
+
+
+def test_recorder_rejects_mismatched_environment_state(tmp_path):
+    configured = EpisodeRecorder(
+        tmp_path / "a", store_images=False, environment_state_dim=3
+    )
+    configured.start_episode()
+    action = Action(joint_position=np.zeros(1))
+    with pytest.raises(ValueError, match="3 values"):
+        configured.record(_joint_observation(), action)
+    with pytest.raises(ValueError, match="3 values"):
+        configured.record(_joint_observation(), action, environment_state=np.zeros(2))
+
+    plain = EpisodeRecorder(tmp_path / "b", store_images=False)
+    plain.start_episode()
+    with pytest.raises(ValueError, match="environment_state_dim"):
+        plain.record(_joint_observation(), action, environment_state=np.zeros(3))
+
+
+def test_load_episode_can_read_only_the_requested_keys(tmp_path):
+    recorder = EpisodeRecorder(tmp_path, store_images=False, environment_state_dim=2)
+    recorder.start_episode()
+    recorder.record(
+        _joint_observation(),
+        Action(joint_position=np.zeros(1)),
+        environment_state=np.array([1.0, 2.0]),
+    )
+    path = recorder.end_episode(success=True)
+
+    only_state = load_episode(path, keys=("observation.environment_state",))
+
+    assert list(only_state) == ["observation.environment_state"]
+    np.testing.assert_array_equal(
+        only_state["observation.environment_state"], [[1.0, 2.0]]
+    )
+
+
+def test_recorder_discard_episode_writes_nothing(tmp_path):
+    recorder = EpisodeRecorder(tmp_path, store_images=False)
+    recorder.start_episode()
+    recorder.record(_joint_observation(), Action(joint_position=np.zeros(1)))
+    recorder.discard_episode()
+
+    assert recorder.end_episode(success=True) is None
+    assert list(tmp_path.glob("*.npz")) == []
+
+
+def test_recorder_writes_path_valued_scene_config_fields(tmp_path):
+    # SceneConfig.robot_xml is a Path; meta.json used to crash on it.
+    recorder = EpisodeRecorder(
+        tmp_path,
+        store_images=False,
+        scene_config={"robot_xml": Path("assets") / "so101" / "robot.xml"},
+    )
+
+    meta = json.loads(recorder.write_meta().read_text())
+
+    assert meta["scene_config"]["robot_xml"] == "assets/so101/robot.xml"
 
 
 def test_recorder_records_scene_identity(tmp_path):

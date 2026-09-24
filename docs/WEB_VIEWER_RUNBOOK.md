@@ -144,6 +144,122 @@ arm, and gripper keys mirror the keyboard controls, illuminate while held, and
 can be pressed with a mouse or touchscreen. Keys unsupported by the active
 robot are hidden.
 
+## Tip Pose Readout
+
+Under the joint bars, a **Tip pose** block shows where the gripper tip is:
+`x`/`y`/`z` in millimetres and `roll`/`pitch`/`yaw` in degrees, in the frame
+named beside the title (`base` for the SO-101).
+
+- **Position** is the pinch centre, the point between the fingertips where an
+  object is held. It sits about 16 mm from the `gripperframe` site; while the
+  scripted grasp holds the cube it is within ~3 mm of the cube's centre,
+  versus ~15 mm for the site.
+- **Orientation** is relative to a straight-down grasp, so **0° / 0° / 0°
+  means the gripper points straight down** with its jaws opening along the
+  world x axis (the reference the scripted expert uses, `top_down_quat`).
+  Roll/pitch/yaw are intrinsic ZYX angles computed in the browser from the
+  reported quaternion. Panning the arm changes only yaw; a grasp reads about
+  0° roll and pitch with the yaw of the approach. During a full scripted
+  pick-and-place, pitch stays between -36° and 11°, and while the cube is
+  held roll and pitch stay within a few degrees of 0.
+- **Gimbal lock:** the SO-101's raw end-effector frame is singular exactly at
+  a top-down grasp (its approach axis is x, so ZYX pitch sits at ±90° and roll
+  and yaw swing wildly), which is why the reference is used. The singular
+  pose is now a horizontal approach with the jaws stacked vertically, which
+  table-top grasping does not use. Past |pitch| = 80° roll and yaw are dimmed
+  and the block shows a "near gimbal lock" warning.
+- A robot without a tool pose reports its observation's `ee_pose` in its own
+  frame instead, and the title says `end-effector` rather than `tip`.
+
+The block is hidden in `--world` sessions and for robots that report no pose.
+
+## Gripper Contact Force
+
+For robots with a gripper, the joint panel lists a **Static pad** and a
+**Moving pad** row. The dot lights while that pad touches anything, and the
+number beside it is the normal force in newtons, summed over everything the
+pad is touching (`–` when it touches nothing). The value is MuJoCo's contact
+normal force from the latest physics step (`mj_contactForce`); friction is
+not included. Contact with the table counts the same as contact with an
+object.
+
+Sanity reference from the scripted pick-and-place: the two pads read the same
+force while holding the cube, and their net vertical force equals the cube's
+weight. In `--serve` the gripper force is deliberately uncapped, so a held
+30 g cube reads roughly 30 N per pad, about ten times what the capped default
+configuration used by the evaluation scripts produces.
+
+## Recording Episodes
+
+Start the host with `--record-dir` to record from the browser into a dataset
+directory:
+
+```bash
+MUJOCO_GL=egl uv run python scripts/run_sim.py --robot so101 --serve --record-dir data/web_session
+```
+
+A Recording panel appears in the sidebar. **Record** starts a take; then
+**Save ✓ success** or **Save ✗ fail** ends it and writes one
+`episode_XXXXX.npz` plus an updated `meta.json` with that success tag, and
+**Discard** drops it without writing anything. The panel shows saved episodes,
+successes, and the frame count of the take in progress.
+
+- The format is the same one `scripts/collect_demos.py` writes (see
+  [Demonstration data](ARCHITECTURE.md#demonstration-data)), plus an
+  `observation.environment_state` key holding the full simulator state.
+- Each step stores the observation and the joint-target action the host
+  actually applied, so jog input is recorded as resolved joint targets.
+- Frames begin once every camera has produced an image; the panel says which
+  camera it is waiting for.
+- A world reset (or a policy ending its episode) discards the take in
+  progress, and the panel reports it.
+- Pointing `--record-dir` at an existing dataset from the same robot continues
+  its numbering. A dataset without `observation.environment_state` (one
+  collected before `collect_demos.py` began saving it) is rejected; use a
+  fresh directory.
+- Recording is single-robot only: `--record-dir` is refused with `--world`, and
+  requires `--serve`.
+
+## Episode Playback
+
+With `--record-dir` set, a Playback panel lists the saved episodes with their
+success tags. Pick one and press **Load**: the world pauses and shows frame 0
+of that episode. Then:
+
+- **◀ / ▶** (or the arrow keys) step one frame and stop playing; the slider
+  scrubs to any frame.
+- **Play** runs the episode at **0.5× / 1× / 2× / 4×**. Speed follows the wall
+  clock, so 1× is the real time the episode was recorded at (its control
+  rate), and playback stops at the last frame; Play again restarts it.
+- **Exit** puts back exactly the world you interrupted, still paused; press
+  Resume to carry on live.
+
+It replays recorded simulator state (`observation.environment_state`, so the
+cube and other objects are exact) on the same paused world and never
+re-simulates. While an episode is loaded, jog input, Reset, Resume and Record
+are refused, and each contact-force readout shows `n/a` (see
+[ADR 9](adr/0009-web-session-recording-and-playback.md)). The tip pose is
+recomputed from the restored state. Episodes without
+`observation.environment_state` (datasets collected before `collect_demos.py`
+began saving it) are listed but not playable.
+
+### Debugging scripted demonstrations
+
+`scripts/collect_demos.py` saves the same state, so you can replay what the
+scripted expert did. Failed episodes are discarded by default, so collect
+with `--keep-failures` to inspect them, then open the dataset:
+
+```bash
+uv run python scripts/collect_demos.py --episodes 5 --keep-failures --out data/debug_v1
+MUJOCO_GL=egl uv run python scripts/run_sim.py --robot so101 --serve --record-dir data/debug_v1
+```
+
+Load an episode and step through it; the ✓/✗ tags come from the collection
+run. Do not press **Record** in this session: it would append your own take to
+the expert dataset. Viewing alone writes nothing. A dataset from a different
+scene (for example `--sorting`, which has three cubes) has a different state
+width and is refused with a clear error.
+
 ## Appearance
 
 The browser viewer follows the OS `prefers-color-scheme` by default (light or

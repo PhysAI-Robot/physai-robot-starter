@@ -7,6 +7,7 @@ const NEAR_LIMIT_MARGIN = 0.04;
 let rowsEl = null;
 let contactSectionEl = null;
 let contactDots = new Map();
+let contactForces = new Map();
 let jointNames = [];
 let jointLimits = {};
 let rows = new Map();
@@ -45,6 +46,12 @@ export function init(panel) {
       el.querySelector(".contact-dot"),
     ]),
   );
+  contactForces = new Map(
+    [...panel.querySelectorAll(".contact-row")].map((el) => [
+      el.dataset.pad,
+      el.querySelector("[data-force]"),
+    ]),
+  );
 }
 
 export function configureForRobot(robot) {
@@ -80,10 +87,20 @@ export function applyState(state, activeRobot) {
   });
 
   if (contactSectionEl.hidden) return;
-  const active = new Set();
+  // Normal force in newtons per pad, summed over everything that pad touches.
+  const forces = new Map();
   (state.gripper_contacts || []).forEach((contact) => {
     if (contact.instance_id !== undefined && contact.instance_id !== activeRobot) return;
-    active.add(contact.pad);
+    forces.set(contact.pad, (forces.get(contact.pad) ?? 0) + (contact.force_n ?? 0));
   });
-  contactDots.forEach((dot, pad) => dot.setAttribute("data-active", String(active.has(pad))));
+  contactDots.forEach((dot, pad) => dot.setAttribute("data-active", String(forces.has(pad))));
+  // force_n is null while replaying an episode: the recorded qpos cannot
+  // reproduce the actuator state behind the original squeeze.
+  contactForces.forEach((el, pad) => {
+    el.textContent = !forces.has(pad)
+      ? "–"
+      : state.playback?.active
+        ? "n/a"
+        : `${forces.get(pad).toFixed(2)} N`;
+  });
 }

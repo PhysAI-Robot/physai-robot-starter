@@ -193,6 +193,12 @@ def main() -> int:
         help="serve the same authoritative simulation to the web viewer; "
         "without --viewer, this runs with no desktop window",
     )
+    ap.add_argument(
+        "--record-dir",
+        type=Path,
+        help="enable browser episode recording into this dataset directory "
+        "(requires --serve; an existing dataset there is continued)",
+    )
     ap.add_argument("--host", default="127.0.0.1", help="web host bind address")
     ap.add_argument("--port", type=int, default=8000, help="web host port")
     args = ap.parse_args()
@@ -201,6 +207,10 @@ def main() -> int:
         ap.error("--world requires --viewer or --serve")
     if args.world and (args.config or args.robot):
         ap.error("--world cannot be combined with --config or --robot")
+    if args.record_dir and not args.serve:
+        ap.error("--record-dir requires --serve")
+    if args.record_dir and args.world:
+        ap.error("--record-dir is not available with --world")
 
     sim_config = load_sim_config(args.sim_config)
     task_config = load_task_config(args.config) if args.config else None
@@ -400,6 +410,7 @@ def run_viewer(
             policy=policy,
             reset_seed=seed,
             async_cameras=args.robot == "so101",
+            record_dir=args.record_dir,
         )
     host.start()
     server = None

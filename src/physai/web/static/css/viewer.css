@@ -133,6 +133,12 @@ button {
 button:hover { background: var(--color-border); }
 button:disabled { opacity: 0.4; cursor: not-allowed; background: var(--color-surface-alt); }
 .hint { margin-top: 0; font: 11px var(--font-mono); }
+.record-panel { margin-bottom: var(--space-2); }
+.playback-panel { margin-bottom: var(--space-2); }
+.playback-panel select { max-width: 100%; margin: 0 var(--space-2) var(--space-2) 0; }
+.playback-transport { display: flex; flex-wrap: wrap; align-items: center; }
+#playback-scrubber { width: 100%; margin: 0 0 var(--space-2); accent-color: var(--color-accent); }
+#record-start { color: var(--color-danger); }
 
 :focus-visible {
   outline: 2px solid var(--focus-ring);
@@ -268,6 +274,31 @@ button:disabled { opacity: 0.4; cursor: not-allowed; background: var(--color-sur
   align-items: center;
   gap: var(--space-2);
   color: var(--color-text-muted);
+}
+.pose-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+.pose-title { color: var(--color-text-muted); }
+.pose-title span { opacity: 0.7; }
+.pose-row {
+  display: grid;
+  grid-template-columns: 40px 1fr 20px;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+}
+.pose-row [data-pose] { text-align: right; color: var(--color-text); font-variant-numeric: tabular-nums; }
+.pose-unit { opacity: 0.7; }
+.pose-row [data-pose].is-near-lock { color: var(--color-danger); opacity: 0.6; }
+.pose-lock { color: var(--color-danger); }
+.contact-force {
+  margin-left: auto;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
 }
 .contact-dot {
   width: 9px;
