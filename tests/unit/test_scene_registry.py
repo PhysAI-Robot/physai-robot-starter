@@ -69,3 +69,23 @@ def test_runtime_records_explicit_scene(monkeypatch):
         assert runtime.task.name == "sorting"
     finally:
         runtime.close()
+
+
+def test_scenes_name_their_object_layout():
+    from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
+
+    assert PickPlaceMinimalSceneConfig.layout_kind == "single_cube"
+    assert SortingMinimalSceneConfig.layout_kind == "sorting"
+    # a class-level hint, not a field, so dataset metadata is unchanged
+    assert "layout_kind" not in PickPlaceMinimalSceneConfig().to_metadata()
+
+
+def test_a_scene_with_an_unknown_layout_is_refused():
+    from types import SimpleNamespace
+
+    import pytest
+
+    from physai.robots.so101.layout import create_layout
+
+    with pytest.raises(ValueError, match="supports: single_cube, sorting"):
+        create_layout(None, SimpleNamespace(layout_kind="stacking"))
