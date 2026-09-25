@@ -20,6 +20,8 @@ from ..robots import create_env_config
 from ..sim.domain_randomization import DomainRandomizationConfig
 from ..sim.scenes import create_scene, get_scene_definition
 from ..sim.world import RobotInstanceConfig
+from ..tasks.pick_place_minimal import DEFAULT_SUCCESS_XY_TOL
+from ..tasks.runtime import DEFAULT_SUCCESS_HOLD_STEPS
 
 
 @dataclass(frozen=True)
@@ -40,8 +42,8 @@ class TaskConfig:
     task: str
     scene_name: str
     env: Any
-    success_xy_tol: float = 0.04
-    success_hold_steps: int = 10
+    success_xy_tol: float = DEFAULT_SUCCESS_XY_TOL
+    success_hold_steps: int = DEFAULT_SUCCESS_HOLD_STEPS
     simulation: SimulationConfig = field(default_factory=SimulationConfig)
 
 
@@ -159,8 +161,8 @@ def load_task_config(path: str | Path) -> TaskConfig:
         raise ValueError(
             f"task mismatch: task.name={task_name!r}, env.task={configured_task!r}"
         )
-    success_xy_tol = env_data.pop("success_xy_tol", 0.04)
-    success_hold_steps = env_data.pop("success_hold_steps", 10)
+    success_xy_tol = env_data.pop("success_xy_tol", DEFAULT_SUCCESS_XY_TOL)
+    success_hold_steps = env_data.pop("success_hold_steps", DEFAULT_SUCCESS_HOLD_STEPS)
     _convert_lists_to_tuples(env_data, _ENV_TUPLE_FIELDS)
     env = create_env_config(robot, scene=scene, **env_data)
     return TaskConfig(
