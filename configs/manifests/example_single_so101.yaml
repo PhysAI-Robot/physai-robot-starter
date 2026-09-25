@@ -1,0 +1,16 @@
+# A single-robot session: manifest with one entry in `robots`.
+schema_version: 1
+
+scene:
+  name: pick_place_minimal
+
+backend: direct
+
+robots:
+  - id: arm_1
+    robot: so101
+    task: pick_place
+    policy: scripted
+
+viewer:
+  mode: none

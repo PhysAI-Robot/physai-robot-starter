@@ -267,9 +267,14 @@ def test_ros2_hardware_adapter_uses_shared_transport_boundary():
 
 
 @pytest.mark.integration
-def test_hardware_factory_does_not_construct_a_mujoco_environment(monkeypatch):
-    from physai.robots.so101 import factory
+def test_adapter_factories_build_only_what_they_support(monkeypatch):
+    from physai.robots import create_robot
+
+    with pytest.raises(ValueError, match="requires a ROS2 transport"):
+        create_robot("so101", adapter="ros2_mujoco", render=False)
+
     from physai.robots import RobotSpec
+    from physai.robots.so101 import factory
 
     class FakeHardware:
         robot_spec = RobotSpec(
@@ -292,9 +297,6 @@ def test_hardware_factory_does_not_construct_a_mujoco_environment(monkeypatch):
     adapter.close()
     assert transport.closed
 
-
-@pytest.mark.integration
-def test_turtlebot4_rejects_the_arm_hardware_adapter(monkeypatch):
     from physai.robots.turtlebot import factory
 
     def fail_if_constructed(*args, **kwargs):
@@ -347,11 +349,3 @@ def test_ros2_message_codec_converts_observations():
     assert (joints.header.stamp.sec, joints.header.stamp.nanosec) == (12, 250000000)
     assert (image.height, image.width, image.encoding, image.step) == (2, 3, "rgb8", 9)
     assert len(image.data) == 18
-
-
-@pytest.mark.integration
-def test_ros2_adapter_requires_transport():
-    from physai.robots import create_robot
-
-    with pytest.raises(ValueError, match="requires a ROS2 transport"):
-        create_robot("so101", adapter="ros2_mujoco", render=False)

@@ -22,13 +22,20 @@ import imageio.v3 as iio
 import numpy as np
 
 from physai.contracts import Action, Twist, Vector3
-from physai.planner import SortingPlanner
 from physai.policy import create_policy
 from physai.policy.plan_runner import PlanRunner
 from physai.robots.so101 import EnvConfig, SO101Env
 from physai.robots.turtlebot import TurtleBot4Config, TurtleBot4Env
-from physai.sim import SceneConfig
+from physai.sim import (
+    ManipulationSceneConfig,
+    PickPlaceMinimalSceneConfig,
+    SortingMinimalSceneConfig,
+)
 from physai.tasks import TaskRuntime, create_task
+
+# Registers so101's "scripted" policy with the robot registry.
+import research.scripted_experts.so101_pick_place_expert  # noqa: E402,F401
+from research.vlm_planners.sorting_planner import SortingPlanner  # noqa: E402
 
 MEDIA = Path(__file__).resolve().parents[1] / "docs" / "media"
 
@@ -41,7 +48,7 @@ def save_gif(frames: list[np.ndarray], path: Path, fps: int, stride: int = 3) ->
     print(f"  {path.name}  {clip.shape[0]} frames  {path.stat().st_size / 1024:.0f} KB")
 
 
-def _so101(scene: SceneConfig, task: str, seed: int, max_steps: int = 400):
+def _so101(scene: ManipulationSceneConfig, task: str, seed: int, max_steps: int = 400):
     robot = SO101Env(
         EnvConfig(scene=scene, seed=seed, max_steps=max_steps, render=True)
     )
@@ -51,7 +58,9 @@ def _so101(scene: SceneConfig, task: str, seed: int, max_steps: int = 400):
 def render_pick_place(seed: int = 0) -> None:
     print("[so101] scripted pick-and-place")
     robot, env = _so101(
-        SceneConfig(camera_width=640, camera_height=480), "pick_place", seed
+        PickPlaceMinimalSceneConfig(camera_width=640, camera_height=480),
+        "pick_place",
+        seed,
     )
     obs = env.reset(seed=seed)
     policy = create_policy("scripted", env=env)
@@ -71,8 +80,10 @@ def render_pick_place(seed: int = 0) -> None:
 def render_camera_views(seed: int = 0) -> None:
     """Both observation cameras at the moment the jaws close on the cube."""
     print("[so101] observation cameras")
-    robot, env = _so101(
-        SceneConfig(camera_width=480, camera_height=480), "pick_place", seed
+    _robot, env = _so101(
+        PickPlaceMinimalSceneConfig(camera_width=480, camera_height=480),
+        "pick_place",
+        seed,
     )
     obs = env.reset(seed=seed)
     policy = create_policy("scripted", env=env)
@@ -92,7 +103,7 @@ def render_camera_views(seed: int = 0) -> None:
 
 def render_sorting(seed: int = 0, planner_seed: int = 1) -> None:
     print("[so101] sorting task")
-    scene = SceneConfig(num_cubes=3, camera_width=640, camera_height=480)
+    scene = SortingMinimalSceneConfig(camera_width=640, camera_height=480)
 
     robot, env = _so101(scene, "sorting", seed)
     obs = env.reset(seed=seed)

@@ -1,29 +1,20 @@
-"""Instruction-to-plan implementations and planner registry exports."""
+"""Instruction-to-plan implementations.
 
-from .base import Plan, Planner, ScriptedPlanner, SortingPlanner, SubGoal
+``SortingPlanner`` is a research module (see
+``research/vlm_planners/sorting_planner.py``) and is not exported here;
+core must not import research code. It registers itself with
+``planner.registry`` on import instead.
+"""
+
+from .base import Plan, Planner, ScriptedPlanner, SubGoal
 from .registry import available_planners, create_planner, register_planner
 
 __all__ = [
     "Plan",
     "Planner",
     "ScriptedPlanner",
-    "SortingPlanner",
     "SubGoal",
-    "ClaudePlanner",
-    "SmolVLMPlanner",
     "available_planners",
     "create_planner",
     "register_planner",
 ]
-
-
-def __getattr__(name):  # lazy: don't import anthropic unless asked for
-    if name == "ClaudePlanner":
-        from .claude_vlm import ClaudePlanner
-
-        return ClaudePlanner
-    if name == "SmolVLMPlanner":
-        from .smolvlm import SmolVLMPlanner
-
-        return SmolVLMPlanner
-    raise AttributeError(name)

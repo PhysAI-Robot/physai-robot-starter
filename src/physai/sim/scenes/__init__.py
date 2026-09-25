@@ -1,15 +1,12 @@
 """Task-specific MuJoCo scenes built from generic world primitives."""
 
 from .common import (
-    CommonSceneConfig,
     ManipulationSceneConfig,
     WorldSceneConfig,
     build_manipulation_spec,
+    export_xml,
 )
-from .pick_place_minimal import (
-    PickPlaceMinimalSceneConfig,
-    build_spec as build_pick_place_spec,
-)
+from .pick_place_minimal import PickPlaceMinimalSceneConfig
 from .registry import (
     SceneDefinition,
     available_scenes,
@@ -18,21 +15,19 @@ from .registry import (
     get_scene_definition,
     register_scene,
 )
-from .sorting_minimal import SortingMinimalSceneConfig, build_spec as build_sorting_spec
+from .sorting_minimal import SortingMinimalSceneConfig
 
 __all__ = [
-    "CommonSceneConfig",
-    "WorldSceneConfig",
     "ManipulationSceneConfig",
-    "build_manipulation_spec",
     "PickPlaceMinimalSceneConfig",
-    "SortingMinimalSceneConfig",
-    "build_pick_place_spec",
-    "build_sorting_spec",
     "SceneDefinition",
+    "SortingMinimalSceneConfig",
+    "WorldSceneConfig",
     "available_scenes",
+    "build_manipulation_spec",
     "create_scene",
     "default_scene_for",
+    "export_xml",
     "get_scene_definition",
     "register_scene",
 ]

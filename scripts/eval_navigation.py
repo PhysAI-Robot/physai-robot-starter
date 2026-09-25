@@ -5,16 +5,17 @@ from __future__ import annotations
 import argparse
 
 import _bootstrap  # noqa: F401
+from _common_args import add_max_steps, add_robot, add_seed
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--robot", default="turtlebot4")
+    add_robot(parser, default="turtlebot4")
     parser.add_argument("--goal-x", type=float, default=1.0)
     parser.add_argument("--goal-y", type=float, default=-1.0)
     parser.add_argument("--goal-yaw", type=float, default=0.0)
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--max-steps", type=int, default=300)
+    add_seed(parser)
+    add_max_steps(parser, default=300)
     args = parser.parse_args()
 
     from physai.robots import navigate

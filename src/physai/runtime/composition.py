@@ -5,9 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ..control.safety import SafetyController
 from ..contracts import Action, Observation
-from ..planner.base import Planner
+from ..control.safety import SafetyController
 from ..policy.base import Policy
 from ..policy.registry import create_policy
 from ..robots.base import RobotPort
@@ -24,7 +23,6 @@ class RuntimeComposition:
     robot: RobotPort
     task: Task | None = None
     policy: Policy | None = None
-    planner: Planner | None = None
     safety: SafetyController | None = None
     scene_name: str | None = None
     _observation: Observation | None = None
@@ -42,8 +40,6 @@ class RuntimeComposition:
     def step(self, action: Action) -> tuple[Observation, float, bool, bool, dict]:
         if self._observation is None:
             raise RuntimeError("call reset() before step()")
-        if self.safety is not None:
-            action = self.safety.validate(self._observation, action)
         result = self.robot.step(action)
         self._observation = result[0]
         return result
@@ -61,13 +57,12 @@ def create_runtime(
     scene_name: str | None = None,
     scene_kwargs: dict[str, Any] | None = None,
     task_kwargs: dict[str, Any] | None = None,
-    task_success_hold_steps: int = 10,
+    task_success_hold_steps: int | None = None,
     adapter: str = "direct_mujoco",
     transport: Any = None,
     hardware: RobotPort | None = None,
     policy_name: str | None = None,
     policy: Policy | None = None,
-    planner: Planner | None = None,
     safety: SafetyController | None = None,
     **policy_kwargs: Any,
 ) -> RuntimeComposition:
@@ -100,22 +95,23 @@ def create_runtime(
             )
         scene_config = create_scene(
             scene_name,
-            **scene_defaults(robot_name),
-            **(scene_kwargs or {}),
+            **{**scene_defaults(robot_name), **(scene_kwargs or {})},
         )
         fields["scene"] = scene_config
 
     selected_scene_name = scene_name
     if selected_scene_name is None and task_name is not None and embodiment_kind:
         selected_scene_name = default_scene_for(embodiment_kind, task_name)
-        if robot_config is None and "scene" not in fields:
-            if selected_scene_name is not None:
-                scene_config = create_scene(
-                    selected_scene_name,
-                    **scene_defaults(robot_name),
-                    **(scene_kwargs or {}),
-                )
-                fields["scene"] = scene_config
+        if (
+            robot_config is None
+            and "scene" not in fields
+            and selected_scene_name is not None
+        ):
+            scene_config = create_scene(
+                selected_scene_name,
+                **{**scene_defaults(robot_name), **(scene_kwargs or {})},
+            )
+            fields["scene"] = scene_config
     robot = create_robot(
         robot_name,
         adapter=adapter,
@@ -149,20 +145,26 @@ def create_runtime(
             raise TypeError("pass either policy or policy_name, not both")
         runtime_robot = robot
         if task is not None:
-            runtime_robot = TaskRuntime(
-                robot,
-                task,
-                success_hold_steps=task_success_hold_steps,
+            # None keeps TaskRuntime's own default.
+            hold = (
+                {}
+                if task_success_hold_steps is None
+                else {"success_hold_steps": task_success_hold_steps}
             )
+            runtime_robot = TaskRuntime(robot, task, **hold)
         if policy is None and policy_name is not None:
             policy = create_policy(policy_name, env=runtime_robot, **policy_kwargs)
 
-        safety = safety or SafetyController(robot.robot_spec)
+        # The adapter owns the gate so every path shares it; an explicit
+        # controller replaces the default the adapter built for itself.
+        if safety is not None:
+            robot.safety = safety
+        else:
+            safety = getattr(robot, "safety", None)
         return RuntimeComposition(
             robot=runtime_robot,
             task=task,
             policy=policy,
-            planner=planner,
             safety=safety,
             scene_name=selected_scene_name,
         )

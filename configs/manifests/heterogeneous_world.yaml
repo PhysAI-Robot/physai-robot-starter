@@ -1,0 +1,26 @@
+# Two robot instances in one MuJoCo model and physics clock.
+# Run it with: python scripts/run_sim.py --manifest configs/manifests/heterogeneous_world.yaml --serve
+# (this replaces configs/worlds/heterogeneous.yaml).
+schema_version: 1
+
+backend: direct
+
+world:
+  timestep: 0.002
+  control_hz: 30.0
+  add_floor: true
+
+robots:
+  - id: arm_1
+    robot: so101
+    model: assets/so101/so101_new_calib_camera.xml
+    pose:
+      position: [0.3, 0.0, 0.0]
+  - id: base_1
+    robot: turtlebot4
+    model: assets/turtlebot4/turtlebot4.xml
+    pose:
+      position: [-0.3, 0.0, 0.1]
+
+viewer:
+  mode: web

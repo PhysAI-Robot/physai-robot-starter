@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
+from launch import LaunchDescription
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_DIR = REPO_ROOT / "configs" / "nav2" / "turtlebot4"

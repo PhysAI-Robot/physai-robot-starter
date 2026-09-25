@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,6 +23,7 @@ class EpisodeBuffer:
     reward: list = field(default_factory=list)
     done: list = field(default_factory=list)
     phase: list = field(default_factory=list)
+    environment_state: list = field(default_factory=list)
 
     def __len__(self) -> int:
         return len(self.state)
@@ -70,6 +71,7 @@ class EpisodeRecorder:
         action_schema: dict | None = None,
         observation_schema: dict | None = None,
         training_contract: RobotTrainingContract | None = None,
+        environment_state_dim: int | None = None,
     ) -> None:
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
@@ -85,6 +87,10 @@ class EpisodeRecorder:
         self.scene_name = scene_name
         self.scene_config = scene_config or {}
         self.training_contract = training_contract
+        # When set, every step must carry the full simulator qpos (see
+        # docs/adr/0009); it lets a viewer restore the exact scene, including
+        # objects that `observation.state` (robot joints only) cannot describe.
+        self.environment_state_dim = environment_state_dim
         self.action_encoder = (
             action_encoder
             or (training_contract.action_encoder if training_contract else None)
@@ -112,9 +118,22 @@ class EpisodeRecorder:
         done: bool = False,
         phase: str = "",
         gripper_joint: float | None = None,
+        environment_state: np.ndarray | None = None,
     ) -> None:
         if self._buf is None:
             raise RuntimeError("call start_episode() first")
+        if self.environment_state_dim is None:
+            if environment_state is not None:
+                raise ValueError(
+                    "environment_state given but the recorder was built without "
+                    "environment_state_dim"
+                )
+        elif environment_state is None or (
+            np.size(environment_state) != self.environment_state_dim
+        ):
+            raise ValueError(
+                f"environment_state must have {self.environment_state_dim} values"
+            )
         action_values, action_names = self.action_encoder(action, gripper_joint)
 
         self._state_names = self._state_names or observation.joint_state.name
@@ -129,6 +148,14 @@ class EpisodeRecorder:
         self._buf.reward.append(float(reward))
         self._buf.done.append(bool(done))
         self._buf.phase.append(phase)
+        if environment_state is not None:
+            self._buf.environment_state.append(
+                np.asarray(environment_state, dtype=np.float64).copy()
+            )
+
+    def discard_episode(self) -> None:
+        """Drop the episode in progress without writing a file."""
+        self._buf = None
 
     def end_episode(self, success: bool, extra: dict | None = None) -> Path | None:
         if self._buf is None or len(self._buf) == 0:
@@ -144,6 +171,10 @@ class EpisodeRecorder:
             "done": np.asarray(self._buf.done, dtype=bool),
             "phase": np.asarray(self._buf.phase),
         }
+        if self.environment_state_dim is not None:
+            arrays["observation.environment_state"] = np.stack(
+                self._buf.environment_state
+            )
         for name, frames in self._buf.images.items():
             arrays[f"observation.images.{name}"] = np.stack(frames)
         np.savez_compressed(path, **arrays)
@@ -183,6 +214,20 @@ class EpisodeRecorder:
                 "names": state_names,
             }
         }
+        features = {
+            "observation.state": {
+                "dtype": "float32",
+                "shape": [len(state_names)],
+                "names": state_names,
+            },
+            "action": action_schema,
+        }
+        if self.environment_state_dim is not None:
+            features["observation.environment_state"] = {
+                "dtype": "float64",
+                "shape": [self.environment_state_dim],
+                "description": "full simulator qpos",
+            }
         metadata = DatasetMetadata(
             robot=self.robot_type,
             task=self.task,
@@ -216,21 +261,24 @@ class EpisodeRecorder:
             "num_episodes": len(self.episodes),
             "num_successful_episodes": n_ok,
             "total_frames": sum(e["length"] for e in self.episodes),
-            "features": {
-                "observation.state": {
-                    "dtype": "float32",
-                    "shape": [len(state_names)],
-                    "names": state_names,
-                },
-                "action": action_schema,
-            },
+            "features": features,
             "episodes": self.episodes,
         }
         path = self.root / "meta.json"
-        path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+        path.write_text(
+            json.dumps(meta, indent=2, default=_json_default), encoding="utf-8"
+        )
         return path
 
 
-def load_episode(path: str | Path) -> dict:
+def _json_default(value: object) -> str:
+    """Scene configs carry `Path` fields (e.g. the robot XML); store them as text."""
+    if isinstance(value, Path):
+        return value.as_posix()
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
+def load_episode(path: str | Path, keys: Iterable[str] | None = None) -> dict:
+    """Load an episode's arrays, or only `keys` (episodes hold every image)."""
     with np.load(Path(path), allow_pickle=False) as archive:
-        return {key: archive[key] for key in archive.files}
+        return {key: archive[key] for key in (archive.files if keys is None else keys)}

@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
+from conftest import requires_turtlebot_assets
 
-pytestmark = [pytest.mark.acceptance, pytest.mark.slow]
+pytestmark = [pytest.mark.acceptance, pytest.mark.slow, requires_turtlebot_assets]
 
 
 def test_turtlebot4_reset_is_deterministic_for_a_given_seed():
@@ -37,12 +38,8 @@ def test_turtlebot4_lidar_detects_configured_obstacle():
         env.reset(seed=0)
         ranges = env.lidar_ranges()
         forward_index = (
-            int(
-                round(
-                    (0.0 - env.cfg.lidar_angle_min)
-                    / (2.0 * np.pi)
-                    * env.cfg.lidar_samples
-                )
+            round(
+                (0.0 - env.cfg.lidar_angle_min) / (2.0 * np.pi) * env.cfg.lidar_samples
             )
             % env.cfg.lidar_samples
         )
@@ -90,7 +87,7 @@ def test_turtlebot4_stays_on_the_ground_while_driving():
         env.close()
 
 
-def test_turtlebot4_rpp_reaches_deterministic_goal():
+def test_turtlebot4_rpp_reaches_a_deterministic_reproducible_goal():
     from physai.robots.turtlebot import NavigationGoal, navigate_to_goal
 
     result = navigate_to_goal(NavigationGoal(x=1.0, y=-1.0), seed=0)
@@ -101,14 +98,8 @@ def test_turtlebot4_rpp_reaches_deterministic_goal():
     assert result.collision_count == 0
     assert result.failure_reason is None
 
-
-def test_turtlebot4_rpp_goal_result_is_reproducible():
-    from physai.robots.turtlebot import NavigationGoal, navigate_to_goal
-
     goal = NavigationGoal(x=1.0, y=-1.0)
-    first = navigate_to_goal(goal, seed=7)
-    second = navigate_to_goal(goal, seed=7)
-    assert first == second
+    assert navigate_to_goal(goal, seed=7) == navigate_to_goal(goal, seed=7)
 
 
 def test_turtlebot4_published_image_is_not_blank():

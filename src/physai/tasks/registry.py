@@ -9,6 +9,7 @@ from .base import Task
 
 TaskFactory = Callable[..., Task]
 _FACTORIES: dict[str, TaskFactory] = {}
+_BUILTINS_LOADED = False
 
 
 def register_task(name: str, factory: TaskFactory) -> TaskFactory:
@@ -33,10 +34,13 @@ def create_task(name: str, **kwargs: Any) -> Task:
 
 
 def _load_builtins() -> None:
-    if _FACTORIES:
+    # A flag, not "is anything registered": an extension may register first.
+    global _BUILTINS_LOADED
+    if _BUILTINS_LOADED:
         return
     from .pick_place_minimal import PickPlaceTask
     from .sorting_minimal import SortingTask
 
     register_task("pick_place", PickPlaceTask)
     register_task("sorting", SortingTask)
+    _BUILTINS_LOADED = True

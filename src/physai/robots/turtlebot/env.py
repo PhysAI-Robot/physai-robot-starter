@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import cached_property
 from pathlib import Path
 
 import mujoco
@@ -26,10 +27,15 @@ from ...sim.domain_randomization import (
     DomainRandomizationEngine,
     RandomizationMetadata,
 )
+from ...sim.scenes.common import (
+    REPO_ROOT,
+    STUDIO_FLOOR_RGB1,
+    STUDIO_FLOOR_RGB2,
+    add_studio_sky,
+)
 from ..base import RobotSpec, RobotTrainingContract
 from .contracts import turtlebot4_training_contract
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_MODEL = REPO_ROOT / "assets" / "turtlebot4" / "turtlebot4.xml"
 BASE_BODY = "base"
 CHASE_CAMERA = "physai_chase"
@@ -76,6 +82,7 @@ def _compile_scene(
     starts providing its own.
     """
     spec = mujoco.MjSpec.from_file(str(model_path))
+    add_studio_sky(spec)
 
     has_plane = any(
         geom.type == mujoco.mjtGeom.mjGEOM_PLANE
@@ -89,8 +96,8 @@ def _compile_scene(
             name="physai_grid",
             type=mujoco.mjtTexture.mjTEXTURE_2D,
             builtin=mujoco.mjtBuiltin.mjBUILTIN_CHECKER,
-            rgb1=[0.22, 0.24, 0.28],
-            rgb2=[0.16, 0.18, 0.22],
+            rgb1=list(STUDIO_FLOOR_RGB1),
+            rgb2=list(STUDIO_FLOOR_RGB2),
             width=300,
             height=300,
         )
@@ -188,8 +195,9 @@ class TurtleBot4Env(MuJoCoSimulationCore):
             mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, CHASE_CAMERA) >= 0
         )
 
-    @property
+    @cached_property
     def robot_spec(self) -> RobotSpec:
+        """Built once: the Host reads it on every tick."""
         return RobotSpec(
             name="turtlebot4",
             kind="mobile_base",
@@ -247,7 +255,7 @@ class TurtleBot4Env(MuJoCoSimulationCore):
         self.step_simulation()
         contacts = self.non_ground_contact_count()
         self.collision_count += contacts
-        info = {"pose": self._pose_array()}
+        info = {"pose": self.pose_array()}
         info["collision_contacts"] = contacts
         info["collision_count"] = self.collision_count
         info["randomization"] = self.randomization_metadata.as_dict()
@@ -326,7 +334,7 @@ class TurtleBot4Env(MuJoCoSimulationCore):
         )
 
     def render_camera(self, name: str = "free") -> np.ndarray:
-        if self._renderer is None:
+        if not self.render_enabled:
             raise RuntimeError("env constructed with render=False")
         camera: str | int = name
         if name == "free":
@@ -335,12 +343,11 @@ class TurtleBot4Env(MuJoCoSimulationCore):
             # `camera_frames` already declares this image to be in base_link,
             # so resolve it to the base-tracking camera when one is available.
             camera = CHASE_CAMERA if self._has_chase_camera else -1
-        self._renderer.update_scene(self.data, camera=camera)
-        return self._renderer.render()
+        return super().render_camera(camera)
 
     def observe(self) -> Observation:
         images = {}
-        if self._renderer is not None:
+        if self.render_enabled:
             images["free"] = ImageFrame(
                 data=self.render_camera(),
                 camera_name="free",
@@ -354,7 +361,8 @@ class TurtleBot4Env(MuJoCoSimulationCore):
             sim_time=float(self.data.time),
         )
 
-    def _pose_array(self) -> np.ndarray:
+    def pose_array(self) -> np.ndarray:
+        """Return the base pose as ``[x, y, yaw]`` in the world frame."""
         body = self.data.body(self._base_body_id)
         yaw = float(
             np.arctan2(

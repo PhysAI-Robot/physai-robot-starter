@@ -1,5 +1,7 @@
 # Configuration for the minimal single-cube pick-and-place task.
-# Load it with `python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml`.
+# Deprecated: use configs/manifests/so101_pick_place.yaml with `run_sim.py --manifest`.
+# `run_sim.py --config configs/tasks/so101/pick_place.yaml` still works and is
+# converted into that manifest on load.
 
 robot: so101
 
@@ -8,7 +10,7 @@ task:
   scene: pick_place_minimal
 
 scene:
-  robot_xml: assets/so101/so101_new_calib.xml
+  robot_xml: assets/so101/so101_new_calib_camera.xml
   timestep: 0.002
   table_pos: [0.30, 0.0, 0.01]
   table_size: [0.20, 0.25, 0.01]
@@ -21,7 +23,7 @@ scene:
   cube_rgba: [0.85, 0.25, 0.2, 1.0]
 
 env:
-  control_hz: 25
+  control_hz: 30
   render: true
   cameras: [front, wrist]
   max_steps: 400

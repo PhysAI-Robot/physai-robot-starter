@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from typing import Any
+from typing import Any, ClassVar
 
 import gymnasium as gym
 import numpy as np
@@ -47,7 +47,7 @@ class GymnasiumAdapter(gym.Env):
     embodiment while task rewards and termination remain owned by the backend.
     """
 
-    metadata = {"render_modes": ["rgb_array"]}
+    metadata: ClassVar = {"render_modes": ["rgb_array"]}
 
     def __init__(
         self,

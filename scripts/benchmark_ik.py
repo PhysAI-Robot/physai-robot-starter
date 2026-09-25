@@ -10,15 +10,14 @@ import json
 import time
 from pathlib import Path
 
+import _bootstrap  # noqa: F401
 import mujoco
 import numpy as np
-
-import _bootstrap  # noqa: F401
+from _common_args import add_seed
 
 from physai.robots.so101 import EnvConfig, SO101Env
 from physai.robots.so101.kinematics import top_down_quat
-from physai.sim import SceneConfig
-
+from physai.sim import PickPlaceMinimalSceneConfig
 
 TARGET_OFFSETS = (
     (0.00, -0.03, 0.01),
@@ -32,7 +31,7 @@ TARGET_OFFSETS = (
 def benchmark(args: argparse.Namespace) -> dict:
     env = SO101Env(
         EnvConfig(
-            scene=SceneConfig(camera_width=64, camera_height=64),
+            scene=PickPlaceMinimalSceneConfig(camera_width=64, camera_height=64),
             render=False,
             max_steps=1,
         )
@@ -116,7 +115,7 @@ def benchmark(args: argparse.Namespace) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--targets", type=int, default=20)
-    parser.add_argument("--seed", type=int, default=0)
+    add_seed(parser)
     parser.add_argument("--json-out", type=Path)
     args = parser.parse_args()
     if args.targets < 1:

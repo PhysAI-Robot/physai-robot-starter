@@ -2,13 +2,58 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import ClassVar
 
 import mujoco
 import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
+
+# Matches the web viewer's Three.js scene background exactly
+# (`scene.background = new THREE.Color(0xdfe6e2)` in
+# src/physai/web/static/js/scene.js), so a MuJoCo render (the native viewer's
+# free camera, a captured camera frame, an exported video) and the browser
+# viewer show the same background color instead of MuJoCo's own default sky.
+STUDIO_SKY_RGB: tuple[float, float, float] = (0.8745, 0.9020, 0.8863)
+
+# Matches the web viewer's checker-textured floor exactly (`checkerTexture`
+# in scene.js uses the same two hex colors, #e3e9e4 / #9fb0a8). A
+# robot-mounted camera (e.g. so101's "front") often frames the floor rather
+# than open sky, so the floor's own texture — not just the skybox — needs to
+# be in the same palette for a MuJoCo render to look consistent with the
+# browser viewer. The gap between the two tiles is wider than the sky/floor
+# gap so the checker pattern stays legible without leaving the light palette.
+STUDIO_FLOOR_RGB1: tuple[float, float, float] = (0.8902, 0.9137, 0.8941)
+STUDIO_FLOOR_RGB2: tuple[float, float, float] = (0.6235, 0.6902, 0.6588)
+
+
+def add_studio_sky(spec: mujoco.MjSpec) -> None:
+    """Make the spec's skybox match the web viewer's background color.
+
+    A robot's own MJCF (e.g. the upstream SO-101 `scene.xml`) may already
+    define a skybox texture. A second `TEXTURE_SKYBOX` in the same model is
+    not reliably overridden — different cameras in the same render can end
+    up showing different skybox textures — so this overwrites the existing
+    one in place instead of adding a second, and only adds a new one when
+    the spec has none.
+    """
+    for texture in spec.textures:
+        if texture.type == mujoco.mjtTexture.mjTEXTURE_SKYBOX:
+            texture.builtin = mujoco.mjtBuiltin.mjBUILTIN_FLAT
+            texture.rgb1 = list(STUDIO_SKY_RGB)
+            texture.rgb2 = list(STUDIO_SKY_RGB)
+            return
+    spec.add_texture(
+        name="physai_studio_sky",
+        type=mujoco.mjtTexture.mjTEXTURE_SKYBOX,
+        builtin=mujoco.mjtBuiltin.mjBUILTIN_FLAT,
+        rgb1=list(STUDIO_SKY_RGB),
+        rgb2=list(STUDIO_SKY_RGB),
+        width=256,
+        height=256,
+    )
 
 
 @dataclass
@@ -26,36 +71,82 @@ class WorldSceneConfig:
     front_cam_pos: tuple[float, float, float] = (0.62, 0.0, 0.38)
     front_cam_xyaxes: tuple[float, ...] = (0.0, 1.0, 0.0, -0.45, 0.0, 0.9)
 
+    def to_metadata(self) -> dict:
+        """This config as JSON-safe data for dataset metadata.
+
+        Paths inside the repository are stored relative to it, so a dataset
+        neither leaks the collecting machine's directory layout nor depends
+        on where the repository was checked out. A path outside the
+        repository has no portable form and is kept as given (forward-slash).
+        """
+        data = asdict(self)
+        for key, value in data.items():
+            if isinstance(value, Path):
+                try:
+                    value = value.relative_to(REPO_ROOT)
+                except ValueError:
+                    pass
+                data[key] = value.as_posix()
+        return data
+
 
 @dataclass
 class ManipulationSceneConfig(WorldSceneConfig):
     """World settings plus end-effector and gripper attachment details."""
+
+    # How a robot should place this scene's objects each episode (a name the
+    # robot maps to its own layout). Not a field: it is not run configuration.
+    layout_kind: ClassVar[str | None] = None
 
     robot_xml: Path | None = None
     ee_site: str | None = None
     gripper_joint: str | None = None
     static_pad_body: str | None = None
     moving_pad_body: str | None = None
+    wrist_body: str | None = None
+    # The grasp-pad fit and the wrist camera pose depend on the gripper's
+    # geometry, so the robot supplies them through its scene defaults
+    # (`robots/so101/scene.py`); they have no generic value.
     pad_friction: tuple[float, float, float] = (2.0, 0.02, 0.001)
-    pad_size: tuple[float, float, float] = (0.011, 0.009, 0.0015)
+    # MuJoCo models friction as a soft constraint, so a held object under a
+    # constant load (a cube's own weight, ~0.3 N, against ~4 N of squeeze)
+    # creeps out of the fingers at about 1 mm/s even though the friction
+    # force is a small fraction of its limit; a cube held for ~15 s falls out
+    # regardless of grip force. The no-slip post-solver removes that creep
+    # (0.0 mm over 30 s) for ~30% more solver time. 0 restores the default.
+    noslip_iterations: int = 5
+    pad_size: tuple[float, float, float] | None = None
     replace_jaw_collision: bool = True
-    pad_align_gripper_q: float = 0.25
-    static_pad_pos: tuple[float, float, float] = (-0.0090, -0.0050, -0.1000)
-    moving_pad_pos: tuple[float, float, float] = (-0.0117, -0.0700, 0.0228)
-    # The wrist camera looks along -z of its own frame. With x = (-1, 0, 0) the
-    # derived view direction pointed backwards and up, away from the workspace,
-    # so this camera rendered a black frame for the whole episode. Negating the
-    # x axis flips the view onto the jaws and the object below them while
-    # keeping the original up vector, so the image is not also upside down.
-    wrist_cam_pos: tuple[float, float, float] = (0.0, -0.07, 0.05)
-    wrist_cam_xyaxes: tuple[float, ...] = (1.0, 0.0, 0.0, 0.0, 0.7, 0.7)
+    pad_align_gripper_q: float | None = None
+    static_pad_pos: tuple[float, float, float] | None = None
+    moving_pad_pos: tuple[float, float, float] | None = None
+    moving_pad_tilt: float | None = None
+    # The pads render in the web viewer (a group-3 box drawn by its rgba) so
+    # their fit can be checked by eye; MuJoCo camera renders skip group 3, so
+    # dataset images are unaffected. Set the alpha (last value) to 0 to hide.
+    pad_rgba: tuple[float, float, float, float] = (0.95, 0.6, 0.1, 0.6)
+    wrist_cam_pos: tuple[float, float, float] | None = None
+    wrist_cam_xyaxes: tuple[float, ...] | None = None
     clutter_count: int = 0
     clutter_size: tuple[float, float, float] = (0.018, 0.018, 0.025)
 
+    def build_spec(self) -> mujoco.MjSpec:
+        """Build the MuJoCo spec for this scene, objects included."""
+        return build_manipulation_spec(self)
 
-# Compatibility name for callers of the original shared-scene API. New code
-# should choose WorldSceneConfig or ManipulationSceneConfig explicitly.
-CommonSceneConfig = ManipulationSceneConfig
+    def build_model(self) -> tuple[mujoco.MjModel, mujoco.MjSpec]:
+        spec = self.build_spec()
+        return spec.compile(), spec
+
+
+def export_xml(path: Path, cfg: ManipulationSceneConfig) -> Path:
+    """Write a scene to disk as MJCF."""
+    spec = cfg.build_spec()
+    spec.compile()
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(spec.to_xml(), encoding="utf-8")
+    return path
 
 
 def _find_body(spec: mujoco.MjSpec, name: str):
@@ -77,6 +168,13 @@ def _validate_robot_attachment(cfg: ManipulationSceneConfig) -> None:
             "gripper_joint",
             "static_pad_body",
             "moving_pad_body",
+            "pad_size",
+            "pad_align_gripper_q",
+            "static_pad_pos",
+            "moving_pad_pos",
+            "moving_pad_tilt",
+            "wrist_cam_pos",
+            "wrist_cam_xyaxes",
         )
         if getattr(cfg, name) is None
     ]
@@ -102,6 +200,11 @@ def _pad_quats(cfg: ManipulationSceneConfig) -> dict[str, np.ndarray]:
     ):
         body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name)
         local_rotation = data.xmat[body_id].reshape(3, 3).T @ site_rotation
+        if key == "moving":
+            c, s = np.cos(cfg.moving_pad_tilt), np.sin(cfg.moving_pad_tilt)
+            local_rotation = local_rotation @ np.array(
+                [[c, 0.0, -s], [0.0, 1.0, 0.0], [s, 0.0, c]]
+            )
         quaternion = np.zeros(4)
         mujoco.mju_mat2Quat(quaternion, local_rotation.reshape(9))
         quaternions[key] = quaternion
@@ -119,9 +222,20 @@ def _replace_jaw_collision(spec: mujoco.MjSpec, cfg: ManipulationSceneConfig) ->
                 geom.conaffinity = 0
 
 
+def _add_wrist_jog_site(spec: mujoco.MjSpec, cfg: ManipulationSceneConfig) -> None:
+    """Add a zero-offset "wristframe" site so a restricted-joint jog IK can
+    target the wrist rather than the gripper tip. Added here (not hand-edited
+    into the fetched MJCF) because `assets/` is downloaded by
+    `scripts/fetch_assets.py` and not committed to the repo.
+    """
+    if cfg.wrist_body is None:
+        return
+    _find_body(spec, cfg.wrist_body).add_site(name="wristframe", pos=[0, 0, 0])
+
+
 def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
-    _validate_robot_attachment(cfg)
     """Build a manipulation world with configurable robot attachments."""
+    _validate_robot_attachment(cfg)
     if cfg.robot_xml is None or not Path(cfg.robot_xml).exists():
         raise FileNotFoundError(
             f"{cfg.robot_xml} not found — run `python scripts/fetch_assets.py` first."
@@ -129,15 +243,18 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
 
     spec = mujoco.MjSpec.from_file(str(cfg.robot_xml))
     spec.option.timestep = cfg.timestep
+    spec.option.noslip_iterations = cfg.noslip_iterations
     _replace_jaw_collision(spec, cfg)
+    _add_wrist_jog_site(spec, cfg)
     world = spec.worldbody
 
+    add_studio_sky(spec)
     spec.add_texture(
         name="physai_grid",
         type=mujoco.mjtTexture.mjTEXTURE_2D,
         builtin=mujoco.mjtBuiltin.mjBUILTIN_CHECKER,
-        rgb1=[0.22, 0.24, 0.28],
-        rgb2=[0.16, 0.18, 0.22],
+        rgb1=list(STUDIO_FLOOR_RGB1),
+        rgb2=list(STUDIO_FLOOR_RGB2),
         width=300,
         height=300,
     )
@@ -214,10 +331,18 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
             size=list(cfg.pad_size),
             pos=list(position),
             quat=list(quaternion),
-            rgba=[0.12, 0.12, 0.14, 1.0],
+            # A collision-only proxy for the jaw mesh (see
+            # _replace_jaw_collision). Its rgba only affects the web viewer
+            # (scene.js sets transparent/opacity from rgba[3]); alpha 0 hides
+            # it without touching contact behavior. Its solref time constant
+            # is already at the stability floor (2 x timestep): a stiffer
+            # direct solref throws the cube out of the grasp or blows up the
+            # arm at this timestep. The high impedance (solimp) is the safe
+            # remaining lever.
+            rgba=list(cfg.pad_rgba),
             friction=list(cfg.pad_friction),
             condim=4,
-            solimp=[0.95, 0.99, 0.001, 0.5, 2.0],
+            solimp=[0.99, 0.999, 0.001, 0.5, 2.0],
             solref=[0.004, 1.0],
             group=3,
         )
@@ -241,18 +366,32 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
         xyaxes=list(cfg.front_cam_xyaxes),
         fovy=48,
     )
-    _find_body(spec, cfg.static_pad_body).add_camera(
-        name="wrist",
-        pos=list(cfg.wrist_cam_pos),
-        xyaxes=list(cfg.wrist_cam_xyaxes),
-        fovy=62,
+    camera_body = next(
+        (body for body in spec.bodies if body.name == "wrist_camera"), None
     )
+    if camera_body is not None:
+        # The official camera variant contains the calibrated mount and camera
+        # body. The sensor is added here because the upstream model only
+        # describes the physical camera mesh, not a MuJoCo render sensor.
+        camera_body.add_camera(
+            name="wrist",
+            # Keep the virtual optical centre just outside the physical lens
+            # housing; placing it at the body origin makes the housing occlude
+            # the rendered image as a large black spot.
+            pos=[0.0, 0.0, 0.025],
+            # The official camera body uses +z as its optical direction while
+            # MuJoCo camera sensors look along local -z.
+            xyaxes=[1.0, 0.0, 0.0, 0.0, -1.0, 0.0],
+            fovy=62,
+        )
+    else:
+        _find_body(spec, cfg.static_pad_body).add_camera(
+            name="wrist",
+            pos=list(cfg.wrist_cam_pos),
+            xyaxes=list(cfg.wrist_cam_xyaxes),
+            fovy=62,
+        )
     return spec
-
-
-def build_common_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
-    """Compatibility alias for the original manipulation scene builder."""
-    return build_manipulation_spec(cfg)
 
 
 def add_cube(

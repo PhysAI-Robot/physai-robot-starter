@@ -11,8 +11,8 @@ import time
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from ..control.safety import SafetyController
 from ..contracts import Action, Observation
+from ..control.safety import SafetyController
 from ..robots.base import RobotPort, RobotSpec
 from .adapters import ROS2MuJoCoAdapter, ROS2Transport
 from .messages import MessageCodec
@@ -83,7 +83,7 @@ class MuJoCoROSBridge:
     ) -> None:
         rate = control_hz
         if rate is None:
-            rate = float(simulation.robot_spec.metadata.get("control_hz", 25.0))
+            rate = float(simulation.robot_spec.metadata.get("control_hz", 30.0))
         if rate <= 0:
             raise ValueError("control_hz must be positive")
         self._adapter = ROS2MuJoCoAdapter(simulation, transport, codec=codec)

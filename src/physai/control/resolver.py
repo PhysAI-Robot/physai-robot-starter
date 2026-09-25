@@ -96,6 +96,7 @@ class TwistToJointResolver:
         damping: float = 0.08,
         max_joint_step: float = 0.08,
         state_provider: Callable[[], object] | None = None,
+        position_only: bool = False,
     ) -> None:
         if data is None and state_provider is None:
             raise ValueError("provide data or state_provider for Jacobian evaluation")
@@ -104,18 +105,44 @@ class TwistToJointResolver:
         self.dt = dt
         self.damping = damping
         self.max_joint_step = max_joint_step
+        # A twist with a structurally-zero angular part (a translation-only
+        # jog over too few joints to also track orientation) still solves the
+        # full 6-row damped least squares by default, and the unreachable
+        # angular rows eat into the same damping budget as the achievable
+        # linear ones -- measured ~5x less displacement per commanded m/s
+        # than solving position alone. Restricting to the 3 position rows
+        # when the caller knows angular is always zero fixes that.
+        self.position_only = position_only
 
     def __call__(
         self,
         twist: Twist,
         joint_state: JointState,
         gripper: GripperCommand | None = None,
+        base_position: np.ndarray | None = None,
     ) -> Action:
+        """`base_position` overrides the integration base (default: the live
+        `joint_state`). A caller driving a sustained hold-position command
+        (v=0 for one or more ticks) should pass its own persistent setpoint
+        here instead of relying on the live reading: dynamic coupling from
+        other moving joints nudges the live position tick to tick, and
+        integrating from it unconditionally re-affirms each nudge as the new
+        target, ratcheting the joint away from where it was actually told to
+        stay.
+        """
         J = self.kin.site_jacobian(self._state_provider())
         v = twist.as_array()  # (6,)
-        JJt = J @ J.T + (self.damping**2) * np.eye(6)
+        if self.position_only:
+            J = J[:3]
+            v = v[:3]
+        JJt = J @ J.T + (self.damping**2) * np.eye(J.shape[0])
         dq = J.T @ np.linalg.solve(JJt, v) * self.dt
         dq = np.clip(dq, -self.max_joint_step, self.max_joint_step)
         joint_count = len(getattr(self.kin, "joint_names", joint_state.name))
-        q = self.kin.clip_to_limits(joint_state.position[:joint_count] + dq)
+        base = (
+            joint_state.position[:joint_count]
+            if base_position is None
+            else base_position
+        )
+        q = self.kin.clip_to_limits(base + dq)
         return Action(joint_position=q, gripper=gripper or GripperCommand())

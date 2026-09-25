@@ -24,7 +24,9 @@ class DomainRandomizationConfig:
 
     def __post_init__(self) -> None:
         if not isinstance(self.enabled, bool):
-            raise ValueError("domain_randomization.enabled must be a boolean")
+            raise ValueError(  # noqa: TRY004
+                "domain_randomization.enabled must be a boolean"
+            )
         for name in ("friction_scale", "mass_scale", "lighting_scale"):
             bounds = getattr(self, name)
             if len(bounds) != 2 or not all(np.isfinite(bounds)):

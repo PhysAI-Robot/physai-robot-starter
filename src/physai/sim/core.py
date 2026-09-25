@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+
 import mujoco
 
 
@@ -25,12 +27,18 @@ class MuJoCoSimulationCore:
         self.control_dt = self.n_substeps * model.opt.timestep
         self.step_count = 0
         self._renderer: mujoco.Renderer | None = None
-        if render:
-            self._renderer = mujoco.Renderer(
-                model,
-                height=camera_height,
-                width=camera_width,
-            )
+        self._renderer_thread_id: int | None = None
+        self._camera_size = (camera_width, camera_height) if render else None
+
+    @property
+    def render_enabled(self) -> bool:
+        """Whether this simulation can render camera frames."""
+        return self._camera_size is not None
+
+    @property
+    def camera_size(self) -> tuple[int, int] | None:
+        """(width, height) of rendered frames, or None when rendering is off."""
+        return self._camera_size
 
     def reset_simulation(self) -> None:
         """Reset simulator state before an adapter applies its initial state."""
@@ -44,8 +52,15 @@ class MuJoCoSimulationCore:
         self.step_count += 1
 
     def render_camera(self, name: str) -> object:
-        if self._renderer is None:
+        if self._camera_size is None:
             raise RuntimeError("simulation constructed with render=False")
+        thread_id = threading.get_ident()
+        if self._renderer is None or self._renderer_thread_id != thread_id:
+            if self._renderer is not None:
+                self._renderer.close()
+            width, height = self._camera_size
+            self._renderer = mujoco.Renderer(self.model, height=height, width=width)
+            self._renderer_thread_id = thread_id
         self._renderer.update_scene(self.data, camera=name)
         return self._renderer.render()
 
@@ -53,3 +68,4 @@ class MuJoCoSimulationCore:
         if self._renderer is not None:
             self._renderer.close()
             self._renderer = None
+            self._renderer_thread_id = None

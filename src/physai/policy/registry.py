@@ -50,14 +50,20 @@ def _load_builtins() -> None:
     register_policy("constant", _make_constant)
     register_policy("constant_twist", _make_constant_twist)
     register_policy("scripted", _make_scripted)
+    register_policy("visual_servo", _make_visual_servo)
     register_policy("replay", _make_replay)
-    register_policy("lerobot", _make_lerobot)
+    # "lerobot" is a research module (research/imitation_learning/vla_adapter.py);
+    # it registers itself on import instead of being listed here, so this
+    # registry never imports research code.
     _BUILTINS_LOADED = True
 
 
-def _make_constant(**_: Any) -> Policy:
-    from .base import ConstantPolicy
+def _make_constant(*, env: Any = None, **_: Any) -> Policy:
+    """The hold policy shaped for the robot's action space: a base holds a zero twist."""
+    from .base import ConstantPolicy, ConstantTwistPolicy
 
+    if env is not None and env.robot_spec.supports("base_velocity"):
+        return ConstantTwistPolicy()
     return ConstantPolicy()
 
 
@@ -78,13 +84,19 @@ def _make_scripted(*, env, **kwargs: Any) -> Policy:
     )
 
 
+def _make_visual_servo(*, env, **kwargs: Any) -> Policy:
+    from ..robots.registry import create_robot_policy
+
+    return create_robot_policy(
+        env.robot_spec.name,
+        "visual_servo",
+        env=env,
+        cfg=kwargs.get("cfg"),
+        **{key: value for key, value in kwargs.items() if key != "cfg"},
+    )
+
+
 def _make_replay(*, env, actions, **kwargs: Any) -> Policy:
-    from .vla_adapter import ReplayPolicy
+    from .replay import ReplayPolicy
 
     return ReplayPolicy(env, actions, **kwargs)
-
-
-def _make_lerobot(*, env, checkpoint, **kwargs: Any) -> Policy:
-    from .vla_adapter import LeRobotPolicy
-
-    return LeRobotPolicy.from_checkpoint(env, checkpoint, **kwargs)

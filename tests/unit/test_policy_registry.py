@@ -1,24 +1,32 @@
-def test_builtin_policies_are_discoverable():
-    from physai.policy import available_policies
+from types import SimpleNamespace
 
-    assert {"constant", "constant_twist", "scripted", "replay", "lerobot"} <= set(
-        available_policies()
-    )
+import numpy as np
+import pytest
 
-
-def test_constant_policy_is_created_through_registry():
-    from physai.policy import ConstantPolicy, create_policy
-
-    policy = create_policy("constant")
-
-    assert isinstance(policy, ConstantPolicy)
+from physai.contracts import JointState, Observation
 
 
-def test_constant_twist_policy_emits_twist_action():
-    import numpy as np
+def test_policies_are_discovered_and_research_ones_register_on_import():
+    import research.imitation_learning.vla_adapter  # noqa: F401
+    from physai.policy import available_policies, create_policy
 
-    from physai.contracts import JointState, Observation
-    from physai.policy import create_policy
+    assert {
+        "constant",
+        "constant_twist",
+        "scripted",
+        "visual_servo",
+        "replay",
+    } <= set(available_policies())
+    assert "lerobot" in available_policies()  # its research module registered it
+    with pytest.raises(ValueError, match="constant"):
+        create_policy("does-not-exist")  # the error lists what is available
+
+
+def test_hold_policies_are_shaped_for_the_robots_action_space():
+    from physai.policy import ConstantPolicy, ConstantTwistPolicy, create_policy
+    from physai.robots import RobotSpec
+
+    assert isinstance(create_policy("constant"), ConstantPolicy)
 
     observation = Observation(
         joint_state=JointState(
@@ -28,16 +36,14 @@ def test_constant_twist_policy_emits_twist_action():
             effort=np.zeros(2),
         )
     )
+    assert create_policy("constant_twist").act(observation).mode == "twist"
 
-    action = create_policy("constant_twist").act(observation)
-
-    assert action.mode == "twist"
-
-
-def test_unknown_policy_lists_available_policies():
-    import pytest
-
-    from physai.policy import create_policy
-
-    with pytest.raises(ValueError, match="constant"):
-        create_policy("does-not-exist")
+    spec = RobotSpec(
+        name="base",
+        kind="mobile_base",
+        joint_names=("wheel",),
+        action_joint_names=("wheel",),
+        capabilities=("base_velocity",),
+    )
+    policy = create_policy("constant", env=SimpleNamespace(robot_spec=spec))
+    assert isinstance(policy, ConstantTwistPolicy)

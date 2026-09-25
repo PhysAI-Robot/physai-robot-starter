@@ -7,7 +7,7 @@ positive linear velocity drives along world ``-Y`` when yaw is zero.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import atan2, cos, hypot, pi, sin
+from math import atan2, cos, hypot, pi
 
 import numpy as np
 
@@ -147,19 +147,19 @@ def navigate_to_goal(
     pursuit = controller or RegulatedPurePursuit()
     env = TurtleBot4Env(config or TurtleBot4Config(render=False, max_steps=max_steps))
     try:
-        observation = env.reset(seed=seed)
+        env.reset(seed=seed)
         collision_count = 0
         reached = False
         for step in range(1, max_steps + 1):
-            pose = env._pose_array()
+            pose = env.pose_array()
             if pursuit.reached(pose, goal):
                 reached = True
                 break
-            observation, _, _, _, _ = env.step(
+            _observation, _, _, _, _ = env.step(
                 Action(ee_twist=pursuit.command(pose, goal))
             )
             collision_count += env.non_ground_contact_count()
-        pose = env._pose_array()
+        pose = env.pose_array()
         position_error = hypot(float(pose[0]) - goal.x, float(pose[1]) - goal.y)
         heading_error = abs(_wrap_angle(float(pose[2]) - goal.yaw))
         reached = reached or pursuit.reached(pose, goal)
@@ -190,11 +190,11 @@ def navigate_to_coordinates(
 
 
 __all__ = [
+    "Nav2AcceptanceResult",
     "NavigationGoal",
     "NavigationResult",
-    "Nav2AcceptanceResult",
     "RPPConfig",
     "RegulatedPurePursuit",
-    "navigate_to_goal",
     "navigate_to_coordinates",
+    "navigate_to_goal",
 ]
