@@ -330,6 +330,37 @@ gripper-contact HUD), `ui.js` (status/telemetry/toast), `cameras.js` (the
 multi-panel camera grid), and `main.js` (entry point). There is no build
 step; edit a module and reload the page.
 
+### Choppy viewer under WSL2
+
+Only for users running the viewer inside WSL2; native Ubuntu can skip this. On
+WSL2, MuJoCo can fall back to the CPU software renderer (`llvmpipe`), which
+makes the interactive viewer look choppy even when `nvidia-smi` sees the
+NVIDIA GPU. Enable the WSLg D3D12 renderer for the shell before opening the
+viewer:
+
+```bash
+export GALLIUM_DRIVER=d3d12
+uv run python scripts/run_sim.py --viewer
+```
+
+To apply it to future Bash sessions, add it once:
+
+```bash
+printf '\nexport GALLIUM_DRIVER=d3d12\n' >> ~/.bashrc
+source ~/.bashrc
+```
+
+Verify that OpenGL is accelerated and reports the NVIDIA GPU:
+
+```bash
+glxinfo -B | grep -Ei 'vendor|renderer|accelerated'
+```
+
+The renderer should mention `D3D12` and the NVIDIA GPU, not `llvmpipe` or
+`Accelerated: no`. WSL2 GPU support needs a current NVIDIA driver on the
+Windows host and WSLg; do not install the Linux NVIDIA display driver inside
+WSL with `sudo apt install nvidia-driver`.
+
 ### Laggy camera feed on a Windows laptop with two GPUs
 
 The 3D viewport can look smooth while the camera panels feel choppy even

@@ -13,7 +13,8 @@ and compatible with the module boundaries in
    owning modules.
 4. Add or update tests for behavior changes.
 5. Run the focused test first, then the full suite for cross-module changes.
-6. Review the final diff for unrelated files, generated artifacts, and secrets.
+6. Review the final diff for unrelated files, generated artifacts, and secrets
+   (`git status --short`, `git diff --check`, `git diff --stat`).
 
 ## Commit messages
 
