@@ -9,6 +9,10 @@ from ..robots.base import RobotPort, RobotSpec
 from .base import Task
 
 
+# Consecutive steps a task's success condition must hold to count as success.
+DEFAULT_SUCCESS_HOLD_STEPS = 10
+
+
 class TaskRuntime:
     """Compose a task with a robot without making the robot task-aware."""
 
@@ -17,7 +21,7 @@ class TaskRuntime:
         robot: RobotPort,
         task: Task,
         *,
-        success_hold_steps: int = 10,
+        success_hold_steps: int = DEFAULT_SUCCESS_HOLD_STEPS,
     ) -> None:
         if success_hold_steps < 1:
             raise ValueError("success_hold_steps must be positive")

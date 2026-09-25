@@ -19,12 +19,16 @@ class PickPlaceBackend(TaskBackend, Protocol):
     cube_half: float
 
 
+# Horizontal cube-to-target distance, in metres, that counts as placed.
+DEFAULT_SUCCESS_XY_TOL = 0.04
+
+
 class PickPlaceTask(Task):
     name = "pick_place"
     required_capabilities = ("arm_kinematics", "gripper")
     required_action_modes = ("joint_position",)
 
-    def __init__(self, success_xy_tol: float = 0.04) -> None:
+    def __init__(self, success_xy_tol: float = DEFAULT_SUCCESS_XY_TOL) -> None:
         self.success_xy_tol = success_xy_tol
 
     def evaluate(self, backend: PickPlaceBackend) -> dict:
