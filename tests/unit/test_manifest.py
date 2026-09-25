@@ -154,3 +154,90 @@ def test_global_task_and_policy_apply_when_instance_omits_them(tmp_path):
     manifest = load_manifest(_write(tmp_path, data))
     assert manifest.task_for(manifest.robots[0]) == "pick_place"
     assert manifest.policy_for(manifest.robots[0]) == "scripted"
+
+
+def test_robot_config_and_scene_overrides_become_typed_values(tmp_path):
+    from physai.config import load_manifest
+
+    data = _base_manifest(
+        scene={
+            "name": "pick_place_minimal",
+            "overrides": {
+                "robot_xml": "assets/so101/so101_new_calib_camera.xml",
+                "table_pos": [0.3, 0.0, 0.01],
+            },
+        },
+        success_hold_steps=7,
+    )
+    data["robots"][0]["config"] = {"max_steps": 50, "cube_x_range": [0.2, 0.24]}
+
+    manifest = load_manifest(_write(tmp_path, data))
+
+    assert manifest.robots[0].config == {"max_steps": 50, "cube_x_range": (0.2, 0.24)}
+    assert manifest.scene.overrides["table_pos"] == (0.3, 0.0, 0.01)
+    assert manifest.scene.overrides["robot_xml"].is_absolute()
+    assert manifest.success_hold_steps == 7
+    assert manifest.world is None
+
+
+def test_world_block_makes_a_shared_world_session(tmp_path):
+    from physai.config import SessionWorldConfig, load_manifest
+
+    data = _base_manifest(world={"control_hz": 20, "add_floor": False})
+    data["robots"][0]["model"] = "assets/so101/so101_new_calib_camera.xml"
+
+    manifest = load_manifest(_write(tmp_path, data))
+
+    assert manifest.world == SessionWorldConfig(
+        timestep=0.002, control_hz=20.0, add_floor=False
+    )
+    assert manifest.robots[0].model.is_absolute()
+
+
+def test_several_robots_share_one_default_world(tmp_path):
+    from physai.config import SessionWorldConfig, load_manifest
+
+    data = _base_manifest()
+    data["robots"] = [
+        {"id": "a", "robot": "so101", "model": "assets/so101/x.xml"},
+        {"id": "b", "robot": "turtlebot4", "model": "assets/turtlebot4/x.xml"},
+    ]
+
+    assert load_manifest(_write(tmp_path, data)).world == SessionWorldConfig()
+
+
+def test_world_robots_must_name_their_model(tmp_path):
+    from physai.config import load_manifest
+
+    with pytest.raises(ValueError, match="need a 'model'"):
+        load_manifest(_write(tmp_path, _base_manifest(world={})))
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"success_hold_steps": 0},
+        {"success_hold_steps": True},
+        {"world": {"timestep": -1}},
+        {"world": {"add_floor": "yes"}},
+        {"world": "shared"},
+    ],
+)
+def test_invalid_world_and_hold_settings_fail_loudly(tmp_path, extra):
+    from physai.config import load_manifest
+
+    data = _base_manifest(**extra)
+    data["robots"][0]["model"] = "assets/so101/x.xml"
+
+    with pytest.raises(ValueError):
+        load_manifest(_write(tmp_path, data))
+
+
+def test_robot_config_must_be_a_mapping(tmp_path):
+    from physai.config import load_manifest
+
+    data = _base_manifest()
+    data["robots"][0]["config"] = ["max_steps"]
+
+    with pytest.raises(ValueError, match="must be a mapping"):
+        load_manifest(_write(tmp_path, data))
