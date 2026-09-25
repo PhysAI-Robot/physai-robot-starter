@@ -146,30 +146,24 @@ robot are hidden.
 
 ## Tip Pose Readout
 
-Under the joint bars, a **Tip pose** block shows where the gripper tip is:
-`x`/`y`/`z` in millimetres and `roll`/`pitch`/`yaw` in degrees, in the frame
-named beside the title (`base` for the SO-101).
+Under the joint bars, a **Tip pose** block shows the gripper tip: `x`/`y`/`z`
+in millimetres and `roll`/`pitch`/`yaw` in degrees, in the frame named beside
+the title (`base` for the SO-101).
 
-- **Position** is the pinch centre, the point between the fingertips where an
-  object is held. It sits about 16 mm from the `gripperframe` site; while the
-  scripted grasp holds the cube it is within ~3 mm of the cube's centre,
-  versus ~15 mm for the site.
-- **Orientation** is relative to a straight-down grasp, so **0° / 0° / 0°
-  means the gripper points straight down** with its jaws opening along the
-  world x axis (the reference the scripted expert uses, `top_down_quat`).
-  Roll/pitch/yaw are intrinsic ZYX angles computed in the browser from the
-  reported quaternion. Panning the arm changes only yaw; a grasp reads about
-  0° roll and pitch with the yaw of the approach. During a full scripted
-  pick-and-place, pitch stays between -36° and 11°, and while the cube is
-  held roll and pitch stay within a few degrees of 0.
-- **Gimbal lock:** the SO-101's raw end-effector frame is singular exactly at
-  a top-down grasp (its approach axis is x, so ZYX pitch sits at ±90° and roll
-  and yaw swing wildly), which is why the reference is used. The singular
-  pose is now a horizontal approach with the jaws stacked vertically, which
-  table-top grasping does not use. Past |pitch| = 80° roll and yaw are dimmed
-  and the block shows a "near gimbal lock" warning.
-- A robot without a tool pose reports its observation's `ee_pose` in its own
-  frame instead, and the title says `end-effector` rather than `tip`.
+- **Position** is the pinch centre between the fingertips, where an object is
+  held (about 16 mm from the `gripperframe` site, and within ~3 mm of a held
+  cube's centre).
+- **Orientation** is relative to a straight-down grasp: **0° / 0° / 0° means
+  the gripper points straight down** with its jaws opening along the world x
+  axis (the scripted expert's `top_down_quat`). Angles are intrinsic ZYX,
+  computed in the browser from the reported quaternion; panning the arm
+  changes only yaw.
+- **Gimbal lock:** the SO-101's raw end-effector frame is singular at a
+  top-down grasp, which is why this reference is used. The singular pose is a
+  horizontal approach that table-top grasping does not use; past
+  |pitch| = 80° roll and yaw are dimmed with a "near gimbal lock" warning.
+- A robot without a tool pose shows its observation's `ee_pose` in its own
+  frame, titled `end-effector` instead of `tip`.
 
 The block is hidden in `--world` sessions and for robots that report no pose.
 
@@ -177,36 +171,23 @@ The block is hidden in `--world` sessions and for robots that report no pose.
 
 For robots with a gripper, the joint panel lists a **Static pad** and a
 **Moving pad** row. The dot lights while that pad touches anything, and the
-number beside it is the normal force in newtons, summed over everything the
-pad is touching (`–` when it touches nothing). The value is MuJoCo's contact
-normal force from the latest physics step (`mj_contactForce`); friction is
-not included. Contact with the table counts the same as contact with an
-object.
+number is the summed normal force in newtons over everything the pad touches
+(`–` when nothing; table contact counts like object contact). It is MuJoCo's
+`mj_contactForce` from the latest step, friction excluded, and it reads `–`
+during playback because a restored pose cannot reproduce the recorded squeeze.
 
-Sanity reference from the scripted pick-and-place: the two pads read the same
-force while holding the cube (about 3.8 N each), and their net vertical force
-equals the cube's weight. The gripper torque is capped at 0.3 N·m in every
-mode. The cap matters: the model's own limit is 3.35 N·m, which drives about
-34 N per pad against a 0.29 N cube and pushes the cube roughly 10 mm into the
-pads and fingers, and below roughly 0.1 N·m (about 1 N per pad) the scripted
-grasp drops the cube.
+Reference from the scripted pick-and-place: each pad reads about 3.8 N while
+holding the cube, and the net vertical force equals the cube's weight. Gripper
+torque is capped at 0.3 N·m in every mode (`EnvConfig.gripper_force_limit`);
+the model's own 3.35 N·m limit would drive about 34 N per pad and sink the
+cube into the pads.
 
-Holding the gripper key (`G`) on a lifted cube used to let it slide slowly
-out of the fingers and fall after ~15 s, at any grip force. That is friction
-creep, not slip: the contact reported only 0.13-0.19 N of friction against
-a limit of about 8 N. MuJoCo softens friction, so a constant load (the cube's
-weight) moves the contact at ~1 mm/s. Manipulation scenes now run the
-solver's no-slip pass (`noslip_iterations = 5` in `ManipulationSceneConfig`),
-after which a held cube moves 0.0 mm over 30 s, for ~30% more solver time.
-
-The translucent orange boxes on the fingertips are those pads: the only parts
-of the fingers that collide. They are fitted to the flat face at each fingertip
-(the last ~6 mm; behind it the lattice is recessed): flush with it, along its
-angle, and one cube width apart at their centres when the gripper is at
-0.16 rad. The moving finger's face is tilted about 8 degrees from the static
-one (the fingers form a V), and its pad is tilted to match. To hide them, set the alpha of
-`pad_rgba` in `ManipulationSceneConfig`
-([common.py](../src/physai/sim/scenes/common.py)) to 0.
+The translucent orange boxes on the fingertips are the grasp pads, the only
+parts of the fingers that collide, fitted to each fingertip's flat face
+(`ManipulationSceneConfig` in
+[common.py](../src/physai/sim/scenes/common.py)); set the alpha of `pad_rgba`
+there to 0 to hide them. A held cube does not creep out of the fingers because
+manipulation scenes run MuJoCo's no-slip pass (`noslip_iterations = 5`).
 
 ## Recording Episodes
 
@@ -363,18 +344,15 @@ WSL with `sudo apt install nvidia-driver`.
 
 ### Laggy camera feed on a Windows laptop with two GPUs
 
-The 3D viewport can look smooth while the camera panels feel choppy even
-though the machine has a capable discrete GPU. The 3D view stays smooth
-regardless, because the browser interpolates received joint/geometry
-transforms every animation frame; a raw camera JPEG has no such
-interpolation, so any rendering slowdown shows up directly as choppiness.
+The 3D viewport can look smooth while the camera panels feel choppy: the
+browser interpolates joint transforms every animation frame, but a raw camera
+JPEG has no such smoothing, so slow rendering shows up directly.
 
-On a laptop with both an integrated and a discrete GPU, Windows decides
-per-executable which GPU handles rendering, and it does not know about
-MuJoCo's offscreen renderer. Unless the *exact* Python executable that runs
-the simulation is explicitly pointed at the discrete GPU, Windows silently
-defaults it to the integrated one, which is far slower at the
-`renderer.render()` calls `Host._camera_loop` does every capture (see
+On a laptop with an integrated and a discrete GPU, Windows picks the GPU per
+executable and does not know about MuJoCo's offscreen renderer. Unless the
+*exact* Python executable running the simulation is pointed at the discrete
+GPU, it defaults to the integrated one, which is far slower at the
+`renderer.render()` calls `Host._camera_loop` makes (see
 [docs/ARCHITECTURE.md](ARCHITECTURE.md#host--client-api)).
 
 Check which GPU is actually rendering:
@@ -395,17 +373,13 @@ print('GL_RENDERER:', glGetString(0x1F01))
 ```
 
 If `GL_RENDERER` names the integrated GPU (for example `Intel(R) UHD
-Graphics`) instead of the discrete one, find the exact interpreter path to
-target. Don't trust `sys.executable` for this: on a `uv`-managed venv,
-`.venv\Scripts\python.exe` is a small launcher (tens of KB, not a full
-interpreter) that reports itself as `sys.executable` for compatibility, but
-when running a script file it re-launches the real, long-running interpreter
-as a *child process* from uv's own cache — and it's that child's path
-Windows' GPU preference actually keys off, not the launcher's. Confirmed by
-inspecting the live process tree while `--serve` is running: `uv.exe` →
-`.venv\Scripts\python.exe` → `%APPDATA%\uv\python\<version>\python.exe`, with
-only the last one doing any rendering work. With the host already running,
-find that real path directly:
+Graphics`), find the exact interpreter path to target. Don't use
+`sys.executable`: on a `uv` venv, `.venv\Scripts\python.exe` is a small
+launcher that re-launches the real interpreter as a *child process* from uv's
+cache (`uv.exe` → `.venv\Scripts\python.exe` →
+`%APPDATA%\uv\python\<version>\python.exe`), and only that child renders, so
+its path is what Windows' GPU preference keys off. With the host running, find
+it directly:
 
 ```powershell
 Get-CimInstance Win32_Process | Where-Object {
@@ -423,16 +397,14 @@ New-ItemProperty -Path "HKCU:\Software\Microsoft\DirectX\UserGpuPreferences" `
   -Name $py -Value "GpuPreference=2;" -PropertyType String -Force
 ```
 
-This takes effect immediately for new processes; no reboot or `uv` reinstall
-needed. Re-run the `GL_RENDERER` check above to confirm. This is a per-machine
-Windows setting, not a repository file, so it does not travel with the repo
-and must be set again on any other Windows machine that hits the same
-symptom.
+This takes effect immediately for new processes; re-run the `GL_RENDERER`
+check to confirm. It is a per-machine Windows setting, so it must be set again
+on any other machine with the same symptom.
 
-Even with the correct GPU in use, the camera stream is still capped by
-`Host._CAMERA_PERIOD`/`app.py`'s `_CAMERA_STREAM_PERIOD` (kept in sync) — the
-default targets 30 fps, but the actually achieved rate depends on readback
-and JPEG-encoding overhead, not just the GPU.
+Even on the right GPU, the camera stream is capped by
+`Host._CAMERA_PERIOD`/`app.py`'s `_CAMERA_STREAM_PERIOD` (kept in sync, 30 fps
+by default), and the achieved rate also depends on readback and JPEG-encoding
+overhead.
 
 Three.js is loaded from a CDN, so the browser needs network access on the
 first page load. Gamepad input, labels, and segmentation masks are not

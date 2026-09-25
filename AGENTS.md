@@ -18,6 +18,8 @@ Keep each document focused on one audience:
   commands, workflow). Detailed research workflows belong there, not in a
   `docs/*_RUNBOOK.md` file — a robot runbook links to the relevant
   `research/<topic>/README.md` instead of embedding its commands.
+  Measurement history behind a research result (investigations, reverted
+  experiments) goes in that topic's `FINDINGS.md`, not the README.
 - `CONTRIBUTING.md` is the contributor-facing source of truth for workflow and
   commit message conventions.
 - `AGENTS.md` is the agent-facing workflow, validation, and repository hygiene
