@@ -76,6 +76,10 @@ def test_a_host_driven_session_disables_inline_camera_rendering(tmp_path):
         cfg = session.runtime.robot.cfg
         assert cfg.render is True
         assert cfg.camera_stride == 0
+        assert session.host_renders_cameras is True
+        # the host scores no task, so none is composed around the robot
+        assert session.runtime.task is None
+        assert session.runtime.policy is None
     finally:
         session.close()
 
@@ -96,6 +100,8 @@ def test_a_base_robot_gets_a_zero_twist_hold_policy(tmp_path):
     )
     try:
         assert isinstance(session.runtime.policy, ConstantTwistPolicy)
+        # it renders inline and cannot stop, so the host must not render for it
+        assert session.host_renders_cameras is False
     finally:
         session.close()
 
