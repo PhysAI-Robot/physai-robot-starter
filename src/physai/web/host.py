@@ -12,7 +12,6 @@ contract, for both cases.
 
 from __future__ import annotations
 
-import queue
 import threading
 import time
 from io import BytesIO
@@ -28,6 +27,7 @@ from ..control.resolver import TwistToJointResolver
 from ..robots.base import RobotPort
 from ..robots.registry import create_shared_instance
 from ..sim.world import RobotInstanceConfig, SharedWorld
+from .lease import ControlLease
 from .playback import Playback
 from .recording import SessionRecorder
 from .telemetry import build_scene_manifest, build_state_snapshot
@@ -95,9 +95,7 @@ class Host:
                     environment_state_dim=None if data is None else int(data.qpos.size),
                 )
 
-        self._commands: dict[str, queue.Queue[Action]] = {
-            instance_id: queue.Queue(maxsize=1) for instance_id in self.instances
-        }
+        self._lease = ControlLease(self.instances)
         self._lock = threading.Lock()
         self._physics_lock = threading.Lock()
         self._state: dict[str, Any] | None = None
@@ -111,9 +109,6 @@ class Host:
         self._camera_thread: threading.Thread | None = None
         self._camera_request = threading.Event()
         self._camera_ready = threading.Event()
-        self._control_owner: dict[str, str] = {}
-        self._control_deadline: dict[str, float] = {}
-        self._control_timeout = 0.35
 
     @classmethod
     def for_robot(
@@ -489,27 +484,10 @@ class Host:
             self._show_playback_frame()
 
     def release_control(self, source: str) -> None:
-        with self._lock:
-            owned = [
-                instance_id
-                for instance_id, owner in self._control_owner.items()
-                if owner == source
-            ]
-            for instance_id in owned:
-                self._control_owner.pop(instance_id, None)
-                self._control_deadline.pop(instance_id, None)
-        for instance_id in owned:
-            try:
-                self._commands[instance_id].get_nowait()
-            except queue.Empty:
-                pass
+        self._lease.release(source)
 
     def _discard_commands(self) -> None:
-        for command_queue in self._commands.values():
-            try:
-                command_queue.get_nowait()
-            except queue.Empty:
-                pass
+        self._lease.discard_all()
 
     # -- commands -----------------------------------------------------------
     def submit(
@@ -525,25 +503,7 @@ class Host:
                 action = self._prepare_action(instance_id, action)
         else:
             action = self._prepare_action(instance_id, action)
-        now = time.monotonic()
-        with self._lock:
-            owner = self._control_owner.get(instance_id)
-            deadline = self._control_deadline.get(instance_id, 0.0)
-            if owner not in (None, source) and now < deadline:
-                raise PermissionError(
-                    f"robot instance {instance_id!r} is controlled by another client"
-                )
-            self._control_owner[instance_id] = source
-            self._control_deadline[instance_id] = now + self._control_timeout
-        command_queue = self._commands[instance_id]
-        try:
-            command_queue.get_nowait()
-        except queue.Empty:
-            pass
-        try:
-            command_queue.put_nowait(action)
-        except queue.Full:
-            pass
+        self._lease.submit(instance_id, action, source)
 
     def _prepare_action(self, instance_id: str, action: Action) -> Action:
         if self._shared:
@@ -567,23 +527,7 @@ class Host:
         return action
 
     def _latest_command(self, instance_id: str) -> Action | None:
-        expired = False
-        with self._lock:
-            deadline = self._control_deadline.get(instance_id)
-            if deadline is not None and time.monotonic() >= deadline:
-                self._control_owner.pop(instance_id, None)
-                self._control_deadline.pop(instance_id, None)
-                expired = True
-        if expired:
-            try:
-                self._commands[instance_id].get_nowait()
-            except queue.Empty:
-                pass
-            return None
-        try:
-            return self._commands[instance_id].get_nowait()
-        except queue.Empty:
-            return None
+        return self._lease.latest(instance_id)
 
     # -- physics loop -------------------------------------------------------
     def _run(self) -> None:
