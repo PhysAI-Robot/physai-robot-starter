@@ -60,21 +60,12 @@ class EnvConfig:
     domain_randomization: DomainRandomizationConfig = field(
         default_factory=DomainRandomizationConfig
     )
-    # The XML's default actuator forcerange (+/-3.35 N*m) is a per-servo torque
-    # rating, not a sane grip-force budget: lifting a 0.03 kg cube only needs a
-    # few mN*m, but a fixed-position squeeze target can drive the actuator to
-    # its full rating against a rigid object, which loads the pad-cube contact
-    # to 20-50x the cube's weight and makes it chatter and pop loose mid-carry.
-    # Capping it here emulates a current-limited real servo and keeps the
-    # squeeze in the contact solver's stable range. Needed by visual_servo,
-    # whose grip target (SQUEEZE_GRIP, 0.15) is shallow enough that uncapped force can
-    # destabilize the contact -- test_visual_servo_pick_place_settles_from_
-    # multiple_seeds fails without this cap. The scripted expert's much
-    # deeper default squeeze (ExpertConfig.gripper_grip=0.06) already keeps
-    # contact force low without help (~0.1-1N measured via mj_contactForce)
-    # and does slightly better with this cap disabled (96.0% vs 94.0% over a
-    # fair 300-seed sorting comparison) -- but that is a per-caller tradeoff,
-    # not a reason to change the shared default other callers rely on.
+    # Gripper actuator torque cap (N*m), emulating a current-limited servo. The
+    # model's own +/-3.35 N*m rating drives a position-controlled squeeze to
+    # 20-50x a cube's weight and makes the contact chatter. visual_servo's
+    # shallow grip needs the cap; the scripted expert's deeper squeeze does not,
+    # but the shared default stays for its other callers. Measurements are in
+    # research/scripted_experts/FINDINGS.md.
     gripper_force_limit: float = 0.3
 
 
