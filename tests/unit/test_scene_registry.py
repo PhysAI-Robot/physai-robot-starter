@@ -89,3 +89,21 @@ def test_a_scene_with_an_unknown_layout_is_refused():
 
     with pytest.raises(ValueError, match="supports: single_cube, sorting"):
         create_layout(None, SimpleNamespace(layout_kind="stacking"))
+
+
+def test_a_scene_without_robot_defaults_names_what_is_missing():
+    import pytest
+
+    from physai.sim import PickPlaceMinimalSceneConfig
+
+    with pytest.raises(ValueError, match="pad_size.*wrist_cam_pos"):
+        PickPlaceMinimalSceneConfig().build_spec()
+
+
+def test_the_so101_supplies_the_grasp_pad_fit_and_wrist_camera_pose():
+    from physai.robots.registry import scene_defaults
+
+    defaults = scene_defaults("so101")
+
+    assert defaults["pad_align_gripper_q"] == 0.16
+    assert len(defaults["wrist_cam_xyaxes"]) == 6

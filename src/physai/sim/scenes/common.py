@@ -104,6 +104,9 @@ class ManipulationSceneConfig(WorldSceneConfig):
     static_pad_body: str | None = None
     moving_pad_body: str | None = None
     wrist_body: str | None = None
+    # The grasp-pad fit and the wrist camera pose depend on the gripper's
+    # geometry, so the robot supplies them through its scene defaults
+    # (`robots/so101/scene.py`); they have no generic value.
     pad_friction: tuple[float, float, float] = (2.0, 0.02, 0.001)
     # MuJoCo models friction as a soft constraint, so a held object under a
     # constant load (a cube's own weight, ~0.3 N, against ~4 N of squeeze)
@@ -112,40 +115,18 @@ class ManipulationSceneConfig(WorldSceneConfig):
     # regardless of grip force. The no-slip post-solver removes that creep
     # (0.0 mm over 30 s) for ~30% more solver time. 0 restores the default.
     noslip_iterations: int = 5
-    # The grasp pads are collision boxes standing in for the finger meshes (see
-    # replace_jaw_collision). They are fitted to the SO-101 fingertips: each
-    # pad's outer face is flush with the tip's inner face, its 12 x 12 mm
-    # footprint is the bounding square of the tapered tip face and sits on the
-    # finger centre line, and it is 6 mm thick so a squeezed cube cannot pass
-    # through it into the finger. Only the last ~6 mm of each fingertip is a
-    # flat face (behind it the lattice is recessed), so the pads are fitted to
-    # that zone. `pad_align_gripper_q` (0.16 rad) is the gripper angle at
-    # which the pad faces are one cube width (28 mm) apart at the pad
-    # centres. Narrower pads (8-10 mm) fit the tip more tightly but make
-    # `visual_servo` miss the cube on some seeds: it grasps up to ~15 mm off
-    # the pinch centre.
-    pad_size: tuple[float, float, float] = (0.006, 0.006, 0.003)
+    pad_size: tuple[float, float, float] | None = None
     replace_jaw_collision: bool = True
-    pad_align_gripper_q: float = 0.16
-    static_pad_pos: tuple[float, float, float] = (-0.0109, -0.0002, -0.0979)
-    moving_pad_pos: tuple[float, float, float] = (-0.0093, -0.0753, 0.0190)
-    # Rotation of the moving pad about its lateral axis, on top of being
-    # parallel to the static pad at `pad_align_gripper_q`. The moving finger's
-    # face is not parallel to the static one (the fingers form a V, about 8
-    # degrees apart here), so this lays the pad along that face. Positive
-    # raises the face toward the tip.
-    moving_pad_tilt: float = 0.1348
+    pad_align_gripper_q: float | None = None
+    static_pad_pos: tuple[float, float, float] | None = None
+    moving_pad_pos: tuple[float, float, float] | None = None
+    moving_pad_tilt: float | None = None
     # The pads render in the web viewer (a group-3 box drawn by its rgba) so
     # their fit can be checked by eye; MuJoCo camera renders skip group 3, so
     # dataset images are unaffected. Set the alpha (last value) to 0 to hide.
     pad_rgba: tuple[float, float, float, float] = (0.95, 0.6, 0.1, 0.6)
-    # The wrist camera looks along -z of its own frame. With x = (-1, 0, 0) the
-    # derived view direction pointed backwards and up, away from the workspace,
-    # so this camera rendered a black frame for the whole episode. Negating the
-    # x axis flips the view onto the jaws and the object below them while
-    # keeping the original up vector, so the image is not also upside down.
-    wrist_cam_pos: tuple[float, float, float] = (0.0, -0.07, 0.05)
-    wrist_cam_xyaxes: tuple[float, ...] = (1.0, 0.0, 0.0, 0.0, 0.7, 0.7)
+    wrist_cam_pos: tuple[float, float, float] | None = None
+    wrist_cam_xyaxes: tuple[float, ...] | None = None
     clutter_count: int = 0
     clutter_size: tuple[float, float, float] = (0.018, 0.018, 0.025)
 
@@ -187,6 +168,13 @@ def _validate_robot_attachment(cfg: ManipulationSceneConfig) -> None:
             "gripper_joint",
             "static_pad_body",
             "moving_pad_body",
+            "pad_size",
+            "pad_align_gripper_q",
+            "static_pad_pos",
+            "moving_pad_pos",
+            "moving_pad_tilt",
+            "wrist_cam_pos",
+            "wrist_cam_xyaxes",
         )
         if getattr(cfg, name) is None
     ]
