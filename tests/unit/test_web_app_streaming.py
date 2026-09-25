@@ -86,34 +86,19 @@ async def _read_first_stream_chunk(app, path: str, timeout: float = 5.0):
     return status, chunks[0] if chunks else b""
 
 
-def test_camera_stream_returns_multipart_mjpeg():
-    app = create_app(host=make_host_with_camera("front"))
+def test_camera_streams_are_mjpeg_and_unknown_cameras_are_404():
+    # a policy-published debug overlay is named "<camera>:detections"; the colon
+    # must survive FastAPI's path routing end to end
+    for camera in ("front", "front:detections"):
+        app = create_app(host=make_host_with_camera(camera))
 
-    status, chunk = anyio.run(_read_first_stream_chunk, app, "/api/camera/front/stream")
+        status, chunk = anyio.run(
+            _read_first_stream_chunk, app, f"/api/camera/{camera}/stream"
+        )
 
-    assert status["code"] == 200
-    assert "multipart/x-mixed-replace" in status["headers"]["content-type"]
-    assert b"\xff\xd8" in chunk
+        assert status["code"] == 200, camera
+        assert "multipart/x-mixed-replace" in status["headers"]["content-type"]
+        assert b"\xff\xd8" in chunk  # a JPEG frame
 
-
-def test_camera_stream_handles_debug_camera_name_with_colon():
-    """A policy-published debug overlay is named `"<camera>:detections"`;
-    confirm that colon survives FastAPI's path routing end to end."""
-    app = create_app(host=make_host_with_camera("front:detections"))
-
-    status, chunk = anyio.run(
-        _read_first_stream_chunk, app, "/api/camera/front:detections/stream"
-    )
-
-    assert status["code"] == 200
-    assert "multipart/x-mixed-replace" in status["headers"]["content-type"]
-    assert b"\xff\xd8" in chunk
-
-
-def test_camera_stream_unknown_camera_returns_404():
-    app = create_app(host=make_host_with_camera("front"))
-    client = TestClient(app)
-
-    response = client.get("/api/camera/missing/stream")
-
-    assert response.status_code == 404
+    client = TestClient(create_app(host=make_host_with_camera("front")))
+    assert client.get("/api/camera/missing/stream").status_code == 404

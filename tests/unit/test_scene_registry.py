@@ -71,39 +71,30 @@ def test_runtime_records_explicit_scene(monkeypatch):
         runtime.close()
 
 
-def test_scenes_name_their_object_layout():
+def test_scenes_name_their_layout_and_reject_an_unknown_one():
+    from types import SimpleNamespace
+
+    import pytest
+
+    from physai.robots.so101.layout import create_layout
     from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
 
     assert PickPlaceMinimalSceneConfig.layout_kind == "single_cube"
     assert SortingMinimalSceneConfig.layout_kind == "sorting"
     # a class-level hint, not a field, so dataset metadata is unchanged
     assert "layout_kind" not in PickPlaceMinimalSceneConfig().to_metadata()
-
-
-def test_a_scene_with_an_unknown_layout_is_refused():
-    from types import SimpleNamespace
-
-    import pytest
-
-    from physai.robots.so101.layout import create_layout
-
     with pytest.raises(ValueError, match="supports: single_cube, sorting"):
         create_layout(None, SimpleNamespace(layout_kind="stacking"))
 
 
-def test_a_scene_without_robot_defaults_names_what_is_missing():
+def test_the_robot_supplies_the_grasp_pad_fit_a_generic_scene_lacks():
     import pytest
 
+    from physai.robots.registry import scene_defaults
     from physai.sim import PickPlaceMinimalSceneConfig
 
     with pytest.raises(ValueError, match="pad_size.*wrist_cam_pos"):
         PickPlaceMinimalSceneConfig().build_spec()
-
-
-def test_the_so101_supplies_the_grasp_pad_fit_and_wrist_camera_pose():
-    from physai.robots.registry import scene_defaults
-
     defaults = scene_defaults("so101")
-
     assert defaults["pad_align_gripper_q"] == 0.16
     assert len(defaults["wrist_cam_xyaxes"]) == 6

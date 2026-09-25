@@ -2,8 +2,19 @@ import numpy as np
 import pytest
 
 
-def test_so101_is_registered():
-    from physai.robots import DirectMuJoCoAdapter, available_robots, create_robot
+def test_the_builtin_robots_are_registered_with_what_they_own():
+    from physai import sim
+    from physai.robots import (
+        DirectMuJoCoAdapter,
+        available_robots,
+        available_ros2_robots,
+        create_jog_resolver,
+        create_robot,
+        navigate,
+    )
+    from physai.robots.so101 import EnvConfig, SO101Env
+    from physai.robots.turtlebot import TurtleBot4Env
+    from physai.sim import MuJoCoSimulationCore
 
     assert "so101" in available_robots()
     env = create_robot("so101", render=False)
@@ -14,24 +25,29 @@ def test_so101_is_registered():
     finally:
         env.close()
 
-
-def test_ros2_nodes_are_registered_for_supported_robots():
-    from physai.robots import available_ros2_robots
-
     assert available_ros2_robots() == ("so101", "turtlebot4")
+    with pytest.raises(ValueError, match="so101"):
+        create_robot("does-not-exist")  # the error lists what is available
+    with pytest.raises(ValueError, match="has no registered navigation baseline"):
+        navigate("so101", goal_x=1.0, goal_y=0.0)
+    assert issubclass(TurtleBot4Env, MuJoCoSimulationCore)
 
-
-def test_so101_environment_is_owned_by_robot_package():
-    from physai import sim
-    from physai.robots.so101 import EnvConfig, SO101Env
-
-    env = SO101Env(EnvConfig(render=False))
+    # the SO-101 environment belongs to its robot package and knows no task
+    own = SO101Env(EnvConfig(render=False))
     try:
         assert SO101Env.__module__ == "physai.robots.so101.env"
-        assert not hasattr(env, "task")
+        assert not hasattr(own, "task")
     finally:
-        env.close()
+        own.close()
     assert not hasattr(sim, "SO101Env")
+
+    class Arm:
+        def resolve_twist_jog(self):
+            return "resolved"
+
+    assert create_jog_resolver("so101", Arm())() == "resolved"
+    assert create_jog_resolver("turtlebot4", object()) is None
+    assert create_jog_resolver("_no_such_robot", object()) is None
 
 
 def test_turtlebot4_is_registered_and_uses_twist_control():
@@ -56,28 +72,7 @@ def test_turtlebot4_is_registered_and_uses_twist_control():
         env.close()
 
 
-def test_navigation_capability_is_resolved_by_robot_registry():
-    from physai.robots import navigate
-
-    with pytest.raises(ValueError, match="has no registered navigation baseline"):
-        navigate("so101", goal_x=1.0, goal_y=0.0)
-
-
-def test_mujoco_robot_environments_share_simulation_lifecycle():
-    from physai.robots.turtlebot import TurtleBot4Env
-    from physai.sim import MuJoCoSimulationCore
-
-    assert issubclass(TurtleBot4Env, MuJoCoSimulationCore)
-
-
-def test_unknown_robot_lists_available_robots():
-    from physai.robots import create_robot
-
-    with pytest.raises(ValueError, match="so101"):
-        create_robot("does-not-exist")
-
-
-def test_robot_spec_validates_action_mode_shape_and_values():
+def test_robot_spec_validates_actions_and_unit_declarations():
     from physai.contracts import Action, Twist
     from physai.robots import RobotSpec
 
@@ -95,12 +90,8 @@ def test_robot_spec_validates_action_mode_shape_and_values():
     with pytest.raises(ValueError, match="non-finite"):
         spec.validate_action(Action(joint_position=np.array([0.0, np.nan])))
 
-
-def test_robot_spec_exposes_and_validates_si_unit_declarations():
-    from physai.robots import RobotSpec
-
-    spec = RobotSpec(name="unitless", kind="mobile_base", action_modes=("twist",))
-    assert spec.units == {
+    unitless = RobotSpec(name="unitless", kind="mobile_base", action_modes=("twist",))
+    assert unitless.units == {
         "joint_position": "rad",
         "joint_velocity": "rad/s",
         "linear_velocity": "m/s",
@@ -120,21 +111,17 @@ def test_robot_spec_exposes_and_validates_si_unit_declarations():
         )
 
 
-def test_scripted_planner_produces_pick_and_place_subgoals():
+def test_the_scripted_baselines_are_available():
     from physai.planner import ScriptedPlanner
+    from physai.tasks import available_tasks, create_task
 
     plan = ScriptedPlanner((0.2, 0.08, 0.036), (0.2, -0.1, 0.021)).plan("", None)
     assert [subgoal.skill for subgoal in plan.subgoals]
-
-
-def test_pick_place_task_is_discoverable():
-    from physai.tasks import available_tasks, create_task
-
     assert "pick_place" in available_tasks()
     assert create_task("pick_place").name == "pick_place"
 
 
-def test_register_embodiment_wires_every_factory_in_one_call():
+def test_registering_an_embodiment_wires_every_factory_and_can_be_extended_once():
     from physai.robots.registry import (
         RobotDescriptor,
         available_robots,
@@ -143,6 +130,9 @@ def test_register_embodiment_wires_every_factory_in_one_call():
         create_robot,
         navigate,
         register_embodiment,
+        register_env_config,
+        register_robot,
+        register_ros2_node,
         robot_kind,
         scene_defaults,
     )
@@ -169,17 +159,7 @@ def test_register_embodiment_wires_every_factory_in_one_call():
     create_robot("_fake_test_embodiment")
     assert calls == ["env_config", "navigation", "factory"]
 
-
-def test_piecemeal_registration_extends_one_registered_robot():
-    from physai.robots.registry import (
-        available_ros2_robots,
-        create_env_config,
-        register_env_config,
-        register_robot,
-        register_ros2_node,
-        robot_kind,
-    )
-
+    # the piecemeal functions fill one still-empty field of a registered robot
     register_robot("_fake_piecemeal", lambda **_: object(), kind="piece")
     register_env_config("_fake_piecemeal", lambda **kwargs: kwargs)
     register_ros2_node("_fake_piecemeal", object)
@@ -187,31 +167,9 @@ def test_piecemeal_registration_extends_one_registered_robot():
     assert robot_kind("_fake_piecemeal") == "piece"
     assert create_env_config("_fake_piecemeal", seed=1) == {"seed": 1}
     assert "_fake_piecemeal" in available_ros2_robots()
-
-
-def test_a_field_can_be_filled_once_and_only_for_a_registered_robot():
-    from physai.robots.registry import register_env_config, register_robot
-
-    register_robot("_fake_once", lambda **_: object())
-    register_env_config("_fake_once", lambda **_: None)
-
     with pytest.raises(ValueError, match="environment config .* already registered"):
-        register_env_config("_fake_once", lambda **_: None)
+        register_env_config("_fake_piecemeal", lambda **_: None)
     with pytest.raises(ValueError, match="not registered"):
         register_env_config("_fake_missing", lambda **_: None)
     with pytest.raises(ValueError, match="already registered"):
-        register_robot("_fake_once", lambda **_: object())
-
-
-def test_only_robots_that_register_a_jog_resolver_get_one():
-    from physai.robots import create_jog_resolver
-
-    class Arm:
-        def resolve_twist_jog(self):
-            return "resolved"
-
-    resolver = create_jog_resolver("so101", Arm())
-
-    assert resolver() == "resolved"
-    assert create_jog_resolver("turtlebot4", object()) is None
-    assert create_jog_resolver("_no_such_robot", object()) is None
+        register_robot("_fake_piecemeal", lambda **_: object())

@@ -13,17 +13,21 @@ from physai.config.compat import (
 )
 
 SIMULATION = SimulationConfig(seed=3)
+TASK_FILE = "configs/tasks/so101/pick_place.yaml"
+WORLD_FILE = "configs/worlds/heterogeneous.yaml"
 
 
-def _task_data() -> dict:
-    with open("configs/tasks/so101/pick_place.yaml", encoding="utf-8") as stream:
-        return yaml.safe_load(stream)
+def _task_file_with(tmp_path, **env):
+    with open(TASK_FILE, encoding="utf-8") as stream:
+        data = yaml.safe_load(stream)
+    data["env"].update(env)
+    path = tmp_path / "task.yaml"
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    return path
 
 
-def test_a_task_file_becomes_a_one_robot_manifest():
-    manifest = manifest_from_task_file(
-        "configs/tasks/so101/pick_place.yaml", simulation=SIMULATION
-    )
+def test_a_task_file_becomes_a_one_robot_manifest(tmp_path):
+    manifest = manifest_from_task_file(TASK_FILE, simulation=SIMULATION)
 
     (robot,) = manifest.robots
     assert (robot.id, robot.robot) == ("so101", "so101")
@@ -38,77 +42,50 @@ def test_a_task_file_becomes_a_one_robot_manifest():
     # settings the manifest owns elsewhere are not left in the robot config
     assert not {"task", "success_xy_tol", "success_hold_steps"} & set(robot.config)
 
-
-def test_a_task_files_own_seed_wins_over_the_shared_one(tmp_path):
-    data = _task_data()
-    data["env"]["seed"] = 11
-    path = tmp_path / "task.yaml"
-    path.write_text(yaml.safe_dump(data), encoding="utf-8")
-
-    manifest = manifest_from_task_file(path, simulation=SIMULATION)
-
-    assert manifest.simulation.seed == 11
-    assert "seed" not in manifest.robots[0].config
-
-
-def test_a_task_file_with_mismatched_task_names_fails(tmp_path):
-    data = _task_data()
-    data["env"]["task"] = "sorting"
-    path = tmp_path / "task.yaml"
-    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    # a file's own seed wins over the shared one, and moves out of the config
+    seeded = manifest_from_task_file(
+        _task_file_with(tmp_path, seed=11), simulation=SIMULATION
+    )
+    assert seeded.simulation.seed == 11
+    assert "seed" not in seeded.robots[0].config
 
     with pytest.raises(ValueError, match="task mismatch"):
-        manifest_from_task_file(path, simulation=SIMULATION)
+        manifest_from_task_file(
+            _task_file_with(tmp_path, task="sorting"), simulation=SIMULATION
+        )
 
 
 def test_a_world_file_becomes_a_shared_world_manifest():
-    manifest = manifest_from_world_file(
-        "configs/worlds/heterogeneous.yaml", simulation=SIMULATION
-    )
+    manifest = manifest_from_world_file(WORLD_FILE, simulation=SIMULATION)
 
     assert manifest.world.control_hz == 30.0
     assert [robot.id for robot in manifest.robots] == ["arm_1", "base_1"]
     assert manifest.robots[0].pose.position == (0.3, 0.0, 0.0)
     assert manifest.robots[0].model.name == "so101_new_calib_camera.xml"
-
-
-def test_a_bare_manipulator_gets_its_default_task_and_camera():
-    manifest = manifest_for_robot("so101", simulation=SIMULATION)
-
-    assert manifest.task == "pick_place"
-    assert manifest.scene.overrides == {"camera_width": 640, "camera_height": 480}
-    assert manifest.robots[0].config == {"max_steps": 600}
-
-
-def test_a_bare_base_robot_has_no_task_or_scene():
-    manifest = manifest_for_robot("turtlebot4", simulation=SIMULATION)
-
-    assert manifest.task is None
-    assert manifest.scene.overrides == {}
-
-
-def test_overrides_replace_only_what_is_given():
-    base = manifest_for_robot("so101", simulation=SIMULATION)
-
-    changed = with_overrides(
-        base, seed=9, max_steps=50, camera_size=128, policy="constant"
+    # run settings mean nothing to a shared world
+    assert with_overrides(manifest, max_steps=5, policy="constant").robots == (
+        manifest.robots
     )
 
+
+def test_a_bare_robot_gets_its_defaults_and_command_line_overrides():
+    arm = manifest_for_robot("so101", simulation=SIMULATION)
+    assert arm.task == "pick_place"
+    assert arm.scene.overrides == {"camera_width": 640, "camera_height": 480}
+    assert arm.robots[0].config == {"max_steps": 600}
+
+    base = manifest_for_robot("turtlebot4", simulation=SIMULATION)
+    assert base.task is None
+    assert base.scene.overrides == {}
+
+    changed = with_overrides(
+        arm, seed=9, max_steps=50, camera_size=128, policy="constant"
+    )
     assert changed.simulation.seed == 9
     assert changed.robots[0].config["max_steps"] == 50
     assert changed.robots[0].policy == "constant"
     assert changed.scene.overrides == {"camera_width": 128, "camera_height": 128}
-    assert with_overrides(base) == base
-
-
-def test_run_settings_do_not_apply_to_a_shared_world():
-    world = manifest_from_world_file(
-        "configs/worlds/heterogeneous.yaml", simulation=SIMULATION
-    )
-
-    changed = with_overrides(world, max_steps=5, policy="constant")
-
-    assert changed.robots == world.robots
+    assert with_overrides(arm) == arm
 
 
 @requires_assets
@@ -116,12 +93,8 @@ def test_the_converted_task_file_builds_the_robot_the_legacy_loader_described():
     from physai.config import load_task_config
     from physai.runtime import create_session
 
-    legacy = load_task_config("configs/tasks/so101/pick_place.yaml")
-    manifest = manifest_from_task_file(
-        "configs/tasks/so101/pick_place.yaml", simulation=SIMULATION
-    )
-
-    session = create_session(manifest)
+    legacy = load_task_config(TASK_FILE)
+    session = create_session(manifest_from_task_file(TASK_FILE, simulation=SIMULATION))
     try:
         built = session.runtime.robot.cfg
         expected = replace(
@@ -144,26 +117,18 @@ def test_the_converted_task_file_builds_the_robot_the_legacy_loader_described():
         session.close()
 
 
-def test_the_shipped_manifest_matches_the_task_file_it_replaces():
+def test_the_shipped_manifests_match_the_legacy_files_they_replace():
+    """Delete with the legacy files once their deprecation window ends."""
     from physai.config import load_manifest
 
-    from_file = manifest_from_task_file(
-        "configs/tasks/so101/pick_place.yaml", simulation=SimulationConfig()
-    )
-    shipped = load_manifest("configs/manifests/so101_pick_place.yaml")
-
+    task = manifest_from_task_file(TASK_FILE, simulation=SimulationConfig())
     # The run decides rendering (--video, --serve), so the manifest omits it.
-    (robot,) = from_file.robots
+    (robot,) = task.robots
     config = {k: v for k, v in robot.config.items() if k != "render"}
-    assert shipped == replace(from_file, robots=(replace(robot, config=config),))
-
-
-def test_the_shipped_world_manifest_matches_the_world_file_it_replaces():
-    from physai.config import load_manifest
-
-    from_file = manifest_from_world_file(
-        "configs/worlds/heterogeneous.yaml", simulation=SimulationConfig()
+    assert load_manifest("configs/manifests/so101_pick_place.yaml") == replace(
+        task, robots=(replace(robot, config=config),)
     )
-    shipped = load_manifest("configs/manifests/heterogeneous_world.yaml")
 
-    assert shipped == replace(from_file, viewer=shipped.viewer)
+    world = manifest_from_world_file(WORLD_FILE, simulation=SimulationConfig())
+    shipped = load_manifest("configs/manifests/heterogeneous_world.yaml")
+    assert shipped == replace(world, viewer=shipped.viewer)

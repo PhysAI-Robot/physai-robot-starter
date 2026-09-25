@@ -72,11 +72,19 @@ def recorded_states(record_dir) -> np.ndarray:
 
 def test_playback_shows_recorded_frames_and_exit_restores_the_live_world(tmp_path):
     host = make_host(tmp_path)
-    record_episode(host)
+    record_episode(host, success=False)
     for _ in range(3):
         host._tick_single()  # the live world moves on after the recording
     live_qpos = host.data.qpos.copy()
     states = recorded_states(tmp_path)
+
+    (episode,) = host.list_episodes()
+    assert (episode["file"], episode["success"], episode["playable"]) == (
+        "episode_00000.npz",
+        False,
+        True,
+    )
+    assert episode["length"] == FRAMES
 
     host.load_episode("episode_00000.npz")
 
@@ -90,6 +98,13 @@ def test_playback_shows_recorded_frames_and_exit_restores_the_live_world(tmp_pat
     host.seek(99)  # out-of-range scrubs clamp to the last frame
     assert host.latest_state()["playback"]["frame"] == FRAMES - 1
 
+    # scrubbing keeps playback running; stepping pauses it
+    host.set_playback(True)
+    host.seek(2)
+    assert host.latest_state()["playback"]["playing"] is True
+    host.seek(1, relative=True)
+    assert host.latest_state()["playback"]["playing"] is False
+
     host.exit_playback()
 
     np.testing.assert_allclose(host.data.qpos, live_qpos)
@@ -97,7 +112,7 @@ def test_playback_shows_recorded_frames_and_exit_restores_the_live_world(tmp_pat
     assert host.paused  # exiting leaves the world paused
 
 
-def test_playback_advances_at_the_selected_speed_then_stops_at_the_end(tmp_path):
+def test_playback_follows_wall_time_at_the_selected_speed(tmp_path):
     host = make_host(tmp_path)
     record_episode(host)
     host.load_episode("episode_00000.npz")
@@ -121,35 +136,19 @@ def test_playback_advances_at_the_selected_speed_then_stops_at_the_end(tmp_path)
     host._advance_playback(200.0 + 2 * tick)
     assert host.latest_state()["playback"]["frame"] == 1
 
-
-def test_playback_follows_wall_time_and_caps_a_stall(tmp_path):
-    host = make_host(tmp_path)
-    host.start_recording()
+    # a slow loop still plays 1x in real time, and a stall is capped
+    long = make_host(tmp_path / "long")
+    long.start_recording()
     for _ in range(60):
-        host._tick_single()
-    host.stop_recording(True)
-    host.load_episode("episode_00000.npz")
-
-    host.set_playback(True)
-    host._advance_playback(0.0)
-    # A slow loop (0.1 s between ticks) still plays 1x in real time: 3 frames.
-    host._advance_playback(0.1)
-    assert host.latest_state()["playback"]["frame"] == 3
-    # A 5 s stall advances by the 0.25 s cap (7 frames), not 150 frames.
-    host._advance_playback(5.1)
-    assert host.latest_state()["playback"]["frame"] == 3 + 7
-
-
-def test_stepping_pauses_playback_but_scrubbing_does_not(tmp_path):
-    host = make_host(tmp_path)
-    record_episode(host)
-    host.load_episode("episode_00000.npz")
-    host.set_playback(True)
-
-    host.seek(2)
-    assert host.latest_state()["playback"]["playing"] is True
-    host.seek(1, relative=True)
-    assert host.latest_state()["playback"]["playing"] is False
+        long._tick_single()
+    long.stop_recording(True)
+    long.load_episode("episode_00000.npz")
+    long.set_playback(True)
+    long._advance_playback(0.0)
+    long._advance_playback(0.1)  # 0.1 s between ticks: 3 frames
+    assert long.latest_state()["playback"]["frame"] == 3
+    long._advance_playback(5.1)  # a 5 s stall advances by the 0.25 s cap: 7 frames
+    assert long.latest_state()["playback"]["frame"] == 3 + 7
 
 
 def test_playback_rejects_live_control_until_exited(tmp_path):
@@ -171,29 +170,7 @@ def test_playback_rejects_live_control_until_exited(tmp_path):
     host.start_recording()
 
 
-def test_load_episode_only_opens_episodes_the_dataset_lists(tmp_path):
-    host = make_host(tmp_path)
-    record_episode(host)
-
-    for name in ("../episode_00000.npz", "missing.npz", str(tmp_path / "meta.json")):
-        with pytest.raises(ValueError, match="unknown episode"):
-            host.load_episode(name)
-
-    host.start_recording()
-    with pytest.raises(ValueError, match="stop recording"):
-        host.load_episode("episode_00000.npz")
-
-
-def test_load_episode_rejects_a_state_recorded_for_another_model(tmp_path):
-    host = make_host(tmp_path)
-    record_episode(host)
-    host._recorder.load_states = lambda file: (np.zeros((3, 4)), {"file": file})
-
-    with pytest.raises(ValueError, match="different model"):
-        host.load_episode("episode_00000.npz")
-
-
-def test_playback_controls_need_a_loaded_episode(tmp_path):
+def test_loading_and_controlling_playback_reject_misuse(tmp_path):
     host = make_host(tmp_path)
 
     for call in (
@@ -204,19 +181,19 @@ def test_playback_controls_need_a_loaded_episode(tmp_path):
         with pytest.raises(ValueError, match="no episode"):
             call()
 
+    record_episode(host)
+    for name in ("../episode_00000.npz", "missing.npz", str(tmp_path / "meta.json")):
+        with pytest.raises(ValueError, match="unknown episode"):
+            host.load_episode(name)
 
-def test_list_episodes_reports_success_tags_and_playability(tmp_path):
-    host = make_host(tmp_path)
-    record_episode(host, success=False)
+    host.start_recording()
+    with pytest.raises(ValueError, match="stop recording"):
+        host.load_episode("episode_00000.npz")
+    host.stop_recording(None)
 
-    (episode,) = host.list_episodes()
-
-    assert (episode["file"], episode["success"], episode["playable"]) == (
-        "episode_00000.npz",
-        False,
-        True,
-    )
-    assert episode["length"] == FRAMES
+    host._recorder.load_states = lambda file: (np.zeros((3, 4)), {"file": file})
+    with pytest.raises(ValueError, match="different model"):
+        host.load_episode("episode_00000.npz")
 
 
 def test_playback_drops_contact_force_because_it_cannot_be_reproduced(tmp_path):
