@@ -277,7 +277,8 @@ def main() -> int:
     successes = 0
 
     # Built once — a lerobot checkpoint is expensive to reload per episode.
-    policy = build_policy(args.policy or "scripted", env, args.checkpoint)
+    policy_name = args.policy or "scripted"
+    policy = build_policy(policy_name, env, args.checkpoint)
 
     for ep in range(args.episodes):
         obs = env.reset(seed=seed + ep)
@@ -305,7 +306,7 @@ def main() -> int:
         if frames and args.video:
             path = write_video(
                 np.stack(frames),
-                args.out / f"{args.policy}_ep{ep:03d}",
+                args.out / f"{policy_name}_ep{ep:03d}",
                 fps=int(env.cfg.control_hz),
             )
             print(f"  video -> {path}")
