@@ -98,7 +98,7 @@ src/physai/
 ├── contracts.py       shared message-shaped values
 ├── config/            typed YAML runtime configuration (legacy.py, manifest.py)
 ├── robots/            embodiment ports, adapters, registries, and factories
-│   ├── so101/         SO-101 environment, kinematics, and shared-world adapter
+│   ├── so101/         SO-101 environment, object layouts, kinematics, and shared-world adapter
 │   └── turtlebot/     TurtleBot4 environment and shared-world adapter
 ├── tasks/             task rules and registry
 ├── sim/               MuJoCo simulation core, shared world, and scene orchestration
@@ -109,7 +109,7 @@ src/physai/
 ├── data/              episode recording, metadata, evaluation, and Gymnasium adapter
 ├── bridge/            ROS2 transport, message mapping, adapters, and tick loop
 ├── runtime/           robot-task-policy composition and manifest sessions
-└── web/               the one Host class, FastAPI app, telemetry, static client
+└── web/               the one Host class (plus its control lease and camera worker), FastAPI app, telemetry, static client
 
 research/
 ├── scripted_experts/      privileged-ground-truth demo-collection policies
@@ -267,11 +267,15 @@ sim/scenes/sorting_minimal.py
      +-- colored cube layout and sorting positions
 ```
 
-Each scene builder owns model geometry and initial object layout. Robot model
-paths and end-effector anchors are configuration, not hardcoded task
-ownership. Each scene config builds itself through `build_spec()`/
-`build_model()`, so selecting a scene is selecting a class rather than
-decoding an object-count flag.
+Each scene builder owns model geometry, and names its object arrangement
+through a class-level `layout_kind`; the robot maps that name to a layout
+strategy (`robots/so101/layout.py`) that places the objects each episode and
+reads them back, so a scene with a new arrangement adds a layout rather than
+editing the environment. Robot model paths, end-effector anchors, and the
+gripper-specific pad and wrist-camera fit are configuration the robot supplies
+through `scene_defaults()`, not generic defaults. Each scene config builds
+itself through `build_spec()`/`build_model()`, so selecting a scene is
+selecting a class rather than decoding an object-count flag.
 
 ## Session manifest
 
