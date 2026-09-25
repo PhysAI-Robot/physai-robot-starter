@@ -358,7 +358,7 @@ def run_viewer(
         env = create_robot(
             args.robot,
             config=TurtleBot4Config(
-                max_steps=args.max_steps,
+                max_steps=max_steps,
                 render=True,
                 domain_randomization=domain_randomization,
             ),
