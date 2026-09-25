@@ -59,7 +59,7 @@ def test_sync_observation_images_merges_the_async_camera_cache():
     assert host._observation.images == {}
 
     fake_frame = np.zeros((4, 4, 3), dtype=np.uint8)
-    host._camera_images[f"{host.robot_name}:front"] = fake_frame
+    host._cameras.put(f"{host.robot_name}:front", fake_frame)
 
     host._sync_observation_images()
 
@@ -126,7 +126,7 @@ def test_publish_debug_frames_merges_into_camera_cache():
     host._publish_debug_frames()
 
     np.testing.assert_array_equal(
-        host._camera_images["test:front:detections"],
+        host._cameras.get("test:front:detections"),
         np.zeros((2, 2, 3), dtype=np.uint8),
     )
 
@@ -136,7 +136,7 @@ def test_publish_debug_frames_noop_without_a_policy():
 
     host._publish_debug_frames()
 
-    assert host._camera_images == {}
+    assert host._cameras.with_prefix("") == {}
 
 
 def test_control_lease_allows_one_client_and_releases_cleanly():
@@ -445,7 +445,7 @@ def test_recording_waits_for_every_camera_before_recording_frames(tmp_path):
     status = host.recording_status()
     assert (status["frames"], status["waiting_for"]) == (0, ["front"])
 
-    host._camera_images["test:front"] = np.full((4, 4, 3), 7, dtype=np.uint8)
+    host._cameras.put("test:front", np.full((4, 4, 3), 7, dtype=np.uint8))
     host._tick_single()
     host._tick_single()
     assert host.recording_status()["frames"] == 2
@@ -506,3 +506,17 @@ def test_ee_pose_payload_prefers_the_kinematics_tool_pose():
         "orientation_xyzw": [0.0, 0.0, 0.0, 1.0],
         "reference": "tool",
     }
+
+
+def test_camera_frames_are_served_from_the_feed_as_copies():
+    host = make_host()
+    frame = np.full((4, 4, 3), 9, dtype=np.uint8)
+    host._cameras.put("test:front", frame)
+
+    served = host.camera_image("front")
+    served[:] = 0
+
+    np.testing.assert_array_equal(host.camera_image("front"), frame)
+    assert host.camera_jpeg("front").startswith(b"\xff\xd8")  # a JPEG
+    with pytest.raises(ValueError, match="unknown camera 'side'"):
+        host.camera_image("side")

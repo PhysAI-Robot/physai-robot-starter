@@ -46,6 +46,7 @@ def test_every_script_prints_help():
         capture_output=True,
         text=True,
         timeout=180,
+        check=False,
     )
 
     assert result.returncode == 0, result.stderr

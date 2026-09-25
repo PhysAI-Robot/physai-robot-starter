@@ -10,7 +10,7 @@ from .actions import action_from_payload
 from .host import Host
 from .telemetry import build_mesh_payload
 
-_CAMERA_STREAM_PERIOD = 1.0 / 30  # matches Host._CAMERA_PERIOD's capture cadence
+_CAMERA_STREAM_PERIOD = 1.0 / 30  # matches CameraFeed.PERIOD's capture cadence
 
 
 def create_app(*, host: Host):

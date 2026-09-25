@@ -19,9 +19,7 @@ from physai.web.app import create_app  # noqa: E402
 def make_host_with_camera(name: str = "front") -> Host:
     spec = RobotSpec(name="test", kind="test", joint_names=("joint",))
     host = Host.for_robot(FakeRobotPort(spec), robot_name="test")
-    host._camera_images[f"{host.robot_name}:{name}"] = np.zeros(
-        (4, 4, 3), dtype=np.uint8
-    )
+    host._cameras.put(f"{host.robot_name}:{name}", np.zeros((4, 4, 3), dtype=np.uint8))
     return host
 
 

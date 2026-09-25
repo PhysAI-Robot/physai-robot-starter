@@ -75,7 +75,9 @@ def manifest_from_world_file(
     robots = []
     for index, raw in enumerate(raw_robots):
         if not isinstance(raw, dict):
-            raise ValueError(f"world robots[{index}] must be a mapping")  # noqa: TRY004
+            raise ValueError(  # noqa: TRY004
+                f"world robots[{index}] must be a mapping"
+            )
         robot: dict[str, Any] = {
             "id": raw.get("id"),
             "robot": raw.get("robot"),
@@ -172,7 +174,9 @@ def _read_mapping(path: Path) -> dict[str, Any]:
     with path.open(encoding="utf-8") as stream:
         data = yaml.safe_load(stream)
     if not isinstance(data, dict):
-        raise ValueError(f"configuration root must be a mapping: {path}")
+        raise ValueError(  # noqa: TRY004
+            f"configuration root must be a mapping: {path}"
+        )
     return data
 
 
