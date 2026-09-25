@@ -13,7 +13,8 @@ from dataclasses import dataclass, field, fields
 from typing import Any
 
 from ..config.manifest import SessionManifest, SessionRobotConfig
-from ..robots.registry import create_env_config, shared_attach
+from ..robots.registry import create_env_config, robot_kind, shared_attach
+from ..sim.scenes import default_scene_for
 from ..sim.world import RobotInstanceConfig, SharedWorld
 from .composition import RuntimeComposition, create_runtime
 
@@ -30,6 +31,9 @@ class Session:
     runtime: RuntimeComposition | None = None
     world: SharedWorld | None = None
     instances: tuple[RobotInstanceConfig, ...] = field(default_factory=tuple)
+    # True when the robot stopped rendering inline for a host-driven session,
+    # so the host's camera thread must supply its frames.
+    host_renders_cameras: bool = False
 
     @property
     def robot_name(self) -> str:
@@ -55,7 +59,8 @@ def create_session(
     ``render`` overrides the robot's own render setting (a run that records
     video or serves cameras needs it on). ``host_driven`` marks a session a
     `Host` will step: the host's camera thread is then the only renderer, so
-    robots that render inline are told to stop. ``policy_kwargs`` carries
+    robots that render inline are told to stop, and the task is not composed
+    around the robot (the host scores none). ``policy_kwargs`` carries
     run-time policy inputs, such as a checkpoint path, that a manifest does
     not hold.
     """
@@ -84,20 +89,32 @@ def _create_single_session(
     policy_kwargs: dict[str, Any],
 ) -> Session:
     policy_name = manifest.policy_for(robot)
+    task_name = manifest.task_for(robot)
+    scene_name = manifest.scene.name
+    if host_driven and task_name is not None:
+        # A Host steps the bare robot and scores no task, and wrapping one
+        # would end episodes on task success. The task still picks the scene.
+        scene_name = scene_name or default_scene_for(robot_kind(robot.robot), task_name)
+        task_name = None
+    fields_, host_renders_cameras = _robot_fields(
+        manifest, robot, render=render, host_driven=host_driven
+    )
     kwargs: dict[str, Any] = {
-        "robot_kwargs": _robot_fields(
-            manifest, robot, render=render, host_driven=host_driven
-        ),
-        "scene_name": manifest.scene.name,
+        "robot_kwargs": fields_,
+        "scene_name": scene_name,
         "scene_kwargs": dict(manifest.scene.overrides),
-        "task_name": manifest.task_for(robot),
+        "task_name": task_name,
         "task_kwargs": {**manifest.task_kwargs, **robot.task_kwargs},
         "task_success_hold_steps": manifest.success_hold_steps,
         "policy_name": None if policy_name == "idle" else policy_name,
         **robot.policy_kwargs,
         **policy_kwargs,
     }
-    return Session(manifest, runtime=create_runtime(robot.robot, **kwargs))
+    return Session(
+        manifest,
+        runtime=create_runtime(robot.robot, **kwargs),
+        host_renders_cameras=host_renders_cameras,
+    )
 
 
 def _create_world_session(manifest: SessionManifest) -> Session:
@@ -138,11 +155,13 @@ def _robot_fields(
     *,
     render: bool | None,
     host_driven: bool,
-) -> dict[str, Any]:
-    """The robot's env-config fields: simulation defaults, its own config, overrides.
+) -> tuple[dict[str, Any], bool]:
+    """The robot's env-config fields, and whether a host now renders its cameras.
 
-    Only fields the robot's config declares are injected, so the generic
-    defaults never have to know which robot defines what.
+    Simulation defaults, the robot's own config, then run overrides; only
+    fields the robot's config declares are injected, so the generic defaults
+    never have to know which robot defines what. A robot that renders inline
+    and can be told to stop (`camera_stride`) hands its cameras to the host.
     """
     duplicated = [key for key in _SIMULATION_OWNED if key in robot.config]
     if duplicated:
@@ -163,9 +182,10 @@ def _robot_fields(
     result.update(robot.config)
     if render is not None and "render" in accepted:
         result["render"] = render
-    if host_driven and "camera_stride" in accepted:
+    host_renders = host_driven and "camera_stride" in accepted
+    if host_renders:
         result["camera_stride"] = 0
-    return result
+    return result, host_renders
 
 
 __all__ = ["Session", "create_session"]

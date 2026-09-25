@@ -137,3 +137,28 @@ def test_the_converted_task_file_builds_the_robot_the_legacy_loader_described():
                 assert getattr(built.scene, item.name) == value
     finally:
         session.close()
+
+
+def test_the_shipped_manifest_matches_the_task_file_it_replaces():
+    from physai.config import load_manifest
+
+    from_file = manifest_from_task_file(
+        "configs/tasks/so101/pick_place.yaml", simulation=SimulationConfig()
+    )
+    shipped = load_manifest("configs/manifests/so101_pick_place.yaml")
+
+    # The run decides rendering (--video, --serve), so the manifest omits it.
+    (robot,) = from_file.robots
+    config = {k: v for k, v in robot.config.items() if k != "render"}
+    assert shipped == replace(from_file, robots=(replace(robot, config=config),))
+
+
+def test_the_shipped_world_manifest_matches_the_world_file_it_replaces():
+    from physai.config import load_manifest
+
+    from_file = manifest_from_world_file(
+        "configs/worlds/heterogeneous.yaml", simulation=SimulationConfig()
+    )
+    shipped = load_manifest("configs/manifests/heterogeneous_world.yaml")
+
+    assert shipped == replace(from_file, viewer=shipped.viewer)

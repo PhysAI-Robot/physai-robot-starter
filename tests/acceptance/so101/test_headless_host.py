@@ -60,8 +60,8 @@ def test_headless_host_serves_the_web_viewer_without_a_desktop_window():
     command = [
         sys.executable,
         str(REPO_ROOT / "scripts" / "run_sim.py"),
-        "--config",
-        "configs/tasks/so101/pick_place.yaml",
+        "--manifest",
+        "configs/manifests/so101_pick_place.yaml",
         "--policy",
         "visual_servo",
         "--serve",

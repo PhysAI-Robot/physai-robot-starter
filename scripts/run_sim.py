@@ -1,7 +1,7 @@
 """Run one episode, optionally writing a video. The 30-second sanity check.
 
 python scripts/run_sim.py                      # scripted expert, 1 episode
-python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml
+python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml
 python scripts/run_sim.py --episodes 5 --seed 0
 python scripts/run_sim.py --video --episodes 5 --seed 0
 python scripts/run_sim.py --policy constant    # baseline: do nothing
@@ -9,15 +9,19 @@ python scripts/run_sim.py --policy lerobot --checkpoint outputs/act_ckpt
 python scripts/run_sim.py --viewer             # native MuJoCo viewer
 python scripts/run_sim.py --viewer --serve     # native viewer plus shared web host
 python scripts/run_sim.py --serve              # web host only, no desktop window
+
+A run is described by a session manifest (`--manifest`). The older `--config`
+(task file), `--world` (world file), and bare `--robot` inputs are converted
+into one, so every run takes the same path from there on.
 """
 
 from __future__ import annotations
 
 import argparse
 import signal
+import sys
 import threading
 import time
-from dataclasses import replace
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
@@ -40,20 +44,21 @@ from _common_args import (
 import research.classical_control.so101_visual_servo
 import research.imitation_learning.vla_adapter
 import research.scripted_experts.so101_pick_place_expert  # noqa: F401
-from physai.config import (
-    DomainRandomizationConfig,
-    TaskConfig,
-    load_sim_config,
-    load_task_config,
-    load_world_config,
+from physai.config import SessionManifest, load_manifest, load_sim_config
+from physai.config.compat import (
+    manifest_for_robot,
+    manifest_from_task_file,
+    manifest_from_world_file,
+    with_overrides,
 )
-from physai.policy import available_policies, create_policy
-from physai.robots import available_robots, create_robot, shared_attach
-from physai.robots.so101 import EnvConfig
-from physai.robots.turtlebot import TurtleBot4Config
-from physai.sim import PickPlaceMinimalSceneConfig, SharedWorld
-from physai.tasks import TaskRuntime, create_task
+from physai.policy import available_policies
+from physai.robots import available_robots
+from physai.runtime import Session, create_session
 from physai.web.host import Host
+
+DEFAULT_SIM_CONFIG = Path("configs/sim_config.yaml")
+# What a headless episode runs when neither --policy nor the manifest names one.
+DEFAULT_HEADLESS_POLICY = "scripted"
 
 
 def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
@@ -82,88 +87,49 @@ def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
     return gif
 
 
-def build_policy(name: str, env, checkpoint: Path | None = None):
-    if name == "lerobot" and checkpoint is None:
-        raise ValueError("--policy lerobot needs --checkpoint")
-    policy_kwargs = {"env": env}
-    if name == "lerobot":
-        policy_kwargs["checkpoint"] = checkpoint
-    return create_policy(name, **policy_kwargs)
-
-
-def build_so101_config(
-    args: argparse.Namespace,
-    task_config: TaskConfig | None,
-    seed: int,
-    max_steps: int,
-    render: bool,
-    domain_randomization: DomainRandomizationConfig,
-) -> EnvConfig:
-    if task_config is None:
-        cam_w, cam_h = (
-            (args.camera_size, args.camera_size) if args.camera_size else (640, 480)
-        )
-        return EnvConfig(
-            scene=PickPlaceMinimalSceneConfig(camera_width=cam_w, camera_height=cam_h),
-            seed=seed,
-            max_steps=max_steps,
-            render=render,
-            domain_randomization=domain_randomization,
-        )
-
-    config = task_config.env
-    scene = config.scene
-    if args.camera_size:
-        scene = replace(
-            scene,
-            camera_width=args.camera_size,
-            camera_height=args.camera_size,
-        )
-    return replace(
-        config,
-        scene=scene,
-        seed=seed,
-        max_steps=max_steps,
-        render=render,
-        domain_randomization=domain_randomization,
-    )
-
-
-def main() -> int:
+def parse_args(
+    argv: list[str] | None = None,
+) -> tuple[argparse.ArgumentParser, argparse.Namespace]:
     ap = argparse.ArgumentParser()
+    ap.add_argument(
+        "--manifest",
+        type=Path,
+        help="session manifest YAML (for example configs/manifests/so101_pick_place.yaml)",
+    )
     ap.add_argument(
         "--sim-config",
         type=Path,
-        default=Path("configs/sim_config.yaml"),
-        help="shared simulation configuration",
+        help="shared simulation settings for --config/--world/--robot "
+        f"(default: {DEFAULT_SIM_CONFIG}); a manifest has its own",
     )
     ap.add_argument(
         "--config",
         type=Path,
-        help="YAML task configuration (for example configs/tasks/so101/pick_place.yaml)",
+        help="deprecated: task YAML (for example configs/tasks/so101/pick_place.yaml)",
     )
     ap.add_argument(
         "--world",
         type=Path,
-        help="shared-world YAML manifest; use with --viewer and/or --serve",
+        help="deprecated: shared-world YAML; use with --viewer and/or --serve",
     )
     add_robot(
-        ap, choices=available_robots(), help="override the robot selected by --config"
+        ap, choices=available_robots(), help="the robot to run when no file selects one"
     )
-    # "lerobot" belongs here: build_policy() handles it and the module
-    # docstring documents it, but dropping it from choices made argparse
-    # reject the documented command before it ever got there.
+    # "lerobot" belongs here: main() handles it and the module docstring
+    # documents it, but dropping it from choices made argparse reject the
+    # documented command before it ever got there.
     add_policy(
         ap,
         choices=[name for name in available_policies() if name != "replay"],
         help="policy to run; viewer/serve stays idle unless this is specified",
     )
     add_episodes(ap, default=1)
-    add_seed(
-        ap, default=None, help="override the seed selected by --config (default: 0)"
+    add_seed(ap, default=None, help="override the seed (default: the manifest's, or 0)")
+    add_max_steps(ap, help="override the episode length")
+    ap.add_argument(
+        "--camera",
+        help="camera to record with --video (default: the robot's first camera)",
     )
-    add_max_steps(ap, help="override the episode length selected by --config")
-    ap.add_argument("--camera", default="front")
     add_checkpoint(ap)
     ap.add_argument(
         "--camera-size",
@@ -197,95 +163,111 @@ def main() -> int:
     )
     ap.add_argument("--host", default="127.0.0.1", help="web host bind address")
     ap.add_argument("--port", type=int, default=8000, help="web host port")
-    args = ap.parse_args()
+    return ap, ap.parse_args(argv)
 
-    if args.world and not (args.viewer or args.serve):
-        ap.error("--world requires --viewer or --serve")
-    if args.world and (args.config or args.robot):
-        ap.error("--world cannot be combined with --config or --robot")
+
+def build_manifest(
+    ap: argparse.ArgumentParser, args: argparse.Namespace
+) -> SessionManifest:
+    """The session the flags describe, with command-line overrides applied."""
+    sources = [flag for flag in ("manifest", "config", "world") if getattr(args, flag)]
+    if len(sources) > 1:
+        ap.error(f"--{' and --'.join(sources)} cannot be combined")
+    if args.manifest and (args.sim_config or args.robot):
+        ap.error("--manifest cannot be combined with --sim-config or --robot")
+    if args.world and args.robot:
+        ap.error("--world cannot be combined with --robot")
+
+    if args.manifest:
+        manifest = load_manifest(args.manifest)
+    else:
+        simulation = load_sim_config(args.sim_config or DEFAULT_SIM_CONFIG)
+        if args.world:
+            note_deprecated("--world", "configs/manifests/heterogeneous_world.yaml")
+            manifest = manifest_from_world_file(args.world, simulation=simulation)
+        elif args.config:
+            note_deprecated("--config", "configs/manifests/so101_pick_place.yaml")
+            manifest = manifest_from_task_file(args.config, simulation=simulation)
+            configured = manifest.robots[0].robot
+            if args.robot and args.robot != configured:
+                ap.error(
+                    f"--robot {args.robot!r} does not match --config robot "
+                    f"{configured!r}"
+                )
+        else:
+            manifest = manifest_for_robot(args.robot or "so101", simulation=simulation)
+
+    if manifest.world is not None and args.policy:
+        ap.error("--policy cannot be used with a shared world")
+    return with_overrides(
+        manifest,
+        seed=args.seed,
+        max_steps=args.max_steps,
+        camera_size=args.camera_size,
+        policy=args.policy,
+    )
+
+
+def note_deprecated(flag: str, replacement: str) -> None:
+    print(
+        f"warning: {flag} is deprecated; describe the run with --manifest "
+        f"(see {replacement})",
+        file=sys.stderr,
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap, args = parse_args(argv)
     if args.record_dir and not args.serve:
         ap.error("--record-dir requires --serve")
-    if args.record_dir and args.world:
-        ap.error("--record-dir is not available with --world")
 
-    sim_config = load_sim_config(args.sim_config)
-    task_config = load_task_config(args.config) if args.config else None
-    configured_robot = task_config.robot if task_config else (args.robot or "so101")
-    if args.robot and args.robot != configured_robot:
-        ap.error(
-            f"--robot {args.robot!r} does not match --config robot {configured_robot!r}"
-        )
-    args.robot = args.robot or configured_robot
-    if task_config and args.robot != "so101":
-        ap.error("--config currently supports the SO-101 pick-and-place workflow only")
-    seed = (
-        args.seed
-        if args.seed is not None
-        else (
-            task_config.env.seed
-            if task_config and task_config.env.seed is not None
-            else sim_config.seed
-        )
-    )
-    max_steps = (
-        args.max_steps
-        if args.max_steps is not None
-        else (task_config.env.max_steps if task_config else 600)
-    )
+    manifest = build_manifest(ap, args)
+    if manifest.world is not None and not (args.viewer or args.serve):
+        ap.error("a shared-world session requires --viewer or --serve")
+    if args.record_dir and manifest.world is not None:
+        ap.error("--record-dir is not available with a shared world")
 
     if args.viewer or args.serve:
-        return run_viewer(
-            args, task_config, seed, max_steps, sim_config.domain_randomization
-        )
+        return run_viewer(args, manifest)
+    return run_episodes(args, manifest)
 
-    if args.robot == "turtlebot4":
-        env = create_robot(
-            args.robot,
-            config=TurtleBot4Config(
-                max_steps=max_steps,
-                render=args.video,
-                domain_randomization=sim_config.domain_randomization,
-            ),
-        )
-        camera_name = "free"
-    else:
-        robot = create_robot(
-            args.robot,
-            config=build_so101_config(
-                args,
-                task_config,
-                seed,
-                max_steps,
-                render=args.video,
-                domain_randomization=sim_config.domain_randomization,
-            ),
-        )
-        env = TaskRuntime(
-            robot,
-            create_task(
-                task_config.task if task_config else "pick_place",
-                success_xy_tol=task_config.success_xy_tol if task_config else 0.04,
-            ),
-            success_hold_steps=task_config.success_hold_steps if task_config else 10,
-        )
-        camera_name = args.camera
+
+def policy_inputs(args: argparse.Namespace, manifest: SessionManifest) -> dict:
+    """Run-time inputs a manifest cannot hold, for the policy it names."""
+    if manifest.world is not None:
+        return {}
+    if manifest.policy_for(manifest.robots[0]) != "lerobot":
+        return {}
+    if args.checkpoint is None:
+        raise ValueError("--policy lerobot needs --checkpoint")
+    return {"checkpoint": args.checkpoint}
+
+
+def run_episodes(args: argparse.Namespace, manifest: SessionManifest) -> int:
+    if manifest.policy_for(manifest.robots[0]) == "idle":
+        manifest = with_overrides(manifest, policy=DEFAULT_HEADLESS_POLICY)
+    # Built once — a lerobot checkpoint is expensive to reload per episode.
+    session = create_session(
+        manifest, render=args.video, policy_kwargs=policy_inputs(args, manifest)
+    )
+    runtime = session.runtime
+    env, policy = runtime.robot, runtime.policy
+    seed = manifest.simulation.seed
+    max_steps = env.cfg.max_steps
+    camera_name = args.camera or next(iter(env.robot_spec.camera_frames))
+    policy_name = manifest.policy_for(manifest.robots[0])
     args.out.mkdir(parents=True, exist_ok=True)
     successes = 0
 
-    # Built once — a lerobot checkpoint is expensive to reload per episode.
-    policy_name = args.policy or "scripted"
-    policy = build_policy(policy_name, env, args.checkpoint)
-
     for ep in range(args.episodes):
-        obs = env.reset(seed=seed + ep)
-        policy.reset(obs)
+        obs = runtime.reset(seed=seed + ep)
         print(f"  randomization={env.randomization_metadata.as_dict()}")
         frames, total_reward, info = [], 0.0, {}
 
         for _ in range(max_steps):
             if args.video:
                 frames.append(env.render_camera(camera_name))
-            obs, reward, terminated, truncated, info = env.step(policy.act(obs))
+            obs, reward, terminated, truncated, info = runtime.step(policy.act(obs))
             total_reward += reward
             if terminated or truncated or policy.done:
                 break
@@ -307,7 +289,7 @@ def main() -> int:
             )
             print(f"  video -> {path}")
 
-    env.close()
+    session.close()
     print(f"\n{successes}/{args.episodes} successful")
     return 0
 
@@ -332,66 +314,31 @@ def wait_for_shutdown() -> None:
         pass
 
 
-def run_viewer(
-    args: argparse.Namespace,
-    task_config: TaskConfig | None,
-    seed: int,
-    max_steps: int,
-    domain_randomization: DomainRandomizationConfig,
-) -> int:
-    if args.world:
-        world_config = load_world_config(args.world)
-        host = Host.for_world(
-            SharedWorld(
-                world_config.instances,
-                timestep=world_config.timestep,
-                control_hz=world_config.control_hz,
-                add_floor=world_config.add_floor,
-                shared_attach=shared_attach,
-            ),
-            world_config.instances,
-        )
-    elif args.robot == "turtlebot4":
-        env = create_robot(
-            args.robot,
-            config=TurtleBot4Config(
-                max_steps=max_steps,
-                render=True,
-                domain_randomization=domain_randomization,
-            ),
-        )
-    else:
-        viewer_config = build_so101_config(
-            args,
-            task_config,
-            seed,
-            max_steps,
-            render=True,
-            domain_randomization=domain_randomization,
-        )
-        # camera_stride=0: interactive mode never renders cameras inline on the
-        # physics thread (a render stalls stepping). The async camera thread
-        # (async_cameras=True) is the one frame source, and
-        # Host._sync_observation_images() feeds vision policies from its cache.
-        viewer_config = replace(viewer_config, camera_stride=0)
-        env = create_robot(
-            args.robot,
-            config=viewer_config,
-        )
-    if not args.world:
-        policy = (
-            build_policy(args.policy, env, args.checkpoint)
-            if args.policy is not None
-            else None
-        )
-        host = Host.for_robot(
-            env,
-            robot_name=args.robot,
-            policy=policy,
-            reset_seed=seed,
-            async_cameras=args.robot == "so101",
-            record_dir=args.record_dir,
-        )
+def build_host(
+    args: argparse.Namespace, manifest: SessionManifest
+) -> tuple[Host, Session]:
+    session = create_session(
+        manifest,
+        render=True,
+        host_driven=True,
+        policy_kwargs=policy_inputs(args, manifest),
+    )
+    if session.world is not None:
+        return Host.for_world(session.world, session.instances), session
+    robot = session.runtime.robot
+    host = Host.for_robot(
+        robot,
+        robot_name=session.robot_name,
+        policy=session.runtime.policy,
+        reset_seed=manifest.simulation.seed,
+        async_cameras=session.host_renders_cameras,
+        record_dir=args.record_dir,
+    )
+    return host, session
+
+
+def run_viewer(args: argparse.Namespace, manifest: SessionManifest) -> int:
+    host, _session = build_host(args, manifest)
     host.start()
     server = None
     server_thread = None
