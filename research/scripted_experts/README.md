@@ -27,14 +27,7 @@ below for why 20 is not enough):
 uv run python scripts/eval_policy.py --policy scripted --episodes 100 --seed 0 --max-steps 600
 ```
 
-The current baseline is **100%** over 100 seeds (95% CI [96%, 100%], measured
-2026-09-21), matching the deterministic `visual_servo` policy (see
-[research/classical_control/README.md](../classical_control/README.md)). Note
-that a 20-seed run could not resolve the pre-fix policy — the same
-configuration scored 45% on seeds 0-19 and 60% on seeds 100-149 — so still
-use at least 100 seeds when comparing changes. The root cause and fix are
-recorded below. Results depend on the calibrated jaw pads and the
-deterministic scene; they are not hardware or randomized results.
+See [Results](#results) for the current success rates.
 
 Use the same seed when comparing parameter changes. Save local results when
 needed:
@@ -51,6 +44,32 @@ workflow):
 ```bash
 uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --policy scripted --serve --seed 0
 ```
+
+## Results
+
+Measured 2026-09-25 on commit `71b95ec`: deterministic scene, no
+randomization, `--max-steps 600`, seeds starting at 0, Wilson 95% intervals.
+These are simulation results that depend on the calibrated jaw pads; they are
+not hardware or randomized results. This table is the one place the project's
+success rates are recorded; other documents link here.
+
+| Policy | Task | Seeds | Success | 95% CI | Failures |
+| --- | --- | --- | --- | --- | --- |
+| `scripted` | single cube | 300 | 300/300 (100%) | [98.7%, 100%] | none |
+| `scripted` | sorting (`--sorting`) | 300 | 300/300 (100%) | [98.7%, 100%] | none |
+| `visual_servo` | single cube | 100 | 95/100 (95%) | [88.8%, 97.8%] | 5 timeouts (seeds 13, 15, 28, 64, 76); no collisions or unsafe actions |
+
+Reproduce with
+`uv run python scripts/eval_policy.py --policy <name> --episodes <n> --seed 0 --max-steps 600`
+(add `--sorting` for the sorting task). Use at least 100 seeds when comparing
+changes: a 20-seed run could not resolve the pre-fix scripted policy, which
+scored 45% on seeds 0-19 and 60% on seeds 100-149
+([FINDINGS.md](FINDINGS.md)).
+
+The `visual_servo` rate is below the 100% recorded on 2026-09-21. That
+measurement predates the fingertip pad refit (`fad205d`); the cause of the
+timeouts is not yet diagnosed and is tracked in
+[ROADMAP.md](../../ROADMAP.md).
 
 ## Collecting demonstrations
 

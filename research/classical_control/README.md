@@ -40,12 +40,15 @@ timeout, or unsafe action. The result table is in the job summary, and the
 merged JSON, each shard's JSON, and one recorded episode are uploaded as
 artifacts.
 
-The current baseline is **100%** over 100 seeds (95% CI [96%, 100%], measured
-2026-09-21), matching the deterministic `scripted` policy. A 20-seed run on
-`ubuntu-24.04` with OSMesa reproduced this outcome (`20/20`, no collisions,
-timeouts, or unsafe actions); it is not bit-identical to a Windows run — 17 of
-the 20 seeds took the same number of steps and the other three differed by
-one, which is expected from floating-point differences between platforms.
+The current baseline is **95/100** with 5 timeouts and no collisions or unsafe
+actions (see [Results](../scripted_experts/README.md#results)); it was 100%
+before the fingertip pad refit (`fad205d`), and the timeouts are not yet
+diagnosed. Seeds 13 and 15 time out without camera jitter, so expect the
+workflow's all-success check on 20 seeds to fail until this is fixed. Before
+the refit, a 20-seed run on `ubuntu-24.04` with OSMesa reproduced 20/20; it was
+not bit-identical to a Windows run (17 of 20 seeds took the same number of
+steps, the other three differed by one), as expected from floating-point
+differences between platforms.
 
 Inspect the policy interactively in the browser — the front and wrist camera
 panels are configurable, and a `front:detections`/`wrist:detections` debug

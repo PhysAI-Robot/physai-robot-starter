@@ -30,7 +30,7 @@ Phase 2 answers one question: **why is learning needed for manipulation, and how
 
 | Method | Perception | Role |
 | --- | --- | --- |
-| Scripted expert | Privileged simulator state | Intended upper bound and demonstration teacher — 100% on the single-cube task, matching the camera-only baseline; see the Phase 2.0 finding |
+| Scripted expert | Privileged simulator state | Intended upper bound and demonstration teacher — 100% on single-cube and sorting (300 seeds each); see the [results table](research/scripted_experts/README.md#results) |
 | Classical vision + state machine | Camera only | What hand-engineered perception and control can do without cheating |
 | ACT (imitation learning) | Camera + proprioception | Does learning from pixels close the gap or extend beyond the classical limits? |
 
@@ -52,9 +52,8 @@ Phase 1 (done) -> Bridge (done) -> Phase 2: benchmark -> classical baseline -> A
 ## Phase 1: Foundation and ROS2 contract (complete)
 
 - [x] Capability-aware `Observation -> Action` contracts, robot registry, unit/frame validation, deterministic resets, seeded regression coverage.
-- [x] SO-101 MuJoCo baseline: scripted single-cube pick-and-place. Measured
-      2026-09-21 at **100% over 100 seeds** after the orientation-constraint
-      fix; see the Phase 2.0 finding below.
+- [x] SO-101 MuJoCo baseline: scripted single-cube pick-and-place, 300/300
+      on seeds 0-299 (see the [results table](research/scripted_experts/README.md#results)).
 - [x] SO-101 ROS2 bridge: joint, gripper, camera, TF, teleoperation, `rclpy` acceptance coverage.
 - [x] SO-101 FK, Jacobian, numerical IK, Cartesian targeting, joint-limit and collision safety validation.
 - [x] Seeded domain randomization (physics, visuals, cameras, clutter) with deterministic baseline preserved.
@@ -79,30 +78,25 @@ Define what the SO-101 can do, with one fixed-seed evaluation per level.
 
 | Level | Task | Tests |
 | --- | --- | --- |
-| T0 | Single cube, fixed setup | Scripted 100% over 100 seeds — done |
+| T0 | Single cube, fixed setup | Scripted 300/300 — done |
 | T1 | Single cube, randomized pose / color / lighting / camera | Perception robustness |
 | T2 | Cube size variation | Gripper aperture limits |
 | T3 | Shape variation (cylinder, sphere, prism) | Grasp difficulty |
 | T4 | Multi-object sorting: 3 colored cubes into 3 bins, then scale toward 9 | Multi-step planning and perception |
 | T5 (stretch) | Clutter, distractors, occlusion, stacking | Hard perception and contact |
 
-**Resolved finding (2026-09-21, opened 2026-09-20).** The scripted expert was
-far weaker than the `20/20` previously recorded; three compounding bugs were
-found and fixed (a missing wrist-orientation constraint, an under-squeezed
-grip, and a stale grasp-aim position used only by the sorting task), taking
-single-cube success from 59% to **100% [98%, 100%]** (300 seeds) and sorting
-from 46% to **98% [97%, 99%]** (900 seeds), matching the `visual_servo`
-baseline. It also surfaced why the historical `20/20` couldn't be trusted:
-the same pre-fix configuration scored 45% on seeds 0-19 and 60% on seeds
-100-149, which is why the ≥100-seed rule below matters. The full root-cause
-investigation — measurements, and the ideas that were tried and reverted — is
-recorded in
-[research/scripted_experts/README.md](research/scripted_experts/README.md).
+**Resolved finding (2026-09-21).** The scripted expert was far weaker than the
+historical `20/20` suggested (a 20-seed run scored 45% and 60% on two seed
+ranges), which is why the ≥100-seed rule below exists. Three bugs were fixed;
+the root causes and reverted experiments are in
+[research/scripted_experts/FINDINGS.md](research/scripted_experts/FINDINGS.md)
+and current rates are in the
+[results table](research/scripted_experts/README.md#results).
 
 Deliverables:
 
 - [x] Diagnose the scripted-expert timeouts and restore a high single-cube success rate.
-- [x] Diagnose and reduce the sorting transfer-slip and neighbor-clutter failures (46% -> 98%).
+- [x] Diagnose and reduce the sorting transfer-slip and neighbor-clutter failures (now 300/300 on seeds 0-299).
 - [ ] Task definitions and scripted experts for T1-T4 (T5 stretch), each with fixed seeds.
 - [ ] `scripts/capability_report.py`: reachable workspace, min/max graspable size, placement repeatability.
 - [ ] Trajectory-quality metrics for the scripted expert: completion time, path length, jerk, joint-limit margin, peak speed.
@@ -121,6 +115,7 @@ A camera-only state-machine pipeline (color segmentation or fiducials, pose esti
 - [x] Perception module without simulator ground truth (`ColorBlobDetector` in `research/classical_control/so101_visual_servo.py`; reads camera calibration only, never object pose).
 - [x] State machine covering approach, grasp, lift, place, and recovery on failure (`SO101VisualServoPolicy`, registered as the `visual_servo` policy).
 - [x] All actions pass the safety layer: `SafetyController` now gates the direct-MuJoCo path inside `DirectMuJoCoAdapter`, not only the ROS2 and Gymnasium paths.
+- [ ] Diagnose the `visual_servo` timeouts (95/100 on seeds 0-99: seeds 13, 15, 28, 64, 76) that appeared after the fingertip pad refit; the visual-servo CI check (20 seeds, all must succeed) is expected to fail until this is fixed.
 - [ ] Report position error, settling time, and categorized failure reasons.
 - [ ] Give it a fair tuning effort; it must not be a strawman.
 
