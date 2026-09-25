@@ -1,7 +1,10 @@
-"""Planner backend registry.
+"""Registry for planner implementations.
 
-New VLM approaches register a factory here; callers do not need to know the
-backend's SDK or constructor details.
+Mirrors `tasks/registry.py`. `ScriptedPlanner` is a core baseline and
+registers here directly; a research planner (e.g.
+`research/vlm_planners/sorting_planner.py`'s `SortingPlanner`) registers
+itself under its own name when its module is imported, so this registry
+never imports research code.
 """
 
 from __future__ import annotations
@@ -13,6 +16,7 @@ from .base import Planner
 
 PlannerFactory = Callable[..., Planner]
 _FACTORIES: dict[str, PlannerFactory] = {}
+_BUILTINS_LOADED = False
 
 
 def register_planner(name: str, factory: PlannerFactory) -> PlannerFactory:
@@ -37,12 +41,12 @@ def create_planner(name: str, **kwargs: Any) -> Planner:
 
 
 def _load_builtins() -> None:
-    if _FACTORIES:
+    # A flag, not "is anything registered": a research planner that registers
+    # itself on import may run before the first lookup.
+    global _BUILTINS_LOADED
+    if _BUILTINS_LOADED:
         return
     from .base import ScriptedPlanner
-    from .claude_vlm import ClaudePlanner
-    from .smolvlm import SmolVLMPlanner
 
-    register_planner("claude", ClaudePlanner)
-    register_planner("smolvlm", SmolVLMPlanner)
-    register_planner("scripted", ScriptedPlanner)
+    register_planner("scripted_planner", ScriptedPlanner)
+    _BUILTINS_LOADED = True

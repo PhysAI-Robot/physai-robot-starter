@@ -10,31 +10,31 @@ default — behaviour cloning on failures teaches failure.
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
+from _common_args import add_episodes, add_max_steps, add_out, add_robot, add_seed
 
 from physai.data import EpisodeRecorder
 from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
-from physai.robots.so101.expert import SO101PickPlaceExpert
-from physai.sim import SceneConfig
+from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
 from physai.tasks import TaskRuntime, create_task
+from research.scripted_experts.so101_pick_place_expert import SO101PickPlaceExpert
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument(
-        "--robot",
+    add_robot(
+        ap,
         default="so101",
         choices=["so101"],
         help="collect_demos currently supports the SO-101 manipulation workflow",
     )
-    ap.add_argument("--episodes", type=int, default=20)
-    ap.add_argument("--out", type=Path, default=Path("data/pickplace_v1"))
-    ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--max-steps", type=int, default=600)
+    add_episodes(ap, default=20)
+    add_out(ap, default=Path("data/pickplace_v1"))
+    add_seed(ap)
+    add_max_steps(ap, default=600)
     ap.add_argument("--width", type=int, default=224)
     ap.add_argument("--height", type=int, default=224)
     ap.add_argument("--keep-failures", action="store_true")
@@ -59,15 +59,13 @@ def main() -> int:
         "max_steps": args.max_steps,
         "render": not args.no_images,
     }
-    if args.sorting:
-        # Task selection moved onto TaskRuntime below; EnvConfig no longer
-        # carries a `task` field, so setting one here raised a TypeError and
-        # made --sorting unusable.
-        scene_kwargs["num_cubes"] = 3
+    scene_type = (
+        SortingMinimalSceneConfig if args.sorting else PickPlaceMinimalSceneConfig
+    )
     robot = create_robot(
         args.robot,
         config=EnvConfig(
-            scene=SceneConfig(**scene_kwargs),
+            scene=scene_type(**scene_kwargs),
             **env_kwargs,
         ),
     )
@@ -84,6 +82,9 @@ def main() -> int:
         store_images=not args.no_images,
         robot_spec=robot.robot_spec,
         training_contract=training_contract,
+        # Full simulator qpos per step, so the web viewer can replay an
+        # episode (see docs/adr/0009). Extra key; training code ignores it.
+        environment_state_dim=robot.data.qpos.size,
         simulator_config={
             "control_hz": env.cfg.control_hz,
             "max_steps": env.cfg.max_steps,
@@ -95,7 +96,7 @@ def main() -> int:
             for name in env.cfg.cameras
         },
         scene_name="sorting_minimal" if args.sorting else "pick_place_minimal",
-        scene_config=asdict(env.cfg.scene),
+        scene_config=env.cfg.scene.to_metadata(),
     )
 
     attempted = kept = 0
@@ -114,6 +115,7 @@ def main() -> int:
             action = policy.act(obs)
             grip_rad = env.gripper_to_joint(action.gripper.clipped())
             prev_obs = obs
+            state = robot.data.qpos.copy()  # the world prev_obs was observed in
             obs, reward, terminated, truncated, info = env.step(action)
             rec.record(
                 prev_obs,
@@ -122,6 +124,7 @@ def main() -> int:
                 done=terminated or truncated,
                 phase=policy.phase.name,
                 gripper_joint=grip_rad,
+                environment_state=state,
             )
             if terminated or truncated:
                 break

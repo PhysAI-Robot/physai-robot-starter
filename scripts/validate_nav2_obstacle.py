@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import signal
 import subprocess
 import time
 from pathlib import Path
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -45,7 +45,9 @@ def _wait_for_scan(timeout: float) -> float:
         while time.monotonic() < deadline:
             executor.spin_once(timeout_sec=0.1)
             if scans:
-                finite_ranges = [value for value in scans[-1].ranges if value == value]
+                finite_ranges = [
+                    value for value in scans[-1].ranges if math.isfinite(value)
+                ]
                 if finite_ranges:
                     return min(finite_ranges)
     finally:

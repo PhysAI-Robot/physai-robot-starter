@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 import numpy as np
 
 
@@ -23,7 +25,7 @@ def test_pick_place_task_owns_metrics_and_reward():
 
 class FakeSortingBackend(FakePickPlaceBackend):
     target_color = "blue"
-    cube_positions = {
+    cube_positions: ClassVar = {
         "red": np.array([0.25, 0.10, 0.034]),
         "blue": np.array([0.2, 0.0, 0.034]),
         "yellow": np.array([0.18, -0.08, 0.034]),

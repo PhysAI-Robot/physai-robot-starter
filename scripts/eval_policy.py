@@ -14,30 +14,51 @@ import argparse
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
-import numpy as np
+from _common_args import (
+    add_checkpoint,
+    add_episodes,
+    add_max_steps,
+    add_policy,
+    add_robot,
+    add_seed,
+)
 
 from physai.data import EvaluationReport, load_episode
 from physai.policy import available_policies, create_policy
-from physai.robots import available_robots, create_robot
+from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
-from physai.sim import SceneConfig
+from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
+from physai.sim.domain_randomization import DomainRandomizationConfig
 from physai.tasks import TaskRuntime, create_task
+
+# Registers so101's "scripted"/"visual_servo" policies and the checkpoint-
+# backed "lerobot" policy with their registries; --policy may select any of
+# them, so all load eagerly (none import torch/lerobot at module scope).
+import research.classical_control.so101_visual_servo  # noqa: E402,F401
+import research.imitation_learning.vla_adapter  # noqa: E402,F401
+import research.scripted_experts.so101_pick_place_expert  # noqa: E402,F401
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument(
-        "--robot",
+    add_robot(
+        ap,
         default="so101",
         choices=["so101"],
         help="eval_policy currently supports the SO-101 manipulation workflow",
     )
-    ap.add_argument("--policy", default="scripted", choices=available_policies())
-    ap.add_argument("--episodes", type=int, default=20)
-    ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--max-steps", type=int, default=600)
+    add_policy(ap, default="scripted", choices=available_policies())
+    add_episodes(ap, default=20)
+    add_seed(ap)
+    add_max_steps(ap, default=600)
+    ap.add_argument(
+        "--camera-jitter",
+        type=float,
+        default=0.0,
+        help="enable seeded camera-position jitter in metres for robustness evaluation",
+    )
     ap.add_argument("--dataset", type=Path, help="required for --policy replay")
-    ap.add_argument("--checkpoint", type=Path, help="required for --policy lerobot")
+    add_checkpoint(ap, help="required for --policy lerobot")
     ap.add_argument(
         "--camera-size",
         type=int,
@@ -65,18 +86,26 @@ def main() -> int:
     # must see them at the resolution --camera-size asks for. Both were lost
     # when env construction moved behind create_robot(): render defaulted to
     # --render alone (so `--policy lerobot` died on an empty images dict) and
-    # --camera-size stopped reaching SceneConfig entirely.
-    needs_images = args.policy == "lerobot"
+    # --camera-size stopped reaching the scene config entirely.
+    needs_images = args.policy in {"lerobot", "visual_servo"}
     scene_kwargs = {"camera_width": args.camera_size, "camera_height": args.camera_size}
-    if args.sorting:
-        scene_kwargs["num_cubes"] = 3
+    scene_type = (
+        SortingMinimalSceneConfig if args.sorting else PickPlaceMinimalSceneConfig
+    )
+    if args.camera_jitter < 0:
+        ap.error("--camera-jitter must be non-negative")
+    randomization = DomainRandomizationConfig(
+        enabled=args.camera_jitter > 0,
+        camera_position_jitter=args.camera_jitter,
+    )
     robot = create_robot(
         args.robot,
         config=EnvConfig(
-            scene=SceneConfig(**scene_kwargs),
+            scene=scene_type(**scene_kwargs),
             seed=args.seed,
             max_steps=args.max_steps,
             render=args.render or needs_images,
+            domain_randomization=randomization,
         ),
     )
     env = TaskRuntime(
@@ -128,10 +157,12 @@ def main() -> int:
     # from disk per episode would dominate wall-clock time for no reason.
     reusable_policy = None
     if args.policy != "replay":
+        policy_kwargs = {"env": env}
+        if args.policy == "lerobot":
+            policy_kwargs["checkpoint"] = args.checkpoint
         reusable_policy = create_policy(
             args.policy,
-            env=env,
-            checkpoint=args.checkpoint,
+            **policy_kwargs,
         )
 
     results = []
@@ -178,6 +209,17 @@ def main() -> int:
                 "unsafe_action": bool(info.get("unsafe_action")),
                 "held_out": bool(train_seeds) and seed not in train_seeds,
                 "dist_cube_target": info["dist_cube_target"],
+                **(
+                    {
+                        "visual_error_px": policy.metrics.visual_error_px,
+                        "ee_error_m": policy.metrics.ee_error_m,
+                        "phase": policy.metrics.phase,
+                        "settling_time_s": policy.metrics.settling_time_s,
+                        "failure_reason": policy.metrics.failure_reason,
+                    }
+                    if args.policy == "visual_servo"
+                    else {}
+                ),
                 # Which cube the episode asked for, so a per-color breakdown is
                 # possible after the fact. ACT never receives this.
                 **({"target_color": info["target_color"]} if args.sorting else {}),

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from physai.contracts import Header, JointState, Observation
+from physai.contracts import JointState, Observation
 from physai.robots import RobotSpec
 
 

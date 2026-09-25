@@ -9,7 +9,6 @@ from .contracts import (
     so101_training_contract,
 )
 from .env import HOME_QPOS, EnvConfig, SO101Env
-from .expert import ExpertConfig, Phase, SO101PickPlaceExpert
 from .kinematics import TOP_DOWN, ArmKinematics, IKResult, top_down_quat
 
 __all__ = [
@@ -19,11 +18,8 @@ __all__ = [
     "TOP_DOWN",
     "ArmKinematics",
     "EnvConfig",
-    "ExpertConfig",
     "IKResult",
-    "Phase",
     "SO101Env",
-    "SO101PickPlaceExpert",
     "so101_action_encoder",
     "so101_action_schema",
     "so101_observation_schema",

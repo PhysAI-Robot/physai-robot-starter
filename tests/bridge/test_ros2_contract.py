@@ -1,4 +1,5 @@
 from physai.bridge import ALL_ENDPOINTS, EXTERNAL_INPUTS, Direction
+from physai.bridge.ros2_contract import describe
 
 
 def test_ros2_contract_is_self_consistent():
@@ -12,3 +13,10 @@ def test_ros2_contract_is_self_consistent():
         types.setdefault(endpoint.topic, set()).add(endpoint.msg_type)
     clashes = {topic: values for topic, values in types.items() if len(values) > 1}
     assert not clashes, f"topic type mismatch: {clashes}"
+
+
+def test_describe_lists_every_endpoint_owner():
+    text = describe()
+
+    for owner in {e.owner for e in ALL_ENDPOINTS}:
+        assert f"[{owner}]" in text

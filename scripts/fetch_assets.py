@@ -15,11 +15,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
+
+from _common_args import add_robot
 
 
 @dataclass(frozen=True)
@@ -48,14 +51,26 @@ DEST_ROOT = Path(__file__).resolve().parents[1] / "assets"
 API = "https://api.github.com/repos/{repo}/contents/{path}?ref={ref}"
 
 
+def _api_headers() -> dict[str, str]:
+    """Headers for api.github.com, authenticated when a token is available.
+
+    Unauthenticated requests share a 60 per hour limit per address, which
+    concurrent CI jobs and shared cloud workspaces exhaust. A token raises it
+    to a per-token limit. It is sent only to the API listing requests, never to
+    the file downloads.
+    """
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "physai-robot-starter",
+    }
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
 def _get_json(url: str) -> list[dict]:
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "physai-robot-starter",
-        },
-    )
+    req = urllib.request.Request(url, headers=_api_headers())
     with urllib.request.urlopen(req, timeout=60) as r:
         return json.loads(r.read().decode("utf-8"))
 
@@ -109,7 +124,7 @@ def walk(
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--robot", choices=sorted(SOURCES), default="so101")
+    add_robot(ap, choices=sorted(SOURCES), default="so101")
     ap.add_argument("--force", action="store_true", help="re-download existing files")
     ap.add_argument("--dest", type=Path)
     args = ap.parse_args()
@@ -132,8 +147,9 @@ def main() -> int:
         print(f"\nGitHub API error {exc.code}: {exc.reason}", file=sys.stderr)
         if exc.code == 403:
             print(
-                "Rate limited (60 req/h unauthenticated). Wait an hour, or "
-                "download the source repository manually.",
+                "Rate limited (60 req/h unauthenticated). Set GITHUB_TOKEN to "
+                "authenticate, wait an hour, or download the source repository "
+                "manually.",
                 file=sys.stderr,
             )
         return 1

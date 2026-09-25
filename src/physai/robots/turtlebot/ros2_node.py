@@ -85,7 +85,7 @@ class TurtleBot4ROS2Node:
         seconds = max(0.0, float(value))
         stamp = header.stamp if hasattr(header, "stamp") else header
         stamp.sec = int(seconds)
-        stamp.nanosec = int(round((seconds - stamp.sec) * 1e9))
+        stamp.nanosec = round((seconds - stamp.sec) * 1e9)
 
     def _joint_state(self, observation: Any) -> Any:
         message = self._joint_state_type()

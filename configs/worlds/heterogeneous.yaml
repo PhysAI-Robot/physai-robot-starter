@@ -1,0 +1,14 @@
+# Deprecated: use configs/manifests/heterogeneous_world.yaml with `run_sim.py --manifest`.
+# Two robot instances in one MuJoCo model and physics clock.
+timestep: 0.002
+control_hz: 30.0
+add_floor: true
+robots:
+  - id: arm_1
+    robot: so101
+    model: assets/so101/so101_new_calib_camera.xml
+    position: [0.3, 0.0, 0.0]
+  - id: base_1
+    robot: turtlebot4
+    model: assets/turtlebot4/turtlebot4.xml
+    position: [-0.3, 0.0, 0.1]

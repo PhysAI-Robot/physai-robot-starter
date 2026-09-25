@@ -1,4 +1,3 @@
-import numpy as np
 import pytest
 
 pytestmark = pytest.mark.integration
@@ -8,35 +7,31 @@ from physai.robots import RobotSpec
 from tests.support.fakes import FakeRobotPort
 
 
-def test_robot_spec_rejects_wrong_joint_order():
+def test_actions_with_the_wrong_joint_order_or_stale_or_out_of_limit_are_rejected():
+    from physai.control import SafetyController
+
     spec = RobotSpec(
         name="arm",
         kind="manipulator",
         joint_names=("a", "b"),
         action_joint_names=("a", "b"),
     )
-
     with pytest.raises(ValueError, match="expects joint order"):
         spec.validate_action(Action(joint_position=[0.0, 0.0], joint_names=("b", "a")))
 
-
-def test_safety_rejects_stale_and_out_of_limit_actions():
-    from physai.control import SafetyController
-
-    spec = RobotSpec(
+    limited = RobotSpec(
         name="arm",
         kind="manipulator",
         joint_names=("a",),
         action_joint_names=("a",),
         joint_limits={"a": (-1.0, 1.0)},
     )
-    safety = SafetyController(spec, max_action_age=0.5)
+    safety = SafetyController(limited, max_action_age=0.5)
     observation = Observation(
         joint_state=JointState(
             name=("a",), position=[0.0], velocity=[0.0], effort=[0.0]
         )
     )
-
     with pytest.raises(ValueError, match="stale"):
         safety.validate(observation, Action(joint_position=[0.0], stamp=9.0), now=10.0)
     with pytest.raises(ValueError, match="outside limits"):
@@ -73,8 +68,11 @@ def test_runtime_validates_action_before_forwarding(monkeypatch):
         capabilities=("arm_kinematics", "gripper"),
         joint_limits={"a": (-1.0, 1.0)},
     )
+    from physai.robots import DirectMuJoCoAdapter
+
     fake = FakeRobotPort(spec)
-    monkeypatch.setattr(composition, "create_robot", lambda *args, **kwargs: fake)
+    adapter = DirectMuJoCoAdapter(fake)
+    monkeypatch.setattr(composition, "create_robot", lambda *args, **kwargs: adapter)
     runtime = composition.create_runtime("arm", task_name="pick_place")
     try:
         runtime.reset()

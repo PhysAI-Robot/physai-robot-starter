@@ -6,33 +6,32 @@ from .domain_randomization import (
     DomainRandomizationEngine,
     RandomizationMetadata,
 )
-from .scene import SceneConfig, build_model, build_spec, export_xml
 from .scenes import (
-    PickPlaceMinimalSceneConfig,
-    CommonSceneConfig,
     ManipulationSceneConfig,
+    PickPlaceMinimalSceneConfig,
     SortingMinimalSceneConfig,
     WorldSceneConfig,
     available_scenes,
     build_manipulation_spec,
     create_scene,
+    export_xml,
 )
+from .world import RobotBinding, RobotInstanceConfig, SharedWorld
 
 __all__ = [
-    "MuJoCoSimulationCore",
     "DomainRandomizationConfig",
     "DomainRandomizationEngine",
-    "RandomizationMetadata",
-    "CommonSceneConfig",
-    "WorldSceneConfig",
     "ManipulationSceneConfig",
-    "build_manipulation_spec",
+    "MuJoCoSimulationCore",
     "PickPlaceMinimalSceneConfig",
+    "RandomizationMetadata",
+    "RobotBinding",
+    "RobotInstanceConfig",
+    "SharedWorld",
     "SortingMinimalSceneConfig",
+    "WorldSceneConfig",
     "available_scenes",
+    "build_manipulation_spec",
     "create_scene",
-    "SceneConfig",
-    "build_model",
-    "build_spec",
     "export_xml",
 ]

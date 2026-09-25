@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from functools import cached_property
 
 import mujoco
 import numpy as np
@@ -14,7 +15,9 @@ from ...contracts import (
     ImageFrame,
     JointState,
     Observation,
+    Twist,
 )
+from ...control.resolver import TwistToJointResolver
 from ...robots.base import RobotSpec, RobotTrainingContract
 from ...sim.core import MuJoCoSimulationCore
 from ...sim.domain_randomization import (
@@ -22,14 +25,16 @@ from ...sim.domain_randomization import (
     DomainRandomizationEngine,
     RandomizationMetadata,
 )
-from ...sim.scene import SceneConfig, build_model
+from ...sim.scenes import ManipulationSceneConfig, PickPlaceMinimalSceneConfig
 from .contracts import (
     ALL_JOINT_NAMES,
     ARM_JOINT_NAMES,
     GRIPPER_JOINT_NAME,
     so101_training_contract,
 )
+from .jog import resolve_jog
 from .kinematics import ArmKinematics
+from .layout import create_layout
 from .scene import scene_defaults
 
 HOME_QPOS = np.array([0.0, -1.05, 1.25, 0.75, 0.0], dtype=np.float64)
@@ -39,10 +44,13 @@ HOME_QPOS = np.array([0.0, -1.05, 1.25, 0.75, 0.0], dtype=np.float64)
 class EnvConfig:
     """SO-101-specific simulation and observation settings."""
 
-    scene: SceneConfig = field(default_factory=lambda: SceneConfig(**scene_defaults()))
-    control_hz: float = 25.0
+    scene: ManipulationSceneConfig = field(
+        default_factory=lambda: PickPlaceMinimalSceneConfig(**scene_defaults())
+    )
+    control_hz: float = 30.0
     render: bool = True
     cameras: tuple[str, ...] = ("front", "wrist")
+    camera_stride: int = 1
     max_steps: int = 400
     randomize_cube: bool = True
     cube_x_range: tuple[float, float] = (0.20, 0.24)
@@ -54,13 +62,12 @@ class EnvConfig:
     domain_randomization: DomainRandomizationConfig = field(
         default_factory=DomainRandomizationConfig
     )
-    # The XML's default actuator forcerange (+/-3.35 N*m) is a per-servo torque
-    # rating, not a sane grip-force budget: lifting a 0.03 kg cube only needs a
-    # few mN*m, but a fixed-position squeeze target can drive the actuator to
-    # its full rating against a rigid object, which loads the pad-cube contact
-    # to 20-50x the cube's weight and makes it chatter and pop loose mid-carry.
-    # Capping it here emulates a current-limited real servo and keeps the
-    # squeeze in the contact solver's stable range.
+    # Gripper actuator torque cap (N*m), emulating a current-limited servo. The
+    # model's own +/-3.35 N*m rating drives a position-controlled squeeze to
+    # 20-50x a cube's weight and makes the contact chatter. visual_servo's
+    # shallow grip needs the cap; the scripted expert's deeper squeeze does not,
+    # but the shared default stays for its other callers. Measurements are in
+    # research/scripted_experts/FINDINGS.md.
     gripper_force_limit: float = 0.3
 
 
@@ -80,7 +87,7 @@ class SO101Env(MuJoCoSimulationCore):
                 self.cfg,
                 scene=replace(self.cfg.scene, **missing),
             )
-        self.model, self.spec = build_model(self.cfg.scene)
+        self.model, self.spec = self.cfg.scene.build_model()
         self.randomization = DomainRandomizationEngine(
             self.model, self.cfg.domain_randomization
         )
@@ -119,31 +126,29 @@ class SO101Env(MuJoCoSimulationCore):
             limit = float(self.cfg.gripper_force_limit)
             self.model.actuator_forcerange[self.grip_act_id] = [-limit, limit]
 
-        scene_cube_names = self.cfg.scene.cube_names
-        self.sorting_cubes: dict[str, tuple[int, int]] = {}
-        if len(scene_cube_names) > 1:
-            for name in scene_cube_names:
-                color = name.removeprefix("cube_")
-                body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, name)
-                joint_id = mujoco.mj_name2id(
-                    self.model, mujoco.mjtObj.mjOBJ_JOINT, f"{name}_free"
-                )
-                qadr = int(self.model.jnt_qposadr[joint_id])
-                self.sorting_cubes[color] = (body_id, qadr)
-            self.cube_bid = self.cube_qadr = None
-        else:
-            self.cube_bid = mujoco.mj_name2id(
-                self.model, mujoco.mjtObj.mjOBJ_BODY, "cube"
-            )
-            cube_joint_id = mujoco.mj_name2id(
-                self.model, mujoco.mjtObj.mjOBJ_JOINT, "cube_free"
-            )
-            self.cube_qadr = int(self.model.jnt_qposadr[cube_joint_id])
-        self.target_color: str | None = None
+        self.layout = create_layout(self.model, self.cfg.scene)
         self.target_sid = mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_SITE, "target_site"
         )
         self.kin = ArmKinematics(self.model, ee_site=self.cfg.scene.ee_site)
+        self.jog_kin = ArmKinematics(
+            self.model, ee_site="wristframe", joint_names=ARM_JOINT_NAMES[1:3]
+        )
+        self._jog_resolver = TwistToJointResolver(
+            self.jog_kin,
+            self.data,
+            dt=1.0 / self.cfg.control_hz,
+            position_only=True,
+            # Damping this high enough to fully suppress wrist coupling
+            # (~0.15) made the 2-joint solve direction-inaccurate instead:
+            # e.g. holding pure -x from the home pose (near a singularity
+            # for that direction) leaked most of the response into +z, so
+            # "back up" visibly lifted the arm. `jog.py`'s MAX_TARGET_LEAD
+            # now caps wrist coupling directly, so this only needs to keep
+            # the Cartesian solve numerically stable, not do double duty.
+            damping=0.03,
+        )
+        self._jog_target = HOME_QPOS.copy()
         self.randomization_metadata = RandomizationMetadata(
             enabled=False,
             seed=self.cfg.seed,
@@ -155,8 +160,9 @@ class SO101Env(MuJoCoSimulationCore):
         )
         self._last_action = Action(joint_position=HOME_QPOS.copy())
 
-    @property
+    @cached_property
     def robot_spec(self) -> RobotSpec:
+        """Built once: the Host reads it on every tick."""
         return RobotSpec(
             name="so101",
             kind="fixed_base_manipulator",
@@ -169,7 +175,12 @@ class SO101Env(MuJoCoSimulationCore):
                 name: tuple(float(value) for value in limit)
                 for name, limit in zip(ARM_JOINT_NAMES, self.arm_limits)
             },
-            max_joint_delta={name: 0.5 for name in ARM_JOINT_NAMES},
+            # JointRateLimiter caps command-to-command steps at 0.5 rad, but
+            # this gate compares a command against the *measured* position,
+            # which trails it by the servo's tracking error. Equal values would
+            # reject a command the limiter considers exactly legal, so leave
+            # headroom: the gate still catches IK teleports, not normal lag.
+            max_joint_delta={name: 0.75 for name in ARM_JOINT_NAMES},
             metadata={
                 "control_hz": self.cfg.control_hz,
                 "action_schema": "so101.joint_position.v1",
@@ -204,67 +215,37 @@ class SO101Env(MuJoCoSimulationCore):
         lo, hi = self.grip_limits
         return float(np.clip((q - lo) / (hi - lo), 0.0, 1.0))
 
+    def resolve_twist_jog(
+        self,
+        twist: Twist,
+        joint_state: JointState,
+        gripper: GripperCommand | None = None,
+    ) -> Action:
+        return resolve_jog(
+            twist,
+            joint_state,
+            cartesian_resolver=self._jog_resolver,
+            target=self._jog_target,
+            shoulder_pan_limits=tuple(self.arm_limits[0]),
+            wrist_flex_limits=tuple(self.arm_limits[3]),
+            wrist_roll_limits=tuple(self.arm_limits[4]),
+            dt=self._jog_resolver.dt,
+            gripper=gripper,
+        )
+
     def reset(self, seed: int | None = None) -> Observation:
         if seed is not None:
             self.rng = np.random.default_rng(seed)
         self.reset_simulation()
         self.data.qpos[self.arm_qadr] = HOME_QPOS
         self.data.qpos[self.grip_qadr] = self.gripper_to_joint(1.0)
+        self._jog_target = HOME_QPOS.copy()
 
-        if self.sorting_cubes:
-            base_z = self.cfg.scene.cube_pos[2]
-            y_bands = [(0.00, 0.02), (0.06, 0.08), (0.12, 0.14)]
-            colors = list(self.sorting_cubes.keys())
-            self.rng.shuffle(colors)
-            for color, (y_lo, y_hi) in zip(colors, y_bands):
-                _body_id, qadr = self.sorting_cubes[color]
-                position = np.array([0.0, 0.0, base_z], dtype=np.float64)
-                if self.cfg.randomize_cube:
-                    position[0] = self.rng.uniform(*self.cfg.cube_x_range)
-                    position[1] = self.rng.uniform(y_lo, y_hi)
-                else:
-                    position[0] = self.cfg.scene.cube_pos[0]
-                    position[1] = (y_lo + y_hi) / 2
-                self.data.qpos[qadr : qadr + 3] = position
-                self.data.qpos[qadr + 3 : qadr + 7] = [1, 0, 0, 0]
-            self.target_color = self.rng.choice(list(self.sorting_cubes.keys()))
-        else:
-            cube_pos = np.array(self.cfg.scene.cube_pos, dtype=np.float64)
-            if self.cfg.randomize_cube:
-                cube_pos[0] = self.rng.uniform(*self.cfg.cube_x_range)
-                cube_pos[1] = self.rng.uniform(*self.cfg.cube_y_range)
-            self.data.qpos[self.cube_qadr : self.cube_qadr + 3] = cube_pos
-            self.data.qpos[self.cube_qadr + 3 : self.cube_qadr + 7] = [1, 0, 0, 0]
-
-        if self.cfg.randomize_target:
-            target_pos = self.model.site_pos[self.target_sid].copy()
-            target_pos[0] = self.rng.uniform(*self.cfg.target_x_range)
-            target_pos[1] = self.rng.uniform(*self.cfg.target_y_range)
-            self.model.site_pos[self.target_sid] = target_pos
-            target_geom_id = mujoco.mj_name2id(
-                self.model, mujoco.mjtObj.mjOBJ_GEOM, "target_pad"
-            )
-            self.model.geom_pos[target_geom_id] = target_pos
-
-        protected_xy: list[tuple[float, float]] = [
-            tuple(float(value) for value in self.model.site_pos[self.target_sid][:2])
-        ]
-        if self.sorting_cubes:
-            protected_xy.extend(
-                tuple(float(value) for value in self.data.qpos[qadr : qadr + 2])
-                for _, qadr in self.sorting_cubes.values()
-            )
-        else:
-            protected_xy.append(
-                tuple(
-                    float(value)
-                    for value in self.data.qpos[self.cube_qadr : self.cube_qadr + 2]
-                )
-            )
+        protected_xy = self.layout.reset(self.data, self.rng, self.cfg)
         self.randomization_metadata = self.randomization.apply(
             self.rng,
             seed=seed if seed is not None else self.cfg.seed,
-            protected_xy=tuple(protected_xy),
+            protected_xy=protected_xy,
         )
 
         self.data.ctrl[self.arm_act_ids] = HOME_QPOS
@@ -334,13 +315,17 @@ class SO101Env(MuJoCoSimulationCore):
         )
 
     def render_camera(self, name: str) -> np.ndarray:
-        if self._renderer is None:
+        if not self.render_enabled:
             raise RuntimeError("env constructed with render=False")
         return super().render_camera(name)
 
     def observe(self) -> Observation:
         images: dict[str, ImageFrame] = {}
-        if self._renderer is not None:
+        if (
+            self.render_enabled
+            and self.cfg.camera_stride > 0
+            and self.step_count % self.cfg.camera_stride == 0
+        ):
             for camera in self.cfg.cameras:
                 images[camera] = ImageFrame(
                     data=self.render_camera(camera),
@@ -359,18 +344,22 @@ class SO101Env(MuJoCoSimulationCore):
         )
 
     @property
+    def target_color(self) -> str | None:
+        """The color the current episode asks for (sorting scenes only)."""
+        return self.layout.target_color
+
+    @property
     def cube_pos(self) -> np.ndarray:
-        if self.sorting_cubes:
-            body_id, _ = self.sorting_cubes[self.target_color]
-            return self.data.xpos[body_id].copy()
-        return self.data.xpos[self.cube_bid].copy()
+        return self.layout.cube_pos(self.data)
+
+    @property
+    def cube_geom_id(self) -> int:
+        """Collision geom of the cube the task is currently asking for."""
+        return self.layout.cube_geom_id()
 
     @property
     def cube_positions(self) -> dict[str, np.ndarray]:
-        return {
-            color: self.data.xpos[body_id].copy()
-            for color, (body_id, _) in self.sorting_cubes.items()
-        }
+        return self.layout.cube_positions(self.data)
 
     @property
     def target_pos(self) -> np.ndarray:

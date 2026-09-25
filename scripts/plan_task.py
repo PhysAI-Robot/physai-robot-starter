@@ -1,17 +1,10 @@
-"""Run the VLM planner on the current scene, then execute the plan.
+"""Run the scripted planner on the current scene, then execute the plan.
 
-    # offline, no API key needed — checks the planner->policy plumbing
-    python scripts/plan_task.py --planner scripted
+    python scripts/plan_task.py --dry-run     # print the plan and stop
+    python scripts/plan_task.py               # plan, then run it
 
-    # local VLM
-    python scripts/plan_task.py --planner smolvlm
-
-    # Claude VLM
-    set ANTHROPIC_API_KEY=...          # PowerShell: $env:ANTHROPIC_API_KEY="..."
-    python scripts/plan_task.py --instruction "put the red cube on the green pad"
-
-`--dry-run` prints the plan and stops, so you can inspect grounding quality
-without spending a rollout.
+`--dry-run` prints the plan without spending a rollout, so you can inspect
+grounding quality on its own.
 """
 
 from __future__ import annotations
@@ -22,54 +15,46 @@ from pathlib import Path
 
 import _bootstrap  # noqa: F401
 import numpy as np
+from _common_args import add_max_steps, add_robot, add_seed
 
-from physai.planner import available_planners, create_planner
+from physai.planner import ScriptedPlanner
 from physai.policy.plan_runner import PlanRunner
-from physai.robots import available_robots, create_robot
+from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
-from physai.sim import SceneConfig
+from physai.sim import PickPlaceMinimalSceneConfig
 from physai.tasks import TaskRuntime, create_task
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--instruction", default="put the red cube on the green pad")
-    ap.add_argument(
-        "--robot",
+    add_robot(
+        ap,
         default="so101",
         choices=["so101"],
         help="plan_task currently supports the SO-101 manipulation workflow",
     )
-    ap.add_argument("--planner", default="smolvlm", choices=available_planners())
-    ap.add_argument("--model")
-    ap.add_argument("--device")
-    ap.add_argument(
-        "--effort", default="medium", choices=["low", "medium", "high", "xhigh", "max"]
-    )
-    ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--max-steps", type=int, default=800)
+    add_seed(ap)
+    add_max_steps(ap, default=800)
     ap.add_argument("--dry-run", action="store_true", help="print the plan and exit")
     ap.add_argument("--save-plan", type=Path)
     ap.add_argument(
         "--save-frames",
         type=Path,
-        help="write the images sent to the planner, for debugging",
+        help="write the images the planner sees, for debugging",
     )
     args = ap.parse_args()
 
     robot = create_robot(
         args.robot,
         config=EnvConfig(
-            scene=SceneConfig(camera_width=512, camera_height=384),
+            scene=PickPlaceMinimalSceneConfig(camera_width=512, camera_height=384),
             seed=args.seed,
             max_steps=args.max_steps,
             render=True,
         ),
     )
-    env = TaskRuntime(
-        robot,
-        create_task("pick_place"),
-    )
+    env = TaskRuntime(robot, create_task("pick_place"))
     obs = env.reset(seed=args.seed)
 
     if args.save_frames:
@@ -80,21 +65,7 @@ def main() -> int:
             iio.imwrite(args.save_frames / f"{name}.png", frame.data)
         print(f"frames -> {args.save_frames}")
 
-    if args.planner == "scripted":
-        from physai.planner import ScriptedPlanner
-
-        planner = ScriptedPlanner(env.cube_pos, env.target_pos)
-    elif args.planner == "claude":
-        planner = create_planner(
-            args.planner, model=args.model or "claude-opus-5", effort=args.effort
-        )
-    else:
-        from physai.planner.smolvlm import DEFAULT_MODEL
-
-        planner = create_planner(
-            args.planner, model=args.model or DEFAULT_MODEL, device=args.device
-        )
-
+    planner = ScriptedPlanner(env.cube_pos, env.target_pos)
     plan = planner.plan(args.instruction, obs)
     print(f"\nplanner: {planner.name}")
     print(f"notes:   {plan.notes}\n")

@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from conftest import requires_assets
 
 pytestmark = [pytest.mark.acceptance, pytest.mark.assets, pytest.mark.slow]
@@ -48,28 +47,21 @@ def test_ik_reaches_a_point_on_the_table(env):
     )
 
 
-@pytest.mark.parametrize(
-    "offset",
-    [
-        (0.00, -0.03, 0.01),
-        (0.01, 0.04, 0.01),
-        (-0.02, 0.07, 0.01),
-    ],
-)
 @requires_assets
-def test_ik_reaches_representative_targets_within_metrics(env, offset):
+def test_ik_reaches_representative_targets_within_metrics(env):
     from physai.robots.so101.kinematics import TOP_DOWN
 
     obs = env.reset(seed=0)
-    target = env.cube_pos + np.asarray(offset)
-    result = env.kin.ik(target, TOP_DOWN, q_init=obs.joint_state.position[:5])
-    assert result.converged
-    assert result.position_error <= 1e-3
-    assert result.orientation_error <= 3e-2
-    assert 0 < result.iterations <= 150
-    assert np.isfinite(result.qpos).all()
-    assert np.all(result.qpos >= env.kin.limits[:, 0])
-    assert np.all(result.qpos <= env.kin.limits[:, 1])
+    for offset in [(0.00, -0.03, 0.01), (0.01, 0.04, 0.01), (-0.02, 0.07, 0.01)]:
+        target = env.cube_pos + np.asarray(offset)
+        result = env.kin.ik(target, TOP_DOWN, q_init=obs.joint_state.position[:5])
+        assert result.converged, offset
+        assert result.position_error <= 1e-3
+        assert result.orientation_error <= 3e-2
+        assert 0 < result.iterations <= 150
+        assert np.isfinite(result.qpos).all()
+        assert np.all(result.qpos >= env.kin.limits[:, 0])
+        assert np.all(result.qpos <= env.kin.limits[:, 1])
 
 
 @requires_assets
@@ -108,6 +100,7 @@ def test_ik_rejects_unreachable_target_without_unsafe_joint_command(env):
 @requires_assets
 def test_ik_collision_acceptance_allows_grasp_contact_but_rejects_table_contact(env):
     import mujoco
+
     from physai.robots.so101.kinematics import TOP_DOWN
 
     obs = env.reset(seed=0)
@@ -139,16 +132,20 @@ def test_ik_collision_acceptance_allows_grasp_contact_but_rejects_table_contact(
     )
 
 
-@pytest.mark.parametrize("bad_value", [np.nan, np.inf])
 @requires_assets
-def test_ik_rejects_non_finite_inputs(env, bad_value):
+def test_ik_rejects_non_finite_inputs(env):
     obs = env.reset(seed=0)
-    with pytest.raises(ValueError, match="finite"):
-        env.kin.ik([bad_value, 0.0, env.table_top], q_init=obs.joint_state.position[:5])
-    with pytest.raises(ValueError, match="finite"):
-        env.kin.ik(
-            env.cube_pos, [bad_value, 0.0, 0.0], q_init=obs.joint_state.position[:5]
-        )
+    for bad_value in (np.nan, np.inf):
+        with pytest.raises(ValueError, match="finite"):
+            env.kin.ik(
+                [bad_value, 0.0, env.table_top], q_init=obs.joint_state.position[:5]
+            )
+        with pytest.raises(ValueError, match="finite"):
+            env.kin.ik(
+                env.cube_pos,
+                [bad_value, 0.0, 0.0],
+                q_init=obs.joint_state.position[:5],
+            )
 
 
 @requires_assets

@@ -117,7 +117,7 @@ class Vector3:
         return np.array([self.x, self.y, self.z], dtype=np.float64)
 
     @classmethod
-    def from_array(cls, a) -> "Vector3":
+    def from_array(cls, a) -> Vector3:
         a = np.asarray(a, dtype=np.float64).reshape(3)
         return cls(float(a[0]), float(a[1]), float(a[2]))
 
@@ -135,7 +135,7 @@ class Quaternion:
         return np.array([self.x, self.y, self.z, self.w], dtype=np.float64)
 
     @classmethod
-    def from_mujoco(cls, wxyz) -> "Quaternion":
+    def from_mujoco(cls, wxyz) -> Quaternion:
         w, x, y, z = (float(v) for v in wxyz)
         return cls(x, y, z, w)
 
@@ -179,7 +179,7 @@ class Twist:
         return np.concatenate([self.linear.as_array(), self.angular.as_array()])
 
     @classmethod
-    def from_array(cls, a) -> "Twist":
+    def from_array(cls, a) -> Twist:
         a = np.asarray(a, dtype=np.float64).reshape(6)
         return cls(Vector3.from_array(a[:3]), Vector3.from_array(a[3:]))
 
@@ -275,7 +275,9 @@ class Observation:
         camera_frames = expected_camera_frames or {}
         for name, frame in self.images.items():
             if not isinstance(frame, ImageFrame):
-                raise ValueError(f"observation image {name!r} is not an ImageFrame")
+                raise ValueError(  # noqa: TRY004
+                    f"observation image {name!r} is not an ImageFrame"
+                )
             frame.validate(
                 expected_camera=name,
                 expected_frame=camera_frames.get(name),

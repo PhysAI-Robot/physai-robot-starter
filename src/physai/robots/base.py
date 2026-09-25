@@ -175,10 +175,6 @@ class RobotPort(Protocol):
     def close(self) -> None: ...
 
 
-class RobotEnv(RobotPort, Protocol):
-    """Backward-compatible synchronous environment contract."""
-
-
 class KinematicsPort(Protocol):
     """Robot kinematics operations required by Cartesian control code."""
 

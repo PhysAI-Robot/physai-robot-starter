@@ -7,14 +7,14 @@ from .runtime import TaskRuntime
 from .sorting_minimal import SortingBackend, SortingTask
 
 __all__ = [
-    "Task",
-    "TaskBackend",
     "PickPlaceBackend",
     "PickPlaceTask",
     "SortingBackend",
     "SortingTask",
+    "Task",
+    "TaskBackend",
+    "TaskRuntime",
     "available_tasks",
     "create_task",
     "register_task",
-    "TaskRuntime",
 ]

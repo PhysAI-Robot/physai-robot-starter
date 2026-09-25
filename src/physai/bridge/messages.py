@@ -61,7 +61,7 @@ class ContractMessageCodec:
             return value
         command = getattr(value, "command", value)
         return GripperCommand(
-            position=float(getattr(command, "position")),
+            position=float(command.position),
             max_effort=float(getattr(command, "max_effort", 0.0)),
         )
 
@@ -119,7 +119,7 @@ def _copy_header(message: Any, source: Any) -> None:
     if hasattr(stamp, "sec") and hasattr(stamp, "nanosec"):
         seconds = max(0.0, float(source.stamp))
         stamp.sec = int(seconds)
-        stamp.nanosec = int(round((seconds - stamp.sec) * 1e9))
+        stamp.nanosec = round((seconds - stamp.sec) * 1e9)
     else:
         header.stamp = float(source.stamp)
 
