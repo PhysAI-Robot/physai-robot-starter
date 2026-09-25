@@ -12,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 
 # Matches the web viewer's Three.js scene background exactly
 # (`scene.background = new THREE.Color(0xdfe6e2)` in
-# src/physai/web/static/js/scene.js), so a MuJoCo render (the Tk viewer's
+# src/physai/web/static/js/scene.js), so a MuJoCo render (the native viewer's
 # free camera, a captured camera frame, an exported video) and the browser
 # viewer show the same background color instead of MuJoCo's own default sky.
 STUDIO_SKY_RGB: tuple[float, float, float] = (0.8745, 0.9020, 0.8863)
@@ -241,8 +241,8 @@ def _add_wrist_jog_site(spec: mujoco.MjSpec, cfg: ManipulationSceneConfig) -> No
 
 
 def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
-    _validate_robot_attachment(cfg)
     """Build a manipulation world with configurable robot attachments."""
+    _validate_robot_attachment(cfg)
     if cfg.robot_xml is None or not Path(cfg.robot_xml).exists():
         raise FileNotFoundError(
             f"{cfg.robot_xml} not found — run `python scripts/fetch_assets.py` first."
