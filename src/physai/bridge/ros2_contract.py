@@ -210,7 +210,7 @@ RECOMMENDED_DISTRO = "jazzy"
 
 def describe() -> str:
     lines = [f"ROS2 contract (target distro: {RECOMMENDED_DISTRO})", ""]
-    for owner in ("so101_driver", "vla_policy"):
+    for owner in dict.fromkeys(e.owner for e in ALL_ENDPOINTS):
         lines.append(f"[{owner}]")
         for e in ALL_ENDPOINTS:
             if e.owner != owner:
