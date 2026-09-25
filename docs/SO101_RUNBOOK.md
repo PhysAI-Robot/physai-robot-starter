@@ -25,13 +25,13 @@ uv run python scripts/run_sim.py --robot so101 --serve --seed 0
 Open the checked-in pick-and-place scene the same way:
 
 ```bash
-uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --serve --seed 0
+uv run python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml --serve --seed 0
 ```
 
 For headless execution:
 
 ```bash
-uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --seed 0 --max-steps 500
+uv run python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml --seed 0 --max-steps 500
 ```
 
 Video recording is opt-in. Add `--video` when you want frames written under
@@ -45,7 +45,7 @@ scroll to zoom); combine it with `--serve` and use the browser viewer's
 camera grid for per-camera views or debug overlays:
 
 ```bash
-uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --viewer --seed 0
+uv run python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml --viewer --seed 0
 ```
 
 This mode requires a desktop display.
@@ -126,7 +126,7 @@ for the full workflow, calibration notes, and CI evaluation reference.
 
 ## 8. Parameters and Open Work
 
-Main files are `configs/tasks/so101/pick_place.yaml`,
+Main files are `configs/manifests/so101_pick_place.yaml`,
 `src/physai/robots/so101/env.py`, `src/physai/sim/scenes/common.py`, and
 `research/scripted_experts/so101_pick_place_expert.py`.
 
