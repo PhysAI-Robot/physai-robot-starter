@@ -373,19 +373,10 @@ def run_viewer(
             render=True,
             domain_randomization=domain_randomization,
         )
-        # camera_stride=0: the env never renders cameras inline on the
-        # physics thread in interactive mode, for any policy. Rendering is
-        # comparatively expensive, so doing it inline stalled physics
-        # stepping every stride'th tick; the async camera thread below
-        # (async_cameras=True) is the one source of camera frames instead —
-        # Host._sync_observation_images() feeds a policy that needs vision
-        # from that same cache. This is now the standard for so101 in
-        # --viewer/--serve, not just the idle/scripted case.
-        #
-        # The gripper torque keeps EnvConfig's tuned 0.3 N*m cap here too. The
-        # model's own limit (3.35 N*m) drives ~34 N per pad against a 0.29 N
-        # cube and sinks it ~10 mm into the pads and fingers; the scripted
-        # grasp drops the cube below ~0.1 N*m, so 0.3 keeps a 3x margin.
+        # camera_stride=0: interactive mode never renders cameras inline on the
+        # physics thread (a render stalls stepping). The async camera thread
+        # (async_cameras=True) is the one frame source, and
+        # Host._sync_observation_images() feeds vision policies from its cache.
         viewer_config = replace(viewer_config, camera_stride=0)
         env = create_robot(
             args.robot,
