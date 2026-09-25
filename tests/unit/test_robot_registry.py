@@ -168,3 +168,36 @@ def test_register_embodiment_wires_every_factory_in_one_call():
     navigate("_fake_test_embodiment")
     create_robot("_fake_test_embodiment")
     assert calls == ["env_config", "navigation", "factory"]
+
+
+def test_piecemeal_registration_extends_one_registered_robot():
+    from physai.robots.registry import (
+        available_ros2_robots,
+        create_env_config,
+        register_env_config,
+        register_robot,
+        register_ros2_node,
+        robot_kind,
+    )
+
+    register_robot("_fake_piecemeal", lambda **_: object(), kind="piece")
+    register_env_config("_fake_piecemeal", lambda **kwargs: kwargs)
+    register_ros2_node("_fake_piecemeal", object)
+
+    assert robot_kind("_fake_piecemeal") == "piece"
+    assert create_env_config("_fake_piecemeal", seed=1) == {"seed": 1}
+    assert "_fake_piecemeal" in available_ros2_robots()
+
+
+def test_a_field_can_be_filled_once_and_only_for_a_registered_robot():
+    from physai.robots.registry import register_env_config, register_robot
+
+    register_robot("_fake_once", lambda **_: object())
+    register_env_config("_fake_once", lambda **_: None)
+
+    with pytest.raises(ValueError, match="environment config .* already registered"):
+        register_env_config("_fake_once", lambda **_: None)
+    with pytest.raises(ValueError, match="not registered"):
+        register_env_config("_fake_missing", lambda **_: None)
+    with pytest.raises(ValueError, match="already registered"):
+        register_robot("_fake_once", lambda **_: object())
