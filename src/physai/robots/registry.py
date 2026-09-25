@@ -25,6 +25,7 @@ SceneDefaultsFactory = Callable[[], dict[str, Any]]
 RobotPolicyFactory = Callable[..., Any]
 SharedAttachHook = Callable[[Any], None]
 SharedInstanceFactory = Callable[[Any, Any], Any]
+JogFactory = Callable[[Any], Callable[..., Any]]
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,7 @@ class RobotDescriptor:
     navigation: NavigationFactory | None = None
     shared_attach: SharedAttachHook | None = None
     shared_instance: SharedInstanceFactory | None = None
+    jog: JogFactory | None = None
 
 
 _ROBOTS: dict[str, RobotDescriptor] = {}
@@ -222,6 +224,17 @@ def navigate(name: str, **kwargs: Any) -> Any:
     return factory(**kwargs)
 
 
+def create_jog_resolver(name: str, robot: Any) -> Callable[..., Any] | None:
+    """The robot's resolver from a Cartesian jog twist to a joint `Action`, if any.
+
+    Called with the constructed robot (or the port wrapping it), which owns the
+    state the resolver reads. A robot without jogging returns None, and a UI
+    hides its jog controls.
+    """
+    factory = _having("jog").get(name)
+    return None if factory is None else factory(robot)
+
+
 def shared_attach(name: str, spec: Any) -> None:
     """Call the robot's shared-world attach hook, if it registered one."""
     hook = _having("shared_attach").get(name)
@@ -251,6 +264,7 @@ def _load_builtins() -> None:
     if "so101" not in _ROBOTS:
         from .so101.env import EnvConfig
         from .so101.factory import make_so101
+        from .so101.jog import so101_jog_resolver
         from .so101.ros2_node import SO101ROS2Node
         from .so101.scene import scene_defaults as so101_scene_defaults
         from .so101.shared import SO101SharedInstance, so101_shared_attach
@@ -266,6 +280,7 @@ def _load_builtins() -> None:
                 ros2_node=SO101ROS2Node,
                 shared_attach=so101_shared_attach,
                 shared_instance=SO101SharedInstance,
+                jog=so101_jog_resolver,
             ),
         )
     if "turtlebot4" not in _ROBOTS:

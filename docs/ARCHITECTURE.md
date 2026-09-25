@@ -542,14 +542,17 @@ reachable area.
 Tracked here rather than silently left implicit, since this document is
 meant to be the frozen reference:
 
-- **Jog resolver ownership.** The jog math is shared
-  (`robots/so101/jog.py`), but `TwistToJointResolver` is still constructed
-  separately in `robots/so101/env.py`, `robots/so101/shared.py`, `web/host.py`
-  (a fallback for robots without `resolve_twist_jog`, found by `hasattr`), and
-  `scripts/teleop_keyboard.py`, instead of each robot registering its own jog
-  factory on `RobotDescriptor`. The client-facing capability model (UIs
-  render controls from `RobotSpec`) is already correct; only the
-  resolver-construction side needs the extra registry field.
+- **Jog resolver construction.** A robot registers its jog resolver on
+  `RobotDescriptor.jog` and the Host asks the registry
+  (`robots.registry.create_jog_resolver()`), so the Host no longer probes the
+  robot. The jog math is shared (`robots/so101/jog.py`), but
+  `TwistToJointResolver` is still built separately in `robots/so101/env.py`,
+  `robots/so101/shared.py`, and `scripts/teleop_keyboard.py`.
+- **Host mode branching.** `Host` still branches on single-robot vs shared
+  world in about a dozen places, because only a single robot runs a policy,
+  records, or plays back. The branches go away when shared-world sessions gain
+  tasks and policies (see below), not by splitting `Host` in two; its lease
+  (`web/lease.py`) and camera worker (`web/cameras.py`) are already separate.
 - **`scripts/` composition-root adoption.** Scripts other than `run_sim.py`
   (`workspace_map.py`, `benchmark_ik.py`, `render_docs_media.py`,
   `teleop_keyboard.py`, `collect_demos.py`, `eval_policy.py`,

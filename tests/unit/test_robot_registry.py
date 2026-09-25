@@ -201,3 +201,17 @@ def test_a_field_can_be_filled_once_and_only_for_a_registered_robot():
         register_env_config("_fake_missing", lambda **_: None)
     with pytest.raises(ValueError, match="already registered"):
         register_robot("_fake_once", lambda **_: object())
+
+
+def test_only_robots_that_register_a_jog_resolver_get_one():
+    from physai.robots import create_jog_resolver
+
+    class Arm:
+        def resolve_twist_jog(self):
+            return "resolved"
+
+    resolver = create_jog_resolver("so101", Arm())
+
+    assert resolver() == "resolved"
+    assert create_jog_resolver("turtlebot4", object()) is None
+    assert create_jog_resolver("_no_such_robot", object()) is None
