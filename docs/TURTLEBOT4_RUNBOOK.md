@@ -45,7 +45,7 @@ Real message and executor coverage requires ROS2 Jazzy:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/robots/turtlebot/test_ros2_node.py -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/robots/turtlebot/test_turtlebot_ros2_node.py -q
 ```
 
 Run a bounded ROS2 MuJoCo smoke test:
