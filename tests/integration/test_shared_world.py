@@ -34,7 +34,7 @@ def make_world() -> SharedWorld:
     )
 
 
-def test_heterogeneous_instances_share_one_model_and_clock():
+def test_instances_share_one_model_and_clock_and_their_controls_are_isolated():
     world = make_world()
 
     assert set(world.bindings) == {"arm_1", "base_1"}
@@ -48,9 +48,6 @@ def test_heterogeneous_instances_share_one_model_and_clock():
     assert world.step_count == 1
     assert world.data.time == pytest.approx(world.model.opt.timestep * world.n_substeps)
 
-
-def test_controls_are_isolated_to_the_target_instance():
-    world = make_world()
     arm_actuator = world.bindings["arm_1"].actuator_ids["shoulder_pan"]
     base_actuator = world.bindings["base_1"].actuator_ids["forward"]
     before = world.data.ctrl.copy()
@@ -60,10 +57,6 @@ def test_controls_are_isolated_to_the_target_instance():
     assert world.data.ctrl[arm_actuator] == before[arm_actuator]
     assert world.data.ctrl[base_actuator] == pytest.approx(0.2)
 
-
-def test_unknown_or_invalid_instance_controls_fail_clearly():
-    world = make_world()
-
     with pytest.raises(KeyError, match="unknown robot instance"):
         world.set_controls("missing", {"forward": 0.1})
     with pytest.raises(KeyError, match="no actuator"):
@@ -72,7 +65,7 @@ def test_unknown_or_invalid_instance_controls_fail_clearly():
         world.set_controls("base_1", {"forward": np.nan})
 
 
-def test_shared_manifest_keeps_turtlebot_collision_enabled_meshes_visible():
+def test_a_shared_world_keeps_its_meshes_visible_and_the_arm_cameras():
     world = SharedWorld(
         (RobotInstanceConfig("base_1", TURTLEBOT_MODEL, "turtlebot4"),),
         shared_attach=shared_attach,
@@ -90,15 +83,12 @@ def test_shared_manifest_keeps_turtlebot_collision_enabled_meshes_visible():
     assert meshes
     assert all(item["visual"] for item in meshes)
 
-
-def test_shared_so101_instance_exposes_front_and_wrist_cameras():
-    world = SharedWorld(
+    arm_world = SharedWorld(
         (RobotInstanceConfig("arm_1", SO101_MODEL, "so101"),),
         shared_attach=shared_attach,
     )
     camera_names = {
-        mujoco.mj_id2name(world.model, mujoco.mjtObj.mjOBJ_CAMERA, camera_id)
-        for camera_id in range(world.model.ncam)
+        mujoco.mj_id2name(arm_world.model, mujoco.mjtObj.mjOBJ_CAMERA, camera_id)
+        for camera_id in range(arm_world.model.ncam)
     }
-
     assert camera_names == {"arm_1__front", "arm_1__wrist"}

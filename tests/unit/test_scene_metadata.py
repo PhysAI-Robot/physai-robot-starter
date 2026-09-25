@@ -3,42 +3,24 @@
 import json
 
 from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
-from physai.sim.scenes.common import REPO_ROOT
+from physai.sim.scenes.common import REPO_ROOT, build_manipulation_spec
 
 
-def test_repo_paths_are_stored_relative_to_the_repository():
+def test_scene_metadata_is_portable_json(tmp_path):
     xml = REPO_ROOT / "assets" / "so101" / "so101_new_calib_camera.xml"
-
     for scene_type in (PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig):
         metadata = scene_type(robot_xml=xml).to_metadata()
-
         assert metadata["robot_xml"] == "assets/so101/so101_new_calib_camera.xml"
 
-
-def test_metadata_is_json_serializable_and_keeps_other_fields():
     scene = PickPlaceMinimalSceneConfig(
         robot_xml=REPO_ROOT / "assets" / "x.xml", camera_width=224
     )
-
-    metadata = json.loads(json.dumps(scene.to_metadata()))
-
+    metadata = json.loads(json.dumps(scene.to_metadata()))  # must serialize
     assert metadata["camera_width"] == 224
     assert metadata["table_size"] == list(scene.table_size)
 
-
-def test_a_path_outside_the_repository_is_kept_as_given(tmp_path):
-    outside = tmp_path / "robot.xml"
-
+    outside = tmp_path / "robot.xml"  # a path outside the repository stays as given
     metadata = PickPlaceMinimalSceneConfig(robot_xml=outside).to_metadata()
-
     assert metadata["robot_xml"] == outside.as_posix()
-
-
-def test_an_unset_path_stays_none():
     assert PickPlaceMinimalSceneConfig().to_metadata()["robot_xml"] is None
-
-
-def test_build_manipulation_spec_has_a_docstring():
-    from physai.sim.scenes.common import build_manipulation_spec
-
-    assert build_manipulation_spec.__doc__
+    assert build_manipulation_spec.__doc__  # its docstring once sat after code

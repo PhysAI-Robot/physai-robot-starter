@@ -18,7 +18,7 @@ XML = """
 """
 
 
-def test_scene_manifest_describes_static_geometry():
+def test_scene_manifest_and_state_snapshot_describe_the_world_for_the_browser():
     model = mujoco.MjModel.from_xml_string(XML)
 
     manifest = build_scene_manifest(model, robot="test")
@@ -35,9 +35,7 @@ def test_scene_manifest_describes_static_geometry():
     assert "asset" not in geometry  # meshes load through /api/mesh, not a robot path
     assert geometry["visual"] is False
 
-
-def test_state_snapshot_uses_three_js_quaternion_order():
-    model = mujoco.MjModel.from_xml_string(XML)
+    # the state snapshot uses Three.js quaternion order (x, y, z, w)
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
 

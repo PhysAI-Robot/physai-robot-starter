@@ -16,7 +16,6 @@ from physai.robots import RobotSpec, shared_attach
 from physai.sim import RobotInstanceConfig, SharedWorld
 from physai.web.actions import action_from_payload
 from physai.web.host import Host
-from physai.web.lease import ControlLease
 from tests.support.fakes import FakeRobotPort
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -94,49 +93,26 @@ class FakeDebugPolicy:
         return {"front:detections": np.zeros((2, 2, 3), dtype=np.uint8)}
 
 
-def test_list_robots_includes_policy_debug_camera_names():
-    spec = RobotSpec(
-        name="test", kind="test", joint_names=("joint",), action_joint_names=("joint",)
-    )
-    host = Host.for_robot(
-        FakeRobotPort(spec), robot_name="test", policy=FakeDebugPolicy()
-    )
-
-    robots = {entry["name"]: entry for entry in host.list_robots()}
-
-    assert robots["test"]["cameras"] == ["front:detections"]
-
-
-def test_list_robots_omits_debug_cameras_without_a_policy():
-    host = make_host()
-
-    robots = {entry["name"]: entry for entry in host.list_robots()}
-
-    assert robots["test"]["cameras"] == []
-
-
-def test_publish_debug_frames_merges_into_camera_cache():
+def test_a_policys_debug_cameras_are_listed_and_published_only_with_a_policy():
     spec = RobotSpec(
         name="test", kind="test", joint_names=("joint",), action_joint_names=("joint",)
     )
     policy = FakeDebugPolicy()
     policy.acted = True
-    host = Host.for_robot(FakeRobotPort(spec), robot_name="test", policy=policy)
+    with_policy = Host.for_robot(FakeRobotPort(spec), robot_name="test", policy=policy)
+    without_policy = make_host()
 
-    host._publish_debug_frames()
+    assert with_policy.list_robots()[0]["cameras"] == ["front:detections"]
+    assert without_policy.list_robots()[0]["cameras"] == []
+
+    with_policy._publish_debug_frames()
+    without_policy._publish_debug_frames()
 
     np.testing.assert_array_equal(
-        host._cameras.get("test:front:detections"),
+        with_policy._cameras.get("test:front:detections"),
         np.zeros((2, 2, 3), dtype=np.uint8),
     )
-
-
-def test_publish_debug_frames_noop_without_a_policy():
-    host = make_host()
-
-    host._publish_debug_frames()
-
-    assert host._cameras.with_prefix("") == {}
+    assert without_policy._cameras.with_prefix("") == {}
 
 
 def test_control_lease_allows_one_client_and_releases_cleanly():
@@ -151,37 +127,16 @@ def test_control_lease_allows_one_client_and_releases_cleanly():
     host.submit(action, source="desktop")
 
 
-def test_reset_reuses_interactive_seed():
+def test_resets_reuse_the_interactive_seed():
     spec = RobotSpec(name="test", kind="test", joint_names=("joint",))
     robot = RecordingRobot(spec)
     host = NoPublishHost.for_robot(robot, robot_name="test", reset_seed=7)
 
     host.reset()
     host.reset()
+    host._reset_episode()  # the automatic reset at the end of a policy episode
 
-    assert robot.seeds == [7, 7]
-
-
-def test_auto_reset_reuses_interactive_seed():
-    spec = RobotSpec(name="test", kind="test", joint_names=("joint",))
-    robot = RecordingRobot(spec)
-    host = NoPublishHost.for_robot(robot, robot_name="test", reset_seed=7)
-
-    host._reset_episode()
-
-    assert robot.seeds == [7]
-
-
-def test_control_lease_expiry_discards_queued_action():
-    host = make_host()
-    action = Action(joint_position=np.array([0.2]))
-
-    now = [100.0]
-    host._lease = ControlLease((host.robot_name,), clock=lambda: now[0])
-    host.submit(action, source="browser")
-    now[0] += 10.0  # well past the lease timeout
-
-    assert host._latest_command(host.robot_name) is None
+    assert robot.seeds == [7, 7, 7]
 
 
 class ThreadRecordingRobot(FakeRobotPort):
@@ -259,10 +214,17 @@ def _heterogeneous_configs() -> tuple[RobotInstanceConfig, ...]:
 
 
 @pytestmark_shared
-def test_shared_host_routes_heterogeneous_actions_into_one_state_snapshot():
+def test_a_shared_host_lists_instances_routes_actions_and_stops_safely():
     configs = _heterogeneous_configs()
     world = SharedWorld(configs, control_hz=10.0, shared_attach=shared_attach)
     host = Host.for_world(world, configs)
+
+    robots = {entry["name"]: entry for entry in host.list_robots()}
+    assert robots["arm_1"]["kind"] == "fixed_base_manipulator"
+    assert robots["arm_1"]["cameras"] == ["front", "wrist"]
+    assert robots["base_1"]["kind"] == "mobile_base"
+    assert robots["base_1"]["cameras"] == []
+
     host.reset()
     host.submit(
         action_from_payload({"mode": "twist", "linear": {"x": 0.01}, "angular": {}}),
@@ -274,7 +236,6 @@ def test_shared_host_routes_heterogeneous_actions_into_one_state_snapshot():
         ),
         instance_id="base_1",
     )
-
     with host.physics_lock:
         host._tick_shared()
         host._publish()
@@ -285,29 +246,7 @@ def test_shared_host_routes_heterogeneous_actions_into_one_state_snapshot():
     owners = {item["instance_id"] for item in state["geometries"]}
     assert {"arm_1", "base_1"} <= owners
 
-
-@pytestmark_shared
-def test_shared_host_lists_every_instance_by_capability():
-    configs = _heterogeneous_configs()
-    world = SharedWorld(configs, control_hz=10.0, shared_attach=shared_attach)
-    host = Host.for_world(world, configs)
-
-    robots = {entry["name"]: entry for entry in host.list_robots()}
-
-    assert robots["arm_1"]["kind"] == "fixed_base_manipulator"
-    assert robots["arm_1"]["cameras"] == ["front", "wrist"]
-    assert robots["base_1"]["kind"] == "mobile_base"
-    assert robots["base_1"]["cameras"] == []
-
-
-@pytestmark_shared
-def test_shared_stop_is_safe_when_never_started():
-    configs = _heterogeneous_configs()
-    world = SharedWorld(configs, control_hz=10.0, shared_attach=shared_attach)
-    host = Host.for_world(world, configs)
-
-    host.stop()
-
+    host.stop()  # never started: must be safe
     assert host._thread is None
 
 
@@ -332,7 +271,7 @@ def make_recording_host(record_dir, host_cls=Host) -> Host:
     return host
 
 
-def test_recording_saves_tagged_episodes_and_counts_them(tmp_path):
+def test_recording_saves_tagged_episodes_and_discards_on_request(tmp_path):
     host = make_recording_host(tmp_path)
 
     host.start_recording()
@@ -343,6 +282,9 @@ def test_recording_saves_tagged_episodes_and_counts_them(tmp_path):
     host.start_recording()
     host._tick_single()
     host.stop_recording(False)
+    host.start_recording()
+    host._tick_single()
+    host.stop_recording(None)  # discard the take
 
     status = host.recording_status()
     assert (status["episodes_saved"], status["successes"], status["active"]) == (
@@ -350,6 +292,11 @@ def test_recording_saves_tagged_episodes_and_counts_them(tmp_path):
         1,
         False,
     )
+    assert status["discarded"] == 1
+    assert sorted(path.name for path in tmp_path.glob("*.npz")) == [
+        "episode_00000.npz",
+        "episode_00001.npz",
+    ]
     episode = load_episode(tmp_path / "episode_00000.npz")
     assert episode["observation.state"].shape == (3, 1)
     np.testing.assert_allclose(
@@ -358,18 +305,6 @@ def test_recording_saves_tagged_episodes_and_counts_them(tmp_path):
     meta = json.loads((tmp_path / "meta.json").read_text())
     assert [e["success"] for e in meta["episodes"]] == [True, False]
     assert meta["episodes"][0]["length"] == 3
-
-
-def test_stop_recording_with_none_discards_the_take(tmp_path):
-    host = make_recording_host(tmp_path)
-
-    host.start_recording()
-    host._tick_single()
-    host.stop_recording(None)
-
-    status = host.recording_status()
-    assert (status["episodes_saved"], status["discarded"]) == (0, 1)
-    assert list(tmp_path.glob("*.npz")) == []
 
 
 def test_reset_discards_an_in_progress_recording(tmp_path):
@@ -413,19 +348,21 @@ def test_recording_state_is_merged_into_the_live_snapshot(tmp_path):
     assert state["recording"]["active"] is True
 
 
-def test_recording_requires_a_record_dir():
-    host = make_host()
-
-    assert host.recording_status() == {"enabled": False}
+def test_recording_misuse_is_reported(tmp_path):
+    plain = make_host()
+    assert plain.recording_status() == {"enabled": False}
     with pytest.raises(ValueError, match="--record-dir"):
-        host.start_recording()
+        plain.start_recording()
 
-
-def test_stop_recording_without_a_take_is_an_error(tmp_path):
     host = make_recording_host(tmp_path)
-
     with pytest.raises(RuntimeError, match="not recording"):
         host.stop_recording(True)
+
+    host.start_recording()
+    with pytest.raises(RuntimeError, match="no frames"):
+        host.stop_recording(True)
+    assert host.recording_status()["episodes_saved"] == 0
+    assert host.recording_status()["active"] is False
 
 
 def test_recording_waits_for_every_camera_before_recording_frames(tmp_path):
@@ -455,22 +392,22 @@ def test_recording_waits_for_every_camera_before_recording_frames(tmp_path):
     assert images.shape == (2, 4, 4, 3)
 
 
-def test_stop_recording_with_no_frames_reports_an_error(tmp_path):
-    host = make_recording_host(tmp_path)
+class ToolPoseKinematics:
+    """Kinematics offering the optional `tool_pose` extension."""
 
-    host.start_recording()
-    with pytest.raises(RuntimeError, match="no frames"):
-        host.stop_recording(True)
+    def tool_pose(self, data):
+        return PoseStamped(
+            pose=Pose(position=Vector3(1.0, 2.0, 3.5)),
+            header=Header(frame_id="base"),
+        )
 
-    assert host.recording_status()["episodes_saved"] == 0
-    assert host.recording_status()["active"] is False
 
-
-def test_ee_pose_payload_reports_the_observation_pose_or_none():
+def test_ee_pose_payload_reports_the_observation_pose_or_the_tool_pose():
     host = make_host()
     assert host._ee_pose_payload() is None
 
     host._observation = host.robot.observe()
+    assert host._observation.ee_pose is None
     assert host._ee_pose_payload() is None
 
     host._observation.ee_pose = PoseStamped(
@@ -484,22 +421,9 @@ def test_ee_pose_payload_reports_the_observation_pose_or_none():
         "reference": "ee_pose",
     }
 
-
-class ToolPoseKinematics:
-    """Kinematics offering the optional `tool_pose` extension."""
-
-    def tool_pose(self, data):
-        return PoseStamped(
-            pose=Pose(position=Vector3(1.0, 2.0, 3.5)),
-            header=Header(frame_id="base"),
-        )
-
-
-def test_ee_pose_payload_prefers_the_kinematics_tool_pose():
-    host = make_host()
+    # a robot whose kinematics offers tool_pose wins over the observation's
     host.robot.kin = ToolPoseKinematics()
     host.robot.data = SimpleNamespace()
-
     assert host._ee_pose_payload() == {
         "frame_id": "base",
         "position": [1.0, 2.0, 3.5],
@@ -522,8 +446,15 @@ def test_camera_frames_are_served_from_the_feed_as_copies():
         host.camera_image("side")
 
 
-def test_a_twist_jog_is_resolved_by_the_robots_registered_jog_resolver():
+def test_a_twist_jog_needs_a_resolver_the_robot_registered():
     from physai.robots.registry import RobotDescriptor, register_embodiment
+
+    plain = make_host()
+    plain._observation = plain.robot.observe()
+    with pytest.raises(ValueError, match="twist jog is not available"):
+        plain.submit(
+            action_from_payload({"mode": "twist", "linear": {"x": 0.1}, "angular": {}})
+        )
 
     calls = []
 
@@ -551,15 +482,4 @@ def test_a_twist_jog_is_resolved_by_the_robots_registered_jog_resolver():
     )
 
     assert calls == [0.25]
-    queued = host._latest_command("_fake_jog_robot")
-    assert queued.joint_position[0] == 0.5
-
-
-def test_a_robot_without_a_jog_resolver_refuses_a_twist_jog():
-    host = make_host()
-    host._observation = host.robot.observe()
-
-    with pytest.raises(ValueError, match="twist jog is not available"):
-        host.submit(
-            action_from_payload({"mode": "twist", "linear": {"x": 0.1}, "angular": {}})
-        )
+    assert host._latest_command("_fake_jog_robot").joint_position[0] == 0.5

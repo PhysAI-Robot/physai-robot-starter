@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from physai.contracts import ImageFrame
 from research.classical_control.so101_visual_servo import (
@@ -24,7 +25,7 @@ def test_color_blob_detector_returns_weighted_centroid():
     assert feature.confidence > 0.99
 
 
-def test_camera_calibration_projects_pixel_to_base_plane():
+def test_camera_calibration_projects_pixels_and_rejects_a_plane_behind_it():
     calibration = CameraCalibration(
         fx=100.0,
         fy=100.0,
@@ -37,27 +38,11 @@ def test_camera_calibration_projects_pixel_to_base_plane():
     point = calibration.pixel_to_plane([60.0, 40.0], plane_z=0.0)
 
     np.testing.assert_allclose(point, [0.1, -0.1, 0.0])
+    with pytest.raises(ValueError, match="behind"):
+        calibration.pixel_to_plane([50.0, 50.0], plane_z=-2.0)
 
 
-def test_camera_calibration_rejects_plane_behind_camera():
-    calibration = CameraCalibration(
-        fx=100.0,
-        fy=100.0,
-        cx=0.0,
-        cy=0.0,
-        rotation_base_camera=np.eye(3),
-        translation_base_camera=[0.0, 0.0, -1.0],
-    )
-
-    try:
-        calibration.pixel_to_plane([0.0, 0.0], plane_z=-2.0)
-    except ValueError as exc:
-        assert "behind" in str(exc)
-    else:
-        raise AssertionError("expected a plane-behind-camera error")
-
-
-def test_draw_crosshair_marks_the_pixel_without_mutating_the_source():
+def test_draw_crosshair_marks_the_pixel_and_clips_at_the_border():
     image = np.zeros((20, 20, 3), dtype=np.uint8)
 
     annotated = draw_crosshair(image, np.array([10.0, 8.0]), size=3, color=(0, 255, 0))
@@ -68,13 +53,8 @@ def test_draw_crosshair_marks_the_pixel_without_mutating_the_source():
     assert tuple(annotated[8, 7]) == (0, 255, 0)
     assert tuple(annotated[0, 0]) == (0, 0, 0)
 
-
-def test_draw_crosshair_clips_an_out_of_bounds_pixel():
-    image = np.zeros((10, 10, 3), dtype=np.uint8)
-
-    annotated = draw_crosshair(image, np.array([-5.0, 4.0]))
-
-    assert annotated.shape == image.shape
+    small = np.zeros((10, 10, 3), dtype=np.uint8)
+    assert draw_crosshair(small, np.array([-5.0, 4.0])).shape == small.shape
 
 
 def _bare_policy() -> SO101VisualServoPolicy:
@@ -88,15 +68,12 @@ def _bare_policy() -> SO101VisualServoPolicy:
     return policy
 
 
-def test_debug_frames_is_empty_before_any_detection():
+def test_debug_frames_are_empty_until_a_detection_then_one_overlay_per_camera():
     policy = _bare_policy()
 
     assert policy.debug_camera_names == ("front:detections", "wrist:detections")
     assert policy.debug_frames() == {}
 
-
-def test_debug_frames_returns_an_overlay_per_detected_camera():
-    policy = _bare_policy()
     frame = np.zeros((6, 6, 3), dtype=np.uint8)
     feature = VisualFeature(pixel=np.array([2.0, 3.0]), area=5, confidence=0.9)
     policy._last_detections["front"] = (frame, feature)

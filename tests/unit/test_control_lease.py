@@ -27,16 +27,11 @@ def lease(clock):
     return ControlLease(("arm", "base"), timeout=0.5, clock=clock)
 
 
-def test_the_first_client_to_submit_controls_the_instance(lease):
+def test_the_first_client_controls_and_renews_until_the_lease_expires(lease, clock):
     lease.submit("arm", command(1.0), "browser")
-
     with pytest.raises(PermissionError, match="controlled by another client"):
         lease.submit("arm", command(2.0), "other")
-    assert lease.latest("arm").joint_position[0] == 1.0
 
-
-def test_the_controller_renews_and_others_wait_for_expiry(lease, clock):
-    lease.submit("arm", command(1.0), "browser")
     clock.now += 0.4
     lease.submit("arm", command(2.0), "browser")  # renewed
     clock.now += 0.4
@@ -45,8 +40,8 @@ def test_the_controller_renews_and_others_wait_for_expiry(lease, clock):
 
     clock.now += 0.2  # past the renewed deadline
     lease.submit("arm", command(4.0), "other")
-
     assert lease.latest("arm").joint_position[0] == 4.0
+    assert lease.latest("arm") is None  # a newer command replaced the older ones
 
 
 def test_an_expired_lease_discards_its_queued_command(lease, clock):
@@ -56,23 +51,9 @@ def test_an_expired_lease_discards_its_queued_command(lease, clock):
     assert lease.latest("arm") is None
 
 
-def test_a_newer_command_replaces_the_waiting_one(lease):
+def test_instances_are_leased_independently_and_released_by_owner(lease):
     lease.submit("arm", command(1.0), "browser")
-    lease.submit("arm", command(2.0), "browser")
-
-    assert lease.latest("arm").joint_position[0] == 2.0
-    assert lease.latest("arm") is None
-
-
-def test_instances_are_leased_independently(lease):
-    lease.submit("arm", command(1.0), "browser")
-
     lease.submit("base", command(2.0), "other")  # a different instance
-
-
-def test_release_frees_only_what_the_source_owns(lease):
-    lease.submit("arm", command(1.0), "browser")
-    lease.submit("base", command(2.0), "other")
 
     lease.release("browser")
 

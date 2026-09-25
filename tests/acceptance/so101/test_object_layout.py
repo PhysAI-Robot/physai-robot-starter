@@ -76,11 +76,11 @@ def _assert_matches(actual, expected, path=""):
         )
 
 
-@pytest.mark.parametrize("case", sorted(GOLDEN))
-def test_reset_places_objects_where_it_used_to(case):
-    env = _build(case)
-    try:
-        for seed, expected in GOLDEN[case].items():
-            _assert_matches(_snapshot(env, int(seed)), expected, f"{case}/{seed}")
-    finally:
-        env.close()
+def test_reset_places_objects_where_it_used_to():
+    for case in sorted(GOLDEN):
+        env = _build(case)
+        try:
+            for seed, expected in GOLDEN[case].items():
+                _assert_matches(_snapshot(env, int(seed)), expected, f"{case}/{seed}")
+        finally:
+            env.close()
