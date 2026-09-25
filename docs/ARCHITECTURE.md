@@ -648,8 +648,9 @@ meant to be the frozen reference:
   resolver-construction side needs the extra registry field.
 - **`scripts/` composition-root adoption.** Most scripts other than
   `run_sim.py`'s robot construction still hand-assemble `EnvConfig`/env
-  objects instead of calling `physai.runtime.create_runtime()` — see
-  [docs/MIGRATION.md](MIGRATION.md) for the per-script list. They are
+  objects instead of calling `physai.runtime.create_runtime()`
+  (`workspace_map.py`, `benchmark_ik.py`, `render_docs_media.py`,
+  `teleop_keyboard.py`, and `run_sim.py`'s task/policy assembly). They are
   safety-gated either way (the gate lives in the adapter, not the
   composition path).
 - **Session manifest adoption.** `physai.config.manifest.load_manifest()` is

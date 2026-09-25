@@ -414,8 +414,6 @@ is also documented there.
 - Runbooks: [SO-101](docs/SO101_RUNBOOK.md),
   [TurtleBot4](docs/TURTLEBOT4_RUNBOOK.md), and the
   [web viewer](docs/WEB_VIEWER_RUNBOOK.md).
-- [Migration record](docs/MIGRATION.md): the core-architecture-freeze
-  restructuring, old path -> new path.
 - [Architecture decisions](docs/adr/): the decisions behind the frozen design.
 - [Contributing](CONTRIBUTING.md): contribution workflow and commit format.
 - [Third-party notices](THIRD_PARTY_NOTICES.md): asset and model sources,

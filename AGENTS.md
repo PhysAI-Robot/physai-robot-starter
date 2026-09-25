@@ -12,8 +12,6 @@ Keep each document focused on one audience:
 - `README.md` is the user-facing setup and workflow guide.
 - `docs/ARCHITECTURE.md` is the internal design reference and the source of
   truth for module boundaries and contracts.
-- `docs/MIGRATION.md` is the historical record of the core-architecture-freeze
-  restructuring (old path -> new path); it is not a plan to execute.
 - `docs/adr/` records the decisions behind the frozen design, one file per
   decision.
 - `research/<topic>/README.md` is that research topic's own runbook (setup,
