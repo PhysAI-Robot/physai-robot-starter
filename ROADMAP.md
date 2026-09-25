@@ -118,7 +118,7 @@ Definition of done:
 
 A camera-only state-machine pipeline (color segmentation or fiducials, pose estimate, approach, grasp, place), all actions passing through the safety layer. This is the "before learning" reference.
 
-- [x] Perception module without simulator ground truth (`ColorBlobDetector` in `src/physai/robots/so101/visual_servo.py`; reads camera calibration only, never object pose).
+- [x] Perception module without simulator ground truth (`ColorBlobDetector` in `research/classical_control/so101_visual_servo.py`; reads camera calibration only, never object pose).
 - [x] State machine covering approach, grasp, lift, place, and recovery on failure (`SO101VisualServoPolicy`, registered as the `visual_servo` policy).
 - [x] All actions pass the safety layer: `SafetyController` now gates the direct-MuJoCo path inside `DirectMuJoCoAdapter`, not only the ROS2 and Gymnasium paths.
 - [ ] Report position error, settling time, and categorized failure reasons.
@@ -132,7 +132,7 @@ Train from scripted-expert demonstrations. The configuration must fit a single 6
 
 - [ ] Fix and document the training configuration (image size, chunk size, batch size, precision).
 - [ ] `scripts/collect_demos.py`: export standard `LeRobotDataset` format (currently a LeRobot-shaped `.npz`, partial).
-- [ ] `scripts/train_act.py`: fixed seeds, logged loss curves, checkpoint metadata.
+- [ ] `research/imitation_learning/train_act.py`: fixed seeds, logged loss curves, checkpoint metadata.
 - [ ] `scripts/eval_policy.py`: closed-loop held-out evaluation with success, collision, timeout, and unsafe-action counts.
 - [ ] At least two ablations (for example number of demonstrations, camera views, randomization on/off).
 

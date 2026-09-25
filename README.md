@@ -95,11 +95,10 @@ In another terminal, open the browser client:
 MUJOCO_GL=egl uv run python scripts/run_web.py --connect http://127.0.0.1:8000
 ```
 
-A minimal Tk desktop window is also available as a fallback when a browser
-isn't convenient; it never grows features beyond a live scene and camera
-panels (see [ADR 4](docs/adr/0004-tk-viewer-frozen.md)). Add `--viewer` in
-place of `--serve` above, or alongside it to attach both clients to the same
-host:
+MuJoCo's own desktop viewer is also available as a fallback when a browser
+isn't convenient; its scope stays at simulation render and basic status (see
+[ADR 4](docs/adr/0004-tk-viewer-frozen.md)). Add `--viewer` in place of
+`--serve` above, or alongside it to attach both clients to the same host:
 
 ```bash
 uv run python scripts/run_sim.py --viewer
@@ -218,9 +217,8 @@ installs its training dependency; for a base-only environment, add it with:
 uv sync --extra training
 ```
 
-The bridge is ready for training integration, but the canonical SO-101 action
-layout, dataset metadata, checkpoint compatibility, and shared evaluation
-report are still tracked as open roadmap work.
+The bridge is ready for training integration; the remaining Phase 2 work is
+tracked in the [Roadmap](ROADMAP.md).
 
 ## Phase 1 workflows
 
@@ -413,6 +411,9 @@ is also documented there.
 
 - [Architecture](docs/ARCHITECTURE.md): runtime composition, module ownership,
   contracts, and extension boundaries.
+- Runbooks: [SO-101](docs/SO101_RUNBOOK.md),
+  [TurtleBot4](docs/TURTLEBOT4_RUNBOOK.md), and the
+  [web viewer](docs/WEB_VIEWER_RUNBOOK.md).
 - [Migration record](docs/MIGRATION.md): the core-architecture-freeze
   restructuring, old path -> new path.
 - [Architecture decisions](docs/adr/): the decisions behind the frozen design.

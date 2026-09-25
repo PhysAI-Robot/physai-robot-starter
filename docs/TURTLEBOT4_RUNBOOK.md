@@ -148,8 +148,9 @@ Navigation parameters are in `configs/nav2/turtlebot4/params.yaml`. Keep the dum
 map for the first Nav2 smoke test; replace it with a real map only after the
 map-frame and odometry-frame relationship is understood.
 
-Open navigation work is:
-
+Open navigation work: count physical MuJoCo contacts during the Nav2 obstacle
+acceptance run (`scripts/validate_nav2_obstacle.py` currently checks only
+`/scan` detection and the goal result).
 
 Later planner/VLM/VLA stages can target TurtleBot waypoints through the same
 shared plan and action contracts; they are not required for the first
