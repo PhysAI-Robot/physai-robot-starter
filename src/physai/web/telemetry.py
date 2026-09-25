@@ -107,7 +107,6 @@ def build_scene_manifest(
         geom_type = int(model.geom_type[geom_id])
         is_mesh = geom_type == int(mujoco.mjtGeom.mjGEOM_MESH)
         mesh_id = int(model.geom_dataid[geom_id]) if is_mesh else -1
-        mesh_name = _name(model, mujoco.mjtObj.mjOBJ_MESH, mesh_id) if is_mesh else None
         material_id = int(model.geom_matid[geom_id])
         rgba = (
             model.mat_rgba[material_id]
@@ -131,9 +130,6 @@ def build_scene_manifest(
                     or (
                         instance_prefixes is not None and model.geom_group[geom_id] != 3
                     )
-                ),
-                "asset": (
-                    f"/assets/so101/assets/{mesh_name}.stl" if mesh_name else None
                 ),
                 "mesh_id": mesh_id if is_mesh else None,
                 "scale": (

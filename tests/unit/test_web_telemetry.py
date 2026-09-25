@@ -32,7 +32,7 @@ def test_scene_manifest_describes_static_geometry():
     assert geometry["body"] == "arm"
     np.testing.assert_allclose(geometry["size"], [0.1, 0.02, 0.02])
     np.testing.assert_allclose(geometry["rgba"], [0.2, 0.4, 0.8, 1.0])
-    assert geometry["asset"] is None
+    assert "asset" not in geometry  # meshes load through /api/mesh, not a robot path
     assert geometry["visual"] is False
 
 
