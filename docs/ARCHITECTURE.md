@@ -108,7 +108,7 @@ src/physai/
 ├── control/           action resolution and rate limiting
 ├── data/              episode recording, metadata, evaluation, and Gymnasium adapter
 ├── bridge/            ROS2 transport, message mapping, adapters, and tick loop
-├── runtime/           robot-task-policy composition and safety orchestration
+├── runtime/           robot-task-policy composition and manifest sessions
 └── web/               the one Host class, FastAPI app, telemetry, static client
 
 research/
@@ -148,8 +148,9 @@ suite via `tests/boundaries/test_import_boundaries.py`, so a violation fails
   dependencies out of model-free workflows; a research module registers
   itself on import instead of a core registry importing it.
 - **Composition Root:** `physai.runtime.create_runtime()` is the intended
-  composition root, and CLIs under `scripts/` should only parse arguments and
-  call it. `run_sim.py` does not yet; see
+  composition root (`physai.runtime.create_session()` builds a whole manifest
+  on top of it), and CLIs under `scripts/` should only parse arguments and call
+  it. `run_sim.py` does; other scripts do not yet, see
   [Known remaining gaps](#known-remaining-gaps).
 - **Safety Gate:** `SafetyController` validates action mode, joint order,
   finite values, timestamps, joint limits, and per-joint step limits
@@ -274,45 +275,47 @@ decoding an object-count flag.
 
 ## Session manifest
 
-One YAML file binds robot instances, scene, task, policy, backend, and viewer
-options for a run. A single-robot run is a manifest with one entry in
-`robots`. Loaded and validated by `physai.config.manifest.load_manifest()`
-(full field-by-field schema and validation rules are documented in that
-module's docstring — this section is the summary):
+One YAML file describes a run: robot instances, scene, task, policy, backend,
+simulation settings, and viewer options. A single-robot run is a manifest with
+one entry in `robots`; a `world` block (or several robots) makes it one shared
+MuJoCo world. `physai.config.manifest.load_manifest()` validates it (the field
+list and validation rules are in that module's docstring) and
+`physai.runtime.create_session()` builds it:
 
 ```yaml
 schema_version: 1
+simulation: {seed: 0}            # the one source of seed and randomization
 scene:
   name: pick_place_minimal
+  overrides: {camera_width: 640}  # scene fields, including robot_xml
 backend: direct                  # direct | ros2_sim | ros2_real
+task: pick_place                 # optional session-wide default
+success_hold_steps: 10
 robots:
   - id: arm_1
     robot: so101
-    pose:
-      position: [0.0, 0.0, 0.0]
-      quaternion: [1.0, 0.0, 0.0, 0.0]
-    task: pick_place              # optional per-instance override
-    policy: scripted               # optional; "idle" if omitted
-task: pick_place                  # optional session-wide default
-policy: idle
-viewer:
-  mode: none                      # none | native | web | both
+    config: {max_steps: 400}     # robot env fields
+    pose: {position: [0.0, 0.0, 0.0]}
+    policy: scripted             # optional per instance; "idle" if omitted
+viewer: {mode: none}             # none | native | web | both
 ```
 
-Validation resolves every `robot`/`task`/`policy` name through the existing
-registries and checks scene/robot-kind/task compatibility via
-`SceneDefinition.supports()` and `robot_kind()` — without constructing any
-robot or MuJoCo model. `backend: ros2_real` is accepted by the schema for
-forward compatibility but raises a clear "not yet implemented" error.
+Validation resolves every `robot`/`task`/`policy` name through the registries
+and checks scene/robot-kind/task compatibility without constructing a robot or
+model. `ros2_real` is accepted for forward compatibility but raises "not yet
+implemented". `create_session()` supports `backend: direct`: one robot becomes
+a `create_runtime()` composition, a `world` becomes a `SharedWorld` (whose
+robots run no task or policy yet). It injects the `simulation` seed and
+randomization into any robot config that declares those fields and rejects a
+robot config that repeats them.
 
-`configs/manifests/example_single_so101.yaml` and
-`example_heterogeneous.yaml` are worked examples.
-`physai.config.legacy` (`load_sim_config`/`load_task_config`/
-`load_world_config`, backing `configs/sim_config.yaml`,
-`configs/tasks/<robot>/*.yaml`, and `configs/worlds/*.yaml`) is unaffected
-and stays for CLI back-compat — see
-[Known remaining gaps](#known-remaining-gaps) for what still uses it instead
-of the manifest.
+`scripts/run_sim.py` builds every run this way. Its older `--config` (task
+file), `--world` (world file), and bare `--robot` inputs are converted by
+`physai.config.compat` and print a deprecation notice; the loaders in
+`physai.config.legacy` and the files under `configs/tasks/` and
+`configs/worlds/` remain for that window and for `scripts/run_ros2_sim.py`.
+Worked examples live in `configs/manifests/`. The decision is recorded in
+[ADR 10](adr/0010-manifest-adoption.md).
 
 ## Host + client API
 
@@ -547,17 +550,17 @@ meant to be the frozen reference:
   factory on `RobotDescriptor`. The client-facing capability model (UIs
   render controls from `RobotSpec`) is already correct; only the
   resolver-construction side needs the extra registry field.
-- **`scripts/` composition-root adoption.** Most scripts other than
-  `run_sim.py`'s robot construction still hand-assemble `EnvConfig`/env
-  objects instead of calling `physai.runtime.create_runtime()`
+- **`scripts/` composition-root adoption.** Scripts other than `run_sim.py`
   (`workspace_map.py`, `benchmark_ik.py`, `render_docs_media.py`,
-  `teleop_keyboard.py`, and `run_sim.py`'s task/policy assembly). They are
-  safety-gated either way (the gate lives in the adapter, not the
+  `teleop_keyboard.py`, `collect_demos.py`, `eval_policy.py`,
+  `eval_randomization.py`, `plan_task.py`) still hand-assemble `EnvConfig`/env
+  objects instead of calling `create_runtime()` or `create_session()`. They
+  are safety-gated either way (the gate lives in the adapter, not the
   composition path).
-- **Session manifest adoption.** `physai.config.manifest.load_manifest()` is
-  implemented and tested but not yet wired into `run_sim.py` or
-  `create_runtime()`; `--config`/`--world` and their legacy loaders are still
-  the only manifest-shaped configuration a script actually consumes.
+- **Legacy configuration.** `--config`, `--world`, `configs/tasks/`, and
+  `configs/worlds/` are deprecated in favor of manifests and are removed after
+  a deprecation window; `scripts/run_ros2_sim.py --config` still reads the
+  task file. Shared-world sessions run no tasks or policies yet.
 - **Registry granularity.** Adding a robot is "one `RobotDescriptor` + one
   `register_embodiment()` call," not literally one line — a robot supplying
   every optional factory sets up to six fields on that one descriptor.

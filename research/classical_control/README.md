@@ -57,7 +57,7 @@ detection failure apart from a control failure (see the
 [Web Viewer Runbook](../../docs/WEB_VIEWER_RUNBOOK.md#camera-panels)):
 
 ```bash
-uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --policy visual_servo --serve --seed 0
+uv run python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml --policy visual_servo --serve --seed 0
 ```
 
 The default detector targets the red pick cube. The fixed front camera

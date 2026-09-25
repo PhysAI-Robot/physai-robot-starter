@@ -61,12 +61,12 @@ uv run python scripts/run_sim.py
 ```
 
 It runs headlessly and writes evaluation output to `outputs/`; add `--video`
-to record the episode. Use `--seed`, `--max-steps`, and `--camera-size` to
-override the configuration (`--config configs/tasks/so101/pick_place.yaml`
-selects the checked-in task; `configs/sim_config.yaml` holds the shared seed
-and the domain-randomization switch, which stays off for the deterministic
-baseline). Image-conditioned policies need a square `--camera-size` matching
-their training resolution, such as `128` or `224`.
+to record the episode. A run is described by a session manifest
+(`--manifest configs/manifests/so101_pick_place.yaml` is the checked-in task;
+its `simulation` block holds the seed and the domain-randomization switch,
+which stays off for the deterministic baseline), and `--seed`, `--max-steps`,
+and `--camera-size` override it. Image-conditioned policies need a square
+`--camera-size` matching their training resolution, such as `128` or `224`.
 
 ### Interactive viewer
 
@@ -87,7 +87,7 @@ To run several robots in one MuJoCo scene, one model, physics data object, and
 clock:
 
 ```bash
-MUJOCO_GL=egl uv run python scripts/run_sim.py --world configs/worlds/heterogeneous.yaml --serve
+MUJOCO_GL=egl uv run python scripts/run_sim.py --manifest configs/manifests/heterogeneous_world.yaml --serve
 ```
 
 The [Web Viewer runbook](docs/WEB_VIEWER_RUNBOOK.md) covers the keyboard
@@ -231,9 +231,9 @@ downloaded artifacts.
   contracts, and extension boundaries.
 - Runbooks: [SO-101](docs/SO101_RUNBOOK.md),
   [TurtleBot4](docs/TURTLEBOT4_RUNBOOK.md), and the
-  [web viewer](docs/WEB_VIEWER_RUNBOOK.md). Robot task configurations live at
-  `configs/tasks/<robot>/<task>.yaml`, Nav2 profiles at `configs/nav2/<robot>/`,
-  and maps at `configs/maps/<environment>/`.
+  [web viewer](docs/WEB_VIEWER_RUNBOOK.md). Session manifests live in
+  `configs/manifests/`, Nav2 profiles at `configs/nav2/<robot>/`, and maps at
+  `configs/maps/<environment>/`.
 - [Architecture decisions](docs/adr/): the decisions behind the frozen design.
 - [Contributing](CONTRIBUTING.md): workflow and commit format.
 - [Agent guide](AGENTS.md): rules for coding agents working in this repository.

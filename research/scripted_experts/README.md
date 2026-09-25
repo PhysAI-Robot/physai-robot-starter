@@ -42,7 +42,7 @@ Inspect the policy interactively in the browser (see the
 workflow):
 
 ```bash
-uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --policy scripted --serve --seed 0
+uv run python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml --policy scripted --serve --seed 0
 ```
 
 ## Results

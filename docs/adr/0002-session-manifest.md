@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted. Extended and adopted by [ADR 10](0010-manifest-adoption.md).
 
 ## Context
 

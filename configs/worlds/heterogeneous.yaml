@@ -1,3 +1,4 @@
+# Deprecated: use configs/manifests/heterogeneous_world.yaml with `run_sim.py --manifest`.
 # Two robot instances in one MuJoCo model and physics clock.
 timestep: 0.002
 control_hz: 30.0
