@@ -6,10 +6,9 @@ python scripts/run_sim.py --episodes 5 --seed 0
 python scripts/run_sim.py --video --episodes 5 --seed 0
 python scripts/run_sim.py --policy constant    # baseline: do nothing
 python scripts/run_sim.py --policy lerobot --checkpoint outputs/act_ckpt
-python scripts/run_sim.py --viewer             # single-window scene + cameras UI
-python scripts/run_sim.py --viewer --serve     # GUI plus shared web host
+python scripts/run_sim.py --viewer             # native MuJoCo viewer
+python scripts/run_sim.py --viewer --serve     # native viewer plus shared web host
 python scripts/run_sim.py --serve              # web host only, no desktop window
-python scripts/run_sim.py --headless --serve   # same as --serve, made explicit
 """
 
 from __future__ import annotations
@@ -17,13 +16,30 @@ from __future__ import annotations
 import argparse
 import signal
 import threading
+import time
 from dataclasses import replace
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
 import mujoco
+import mujoco.viewer
 import numpy as np
+from _common_args import (
+    add_checkpoint,
+    add_episodes,
+    add_max_steps,
+    add_out,
+    add_policy,
+    add_robot,
+    add_seed,
+)
 
+# Registers so101's "scripted"/"visual_servo" policies and the checkpoint-
+# backed "lerobot" policy with their registries; --policy may select any of
+# them, so all load eagerly (none import torch/lerobot at module scope).
+import research.classical_control.so101_visual_servo
+import research.imitation_learning.vla_adapter
+import research.scripted_experts.so101_pick_place_expert  # noqa: F401
 from physai.config import (
     DomainRandomizationConfig,
     TaskConfig,
@@ -32,13 +48,12 @@ from physai.config import (
     load_world_config,
 )
 from physai.policy import available_policies, create_policy
-from physai.robots import available_robots, create_robot
+from physai.robots import available_robots, create_robot, shared_attach
 from physai.robots.so101 import EnvConfig
 from physai.robots.turtlebot import TurtleBot4Config
 from physai.sim import PickPlaceMinimalSceneConfig, SharedWorld
 from physai.tasks import TaskRuntime, create_task
-from physai.web.runtime import SimulationHost
-from physai.web.world_runtime import SharedWorldHost
+from physai.web.host import Host
 
 
 def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
@@ -65,203 +80,6 @@ def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
     iio.imwrite(gif, frames[::2], duration=2000 / fps, loop=0)
     print("  (no H.264 encoder found — wrote a GIF; run `uv sync` for mp4 support)")
     return gif
-
-
-class SingleWindowViewer:
-    """Tk client rendering an authoritative host and its model cameras."""
-
-    def __init__(
-        self,
-        host: SimulationHost | SharedWorldHost,
-        camera_names: list[str],
-        *,
-        serve_url: str | None = None,
-    ) -> None:
-        try:
-            import tkinter as tk
-            from tkinter import ttk
-        except ImportError as exc:
-            raise RuntimeError(
-                "the custom viewer requires Tkinter; install python3-tk"
-            ) from exc
-        self._tk = tk
-        self.root = tk.Tk()
-        label = getattr(host, "robot_name", None) or (
-            f"shared world ({len(host.instances)} robots)"
-        )
-        self.root.title(f"PhysAI MuJoCo Viewer — {label}")
-        self.root.minsize(720, 480)
-        self.host = host
-        self.camera_names = camera_names
-        self.serve_url = serve_url
-        self.closed = False
-        self.paused = False
-        self._last_drag: tuple[int, int] | None = None
-        scene_width = min(800, int(host.model.vis.global_.offwidth))
-        scene_height = min(600, int(host.model.vis.global_.offheight))
-        self._scene_renderer = mujoco.Renderer(
-            host.model, height=scene_height, width=scene_width
-        )
-        self._free_camera = mujoco.MjvCamera()
-        mujoco.mjv_defaultFreeCamera(host.model, self._free_camera)
-
-        style = ttk.Style(self.root)
-        # "clam" is the only built-in ttk theme that honors custom colors on every
-        # platform; the default themes ignore background/foreground overrides.
-        style.theme_use("clam")
-        style.configure("Toolbar.TFrame", background="#1c2224")
-        style.configure("StatusBar.TFrame", background="#eef2f0")
-        style.configure("StatusBar.TLabel", background="#eef2f0", foreground="#355448")
-        style.configure("TButton", padding=(10, 6))
-        style.configure("TLabelframe", background="#f0f3f1")
-        style.configure("TLabelframe.Label", background="#f0f3f1", foreground="#355448")
-
-        toolbar = ttk.Frame(self.root, style="Toolbar.TFrame")
-        toolbar.pack(fill=tk.X)
-        self.pause_button = ttk.Button(
-            toolbar, text="Pause", command=self.toggle_pause
-        )
-        self.pause_button.pack(side=tk.LEFT, padx=4, pady=6)
-        ttk.Button(toolbar, text="Reset", command=self.reset).pack(
-            side=tk.LEFT, padx=4
-        )
-        ttk.Button(toolbar, text="Zoom +", command=lambda: self.zoom(0.85)).pack(
-            side=tk.LEFT, padx=4
-        )
-        ttk.Button(toolbar, text="Zoom -", command=lambda: self.zoom(1.18)).pack(
-            side=tk.LEFT, padx=4
-        )
-
-        content = tk.Frame(self.root)
-        content.pack(fill=tk.BOTH, expand=True)
-        self.scene_label = tk.Label(content, text="Rendering scene...", bg="#202124")
-        self.scene_label.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self.scene_label.bind("<ButtonPress-1>", self.begin_drag)
-        self.scene_label.bind("<B1-Motion>", self.drag_scene)
-        self.scene_label.bind("<ButtonRelease-1>", self.end_drag)
-        self.scene_label.bind("<MouseWheel>", self.scroll_zoom)
-        self.scene_label.bind("<Button-4>", lambda _event: self.zoom(0.9))
-        self.scene_label.bind("<Button-5>", lambda _event: self.zoom(1.1))
-
-        camera_panel = ttk.Frame(content)
-        camera_panel.pack(side=tk.RIGHT, fill=tk.Y)
-        self.camera_labels: dict[str, object] = {}
-        self.camera_photos: dict[str, object] = {}
-        for name in camera_names:
-            panel = ttk.LabelFrame(camera_panel, text=name)
-            panel.pack(fill=tk.X, padx=6, pady=6)
-            label = tk.Label(panel, text="waiting", width=320, height=240)
-            label.pack()
-            self.camera_labels[name] = label
-
-        status_bar = ttk.Frame(self.root, style="StatusBar.TFrame")
-        status_bar.pack(side=tk.BOTTOM, fill=tk.X)
-        self.status = ttk.Label(status_bar, text="running", style="StatusBar.TLabel")
-        self.status.pack(side=tk.LEFT, padx=10, pady=4)
-        if self.serve_url is not None:
-            ttk.Label(
-                status_bar, text=f"Web viewer: {self.serve_url}", style="StatusBar.TLabel"
-            ).pack(side=tk.RIGHT, padx=10, pady=4)
-
-        self.root.protocol("WM_DELETE_WINDOW", self.close)
-
-    def _photo(self, frame: np.ndarray):
-        frame = np.ascontiguousarray(frame, dtype=np.uint8)
-        height, width = frame.shape[:2]
-        ppm = f"P6\n{width} {height}\n255\n".encode() + frame.tobytes()
-        # Hand Tk the bytes directly. Writing them to a NamedTemporaryFile and
-        # passing its name fails on Windows, where a temporary file that is
-        # still open cannot be opened a second time by name ("permission
-        # denied"), and it also costs a disk write per frame.
-        return self._tk.PhotoImage(data=ppm, format="PPM")
-
-    def render(self) -> None:
-        if self.closed:
-            return
-        with self.host.physics_lock:
-            self._scene_renderer.update_scene(self.host.data, camera=self._free_camera)
-            scene_frame = self._scene_renderer.render()
-            camera_frames = {}
-            for name in self.camera_names:
-                try:
-                    camera_frames[name] = self.host.camera_image(name)
-                except ValueError:
-                    # The camera worker thread has not captured its first
-                    # frame yet (it starts concurrently with the physics
-                    # thread); keep the "waiting" placeholder for this tick.
-                    pass
-        scene_photo = self._photo(scene_frame)
-        self.scene_photo = scene_photo
-        self.scene_label.configure(image=scene_photo, text="")
-        for name, label in self.camera_labels.items():
-            frame = camera_frames.get(name)
-            if frame is None:
-                continue
-            photo = self._photo(frame)
-            self.camera_photos[name] = photo
-            label.configure(image=photo, text="")
-        state = self.host.latest_state()
-        step = state["step"] if state is not None else 0
-        self.paused = self.host.paused
-        self.status.configure(
-            text=f"{'paused' if self.paused else 'running'}  step={step}"
-        )
-        self.root.update_idletasks()
-        self.root.update()
-
-    def tick(self) -> None:
-        if self.closed:
-            return
-        self.render()
-        control_hz = float(
-            getattr(
-                self.host,
-                "control_hz",
-                getattr(getattr(self.host, "robot", None), "cfg", None)
-                and getattr(self.host.robot.cfg, "control_hz", 30.0)
-                or 30.0,
-            )
-        )
-        self.root.after(max(1, round(1000 / control_hz)), self.tick)
-
-    def reset(self) -> None:
-        self.host.reset()
-
-    def toggle_pause(self) -> None:
-        self.paused = not self.paused
-        self.host.set_paused(self.paused)
-        self.pause_button.configure(text="Resume" if self.paused else "Pause")
-
-    def zoom(self, factor: float) -> None:
-        self._free_camera.distance = float(
-            np.clip(self._free_camera.distance * factor, 0.05, 5.0)
-        )
-
-    def begin_drag(self, event) -> None:
-        self._last_drag = (event.x, event.y)
-
-    def drag_scene(self, event) -> None:
-        if self._last_drag is None:
-            return
-        last_x, last_y = self._last_drag
-        dx, dy = event.x - last_x, event.y - last_y
-        self._free_camera.azimuth -= dx * 0.5
-        self._free_camera.elevation = float(
-            np.clip(self._free_camera.elevation + dy * 0.5, -89.0, 89.0)
-        )
-        self._last_drag = (event.x, event.y)
-
-    def end_drag(self, _event) -> None:
-        self._last_drag = None
-
-    def scroll_zoom(self, event) -> None:
-        self.zoom(0.9 if event.delta > 0 else 1.1)
-
-    def close(self) -> None:
-        if not self.closed:
-            self.closed = True
-            self._scene_renderer.close()
-            self.root.destroy()
 
 
 def build_policy(name: str, env, checkpoint: Path | None = None):
@@ -333,29 +151,24 @@ def main() -> int:
         type=Path,
         help="shared-world YAML manifest; use with --viewer and/or --serve",
     )
-    ap.add_argument(
-        "--robot",
-        choices=available_robots(),
-        help="override the robot selected by --config",
+    add_robot(
+        ap, choices=available_robots(), help="override the robot selected by --config"
     )
     # "lerobot" belongs here: build_policy() handles it and the module
     # docstring documents it, but dropping it from choices made argparse
     # reject the documented command before it ever got there.
-    ap.add_argument(
-        "--policy",
-        default=None,
+    add_policy(
+        ap,
         choices=[name for name in available_policies() if name != "replay"],
         help="policy to run; viewer/serve stays idle unless this is specified",
     )
-    ap.add_argument("--episodes", type=int, default=1)
-    ap.add_argument(
-        "--seed", type=int, help="override the seed selected by --config (default: 0)"
+    add_episodes(ap, default=1)
+    add_seed(
+        ap, default=None, help="override the seed selected by --config (default: 0)"
     )
-    ap.add_argument(
-        "--max-steps", type=int, help="override the episode length selected by --config"
-    )
+    add_max_steps(ap, help="override the episode length selected by --config")
     ap.add_argument("--camera", default="front")
-    ap.add_argument("--checkpoint", type=Path)
+    add_checkpoint(ap)
     ap.add_argument(
         "--camera-size",
         type=int,
@@ -365,15 +178,14 @@ def main() -> int:
         "you render non-square here — pass the training size "
         "(e.g. 128) to avoid the mismatch.",
     )
-    ap.add_argument("--out", type=Path, default=Path("outputs"))
+    add_out(ap, default=Path("outputs"))
     ap.add_argument(
         "--video", action="store_true", help="render frames and write an episode video"
     )
-    ap.add_argument("--no-video", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument(
         "--viewer",
         action="store_true",
-        help="open the single-window interactive scene and camera viewer",
+        help="open MuJoCo's native interactive scene viewer",
     )
     ap.add_argument(
         "--serve",
@@ -382,28 +194,23 @@ def main() -> int:
         "without --viewer, this runs with no desktop window",
     )
     ap.add_argument(
-        "--headless",
-        action="store_true",
-        help="explicit synonym for --serve without --viewer, for servers, "
-        "containers, and cloud workspaces with no display",
+        "--record-dir",
+        type=Path,
+        help="enable browser episode recording into this dataset directory "
+        "(requires --serve; an existing dataset there is continued)",
     )
     ap.add_argument("--host", default="127.0.0.1", help="web host bind address")
     ap.add_argument("--port", type=int, default=8000, help="web host port")
-    ap.add_argument(
-        "--camera-view",
-        action="store_true",
-        help="compatibility flag; --viewer already shows all cameras",
-    )
     args = ap.parse_args()
 
-    if args.headless and args.viewer:
-        ap.error("--headless and --viewer are mutually exclusive")
-    if args.headless and not args.serve:
-        ap.error("--headless requires --serve")
     if args.world and not (args.viewer or args.serve):
         ap.error("--world requires --viewer or --serve")
     if args.world and (args.config or args.robot):
         ap.error("--world cannot be combined with --config or --robot")
+    if args.record_dir and not args.serve:
+        ap.error("--record-dir requires --serve")
+    if args.record_dir and args.world:
+        ap.error("--record-dir is not available with --world")
 
     sim_config = load_sim_config(args.sim_config)
     task_config = load_task_config(args.config) if args.config else None
@@ -431,8 +238,6 @@ def main() -> int:
     )
 
     if args.viewer or args.serve:
-        if args.camera_view and args.robot == "turtlebot4":
-            ap.error("--camera-view currently supports the SO-101 viewer only")
         return run_viewer(
             args, task_config, seed, max_steps, sim_config.domain_randomization
         )
@@ -442,7 +247,7 @@ def main() -> int:
             args.robot,
             config=TurtleBot4Config(
                 max_steps=max_steps,
-                render=args.video and not args.no_video,
+                render=args.video,
                 domain_randomization=sim_config.domain_randomization,
             ),
         )
@@ -455,7 +260,7 @@ def main() -> int:
                 task_config,
                 seed,
                 max_steps,
-                render=args.video and not args.no_video,
+                render=args.video,
                 domain_randomization=sim_config.domain_randomization,
             ),
         )
@@ -481,7 +286,7 @@ def main() -> int:
         frames, total_reward, info = [], 0.0, {}
 
         for _ in range(max_steps):
-            if args.video and not args.no_video:
+            if args.video:
                 frames.append(env.render_camera(camera_name))
             obs, reward, terminated, truncated, info = env.step(policy.act(obs))
             total_reward += reward
@@ -497,7 +302,7 @@ def main() -> int:
             f"return={total_reward:.2f}{suffix}"
         )
 
-        if frames and args.video and not args.no_video:
+        if frames and args.video:
             path = write_video(
                 np.stack(frames),
                 args.out / f"{args.policy}_ep{ep:03d}",
@@ -539,16 +344,16 @@ def run_viewer(
 ) -> int:
     if args.world:
         world_config = load_world_config(args.world)
-        host = SharedWorldHost(
+        host = Host.for_world(
             SharedWorld(
                 world_config.instances,
                 timestep=world_config.timestep,
                 control_hz=world_config.control_hz,
                 add_floor=world_config.add_floor,
+                shared_attach=shared_attach,
             ),
             world_config.instances,
         )
-        camera_names = []
     elif args.robot == "turtlebot4":
         env = create_robot(
             args.robot,
@@ -558,7 +363,6 @@ def run_viewer(
                 domain_randomization=domain_randomization,
             ),
         )
-        camera_names = ["free"]
     else:
         viewer_config = build_so101_config(
             args,
@@ -568,12 +372,20 @@ def run_viewer(
             render=True,
             domain_randomization=domain_randomization,
         )
-        viewer_config = replace(
-            viewer_config,
-            camera_stride=max(1, round(viewer_config.control_hz / 5)),
-        )
-        if args.policy in (None, "scripted"):
-            viewer_config = replace(viewer_config, camera_stride=0)
+        # camera_stride=0: the env never renders cameras inline on the
+        # physics thread in interactive mode, for any policy. Rendering is
+        # comparatively expensive, so doing it inline stalled physics
+        # stepping every stride'th tick; the async camera thread below
+        # (async_cameras=True) is the one source of camera frames instead —
+        # Host._sync_observation_images() feeds a policy that needs vision
+        # from that same cache. This is now the standard for so101 in
+        # --viewer/--serve, not just the idle/scripted case.
+        #
+        # The gripper torque keeps EnvConfig's tuned 0.3 N*m cap here too. The
+        # model's own limit (3.35 N*m) drives ~34 N per pad against a 0.29 N
+        # cube and sinks it ~10 mm into the pads and fingers; the scripted
+        # grasp drops the cube below ~0.1 N*m, so 0.3 keeps a 3x margin.
+        viewer_config = replace(viewer_config, camera_stride=0)
         env = create_robot(
             args.robot,
             config=viewer_config,
@@ -584,19 +396,13 @@ def run_viewer(
             if args.policy is not None
             else None
         )
-        if args.robot != "turtlebot4":
-            camera_names = [
-                mujoco.mj_id2name(env.model, mujoco.mjtObj.mjOBJ_CAMERA, camera_id)
-                for camera_id in range(env.model.ncam)
-            ]
-            camera_names = [name for name in camera_names if name]
-
-        host = SimulationHost(
+        host = Host.for_robot(
             env,
             robot_name=args.robot,
             policy=policy,
             reset_seed=seed,
-            async_cameras=args.robot == "so101" and args.policy in (None, "scripted"),
+            async_cameras=args.robot == "so101",
+            record_dir=args.record_dir,
         )
     host.start()
     server = None
@@ -622,27 +428,34 @@ def run_viewer(
         server_thread = threading.Thread(target=server.run, daemon=True)
         server_thread.start()
 
-    app = None
     try:
         if not args.viewer:
-            # No desktop window: true whether the caller passed --headless
-            # explicitly or just --serve on its own.
+            # No desktop window: --serve alone runs headless.
             print(f"Headless host running. Web viewer: http://{args.host}:{args.port}/")
             print("Press Ctrl+C to stop.")
             wait_for_shutdown()
         else:
-            print("Custom viewer open. Close the window to exit.")
+            print("MuJoCo viewer open. Close the window to exit.")
             if args.serve:
                 print(f"Web viewer: http://{args.host}:{args.port}/")
-            serve_url = f"http://{args.host}:{args.port}/" if args.serve else None
-            app = SingleWindowViewer(host, camera_names, serve_url=serve_url)
-            app.tick()
-            app.root.mainloop()
+            # Host.start() steps physics on its own thread. launch_passive's
+            # own render thread reads its mjData continuously, not only at
+            # sync() — sharing host.data directly races that render thread
+            # against Host's physics/camera threads (both guarded by
+            # host.physics_lock, which the native viewer knows nothing
+            # about). Mirror Host._camera_loop's pattern instead: render a
+            # private copy, refreshed each tick under the same lock (ADR 4).
+            viewer_data = mujoco.MjData(host.model)
+            with mujoco.viewer.launch_passive(host.model, viewer_data) as viewer:
+                period = 1.0 / host.control_hz
+                while viewer.is_running():
+                    with host.physics_lock:
+                        mujoco.mj_copyData(viewer_data, host.model, host.data)
+                    viewer.sync()
+                    time.sleep(period)
     except KeyboardInterrupt:
         pass
     finally:
-        if app is not None and not app.closed:
-            app.close()
         if server is not None:
             server.should_exit = True
         if server_thread is not None:

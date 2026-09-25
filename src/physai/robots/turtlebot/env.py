@@ -26,6 +26,7 @@ from ...sim.domain_randomization import (
     DomainRandomizationEngine,
     RandomizationMetadata,
 )
+from ...sim.scenes.common import STUDIO_FLOOR_RGB1, STUDIO_FLOOR_RGB2, add_studio_sky
 from ..base import RobotSpec, RobotTrainingContract
 from .contracts import turtlebot4_training_contract
 
@@ -76,6 +77,7 @@ def _compile_scene(
     starts providing its own.
     """
     spec = mujoco.MjSpec.from_file(str(model_path))
+    add_studio_sky(spec)
 
     has_plane = any(
         geom.type == mujoco.mjtGeom.mjGEOM_PLANE
@@ -89,8 +91,8 @@ def _compile_scene(
             name="physai_grid",
             type=mujoco.mjtTexture.mjTEXTURE_2D,
             builtin=mujoco.mjtBuiltin.mjBUILTIN_CHECKER,
-            rgb1=[0.22, 0.24, 0.28],
-            rgb2=[0.16, 0.18, 0.22],
+            rgb1=list(STUDIO_FLOOR_RGB1),
+            rgb2=list(STUDIO_FLOOR_RGB2),
             width=300,
             height=300,
         )

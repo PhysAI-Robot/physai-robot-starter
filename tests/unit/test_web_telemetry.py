@@ -1,8 +1,9 @@
 import mujoco
 import numpy as np
+import pytest
 
 from physai.contracts import Action
-from physai.web.runtime import action_from_payload
+from physai.web.actions import action_from_payload
 from physai.web.telemetry import build_scene_manifest, build_state_snapshot
 
 XML = """
@@ -78,11 +79,38 @@ def test_browser_commands_map_to_shared_actions():
 def test_websocket_route_resolves_fastapi_websocket_annotation():
     from physai.robots import RobotSpec
     from physai.web.app import create_app
-    from physai.web.runtime import SimulationHost
+    from physai.web.host import Host
     from tests.support.fakes import FakeRobotPort
 
     spec = RobotSpec(name="test", kind="test", joint_names=("joint",))
-    app = create_app(host=SimulationHost(FakeRobotPort(spec), robot_name="test"))
+    app = create_app(host=Host.for_robot(FakeRobotPort(spec), robot_name="test"))
     websocket_route = next(route for route in app.routes if route.path == "/ws")
 
     assert websocket_route.endpoint.__annotations__["websocket"].__name__ == "WebSocket"
+
+
+def test_gripper_contact_reports_the_normal_force_in_newtons():
+    """A box named like a gripper pad resting on the floor carries its weight."""
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <worldbody>
+            <geom name="floor" type="plane" size="1 1 0.1"/>
+            <body pos="0 0 0.05">
+              <freejoint/>
+              <geom name="pad_static" type="box" size="0.05 0.05 0.05" mass="0.5"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = mujoco.MjData(model)
+    for _ in range(500):
+        mujoco.mj_step(model, data)
+
+    snapshot = build_state_snapshot(model, data, step=0, robot="test")
+
+    (contact,) = snapshot["gripper_contacts"]
+    assert (contact["pad"], contact["other_geom"]) == ("static", "floor")
+    # Several corner contacts are grouped; their normal forces sum to m * g.
+    assert contact["force_n"] == pytest.approx(0.5 * 9.81, rel=0.02)

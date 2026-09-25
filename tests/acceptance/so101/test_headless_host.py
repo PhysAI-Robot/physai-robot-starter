@@ -64,7 +64,6 @@ def test_headless_host_serves_the_web_viewer_without_a_desktop_window():
         "configs/tasks/so101/pick_place.yaml",
         "--policy",
         "visual_servo",
-        "--headless",
         "--serve",
         "--port",
         str(port),

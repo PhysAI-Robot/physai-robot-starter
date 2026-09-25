@@ -1,30 +1,23 @@
-"""Control-rate policies and model adapter exports."""
+"""Control-rate policies.
 
-from ..robots.so101.visual_servo import (
-    CameraCalibration,
-    ColorBlobDetector,
-    SO101VisualServoPolicy,
-    VisualFeature,
-    VisualServoMetrics,
-)
+SO-101's "scripted" and "visual_servo" policies, and the checkpoint-backed
+"lerobot" policy, are research modules (see ``research/scripted_experts``,
+``research/classical_control``, and ``research/imitation_learning``) and
+are looked up by name through the registry, not imported here.
+"""
+
 from .base import ConstantPolicy, ConstantTwistPolicy, Policy
 from .plan_runner import PlanRunner
 from .registry import available_policies, create_policy, register_policy
-from .vla_adapter import LeRobotPolicy, ReplayPolicy, VLAPolicy
+from .replay import ReplayPolicy, VLAPolicy
 
 __all__ = [
-    "CameraCalibration",
-    "ColorBlobDetector",
     "ConstantPolicy",
     "ConstantTwistPolicy",
-    "LeRobotPolicy",
     "PlanRunner",
     "Policy",
     "ReplayPolicy",
-    "SO101VisualServoPolicy",
     "VLAPolicy",
-    "VisualFeature",
-    "VisualServoMetrics",
     "available_policies",
     "create_policy",
     "register_policy",

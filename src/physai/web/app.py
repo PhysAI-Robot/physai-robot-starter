@@ -6,17 +6,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from .runtime import SimulationHost, action_from_payload
+from .actions import action_from_payload
+from .host import Host
 from .telemetry import build_mesh_payload
-from .world_runtime import SharedWorldHost
 
-_CAMERA_STREAM_PERIOD = 0.2  # matches SimulationHost/SharedWorldHost's camera capture cadence
+_CAMERA_STREAM_PERIOD = 1.0 / 30  # matches Host._CAMERA_PERIOD's capture cadence
 
 
-def create_app(
-    *,
-    host: SimulationHost | SharedWorldHost,
-):
+def create_app(*, host: Host):
     try:
         from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
         from fastapi.responses import FileResponse, Response, StreamingResponse
@@ -26,9 +23,6 @@ def create_app(
             "web dependencies are missing; install with `uv sync --extra web`"
         ) from exc
 
-    shared = isinstance(host, SharedWorldHost)
-    names = tuple(host.instances) if shared else (host.robot_name,)
-    sessions = host.instances if shared else {host.robot_name: host}
     static_dir = Path(__file__).with_name("static")
     assets_dir = Path(__file__).resolve().parents[3] / "assets"
 
@@ -44,47 +38,18 @@ def create_app(
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
     app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
-    def get_session(name: str | None):
-        selected = name or names[0]
-        try:
-            return sessions[selected]
-        except KeyError as exc:
-            raise ValueError(f"unknown robot {selected!r}") from exc
-
     @app.get("/api/robots")
     async def robots() -> list[dict[str, Any]]:
-        return [
-            {
-                "name": name,
-                "kind": (
-                    session.robot_spec.kind if shared else session.robot.robot_spec.kind
-                ),
-                "robot": (
-                    session.robot_spec.name if shared else session.robot.robot_spec.name
-                ),
-                "action_modes": list(
-                    session.robot_spec.action_modes
-                    if shared
-                    else session.robot.robot_spec.action_modes
-                ),
-                "capabilities": list(
-                    session.robot_spec.capabilities
-                    if shared
-                    else session.robot.robot_spec.capabilities
-                ),
-                "cameras": list(
-                    session.robot_spec.camera_frames
-                    if shared
-                    else session.robot.robot_spec.camera_frames
-                ),
-            }
-            for name, session in sessions.items()
-        ]
+        return host.list_robots()
+
+    @app.get("/api/episodes")
+    async def episodes() -> list[dict[str, Any]]:
+        return host.list_episodes()
 
     @app.get("/api/scene")
     async def scene(robot: str | None = None) -> dict[str, Any]:
         del robot
-        return host.scene() if shared else get_session(None).scene()
+        return host.scene()
 
     @app.get("/api/state")
     async def state(robot: str | None = None) -> dict[str, Any] | None:
@@ -93,43 +58,37 @@ def create_app(
 
     @app.get("/api/mesh/{mesh_id}")
     async def mesh(mesh_id: int, robot: str | None = None) -> Response:
-        selected = host if shared else get_session(robot)
+        del robot
         return Response(
-            build_mesh_payload(host.model if shared else selected.model, mesh_id),
+            build_mesh_payload(host.model, mesh_id),
             media_type="application/octet-stream",
         )
 
     @app.get("/api/camera/{name}.jpg")
     async def camera(name: str, robot: str | None = None) -> Response:
-        if shared:
-            return Response(
-                host.camera_jpeg(robot or names[0], name),
-                media_type="image/jpeg",
-            )
-        return Response(get_session(robot).camera_jpeg(name), media_type="image/jpeg")
-
-    def camera_frame(robot: str | None, name: str) -> bytes:
-        if shared:
-            return host.camera_jpeg(robot or names[0], name)
-        return get_session(robot).camera_jpeg(name)
+        return Response(
+            host.camera_jpeg(name, instance_id=robot), media_type="image/jpeg"
+        )
 
     @app.get("/api/camera/{name}/stream")
     async def camera_stream(name: str, robot: str | None = None) -> StreamingResponse:
         try:
-            camera_frame(robot, name)
+            host.camera_jpeg(name, instance_id=robot)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
         async def frames():
             while True:
                 try:
-                    frame = camera_frame(robot, name)
+                    frame = host.camera_jpeg(name, instance_id=robot)
                 except ValueError:
                     return
                 yield (
                     b"--frame\r\n"
                     b"Content-Type: image/jpeg\r\n"
-                    b"Content-Length: " + str(len(frame)).encode() + b"\r\n\r\n"
+                    b"Content-Length: "
+                    + str(len(frame)).encode()
+                    + b"\r\n\r\n"
                     + frame
                     + b"\r\n"
                 )
@@ -147,15 +106,31 @@ def create_app(
     async def websocket(websocket: WebSocket) -> None:
         await websocket.accept()
         errors: asyncio.Queue[dict[str, str]] = asyncio.Queue()
-        active_robot = names[0]
+        active_robot = host.default_instance_id
         client_id = uuid.uuid4().hex
+
+        async def handle_playback(message: dict[str, Any]) -> None:
+            kind = message["type"]
+            if kind == "playback_load":
+                # Reads the episode's state array from disk; keep it off the loop.
+                await asyncio.to_thread(host.load_episode, message["file"])
+            elif kind == "playback_seek":
+                host.seek(int(message["frame"]))
+            elif kind == "playback_step":
+                host.seek(int(message["delta"]), relative=True)
+            elif kind == "playback_play":
+                host.set_playback(bool(message["playing"]), message.get("speed"))
+            elif kind == "playback_exit":
+                host.exit_playback()
+            else:
+                raise ValueError(f"unknown message type {kind!r}")
 
         async def receive_commands() -> None:
             try:
                 while True:
                     message = await websocket.receive_json()
                     if message.get("type") == "select_robot":
-                        if message.get("robot") not in sessions:
+                        if message.get("robot") not in host.instances:
                             await errors.put(
                                 {"type": "error", "message": "unknown robot"}
                             )
@@ -168,10 +143,7 @@ def create_app(
                             if target != active_robot:
                                 raise ValueError("command target is not selected")
                             action = action_from_payload(message["action"])
-                            if shared:
-                                host.submit(target, action, source=client_id)
-                            else:
-                                get_session(target).submit(action, source=client_id)
+                            host.submit(action, instance_id=target, source=client_id)
                         except (
                             KeyError,
                             TypeError,
@@ -180,17 +152,35 @@ def create_app(
                         ) as exc:
                             await errors.put({"type": "error", "message": str(exc)})
                     elif message.get("type") == "reset":
-                        if shared:
+                        try:
                             host.reset()
-                        else:
-                            get_session(message.get("robot", active_robot)).reset()
+                        except ValueError as exc:  # e.g. during playback
+                            await errors.put({"type": "error", "message": str(exc)})
                     elif message.get("type") == "pause":
-                        if shared:
+                        try:
                             host.set_paused(bool(message.get("value", True)))
-                        else:
-                            get_session(message.get("robot", active_robot)).set_paused(
-                                bool(message.get("value", True))
-                            )
+                        except ValueError as exc:
+                            await errors.put({"type": "error", "message": str(exc)})
+                    elif str(message.get("type")).startswith("playback_"):
+                        try:
+                            await handle_playback(message)
+                        except (KeyError, TypeError, ValueError, RuntimeError) as exc:
+                            await errors.put({"type": "error", "message": str(exc)})
+                    elif message.get("type") == "record_start":
+                        try:
+                            host.start_recording()
+                        except (RuntimeError, ValueError) as exc:
+                            await errors.put({"type": "error", "message": str(exc)})
+                    elif message.get("type") == "record_stop":
+                        success = message.get("success")
+                        try:
+                            if success is not None and not isinstance(success, bool):
+                                raise ValueError("success must be true, false or null")
+                            # Saving compresses the whole take; keep it off the
+                            # event loop so the state stream doesn't stall.
+                            await asyncio.to_thread(host.stop_recording, success)
+                        except (RuntimeError, ValueError) as exc:
+                            await errors.put({"type": "error", "message": str(exc)})
                     elif message.get("type") == "release_control":
                         host.release_control(client_id)
             except WebSocketDisconnect:
@@ -199,11 +189,7 @@ def create_app(
         receiver = asyncio.create_task(receive_commands())
         try:
             while True:
-                state = (
-                    host.latest_state()
-                    if shared
-                    else sessions[active_robot].latest_state()
-                )
+                state = host.latest_state()
                 if state is not None:
                     await websocket.send_json(state)
                 while not errors.empty():

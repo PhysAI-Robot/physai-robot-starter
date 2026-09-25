@@ -47,20 +47,44 @@
     <main>
       <section id="viewport">
         <div id="scene-loading" class="scene-loading"><span class="spinner"></span>Loading scene…</div>
+        <div class="state-panel" id="joint-panel" aria-label="Joint state">
+          <h2>Joints</h2>
+          <div class="joint-rows" id="joint-rows"></div>
+          <div class="contact-rows" id="contact-rows" hidden>
+            <div class="contact-row" data-pad="static"><span class="contact-dot"></span>Static pad<span class="contact-force" data-force>–</span></div>
+            <div class="contact-row" data-pad="moving"><span class="contact-dot"></span>Moving pad<span class="contact-force" data-force>–</span></div>
+          </div>
+          <div class="pose-rows" id="pose-rows" hidden>
+            <div class="pose-title" title="0° roll/pitch/yaw = gripper pointing straight down">Tip pose <span id="pose-frame"></span></div>
+            <div class="pose-row"><span>x</span><span data-pose="x">–</span><span class="pose-unit">mm</span></div>
+            <div class="pose-row"><span>y</span><span data-pose="y">–</span><span class="pose-unit">mm</span></div>
+            <div class="pose-row"><span>z</span><span data-pose="z">–</span><span class="pose-unit">mm</span></div>
+            <div class="pose-row"><span>roll</span><span data-pose="roll">–</span><span class="pose-unit">°</span></div>
+            <div class="pose-row"><span>pitch</span><span data-pose="pitch">–</span><span class="pose-unit">°</span></div>
+            <div class="pose-row"><span>yaw</span><span data-pose="yaw">–</span><span class="pose-unit">°</span></div>
+            <div class="pose-lock" id="pose-lock" hidden>near gimbal lock: roll and yaw are unreliable</div>
+          </div>
+        </div>
         <div class="control-pad" aria-label="Robot controls">
           <div class="control-cluster movement-keys" aria-label="Movement">
             <button class="control-key key-w" data-control-key="w" aria-label="Move forward">W</button>
-            <button class="control-key key-a" data-control-key="a" aria-label="Turn left">A</button>
+            <button class="control-key key-a" data-control-key="a" aria-label="Rotate shoulder pan left">A</button>
             <button class="control-key key-s" data-control-key="s" aria-label="Move backward">S</button>
-            <button class="control-key key-d" data-control-key="d" aria-label="Turn right">D</button>
+            <button class="control-key key-d" data-control-key="d" aria-label="Rotate shoulder pan right">D</button>
           </div>
-          <div class="control-cluster secondary-keys" aria-label="Arm controls">
-            <button class="control-key" data-control-key="q" aria-label="Move up">Q</button>
-            <button class="control-key" data-control-key="e" aria-label="Move down">E</button>
-            <button class="control-key" data-control-key="r" aria-label="Tilt grip right">R</button>
-            <button class="control-key" data-control-key="f" aria-label="Tilt grip left">F</button>
-            <button class="control-key" data-control-key="o" aria-label="Open gripper">O</button>
-            <button class="control-key" data-control-key="c" aria-label="Close gripper">C</button>
+          <div class="control-cluster z-keys" aria-label="Height controls">
+            <button class="control-key key-u" data-control-key="u" aria-label="Move up">U</button>
+            <button class="control-key key-j" data-control-key="j" aria-label="Move down">J</button>
+          </div>
+          <div class="control-cluster wrist-keys" aria-label="Wrist controls">
+            <button class="control-key key-i" data-control-key="i" aria-label="Wrist tilt down">I</button>
+            <button class="control-key key-q" data-control-key="q" aria-label="Wrist roll left">Q</button>
+            <button class="control-key key-k" data-control-key="k" aria-label="Wrist tilt up">K</button>
+            <button class="control-key key-e" data-control-key="e" aria-label="Wrist roll right">E</button>
+          </div>
+          <div class="control-cluster gripper-keys" aria-label="Gripper controls">
+            <button class="control-key key-f" data-control-key="f" aria-label="Open gripper">F</button>
+            <button class="control-key key-g" data-control-key="g" aria-label="Close gripper">G</button>
           </div>
         </div>
       </section>
@@ -69,11 +93,37 @@
         <p id="telemetry" aria-live="polite">waiting for state</p>
         <button id="reset">Reset</button>
         <button id="pause">Pause</button>
+        <section id="record-panel" class="record-panel" aria-label="Episode recording" hidden>
+          <h1>Recording</h1>
+          <button id="record-start" type="button">● Record</button>
+          <button id="record-success" type="button" data-record-stop hidden>Save ✓ success</button>
+          <button id="record-fail" type="button" data-record-stop hidden>Save ✗ fail</button>
+          <button id="record-discard" type="button" data-record-stop hidden>Discard</button>
+          <p id="record-status" class="hint" aria-live="polite"></p>
+        </section>
+        <section id="playback-panel" class="playback-panel" aria-label="Episode playback" hidden>
+          <h1>Playback</h1>
+          <div id="playback-load-section">
+            <select id="playback-episode" aria-label="Recorded episode"></select>
+            <button id="playback-load" type="button">Load</button>
+          </div>
+          <div id="playback-active-section" hidden>
+            <div class="playback-transport">
+              <button id="playback-prev" type="button" aria-label="Previous frame">◀</button>
+              <button id="playback-play" type="button">Play</button>
+              <button id="playback-next" type="button" aria-label="Next frame">▶</button>
+              <select id="playback-speed" aria-label="Playback speed"></select>
+              <button id="playback-exit" type="button">Exit</button>
+            </div>
+            <input id="playback-scrubber" type="range" min="0" max="0" value="0" step="1" aria-label="Frame" />
+          </div>
+          <p id="playback-status" class="hint" aria-live="polite"></p>
+        </section>
         <p class="hint">Drag to orbit · right-drag to pan · wheel to zoom.</p>
-        <div class="camera-grid">
-          <figure><figcaption>front</figcaption><img data-camera="front" alt="Front camera feed" /></figure>
-          <figure><figcaption>wrist</figcaption><img data-camera="wrist" alt="Wrist camera feed" /></figure>
+        <div class="camera-toolbar">
+          <button id="camera-add" type="button">+ Camera</button>
         </div>
+        <div class="camera-grid" id="camera-grid"></div>
         <p id="control-hint" class="hint"></p>
       </aside>
     </main>

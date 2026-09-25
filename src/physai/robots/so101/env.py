@@ -14,7 +14,9 @@ from ...contracts import (
     ImageFrame,
     JointState,
     Observation,
+    Twist,
 )
+from ...control.resolver import TwistToJointResolver
 from ...robots.base import RobotSpec, RobotTrainingContract
 from ...sim.core import MuJoCoSimulationCore
 from ...sim.domain_randomization import (
@@ -29,6 +31,7 @@ from .contracts import (
     GRIPPER_JOINT_NAME,
     so101_training_contract,
 )
+from .jog import resolve_jog
 from .kinematics import ArmKinematics
 from .scene import scene_defaults
 
@@ -64,7 +67,7 @@ class EnvConfig:
     # to 20-50x the cube's weight and makes it chatter and pop loose mid-carry.
     # Capping it here emulates a current-limited real servo and keeps the
     # squeeze in the contact solver's stable range. Needed by visual_servo,
-    # whose grip target (0.19) is shallow enough that uncapped force can
+    # whose grip target (SQUEEZE_GRIP, 0.15) is shallow enough that uncapped force can
     # destabilize the contact -- test_visual_servo_pick_place_settles_from_
     # multiple_seeds fails without this cap. The scripted expert's much
     # deeper default squeeze (ExpertConfig.gripper_grip=0.06) already keeps
@@ -155,6 +158,24 @@ class SO101Env(MuJoCoSimulationCore):
             self.model, mujoco.mjtObj.mjOBJ_SITE, "target_site"
         )
         self.kin = ArmKinematics(self.model, ee_site=self.cfg.scene.ee_site)
+        self.jog_kin = ArmKinematics(
+            self.model, ee_site="wristframe", joint_names=ARM_JOINT_NAMES[1:3]
+        )
+        self._jog_resolver = TwistToJointResolver(
+            self.jog_kin,
+            self.data,
+            dt=1.0 / self.cfg.control_hz,
+            position_only=True,
+            # Damping this high enough to fully suppress wrist coupling
+            # (~0.15) made the 2-joint solve direction-inaccurate instead:
+            # e.g. holding pure -x from the home pose (near a singularity
+            # for that direction) leaked most of the response into +z, so
+            # "back up" visibly lifted the arm. `jog.py`'s MAX_TARGET_LEAD
+            # now caps wrist coupling directly, so this only needs to keep
+            # the Cartesian solve numerically stable, not do double duty.
+            damping=0.03,
+        )
+        self._jog_target = HOME_QPOS.copy()
         self.randomization_metadata = RandomizationMetadata(
             enabled=False,
             seed=self.cfg.seed,
@@ -220,12 +241,31 @@ class SO101Env(MuJoCoSimulationCore):
         lo, hi = self.grip_limits
         return float(np.clip((q - lo) / (hi - lo), 0.0, 1.0))
 
+    def resolve_twist_jog(
+        self,
+        twist: Twist,
+        joint_state: JointState,
+        gripper: GripperCommand | None = None,
+    ) -> Action:
+        return resolve_jog(
+            twist,
+            joint_state,
+            cartesian_resolver=self._jog_resolver,
+            target=self._jog_target,
+            shoulder_pan_limits=tuple(self.arm_limits[0]),
+            wrist_flex_limits=tuple(self.arm_limits[3]),
+            wrist_roll_limits=tuple(self.arm_limits[4]),
+            dt=self._jog_resolver.dt,
+            gripper=gripper,
+        )
+
     def reset(self, seed: int | None = None) -> Observation:
         if seed is not None:
             self.rng = np.random.default_rng(seed)
         self.reset_simulation()
         self.data.qpos[self.arm_qadr] = HOME_QPOS
         self.data.qpos[self.grip_qadr] = self.gripper_to_joint(1.0)
+        self._jog_target = HOME_QPOS.copy()
 
         if self.sorting_cubes:
             base_z = self.cfg.scene.cube_pos[2]

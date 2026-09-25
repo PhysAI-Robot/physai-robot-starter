@@ -17,10 +17,21 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
-      - name: Check Python formatting
-        uses: astral-sh/ruff-action@v3
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
         with:
-          args: "format --check --exclude .venv --exclude venv"
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install formatting dependencies
+        run: uv sync --locked --extra dev
+
+      - name: Check Python formatting
+        run: uv run ruff format --check --exclude .venv --exclude venv
 
   test:
     name: Python 3.12 tests
@@ -65,7 +76,18 @@ jobs:
         run: uv sync --locked --extra dev --extra web --extra training
 
       - name: Run test suite
-        run: uv run python -m pytest tests/ -q
+        run: |
+          uv run python - <<'PY'
+          import os
+
+          import pytest
+
+          # mujoco.Renderer under MUJOCO_GL=osmesa segfaults during CPython's
+          # normal interpreter shutdown on this runner, after pytest has
+          # already reported its result. os._exit() reports pytest's real
+          # exit code while skipping that unsafe native-library teardown.
+          os._exit(pytest.main(["tests/", "-q"]))
+          PY
 
   ros2-acceptance:
     name: ROS2 Jazzy robot acceptance

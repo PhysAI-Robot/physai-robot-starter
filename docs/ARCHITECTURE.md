@@ -1,9 +1,12 @@
 # Architecture
 
-This is the internal design reference for the runtime. It defines the
-composition model, module ownership, stable contracts, and extension rules.
-User setup and runnable commands live in [README.md](../README.md). Agent
-workflow rules live in [AGENTS.md](../AGENTS.md).
+This is the internal design reference for the runtime. It defines the frozen
+design shape, module ownership, dependency rules, stable contracts, the
+session manifest, the host and client API, extension seams, the capability
+model, and the research/core boundary. User setup and runnable commands live
+in [README.md](../README.md). Agent workflow rules live in
+[AGENTS.md](../AGENTS.md). Design decisions behind the frozen shape are
+recorded as ADRs in [docs/adr/](adr/).
 
 ## Design shape
 
@@ -16,7 +19,7 @@ through message-shaped contracts.
 instruction + camera images
                     |
                     v
-     Planner (scripted; model backends are not built)
+     Planner (scripted; model backends are research, not core)
                     |
                     v
      Plan: sub-goals + optional PoseStamped waypoints
@@ -33,13 +36,13 @@ instruction + camera images
 
 The current runnable baselines are the scripted planner/policy path with
 `PlanRunner` and the SO-101 visual-servo policy; model-backed planners and VLA
-policies plug into the same boundaries.
+policies plug into the same boundaries from `research/`.
 
 ## Execution modes and deployment parity
 
 MuJoCo and ROS2 are different layers, not competing robot backends. MuJoCo
 provides simulation and physics; ROS2 provides process and device transport.
-The project should support three execution paths with different purposes:
+The project supports three execution paths with different purposes:
 
 ```text
 Fast development:
@@ -59,7 +62,10 @@ change. Direct MuJoCo is a fast path for unit tests, training, deterministic
 regression tests, and physics debugging; it is not a substitute for ROS2
 integration validation.
 
-The proposed adapter boundary is:
+Implementation status: `DirectMuJoCoAdapter` and `ROS2MuJoCoAdapter` are
+implemented. `ROS2HardwareAdapter` is a contract-only placeholder — simulation
+only for now, per [ROADMAP.md](../ROADMAP.md); the adapter boundary below
+exists so a real backend is additive when hardware work starts.
 
 ```text
 RobotPort
@@ -71,14 +77,15 @@ RobotPort
 The adapters are generic at the port level and receive an embodiment-specific
 mapping and configuration. `DirectMuJoCoAdapter` and `ROS2MuJoCoAdapter` use
 MuJoCo as the simulation engine, while `ROS2HardwareAdapter` connects the
-selected embodiment to its real device driver. The embodiment mapping changes
-inside each adapter without changing `RobotPort`.
+selected embodiment to its real device driver. Backends are registry-driven
+(`robots.registry.register_adapter()`/`create_adapter()`; `select_adapter()`
+is the stable thin wrapper robot factories call) — adding a fourth backend is
+additive, not a new branch inside an existing adapter.
 
 `DirectMuJoCoAdapter` may retain a synchronous `reset`/`step` API for fast local
 execution. The two ROS2 adapters may use asynchronous callbacks and queues
 internally, but they must translate to the same `Observation` and `Action`
-contracts at the application boundary. `ROS2MuJoCoAdapter` is therefore an
-integration adapter around MuJoCo, not a replacement for MuJoCo.
+contracts at the application boundary.
 
 ### Mode trade-offs
 
@@ -88,26 +95,23 @@ integration adapter around MuJoCo, not a replacement for MuJoCo.
 | MuJoCo through ROS2 | Tests the production message and process boundary before hardware | Adds setup, scheduling, latency, and transport failure modes |
 | Hardware through ROS2 | Tests real sensors, actuators, calibration, and safety behavior | Slow, nondeterministic, hardware-dependent, and higher risk |
 
-The validation policy should keep direct MuJoCo in normal unit and regression
-tests, while requiring the ROS2 MuJoCo path before hardware experiments. This
-keeps development fast without allowing the direct path to hide integration
-errors.
-
 ## Module ownership
 
 | Module | Owns | Must not own |
 | --- | --- | --- |
 | `physai.contracts` | Shared `Observation`, `Action`, and ROS2-shaped value types | Robot-specific ordering or task rules |
-| `physai.config` | Typed YAML configuration parsing delegated to robot-owned config factories | Simulation behavior, robot construction, or task evaluation |
-| `physai.robots` | Embodiment discovery, `RobotSpec`, robot ports, factories, environments, and robot-specific adapters | Task reward, planner decisions, or model SDKs |
+| `physai.config` | Typed YAML configuration parsing (`legacy`: per-robot/per-world loaders; `manifest`: the session manifest), delegated to robot-owned config factories and the registries | Simulation behavior, robot construction, or task evaluation |
+| `physai.robots` | Embodiment discovery, `RobotSpec`, robot ports, factories, environments, robot-specific adapters, backend registry (`adapters.py`), and shared-world instance/attach factories | Task reward, planner decisions, or model SDKs |
 | `physai.tasks` | Task state, reset rules, reward, metrics, and termination | Robot internals or action generation |
-| `physai.sim` | MuJoCo simulation core, generic scene primitives, task-specific scene builders, rendering, and simulation time | Robot-specific environment logic, ROS2 transport, QoS, or callbacks |
-| `physai.planner` | Instruction and image grounding, `Plan`, and `SubGoal` production | Control-rate motor commands |
-| `physai.policy` | Control-rate `Action` production, scripted policies, and model adapters | Task scoring or robot discovery |
+| `physai.sim` | MuJoCo simulation core, generic scene primitives, task-specific scene builders, the shared multi-robot world, rendering, and simulation time | Robot-specific environment logic, ROS2 transport, QoS, callbacks, or any robot-name branch (`SharedWorld` takes an optional `shared_attach` hook instead) |
+| `physai.planner` | Instruction and image grounding, `Plan`, `SubGoal` production, and the planner registry | Control-rate motor commands; research planners |
+| `physai.policy` | Control-rate `Action` production, core baseline policies (`constant`, `constant_twist`, `replay`), and the policy registry | Task scoring, robot discovery, or checkpoint-backed inference |
 | `physai.control` | Action resolution, capability checks, and rate limiting | High-level planning or task semantics |
-| `physai.data` | Episode recording and dataset loading | Simulation decisions or model inference |
+| `physai.data` | Episode recording, dataset/checkpoint metadata, evaluation, and the Gymnasium adapter | Simulation decisions or model inference |
 | `physai.bridge` | ROS2 transport, topic/message mapping, timing, and ROS2-backed adapters | Physics implementation, task semantics, or model inference |
 | `physai.runtime` | Runtime composition, compatibility checks, and safety orchestration | Robot-specific physics, task reward, or model inference |
+| `physai.web` | The one `Host` class, the FastAPI client surface, telemetry payloads, and the static browser client | Simulator selection or robot construction (the composition root builds what a `Host` wraps) |
+| `research/<topic>/` | Approach-specific implementations (scripted experts, classical control, imitation learning, reinforcement learning, VLA, VLM planners), each self-registering with a core registry on import | Anything a core module imports — see [Research boundary](#research-boundary) |
 | `scripts/` | Generic CLI argument parsing and runtime composition | IK, reward calculation, or SDK-specific implementation |
 | `launch/` | Generic ROS2 launch composition and launch arguments | Robot physics, transport callbacks, or task rules |
 | `tests/` | Executable behavior and contract coverage | New runtime ownership |
@@ -117,120 +121,116 @@ The source tree follows this ownership map:
 ```text
 src/physai/
 ├── contracts.py       shared message-shaped values
-├── config.py          typed YAML runtime configuration
-├── robots/            embodiment ports, adapters, and factories
-│   ├── so101/         SO-101 environment and kinematics implementation
-│   └── turtlebot/     TurtleBot4 environment and differential-drive implementation
-├── tasks/             task rules and registries
-├── sim/               MuJoCo simulation core and scene/environment orchestration
+├── config/            typed YAML runtime configuration (legacy.py, manifest.py)
+├── robots/            embodiment ports, adapters, registries, and factories
+│   ├── so101/         SO-101 environment, kinematics, and shared-world adapter
+│   └── turtlebot/     TurtleBot4 environment and shared-world adapter
+├── tasks/             task rules and registry
+├── sim/               MuJoCo simulation core, shared world, and scene orchestration
 │   └── scenes/        shared world builder and task-specific scene variants
-├── planner/           language-to-plan implementations
-├── policy/            control and model adapters
+├── planner/           Planner contract, ScriptedPlanner baseline, and registry
+├── policy/            Policy contract, core baselines, and registry
 ├── control/           action resolution and rate limiting
-├── data/              episode recording, metadata, evaluation, and loading
+├── data/              episode recording, metadata, evaluation, and Gymnasium adapter
 ├── bridge/            ROS2 transport, message mapping, adapters, and tick loop
-└── runtime/           robot-task-policy composition and safety orchestration
+├── runtime/           robot-task-policy composition and safety orchestration
+└── web/               the one Host class, FastAPI app, telemetry, static client
+
+research/
+├── scripted_experts/      privileged-ground-truth demo-collection policies
+├── classical_control/     visual servo and other model-free baselines
+├── imitation_learning/    ACT/LeRobot dataset tooling, training, checkpoints
+├── reinforcement_learning/  deep RL on the Gymnasium adapter (placeholder)
+├── vla/                   VLA research beyond the checkpoint adapter (placeholder)
+└── vlm_planners/          model- or heuristic-grounded Planner implementations
 ```
 
-### Adapter dependency rule
+## Dependency direction
 
-```text
-DirectMuJoCoAdapter  -> MuJoCoSimulationCore
-ROS2MuJoCoAdapter    -> ROS2 transport + MuJoCoSimulationCore
-ROS2HardwareAdapter  -> ROS2 transport + hardware port
-```
+These four rules are enforced by `uv run lint-imports`
+(`pyproject.toml`'s `[tool.importlinter]`) and run inside the normal test
+suite via `tests/boundaries/test_import_boundaries.py`, so a violation fails
+`pytest tests/ -q` the same way a failing unit test would.
 
-`physai.sim` owns `MuJoCoSimulationCore` and must not import ROS2. Robot
-environments and embodiment mappings live under `physai.robots`; the direct
-adapter may live with that embodiment integration, while
-`ROS2MuJoCoAdapter` and `ROS2HardwareAdapter` belong to the ROS2 boundary under
-`physai.bridge`. Robot-specific joint mapping, capabilities, calibration, and
-kinematics are supplied by `physai.robots` to all three adapters.
-
-This split keeps ROS2 optional for fast MuJoCo tests and prevents transport
-concerns from leaking into the simulator. `scripts/` selects the adapter in
-the composition root; policy and task code depend only on shared contracts and
-capabilities, not on a robot name or transport implementation.
-
-`MuJoCoROSBridge` owns the synchronous control tick around
-`ROS2MuJoCoAdapter`. `RclpyTransport` adapts an existing `rclpy` node to the
-transport port without importing ROS2 from the core package. Embodiment-owned
-ROS2 nodes under `physai.robots` compose these generic pieces: the SO-101 node
-publishes joint states, camera images, CameraInfo, and TF while accepting joint
-trajectory and gripper commands; the TurtleBot4 node accepts `/cmd_vel` and
-publishes wheel state, `/odom`, and `odom` to `base_link` TF. The generic
-`launch/` composition starts the currently supported Nav2 profile; robot-owned
-Nav2 parameters live under `configs/nav2/<robot>/`; reusable environment maps
-live under `configs/maps/<environment>/`.
-
-### Task-specific scenes
-
-Scene geometry is split by task while robot and workspace components are shared:
-
-```text
-sim/scenes/common.py
-     +-- WorldSceneConfig: generic model, workspace, and camera settings
-     +-- ManipulationSceneConfig: configurable end-effector and pad attachments
-     +-- shared manipulation-world builder
-
-sim/scenes/pick_place_minimal.py
-     +-- one cube and one target layout
-
-sim/scenes/sorting_minimal.py
-     +-- colored cube layout and sorting positions
-```
-
-Each scene builder owns model geometry and initial object layout. Generic world
-settings are separated from manipulation attachment settings; robot-owned scene
-default providers supply model paths, end-effector anchors, and pad attachment
-bodies. The SO-101 provider supplies its calibrated pad positions and collision
-configuration, while another arm should provide its own attachment provider or
-builder. Robot model paths and end-effector anchors are configuration, not
-hardcoded task ownership. It must not own task reward, policy decisions, or ROS2
-transport. Each scene config builds itself through `build_spec()` /
-`build_model()`, so selecting a scene is selecting a class rather than decoding
-an object-count flag. This keeps task-specific object branches out of the
-shared scene builder and makes a future task scene additive.
+| Rule | Rationale |
+| --- | --- |
+| `physai.sim` must not import `physai.bridge` or `rclpy` | Keeps ROS2 optional for fast, deterministic MuJoCo-only workflows |
+| `physai.policy`, `physai.tasks`, `physai.planner` must not import `mujoco` | Policy/task/planner code depends on ports (`RobotPort`, `RobotSpec`), never on MuJoCo types. One accepted, documented indirect path exists: `policy.registry` calls `robots.registry.create_robot_policy()` to build a robot-owned policy without importing the robot itself; `robots.registry`'s own lazily loaded robot implementations are what actually touch MuJoCo, and policy never inspects the returned object's type. |
+| `physai` (core) must not import `research` | Research plugs in by registering itself into a core registry on import; core never reaches back into it. See [Research boundary](#research-boundary). |
+| A robot-name branch in generic code is a bug | `SharedWorld`, `web.host.Host`, and the web static client must resolve behavior through `RobotSpec` capabilities or a registry lookup, never `if robot_name == "..."`. Not import-linter-checked (it is a code-shape rule, not an import-graph rule); enforced by review. |
 
 ## Design patterns in use
 
 - **Ports and Adapters:** `Observation`, `Action`, `RobotPort`, `Planner`,
-     `Policy`, and `Task` are ports. Direct MuJoCo, ROS2 transport, model SDKs,
-     and concrete robot implementations are adapters around those ports.
+  `Policy`, and `Task` are ports. Direct MuJoCo, ROS2 transport, model SDKs,
+  and concrete robot implementations are adapters around those ports.
 - **Strategy:** planners, policies, and tasks are interchangeable strategies.
-     The caller depends on the abstract contract and selects the behavior at
-     runtime.
-- **Registry plus Factory:** robot, task, planner, and policy registries map
-     stable names to factories. Lazy builtin loading keeps optional dependencies
-     out of model-free workflows and lets extensions register without editing a
-     caller.
-- **Composition Root:** CLI modules under `scripts/` assemble the selected
-     adapters and dependencies. Domain modules do not parse CLI arguments or
-     discover unrelated implementations.
+  The caller depends on the abstract contract and selects the behavior at
+  runtime.
+- **Registry plus Factory:** robot, scene, task, policy, planner, and backend
+  registries map stable names to factories. `robots.registry.register_embodiment()`
+  registers everything one robot owns (factory, scene defaults, env config,
+  ROS2 node, navigation, shared-world attach/instance) in one call, given one
+  `RobotDescriptor`. Lazy builtin loading keeps optional dependencies out of
+  model-free workflows and lets extensions register without editing a caller;
+  a research module registers itself on import instead of a core registry
+  importing it.
+- **Composition Root:** `physai.runtime.create_runtime()` is the intended
+  composition root; CLI modules under `scripts/` are meant to call it and
+  parse arguments only. `run_sim.py` calls it for the manifest-free
+  single-robot path's robot construction but still assembles the task/policy
+  and (for `--world`) the shared world by hand — see
+  [Known remaining gaps](#known-remaining-gaps).
 - **Safety Gate:** `SafetyController` validates action mode, joint order,
-     finite values, timestamps, joint limits, and configured per-joint step
-     limits immediately before a robot port receives a command. The gate lives
-     inside the adapters (`DirectMuJoCoAdapter`, `MuJoCoROSBridge`, the
-     Gymnasium adapter), so every execution path shares it and no workflow can
-     reach the robot unchecked. `RobotSpec.max_joint_delta` bounds command
-     against *measured* position and must stay above `JointRateLimiter`'s
-     command-to-command clamp, or normal servo tracking lag trips the gate.
+  finite values, timestamps, joint limits, and configured per-joint step
+  limits immediately before a robot port receives a command. The gate lives
+  inside the adapters (`DirectMuJoCoAdapter`, `MuJoCoROSBridge`, the
+  Gymnasium adapter), so every execution path shares it and no workflow can
+  reach the robot unchecked. `RobotSpec.max_joint_delta` bounds command
+  against *measured* position and must stay above `JointRateLimiter`'s
+  command-to-command clamp, or normal servo tracking lag trips the gate.
 
 These patterns are intentionally lightweight. A new abstraction is warranted
 only when it removes coupling at a boundary or makes a component replaceable;
 inheritance should not be added solely to make a class hierarchy.
 
-Adding one component should not require changing an unrelated component:
+## Extension seams
 
-- A robot owns its adapter, capabilities, factory, and registration.
-- A task consumes backend state and owns task semantics.
-- A planner returns a `Plan` and does not emit motor commands.
-- A policy emits `Action` at the control rate and does not score the task.
-- A model-specific observation or action space requires an explicit adapter.
-- A simulator adapter and a hardware adapter implement the same robot port;
-     neither is selected by branching inside a policy.
-- ROS2 transport is optional for the direct fast path but mandatory for the
-     ROS2 simulation and hardware deployment paths.
+Every seam is one new file plus one registration call, except where noted.
+
+| Seam | New file | Registration |
+| --- | --- | --- |
+| Robot | `robots/<name>/` package | One `RobotDescriptor` + `register_embodiment(name, descriptor)` in `robots/registry.py:_load_builtins()` |
+| Scene | `sim/scenes/<name>.py` | `register_scene(name, SceneDefinition(...))` in `sim/scenes/registry.py:_load_builtins()` |
+| Task | `tasks/<name>.py` | `register_task(name, factory)` in `tasks/registry.py:_load_builtins()` |
+| Policy (core baseline) | `policy/<name>.py` | `register_policy(name, factory)` in `policy/registry.py:_load_builtins()` |
+| Policy (robot-owned) | `robots/<robot>/<name>.py` or `research/<topic>/<name>.py` | `register_robot_policy(robot_name, policy_name, factory)`, called by the module itself if it lives in `research/` |
+| Policy (research, global) | `research/<topic>/<name>.py` | `register_policy(name, factory)`, called by the module itself on import |
+| Planner (core baseline) | `planner/base.py` | `register_planner(name, factory)` in `planner/registry.py:_load_builtins()` |
+| Planner (research) | `research/<topic>/<name>.py` | `register_planner(name, factory)`, called by the module itself on import |
+| Backend | `robots/adapters.py` (a new builder function) | `register_adapter(name, builder)` in `robots/adapters.py:_load_builtins()` |
+| Client capability control | `web/static/js/controls.js` / `ui.js` | None — capabilities are declarative data (`RobotSpec.action_modes`/`capabilities`), rendered conditionally; this is a UI branch on data, not a registry |
+
+Robot registration touches one function in one file (`_load_builtins()`),
+even though a robot with every optional factory (env config, ROS2 node,
+navigation, shared-world attach/instance) supplies up to six fields on one
+`RobotDescriptor` — still one call, not one call per factory kind.
+
+## Frozen vs. free to change
+
+| Layer | Frozen (needs an ADR + version bump) | Free to change |
+| --- | --- | --- |
+| Contracts | `contracts.py` (`Observation`, `Action`, `*Spec`, `Header`, `JointState`, `Pose`, `Twist`, ...) | Internal helpers not part of the public dataclass shape |
+| Ports | `robots/base.py` (`RobotPort`, `RobotSpec`, `RobotTrainingContract`, `KinematicsPort`); `policy/base.py` (`Policy`); `tasks/base.py` (`Task`); `planner/base.py` (`Planner`, `Plan`/`SubGoal`) | Concrete implementations of each ABC |
+| Manifest schema | `SessionManifest`'s field names/types/validation rules (see [Session manifest](#session-manifest)) once a session depends on them | Which YAML files exist under `configs/` |
+| Host API | The method surface in [Host + client API](#host--client-api) | `Host`'s internal threading model, camera cadence, lease timeout |
+| Folder tree | Top-level package boundaries (`robots/`, `policy/`, `tasks/`, `planner/`, `sim/`, `web/`, `runtime/`, `research/`) and the rule that core never imports `research/` | Internal file layout inside one robot's package or one research topic |
+| Registries | The register/create pattern itself | Which specific factories are registered, and in what order |
+
+Evolution rule: a frozen item changes only via (1) an ADR under `docs/adr/`,
+(2) a version marker on the affected contract (e.g. `SessionManifest.schema_version`),
+and (3) a deprecation window — old names/routes keep working with a warning
+for at least one minor version before removal.
 
 ## Stable contracts
 
@@ -253,19 +253,15 @@ definitions declare compatible robot kinds and task names; incompatible
 combinations fail during composition rather than inside a policy or scene
 builder.
 
-`Action` may carry explicit joint names and a timestamp. Legacy callers may
-omit those fields, but adapters and safety-critical paths should populate them
-so joint ordering and command freshness are checked at the boundary.
-
 The robot boundary consists of two explicit ports around the existing
 contracts:
 
 - `RobotPort` owns observation acquisition, action dispatch, lifecycle, and
-     the robot-specific mapping of joint names, units, gripper range, cameras,
-     and frames.
+  the robot-specific mapping of joint names, units, gripper range, cameras,
+  and frames.
 - `KinematicsPort` owns FK, IK, Jacobian, and pinch-frame operations. A
-     MuJoCo implementation may use `MjModel`/`MjData`; a hardware implementation
-     must consume measured joint state and a calibrated kinematics model instead.
+  MuJoCo implementation may use `MjModel`/`MjData`; a hardware implementation
+  must consume measured joint state and a calibrated kinematics model instead.
 
 `Policy`, `PlanRunner`, and task code should depend on these ports rather than
 on MuJoCo types. `SO101Env` is a robot-owned backend that provides observation,
@@ -276,18 +272,23 @@ direct-MuJoCo workflows.
 
 `Planner` maps an instruction and observation to `Plan`. A `Plan` contains
 language-grounded `SubGoal` values and optional `PoseStamped` waypoints.
-`Policy` maps an observation and optional goal to one `Action` per control tick.
-`Task` owns evaluation, reward, and termination around the backend state.
+`Policy` maps an observation and optional goal to one `Action` per control
+tick. `Task` owns evaluation, reward, and termination around the backend
+state.
+
+`physai.policy.replay.VLAPolicy` is the chunked-action `Policy` shape
+(observation packing, action-chunk buffering, unit decoding) shared by any
+policy that consumes a chunk of actions at a time; it stays in core because
+`ReplayPolicy` — a model-free integration test for the whole seam — needs it,
+and core must not import research. Checkpoint-backed subclasses
+(`LeRobotPolicy`) are research content: see
+[Research boundary](#research-boundary).
 
 `physai.runtime.create_runtime` composes a runtime in one call: it validates
 the task's declared capabilities against the selected `RobotSpec`, resolves the
 scene, wraps the robot port with `TaskRuntime` when a task is selected, and
 creates an optional registered policy. Safety is not its job — the adapter
 gates every action regardless of how the runtime was assembled.
-
-Known gap: the CLIs under `scripts/` still assemble these pieces by hand rather
-than calling `create_runtime`, so the same assembly exists in two places. They
-are safety-gated either way.
 
 Scene configs are selected through `physai.sim.scenes.create_scene` and the
 scene registry. Each registered scene declares supported robot kinds and task
@@ -296,79 +297,161 @@ the robot and rejects task-scene mismatches during composition. A scene's
 embodiment defaults come from the robot's `scene_defaults()` and are passed in
 explicitly; the scene layer never looks up a robot by name.
 
-## Runtime compositions
+### Task-specific scenes
 
-### Implemented compositions
-
-The currently implemented compositions are concrete and should remain listed
-here as an inventory of repository support:
+Scene geometry is split by task while robot and workspace components are shared:
 
 ```text
-so101 + pick_place + scripted, visual-servo, or Planner + PlanRunner + MuJoCo
-turtlebot4 + generic smoke test + constant twist policy + MuJoCo
+sim/scenes/common.py
+     +-- WorldSceneConfig: generic model, workspace, and camera settings
+     +-- ManipulationSceneConfig: configurable end-effector and pad attachments
+     +-- shared manipulation-world builder
+
+sim/scenes/pick_place_minimal.py
+     +-- one cube and one target layout
+
+sim/scenes/sorting_minimal.py
+     +-- colored cube layout and sorting positions
 ```
 
-`so101` and `turtlebot4` are examples of registered embodiments, not names
-that belong in the generic adapter or policy contracts. `pick_place` is the
-registered manipulation task and requires arm and gripper capabilities, so the
-policy, demo, and planner workflows are currently SO-101-specific. TurtleBot4
-has a native MuJoCo model, differential-drive controls, wheel state, base pose,
-direct RPP navigation, and a ROS2/Nav2 obstacle acceptance path.
+Each scene builder owns model geometry and initial object layout. Robot model
+paths and end-effector anchors are configuration, not hardcoded task
+ownership. Each scene config builds itself through `build_spec()`/
+`build_model()`, so selecting a scene is selecting a class rather than
+decoding an object-count flag.
 
-The current pick-and-place and sorting implementations are intentionally
-minimal baselines for smoke tests and early experiments. They live in
-`physai.tasks.pick_place_minimal` and `physai.tasks.sorting_minimal`, where
-`SortingTask` extends `PickPlaceTask` with the target-color state; the registry
-keys `pick_place` and `sorting` remain stable so configuration does not encode
-an implementation filename.
+## Session manifest
 
-### Web fleet composition
+One YAML file binds robot instances, scene, task, policy, backend, and viewer
+options for a run. A single-robot run is a manifest with one entry in
+`robots`. Loaded and validated by `physai.config.manifest.load_manifest()`
+(full field-by-field schema and validation rules are documented in that
+module's docstring — this section is the summary):
 
-`SimulationHost` composes one robot port for the single-robot web path. The
-shared-world path composes one `SharedWorldHost` from a world manifest.
+```yaml
+schema_version: 1
+scene:
+  name: pick_place_minimal
+backend: direct                  # direct | ros2_sim | ros2_real
+robots:
+  - id: arm_1
+    robot: so101
+    pose:
+      position: [0.0, 0.0, 0.0]
+      quaternion: [1.0, 0.0, 0.0, 0.0]
+    task: pick_place              # optional per-instance override
+    policy: scripted               # optional; "idle" if omitted
+task: pick_place                  # optional session-wide default
+policy: idle
+viewer:
+  mode: none                      # none | native | web | both
+```
 
-Known gap: the two hosts duplicate their physics thread, camera thread, control
-lease, and publish loop, and `SharedRobotInstance` hardcodes a `so101` /
-`turtlebot4` whitelist instead of reading the robot registry. They should share
-one base. It owns
-one MuJoCo model, one `MjData`, one physics clock, and one loop for all
-heterogeneous robot instances. Each instance has a namespaced binding,
-capability contract, action queue, and control lease; `/api/state` and
-`/api/scene` describe the complete world.
+Validation resolves every `robot`/`task`/`policy` name through the existing
+registries and checks scene/robot-kind/task compatibility via
+`SceneDefinition.supports()` and `robot_kind()` — without constructing any
+robot or MuJoCo model. `backend: ros2_real` is accepted by the schema for
+forward compatibility but raises a clear "not yet implemented" error.
+
+`configs/manifests/example_single_so101.yaml` and
+`example_heterogeneous.yaml` are worked examples.
+`physai.config.legacy` (`load_sim_config`/`load_task_config`/
+`load_world_config`, backing `configs/sim_config.yaml`,
+`configs/tasks/<robot>/*.yaml`, and `configs/worlds/*.yaml`) is unaffected
+and stays for CLI back-compat — see
+[Known remaining gaps](#known-remaining-gaps) for what still uses it instead
+of the manifest.
+
+## Host + client API
+
+`physai.web.host.Host` is the one host class. Build one with `Host.for_robot(...)`
+(direct MuJoCo, one `RobotPort`, optional policy) or `Host.for_world(...)`
+(a `SharedWorld` with N namespaced instances, command/hold only, no policy) —
+a single-robot session is simply a `Host` with one instance. Every method is
+instance-keyed with `instance_id` optional, defaulting to the sole instance:
 
 ```text
-world manifest
-     |
-     v
-SharedWorldHost
-     |
-     +-- { instance_id: SharedRobotInstance }
-          |
-          +-- /api/robots       capability discovery
-         +-- /api/scene        whole-world static geometry
-         +-- /api/state        whole-world dynamic state
-         +-- /ws               selected-instance control and whole-world telemetry
+Host
+ ├── scene() / list_robots()               capability + geometry discovery
+ ├── latest_state()                        dynamic transform snapshot
+ ├── camera_jpeg(name, instance_id=None)   cached camera JPEG
+ ├── submit(action, instance_id=None, ...) command + control lease
+ ├── reset() / set_paused(paused)          world-atomic, affects every client
+ ├── start_recording() / stop_recording(success)   browser episode capture
+ │   / recording_status()                    (single-instance, needs record_dir)
+ ├── list_episodes() / load_episode(file)   replay a saved episode on the paused
+ │   / seek(frame, relative) / set_playback(playing, speed) / exit_playback()
+ ├── release_control(source)               drop every instance a source owns
+ └── start() / stop()                      physics-thread lifecycle
 ```
 
-`scripts/run_sim.py --world <manifest> --viewer --serve` starts the shared-world
-path. The browser selector changes the active instance for commands; it does
-not hide or replace the other robots in the scene. Reset and pause are
-world-atomic, while commands and leases are instance-scoped. Capability-
-specific controls belong at the presentation boundary; a robot without a
-gripper or twist resolver must not be forced through the SO-101 keyboard
-mapping.
+One physics thread runs the control loop (30 Hz by default); a separate
+camera worker thread renders named cameras at a slower, decoupled cadence
+(0.2 s) so camera capture never pauses the physics loop. `Host.physics_lock`
+serializes MuJoCo access between the two threads and any renderer client
+(e.g. the native `--viewer`). HTTP camera requests only read the latest
+cached JPEG; they never step or render from the request handler itself.
 
-The near-term instantiation is `so101 + pick_place`, but adding another robot
-must not require changing this composition model. Every robot/task combination
-should use the three execution paths defined in [Execution modes and
-deployment parity](#execution-modes-and-deployment-parity); only the two ROS2
-paths are deployment paths.
+Reset and pause are world-atomic and affect every connected client. Manual
+control uses a short per-instance lease: the first client to submit a command
+becomes that instance's controller; another client's command is rejected
+while the lease is alive. Releasing the connection or letting the lease
+expire returns that instance to its hold action or configured policy.
+`release_control(source)` only drops the instances that `source` actually
+owns, so one client's disconnect never cancels another instance's rightful
+owner mid-lease.
 
-Future compositions such as
-`turtlebot4 + navigation + Nav2 policy` or
-`mobile_manipulator + mobile_pick_place + VLA` should add adapters, tasks, and
-registrations. They should not route TurtleBot4 through an SO-101 environment,
-SO-101 kinematics, or `PickPlaceTask`.
+`web/app.py` (FastAPI) is a thin client of `Host` — it never branches on host
+type, and it never imports `mujoco` or a robot module. The REST/WebSocket
+surface is stable across single- and multi-robot sessions:
+
+| Route | Behavior |
+| --- | --- |
+| `GET /` | Three.js browser console (static file) |
+| `GET /api/robots` | Every instance's id, kind, action modes, capabilities, and cameras |
+| `GET /api/scene` | Static geometry manifest for the whole session |
+| `GET /api/episodes` | Saved episodes of the record directory (file, length, `success`, `playable`); `[]` when recording is disabled |
+| `GET /api/state` | Latest transform snapshot for the whole session |
+| `GET /api/mesh/{id}` | Compiled mesh binary payload |
+| `GET /api/camera/{name}.jpg` | Cached camera JPEG (single snapshot), optionally `?robot=<instance_id>` |
+| `GET /api/camera/{name}/stream` | MJPEG `multipart/x-mixed-replace` stream; 404 on an unknown camera |
+| `WS /ws` | Accepts `select_robot`, `command`, `reset`, `pause`, `release_control`, `record_start`, `record_stop`, `playback_load`/`_seek`/`_step`/`_play`/`_exit`; streams state + errors |
+
+Each `gripper_contacts` entry carries `force_n`, the pad's summed contact
+normal force in newtons. The streamed state also carries the robot's `ee_pose` (a `PoseStamped`-shaped
+dict plus a `reference` of `tool` or `ee_pose`, or `null`; `tool` is the pose
+the robot's kinematics reports through the optional `tool_pose(data)`
+extension, which for the SO-101 is the pinch centre oriented relative to a
+top-down grasp), the live `paused` flag and
+a `recording` status block (episodes saved, frames, errors) and a `playback`
+status block (file, frame, length, playing, speed, success). During playback
+each `gripper_contacts` entry's `force_n` is `null`: a restored `qpos` cannot
+reproduce the actuator state that produced the recorded squeeze. `paused` and `recording` are merged in at read
+time by `Host.latest_state()`, so a paused world still reports changes.
+Recording and playback are specified in
+[ADR 9](adr/0009-web-session-recording-and-playback.md).
+
+Both clients depend only on this API plus `RobotSpec` capabilities, never on
+MuJoCo or robot internals:
+
+- **`--viewer` (native MuJoCo):** `mujoco.viewer.launch_passive` rendering
+  `Host.model`/`Host.data` directly, synced from the physics thread's state
+  under `Host.physics_lock` (see [ADR 4](adr/0004-tk-viewer-frozen.md), which
+  replaced the former Tk implementation). It has no multi-camera panel
+  of its own; combine it with `--serve` and use the web viewer's camera grid
+  for that.
+- **`--serve` (FastAPI + Three.js):** the sophisticated client. All new UI
+  features (jog controls, instance selection, telemetry, overlays) go here.
+  The browser talks only to the REST/WebSocket surface above; see
+  [docs/WEB_VIEWER_RUNBOOK.md](WEB_VIEWER_RUNBOOK.md) for keyboard mapping,
+  cloud-workspace setup, and troubleshooting.
+
+Shared-world instances (`SharedWorldInstance`-shaped adapters returned by
+`robots.registry.create_shared_instance()`) are built entirely through the
+robot registry — `web/host.py` and `sim/world.py` never branch on a robot
+name; `sim.world.SharedWorld` takes an optional `shared_attach` callable
+(wired to `robots.shared_attach`) so a robot can inject shared-world-only
+MJCF (e.g. SO-101's extra cameras) without `sim` knowing any robot's name.
 
 ## Capabilities and kinematics
 
@@ -388,19 +471,70 @@ A mobile base may expose `base_velocity` and `odometry`; an arm may expose
 `joint_position` and `arm_kinematics`; a mobile manipulator may expose both.
 Tasks and policies request capabilities, not robot names.
 
+Jogging is meant to be a capability a robot owns and registers (a resolver
+factory alongside its other `RobotDescriptor` fields), with the host exposing
+one generic jog command and UIs rendering controls from `action_modes`/
+`capabilities`. The UI side of this is already true (the web client hides
+controls a robot's capabilities don't support). The resolver-ownership side
+is not finished — see [Known remaining gaps](#known-remaining-gaps).
+
+## Research boundary
+
+Research plugs in through the existing contracts only (`Planner`, `Policy`,
+`Task`, `Observation`/`Action`, `RobotTrainingContract`, `physai.data`, the
+Gymnasium adapter) and registers itself into a core registry on import. Core
+ships the contracts plus minimal baselines only; per-module placement:
+
+| Module | Home | Why |
+| --- | --- | --- |
+| `ScriptedPlanner`, `PlanRunner`, `ReplayPolicy`/`VLAPolicy` base, `SortingTask`, `GymnasiumAdapter`, TurtleBot4 `navigation.py` | Core | Minimal, technique-agnostic baselines the brief treats as core's job to ship |
+| `research/scripted_experts/so101_pick_place_expert.py` | Research | Privileged ground-truth expert (reads `mujoco` object pose directly) |
+| `research/classical_control/so101_visual_servo.py` | Research | One calibrated-camera visual-servo baseline, not infrastructure |
+| `research/imitation_learning/{act_dataset,vla_adapter,train_act}.py` | Research | ACT/LeRobot training pipeline and the checkpoint-backed `LeRobotPolicy` |
+| `research/vlm_planners/sorting_planner.py` | Research | Task-coupled (reads privileged `env.cube_positions`), not a generic baseline |
+| `research/reinforcement_learning/`, `research/vla/` | Research (placeholders) | No concrete module yet; topics reserved per [ROADMAP.md](../ROADMAP.md) |
+
+See [ADR 3](adr/0003-research-outside-core.md) for the decision and
+`research/README.md` for the one rule research code follows.
+
+## Runtime compositions
+
+### Implemented compositions
+
+```text
+so101 + pick_place + scripted, visual-servo, or Planner + PlanRunner + MuJoCo
+turtlebot4 + generic smoke test + constant twist policy + MuJoCo
+```
+
+`so101` and `turtlebot4` are examples of registered embodiments, not names
+that belong in the generic adapter or policy contracts. `pick_place` is the
+registered manipulation task and requires arm and gripper capabilities, so the
+policy, demo, and planner workflows are currently SO-101-specific. TurtleBot4
+has a native MuJoCo model, differential-drive controls, wheel state, base pose,
+direct RPP navigation, and a ROS2/Nav2 obstacle acceptance path. It proves the
+capability abstraction generalizes beyond one arm and is explicitly not a
+development focus (see [ADR 5](adr/0005-turtlebot4-kept-as-second-embodiment.md)).
+
+The current pick-and-place and sorting implementations are intentionally
+minimal baselines for smoke tests and early experiments. They live in
+`physai.tasks.pick_place_minimal` and `physai.tasks.sorting_minimal`, where
+`SortingTask` extends `PickPlaceTask` with the target-color state; the
+registry keys `pick_place` and `sorting` remain stable so configuration does
+not encode an implementation filename.
+
 ## Model roles
 
-No model-backed planner is built. `physai.planner` defines the `Planner`
-contract and a scripted backend; a future VLM backend implements the same
-contract and returns a `Plan`.
+No model-backed planner is built in core. `physai.planner` defines the
+`Planner` contract and a scripted backend; `research/vlm_planners/` is where
+a VLM-grounded backend implementing the same contract belongs.
 
 ACT is the low-level policy checkpoint format behind the policy boundary in
-`src/physai/policy/vla_adapter.py` (`LeRobotPolicy`). A policy checkpoint
-predicts control-rate actions; it must not be described as a planner or be
-coupled directly to a robot environment.
+`research/imitation_learning/vla_adapter.py` (`LeRobotPolicy`). A policy
+checkpoint predicts control-rate actions; it must not be described as a
+planner or be coupled directly to a robot environment.
 
-Checkpoints are written by `scripts/train_act.py` into the ignored local
-`outputs/` directory and loaded through an explicit path.
+Checkpoints are written by `research/imitation_learning/train_act.py` into
+the ignored local `outputs/` directory and loaded through an explicit path.
 
 ## Demonstration data
 
@@ -429,6 +563,13 @@ recorder writes a compact internal `.npz` format with LeRobot-shaped feature
 keys; a future standard `LeRobotDataset` exporter must consume the same
 metadata and must not introduce a parallel action contract.
 
+A recording may add one optional per-step key,
+`observation.environment_state` (`(T, nq)` float64, the full simulator qpos),
+declared in `meta.json`'s `features` when present. The web viewer's recorder
+writes it, as does `scripts/collect_demos.py` (see
+[ADR 9](adr/0009-web-session-recording-and-playback.md)); datasets recorded
+before that change lack it and keep the layout above.
+
 Dataset and checkpoint metadata also record the selected scene name and scene
 configuration snapshot. This makes training and evaluation reproducible when
 the scene registry grows, while keeping scene construction owned by
@@ -445,9 +586,9 @@ transport-neutral; topic mapping is documented in
 The ROS2 boundary has two interchangeable adapter roles:
 
 - `ROS2MuJoCoAdapter` translates the ROS2 topics into MuJoCo control and
-     publishes simulated joint state and available camera frames.
+  publishes simulated joint state and available camera frames.
 - `ROS2HardwareAdapter` translates the same ROS2 topics into the selected
-     embodiment's motor and camera interfaces and publishes measured state.
+  embodiment's motor and camera interfaces and publishes measured state.
 
 Both adapters have embodiment-specific implementations. The SO-101 is one
 such implementation, not part of the generic adapter contract. Each adapter
@@ -463,18 +604,22 @@ Both adapters must make unit conversion, joint ordering, timestamps, frame
 names, command freshness, and command rate explicit. Joint order and value
 shape are validated at decode time against `RobotSpec`. The ROS2 contract file
 is the source of truth for external interfaces; it is not itself an adapter.
+`rclpy` is imported lazily inside each robot's `ros2_node.py`, only when its
+node actually runs, which is how `physai.sim` stays free of it (enforced by
+the import-boundary contract above) even though `robots.registry` eagerly
+imports `ros2_node.py` modules that reference it.
 
 ### Required validation gates
 
 Before hardware deployment, the following checks should pass:
 
 1. Direct MuJoCo contract tests for `Observation`, `Action`, capabilities,
-      joint ordering, limits, and gripper normalization.
+   joint ordering, limits, and gripper normalization.
 2. ROS2 MuJoCo integration tests using the same topics and message types as
-      the hardware driver.
+   the hardware driver.
 3. Hardware-driver tests with recorded or fake joint states and camera frames.
 4. A supervised hardware smoke test with command timeout, joint limits,
-      emergency stop, and stale-observation handling.
+   emergency stop, and stale-observation handling.
 
 ## Embodiment constraints
 
@@ -486,3 +631,28 @@ the reachable workspace.
 The simulation uses the new-calibration SO-101 model. Changes to robot model
 files require rechecking pad geometry, joint limits, contact behavior, and
 reachable area.
+
+## Known remaining gaps
+
+Tracked here rather than silently left implicit, since this document is
+meant to be the frozen reference:
+
+- **Jog resolver ownership.** `TwistToJointResolver` construction is
+  duplicated across `web/host.py`'s single- and shared-world branches and
+  `scripts/teleop_keyboard.py`, instead of each robot registering its own jog
+  resolver factory on `RobotDescriptor`. The client-facing capability model
+  (UIs render controls from `RobotSpec`) is already correct; only the
+  resolver-construction side needs the extra registry field.
+- **`scripts/` composition-root adoption.** Most scripts other than
+  `run_sim.py`'s robot construction still hand-assemble `EnvConfig`/env
+  objects instead of calling `physai.runtime.create_runtime()` — see
+  [docs/MIGRATION.md](MIGRATION.md) for the per-script list. They are
+  safety-gated either way (the gate lives in the adapter, not the
+  composition path).
+- **Session manifest adoption.** `physai.config.manifest.load_manifest()` is
+  implemented and tested but not yet wired into `run_sim.py` or
+  `create_runtime()`; `--config`/`--world` and their legacy loaders are still
+  the only manifest-shaped configuration a script actually consumes.
+- **Registry granularity.** Adding a robot is "one `RobotDescriptor` + one
+  `register_embodiment()` call," not literally one line — a robot supplying
+  every optional factory sets up to six fields on that one descriptor.

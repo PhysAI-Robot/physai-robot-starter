@@ -1,4 +1,12 @@
-"""Load typed runtime configuration from YAML files."""
+"""Load typed runtime configuration from YAML files.
+
+This is the pre-manifest configuration surface: one robot's task+scene+env
+(`load_task_config`), a heterogeneous world's robot placement
+(`load_world_config`), and shared simulation defaults (`load_sim_config`).
+It stays for CLI back-compat; `physai.config.manifest` is the new, unified
+session-manifest schema (robots + scene + task + policy + backend +
+viewer in one file).
+"""
 
 from __future__ import annotations
 
@@ -8,10 +16,10 @@ from typing import Any
 
 import yaml
 
-from .robots import create_env_config
-from .sim.domain_randomization import DomainRandomizationConfig
-from .sim.scenes import create_scene, get_scene_definition
-from .sim.world import RobotInstanceConfig
+from ..robots import create_env_config
+from ..sim.domain_randomization import DomainRandomizationConfig
+from ..sim.scenes import create_scene, get_scene_definition
+from ..sim.world import RobotInstanceConfig
 
 
 @dataclass(frozen=True)

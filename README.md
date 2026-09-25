@@ -72,30 +72,37 @@ uv run python scripts/run_sim.py
 ```
 
 The command runs headlessly by default and writes evaluation output to
-`outputs/`. Add `--video` when you want a recorded episode. Open the
-interactive MuJoCo viewer after the headless run succeeds:
+`outputs/`. Add `--video` when you want a recorded episode.
+
+For an interactive session, start the SO-101 host with `--serve` and open the
+browser-based Three.js viewer — this is the actively developed client, with
+configurable camera panels and per-policy debug overlays. Without an explicit
+`--policy`, serve mode holds the current pose and does not run pick-and-place
+automatically. Add `--policy scripted` when you want the scripted task to
+drive the robot:
 
 ```bash
-uv run python scripts/run_sim.py --viewer
+MUJOCO_GL=egl uv run python scripts/run_sim.py --robot so101 --serve
 ```
 
-For an idle browser-based Three.js viewer, start the SO-101 host with `--serve`
-and jog it from the browser. Without an explicit `--policy`, viewer and serve
-modes hold the current pose and do not run pick-and-place automatically. Add
-`--policy scripted` when you want the scripted task to drive the robot, and add
-`--viewer` only when you also want the local desktop window:
-
-```bash
-MUJOCO_GL=egl uv run python scripts/run_sim.py \
-  --robot so101 \
-  --serve
-```
+Add `--record-dir data/web_session` to record episodes from the browser with
+success/fail tags (see
+[docs/WEB_VIEWER_RUNBOOK.md](docs/WEB_VIEWER_RUNBOOK.md#recording-episodes)).
 
 In another terminal, open the browser client:
 
 ```bash
-MUJOCO_GL=egl uv run python scripts/run_web.py \
-  --connect http://127.0.0.1:8000
+MUJOCO_GL=egl uv run python scripts/run_web.py --connect http://127.0.0.1:8000
+```
+
+A minimal Tk desktop window is also available as a fallback when a browser
+isn't convenient; it never grows features beyond a live scene and camera
+panels (see [ADR 4](docs/adr/0004-tk-viewer-frozen.md)). Add `--viewer` in
+place of `--serve` above, or alongside it to attach both clients to the same
+host:
+
+```bash
+uv run python scripts/run_sim.py --viewer
 ```
 
 The web layer remains robot-agnostic and discovers action modes and cameras
@@ -106,9 +113,7 @@ To run multiple heterogeneous robots in one shared MuJoCo scene at the default
 30 Hz control rate, use the world manifest example:
 
 ```bash
-MUJOCO_GL=egl uv run python scripts/run_sim.py \
-  --world configs/worlds/heterogeneous.yaml \
-  --serve
+MUJOCO_GL=egl uv run python scripts/run_sim.py --world configs/worlds/heterogeneous.yaml --serve
 ```
 
 This uses one model, physics data object, and simulation clock. The shared
@@ -264,10 +269,11 @@ uv run python scripts/collect_demos.py --sorting --episodes 50 --out data/sortin
 Measured over held-out seeds, the scripted expert now reaches 100% on the
 single-cube check (300 seeds) and 98% on this sorting variant (900 seeds).
 The single-cube number matches the camera-only `visual_servo` baseline; see
-the Phase 2.0 finding in [ROADMAP.md](ROADMAP.md) for the two root causes
-behind the sorting gap and their fixes: a missing wrist-orientation
-constraint, and the wide-open jaws nudging a neighboring cube during
-approach and staling the expert's locked aim point.
+[research/scripted_experts/README.md](research/scripted_experts/README.md)
+for the root causes behind the sorting gap and their fixes: a missing
+wrist-orientation constraint, an under-squeezed grip, and the wide-open jaws
+nudging a neighboring cube during approach and staling the expert's locked
+aim point.
 
 Failed demonstrations are discarded by default. Add `--keep-failures` when
 you are analyzing failure cases.
@@ -301,9 +307,8 @@ extra:
 
 ```bash
 uv sync --extra vla
-uv run python scripts/train_act.py --dataset data/pickplace_v1 --steps 4000
-uv run python scripts/eval_policy.py --policy lerobot \
-  --checkpoint outputs/act_ckpt --camera-size 128
+uv run python research/imitation_learning/train_act.py --dataset data/pickplace_v1 --steps 4000
+uv run python scripts/eval_policy.py --policy lerobot --checkpoint outputs/act_ckpt --camera-size 128
 ```
 
 The training script stores the checkpoint and metadata under
@@ -346,7 +351,7 @@ Install the extra for the workflow you intend to use:
 uv sync --extra vla
 ```
 
-Checkpoints are written by `scripts/train_act.py` into the ignored local
+Checkpoints are written by `research/imitation_learning/train_act.py` into the ignored local
 `outputs/` directory and loaded from an explicit path.
 
 Copy `.env.example` to `.env` when using gated or private Hugging Face models.
@@ -408,6 +413,9 @@ is also documented there.
 
 - [Architecture](docs/ARCHITECTURE.md): runtime composition, module ownership,
   contracts, and extension boundaries.
+- [Migration record](docs/MIGRATION.md): the core-architecture-freeze
+  restructuring, old path -> new path.
+- [Architecture decisions](docs/adr/): the decisions behind the frozen design.
 - [Contributing](CONTRIBUTING.md): contribution workflow and commit format.
 - [Third-party notices](THIRD_PARTY_NOTICES.md): asset and model sources,
   attribution, and license status.

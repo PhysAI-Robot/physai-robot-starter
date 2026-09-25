@@ -10,36 +10,30 @@ baseline before using Nav2.
 uv run python scripts/fetch_assets.py --robot turtlebot4
 ```
 
-Open the robot in MuJoCo:
+Open the robot interactively in the browser (see the shared
+[Web Viewer Runbook](WEB_VIEWER_RUNBOOK.md) for the full workflow):
 
 ```bash
-uv run python scripts/run_sim.py \
-  --robot turtlebot4 \
-  --viewer \
-  --seed 0
+uv run python scripts/run_sim.py --robot turtlebot4 --serve --seed 0
 ```
 
 Run headless for repeatable checks:
 
 ```bash
-uv run python scripts/run_sim.py \
-  --robot turtlebot4 \
-  --seed 0 \
-  --max-steps 300
+uv run python scripts/run_sim.py --robot turtlebot4 --seed 0 --max-steps 300
 ```
 
 At yaw zero, positive linear velocity drives along the model's world `-Y`
 direction. The navigation controller and tests use this model convention.
 
-To inspect TurtleBot4 in the Three.js console through the same authoritative
-host workflow, see the [Web Viewer Runbook](WEB_VIEWER_RUNBOOK.md).
+MuJoCo's own desktop viewer is also available as a fallback when a browser
+isn't convenient (see [ADR 4](adr/0004-tk-viewer-frozen.md)); add
+`--viewer` in place of `--serve` above.
 
 ## 2. Validate Basic Differential-Drive Control
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest \
-  tests/unit/test_robot_registry.py \
-  tests/acceptance/turtlebot/test_navigation.py -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/unit/test_robot_registry.py tests/acceptance/turtlebot/test_navigation.py -q
 ```
 
 These checks cover registry creation, reset determinism, wheel motion, ground
@@ -51,17 +45,14 @@ Real message and executor coverage requires ROS2 Jazzy:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest \
-  tests/robots/turtlebot/test_ros2_node.py -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/robots/turtlebot/test_turtlebot_ros2_node.py -q
 ```
 
 Run a bounded ROS2 MuJoCo smoke test:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-uv run python scripts/run_ros2_sim.py \
-  --robot turtlebot4 \
-  --max-ticks 100
+uv run python scripts/run_ros2_sim.py --robot turtlebot4 --max-ticks 100
 ```
 
 The node subscribes to `/cmd_vel` and publishes `/joint_states`, `/odom`, and
@@ -72,13 +63,7 @@ the `odom` to `base_link` TF transform.
 Run the first Point A to Point B scenario directly in MuJoCo:
 
 ```bash
-uv run python scripts/eval_navigation.py \
-  --robot turtlebot4 \
-  --goal-x 1.0 \
-  --goal-y -1.0 \
-  --goal-yaw 0.0 \
-  --seed 0 \
-  --max-steps 300
+uv run python scripts/eval_navigation.py --robot turtlebot4 --goal-x 1.0 --goal-y -1.0 --goal-yaw 0.0 --seed 0 --max-steps 300
 ```
 
 Expected output includes `reached=True` and `collisions=0`. Repeat with the
@@ -107,8 +92,7 @@ Nav2:
 
 ```bash
 docker compose -f docker/docker-compose.yml build physai
-docker compose -f docker/docker-compose.yml run --rm physai \
-  ros2 pkg prefix nav2_bringup
+docker compose -f docker/docker-compose.yml run --rm physai ros2 pkg prefix nav2_bringup
 ```
 
 Start the map-based smoke test when the package is available:
@@ -121,11 +105,7 @@ In a second terminal, send the deterministic open-space goal:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-uv run python scripts/send_nav_goal.py \
-  --robot turtlebot4 \
-  --x 1.0 \
-  --y 0.0 \
-  --yaw 0.0
+uv run python scripts/send_nav_goal.py --robot turtlebot4 --x 1.0 --y 0.0 --yaw 0.0
 ```
 
 The command succeeds only when Nav2 returns `SUCCEEDED` and final odometry is
@@ -150,10 +130,7 @@ and sends the deterministic goal automatically. To inspect the graph manually,
 the equivalent launch command is:
 
 ```bash
-ros2 launch launch/nav2.launch.py \
-  robot:=turtlebot4 \
-  scenario:=obstacle_course \
-  map-file:=$PWD/configs/maps/obstacle_course/map.yaml
+ros2 launch launch/nav2.launch.py robot:=turtlebot4 scenario:=obstacle_course map-file:=$PWD/configs/maps/obstacle_course/map.yaml
 ```
 
 The obstacle scenario publishes a real `sensor_msgs/msg/LaserScan`, feeds the

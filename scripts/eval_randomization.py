@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
+from _common_args import add_episodes, add_max_steps, add_seed
 
 from physai.config import DomainRandomizationConfig
 from physai.policy import create_policy
@@ -17,6 +18,9 @@ from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
 from physai.sim import PickPlaceMinimalSceneConfig
 from physai.tasks import TaskRuntime, create_task
+
+# Registers so101's "scripted" policy with the robot registry.
+import research.scripted_experts.so101_pick_place_expert  # noqa: E402,F401
 
 
 def evaluate_mode(args: argparse.Namespace, randomized: bool) -> dict:
@@ -81,9 +85,9 @@ def evaluate_mode(args: argparse.Namespace, randomized: bool) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--episodes", type=int, default=20)
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--max-steps", type=int, default=600)
+    add_episodes(parser, default=20)
+    add_seed(parser)
+    add_max_steps(parser, default=600)
     parser.add_argument("--clutter-count", type=int, default=0)
     parser.add_argument("--json-out", type=Path)
     args = parser.parse_args()
