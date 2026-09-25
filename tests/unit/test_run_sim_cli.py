@@ -50,3 +50,27 @@ def test_turtlebot_viewer_gets_a_resolved_step_limit(monkeypatch):
 
     assert captured["name"] == "turtlebot4"
     assert isinstance(captured["max_steps"], int)
+
+
+def test_default_policy_names_the_video_file(monkeypatch, tmp_path):
+    monkeypatch.syspath_prepend(str(SCRIPTS))
+    import run_sim
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_sim.py",
+            "--video",
+            "--max-steps",
+            "3",
+            "--camera-size",
+            "64",
+            "--out",
+            str(tmp_path),
+        ],
+    )
+
+    assert run_sim.main() == 0
+
+    assert [path.stem for path in tmp_path.iterdir()] == ["scripted_ep000"]
