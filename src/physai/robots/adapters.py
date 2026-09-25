@@ -60,6 +60,7 @@ class DirectMuJoCoAdapter:
 
 AdapterBuilder = Callable[..., RobotPort]
 _ADAPTERS: dict[str, AdapterBuilder] = {}
+_BUILTINS_LOADED = False
 
 
 def register_adapter(name: str, builder: AdapterBuilder) -> AdapterBuilder:
@@ -145,8 +146,12 @@ def _build_ros2_hardware(
 
 
 def _load_builtins() -> None:
-    if _ADAPTERS:
+    # A flag, not "is anything registered": a new backend is additive and may
+    # register before the first lookup.
+    global _BUILTINS_LOADED
+    if _BUILTINS_LOADED:
         return
     register_adapter("direct_mujoco", _build_direct_mujoco)
     register_adapter("ros2_mujoco", _build_ros2_mujoco)
     register_adapter("ros2_hardware", _build_ros2_hardware)
+    _BUILTINS_LOADED = True
