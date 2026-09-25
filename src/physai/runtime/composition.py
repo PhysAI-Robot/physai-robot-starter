@@ -57,7 +57,7 @@ def create_runtime(
     scene_name: str | None = None,
     scene_kwargs: dict[str, Any] | None = None,
     task_kwargs: dict[str, Any] | None = None,
-    task_success_hold_steps: int = 10,
+    task_success_hold_steps: int | None = None,
     adapter: str = "direct_mujoco",
     transport: Any = None,
     hardware: RobotPort | None = None,
@@ -147,11 +147,13 @@ def create_runtime(
             raise TypeError("pass either policy or policy_name, not both")
         runtime_robot = robot
         if task is not None:
-            runtime_robot = TaskRuntime(
-                robot,
-                task,
-                success_hold_steps=task_success_hold_steps,
+            # None keeps TaskRuntime's own default.
+            hold = (
+                {}
+                if task_success_hold_steps is None
+                else {"success_hold_steps": task_success_hold_steps}
             )
+            runtime_robot = TaskRuntime(robot, task, **hold)
         if policy is None and policy_name is not None:
             policy = create_policy(policy_name, env=runtime_robot, **policy_kwargs)
 
