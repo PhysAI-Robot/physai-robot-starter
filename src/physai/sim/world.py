@@ -128,6 +128,10 @@ class SharedWorld:
             prefix = f"{instance.instance_id}__"
             if shared_attach is not None:
                 shared_attach(instance.robot_name, child)
+            # On a conflict MuJoCo keeps the parent's value and warns. The
+            # world's clock and user-data sizes are authoritative, so say so.
+            child.option.timestep = spec.option.timestep
+            child.nuser_geom = spec.nuser_geom
             frame = spec.worldbody.add_frame(
                 name=f"{instance.instance_id}__root",
                 pos=list(instance.position),
