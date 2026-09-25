@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
+from conftest import requires_turtlebot_assets
 
-pytestmark = [pytest.mark.acceptance, pytest.mark.slow]
+pytestmark = [pytest.mark.acceptance, pytest.mark.slow, requires_turtlebot_assets]
 
 
 def test_turtlebot4_reset_is_deterministic_for_a_given_seed():
