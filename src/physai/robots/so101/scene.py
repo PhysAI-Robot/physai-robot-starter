@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[4]
+from ...sim.scenes.common import REPO_ROOT
 
 
 def scene_defaults() -> dict[str, object]:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from functools import cached_property
 
 import mujoco
 import numpy as np
@@ -178,8 +179,9 @@ class SO101Env(MuJoCoSimulationCore):
         )
         self._last_action = Action(joint_position=HOME_QPOS.copy())
 
-    @property
+    @cached_property
     def robot_spec(self) -> RobotSpec:
+        """Built once: the Host reads it on every tick."""
         return RobotSpec(
             name="so101",
             kind="fixed_base_manipulator",
@@ -381,14 +383,14 @@ class SO101Env(MuJoCoSimulationCore):
         )
 
     def render_camera(self, name: str) -> np.ndarray:
-        if not hasattr(self, "_camera_width"):
+        if not self.render_enabled:
             raise RuntimeError("env constructed with render=False")
         return super().render_camera(name)
 
     def observe(self) -> Observation:
         images: dict[str, ImageFrame] = {}
         if (
-            hasattr(self, "_camera_width")
+            self.render_enabled
             and self.cfg.camera_stride > 0
             and self.step_count % self.cfg.camera_stride == 0
         ):

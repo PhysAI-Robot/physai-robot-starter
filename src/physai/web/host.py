@@ -809,12 +809,10 @@ class Host:
             self._camera_ready.wait(timeout=2.0)
 
     def _camera_loop(self, camera_specs: list[tuple[str, str, str]]) -> None:
-        width = (
-            int(getattr(self.robot, "_camera_width", 640)) if not self._shared else 320
-        )
-        height = (
-            int(getattr(self.robot, "_camera_height", 480)) if not self._shared else 240
-        )
+        if self._shared:
+            width, height = 320, 240
+        else:
+            width, height = getattr(self.robot, "camera_size", None) or (640, 480)
         renderer = mujoco.Renderer(self.model, height=height, width=width)
         next_capture = 0.0
         try:
