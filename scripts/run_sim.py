@@ -83,10 +83,6 @@ def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
 
 
 def build_policy(name: str, env, checkpoint: Path | None = None):
-    if env.robot_spec.supports("base_velocity"):
-        if name != "constant":
-            raise ValueError("TurtleBot4 currently supports --policy constant only")
-        name = "constant_twist"
     if name == "lerobot" and checkpoint is None:
         raise ValueError("--policy lerobot needs --checkpoint")
     policy_kwargs = {"env": env}
