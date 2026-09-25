@@ -137,4 +137,9 @@ def resolve_jog(
     return Action(joint_position=target.copy(), gripper=gripper or GripperCommand())
 
 
-__all__ = ["resolve_jog"]
+def so101_jog_resolver(robot):
+    """The SO-101's jog resolver: its env's `resolve_twist_jog`, through any port."""
+    return robot.resolve_twist_jog
+
+
+__all__ = ["resolve_jog", "so101_jog_resolver"]

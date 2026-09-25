@@ -23,9 +23,8 @@ import mujoco
 import numpy as np
 
 from ..contracts import Action, GripperCommand, Header, ImageFrame, Twist
-from ..control.resolver import TwistToJointResolver
 from ..robots.base import RobotPort
-from ..robots.registry import create_shared_instance
+from ..robots.registry import create_jog_resolver, create_shared_instance
 from ..sim.world import RobotInstanceConfig, SharedWorld
 from .cameras import CameraFeed
 from .lease import ControlLease
@@ -73,15 +72,7 @@ class Host:
             self.reset_seed = reset_seed
             self._async_cameras = async_cameras
             self._gripper = GripperCommand()
-            self._twist_resolver = None
-            if hasattr(robot, "resolve_twist_jog"):
-                self._twist_resolver = robot.resolve_twist_jog
-            elif hasattr(robot, "kin") and hasattr(robot, "data"):
-                self._twist_resolver = TwistToJointResolver(
-                    robot.kin,
-                    robot.data,
-                    dt=float(getattr(getattr(robot, "cfg", None), "control_dt", 0.04)),
-                )
+            self._twist_resolver = create_jog_resolver(robot_name, robot)
             self.instances = {robot_name: robot}
             if record_dir is not None:
                 data = getattr(robot, "data", None)
@@ -250,8 +241,6 @@ class Host:
             return
         self._thread.join(timeout=2.0)
         self._cameras.join()
-        if self._shared:
-            self.world.close()
 
     def _close(self) -> None:
         if self._shared:
@@ -590,7 +579,7 @@ class Host:
         The env's own `observe()` never renders images itself in interactive
         (viewer/serve) mode — that used to happen inline on the physics
         thread every `camera_stride` ticks, stalling it for the length of a
-        render. The async camera thread (`_camera_loop`) is the only
+        render. The async camera worker (`CameraFeed`) is the only
         renderer now, decoupled onto its own thread; this is what lets a
         vision-dependent policy (e.g. visual_servo) still see a reasonably
         fresh image without that render blocking physics stepping.

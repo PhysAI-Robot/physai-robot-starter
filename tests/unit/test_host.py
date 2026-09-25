@@ -520,3 +520,46 @@ def test_camera_frames_are_served_from_the_feed_as_copies():
     assert host.camera_jpeg("front").startswith(b"\xff\xd8")  # a JPEG
     with pytest.raises(ValueError, match="unknown camera 'side'"):
         host.camera_image("side")
+
+
+def test_a_twist_jog_is_resolved_by_the_robots_registered_jog_resolver():
+    from physai.robots.registry import RobotDescriptor, register_embodiment
+
+    calls = []
+
+    def resolver(twist, joint_state, gripper):
+        calls.append(twist.linear.x)
+        return Action(joint_position=np.array([0.5]), gripper=gripper)
+
+    register_embodiment(
+        "_fake_jog_robot",
+        RobotDescriptor(
+            factory=lambda **_: None, kind="fake", jog=lambda robot: resolver
+        ),
+    )
+    spec = RobotSpec(
+        name="_fake_jog_robot",
+        kind="fake",
+        joint_names=("joint",),
+        action_joint_names=("joint",),
+    )
+    host = Host.for_robot(FakeRobotPort(spec), robot_name="_fake_jog_robot")
+    host._observation = host.robot.observe()
+
+    host.submit(
+        action_from_payload({"mode": "twist", "linear": {"x": 0.25}, "angular": {}})
+    )
+
+    assert calls == [0.25]
+    queued = host._latest_command("_fake_jog_robot")
+    assert queued.joint_position[0] == 0.5
+
+
+def test_a_robot_without_a_jog_resolver_refuses_a_twist_jog():
+    host = make_host()
+    host._observation = host.robot.observe()
+
+    with pytest.raises(ValueError, match="twist jog is not available"):
+        host.submit(
+            action_from_payload({"mode": "twist", "linear": {"x": 0.1}, "angular": {}})
+        )
