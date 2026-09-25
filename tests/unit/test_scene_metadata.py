@@ -36,3 +36,9 @@ def test_a_path_outside_the_repository_is_kept_as_given(tmp_path):
 
 def test_an_unset_path_stays_none():
     assert PickPlaceMinimalSceneConfig().to_metadata()["robot_xml"] is None
+
+
+def test_build_manipulation_spec_has_a_docstring():
+    from physai.sim.scenes.common import build_manipulation_spec
+
+    assert build_manipulation_spec.__doc__
