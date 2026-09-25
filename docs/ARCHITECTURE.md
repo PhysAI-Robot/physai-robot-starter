@@ -342,7 +342,7 @@ Host
 ```
 
 One physics thread runs the control loop (30 Hz by default). A separate camera
-worker renders named cameras on its own cadence (`Host._CAMERA_PERIOD`,
+worker renders named cameras on its own cadence (`CameraFeed.PERIOD`,
 1/30 s), so capture never pauses physics. `Host.physics_lock` serializes
 MuJoCo access between the two threads and renderer clients such as the native
 `--viewer`; HTTP camera requests only read the latest cached JPEG.

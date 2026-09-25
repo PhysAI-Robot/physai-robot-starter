@@ -27,6 +27,7 @@ from ..control.resolver import TwistToJointResolver
 from ..robots.base import RobotPort
 from ..robots.registry import create_shared_instance
 from ..sim.world import RobotInstanceConfig, SharedWorld
+from .cameras import CameraFeed
 from .lease import ControlLease
 from .playback import Playback
 from .recording import SessionRecorder
@@ -36,10 +37,6 @@ from .telemetry import build_scene_manifest, build_state_snapshot
 class Host:
     """Own the authoritative simulation state; keep clients off the physics thread."""
 
-    # Camera rendering runs on its own thread (see _camera_loop), decoupled
-    # from physics stepping, so this is a plain frame-rate choice rather than
-    # a physics-stall guard. Must match app.py's _CAMERA_STREAM_PERIOD.
-    _CAMERA_PERIOD = 1.0 / 30
     # Longest wall-clock gap one playback tick may advance by (see
     # `_advance_playback`).
     _MAX_PLAYBACK_STEP = 0.25
@@ -104,11 +101,7 @@ class Host:
         self._paused = False
         self._observation = None
         self._hold_action_value: Action | None = None
-        self._camera_images: dict[str, np.ndarray] = {}
-        self._camera_data: Any = None
-        self._camera_thread: threading.Thread | None = None
-        self._camera_request = threading.Event()
-        self._camera_ready = threading.Event()
+        self._cameras = CameraFeed()
 
     @classmethod
     def for_robot(
@@ -256,8 +249,7 @@ class Host:
             self._close()
             return
         self._thread.join(timeout=2.0)
-        if self._camera_thread is not None:
-            self._camera_thread.join(timeout=2.0)
+        self._cameras.join()
         if self._shared:
             self.world.close()
 
@@ -606,12 +598,7 @@ class Host:
         if self._observation is None:
             return
         prefix = f"{self.robot_name}:"
-        with self._lock:
-            cached = {
-                name[len(prefix) :]: image
-                for name, image in self._camera_images.items()
-                if name.startswith(prefix)
-            }
+        cached = self._cameras.with_prefix(prefix)
         if not cached:
             return
         data_obj = getattr(self.robot, "data", None)
@@ -638,11 +625,10 @@ class Host:
         frames = debug_frames()
         if not frames:
             return
-        with self._lock:
-            for local_name, image in frames.items():
-                self._camera_images[f"{self.robot_name}:{local_name}"] = np.asarray(
-                    image, dtype=np.uint8
-                )
+        for local_name, image in frames.items():
+            self._cameras.put(
+                f"{self.robot_name}:{local_name}", np.asarray(image, dtype=np.uint8)
+            )
 
     def _hold_action(self) -> Action:
         if "twist" in self.robot.robot_spec.action_modes:
@@ -671,9 +657,10 @@ class Host:
             else:
                 if self._observation is not None and self._playback is None:
                     for name, image in self._observation.images.items():
-                        self._camera_images[f"{self.robot_name}:{name}"] = np.asarray(
-                            image.data, dtype=np.uint8
-                        ).copy()
+                        self._cameras.put(
+                            f"{self.robot_name}:{name}",
+                            np.asarray(image.data, dtype=np.uint8).copy(),
+                        )
                 self._state = build_state_snapshot(
                     self.model,
                     self.data,
@@ -728,76 +715,48 @@ class Host:
         return specs
 
     def _start_camera_thread(self) -> None:
-        if self._camera_thread is not None:
+        if self._cameras.running:
             return
         if not self._shared and not self._async_cameras:
             return
         camera_specs = self._camera_specs()
         if not camera_specs:
             return
-        self._camera_data = mujoco.MjData(self.model)
-        self._camera_thread = threading.Thread(
-            target=self._camera_loop,
-            args=(camera_specs,),
-            name="physai-camera",
-            daemon=True,
+        if self._shared:
+            size = (320, 240)
+        else:
+            size = getattr(self.robot, "camera_size", None) or (640, 480)
+        self._cameras.start(
+            self.model,
+            self.data,
+            self._physics_lock,
+            self._stop,
+            [
+                (f"{instance_id}:{local_name}", mujoco_name)
+                for instance_id, local_name, mujoco_name in camera_specs
+            ],
+            size,
         )
-        self._camera_thread.start()
 
     def _request_camera_capture(self, *, wait: bool = False) -> None:
-        if self._camera_thread is None:
-            return
-        self._camera_ready.clear()
-        self._camera_request.set()
-        if wait:
-            self._camera_ready.wait(timeout=2.0)
-
-    def _camera_loop(self, camera_specs: list[tuple[str, str, str]]) -> None:
-        if self._shared:
-            width, height = 320, 240
-        else:
-            width, height = getattr(self.robot, "camera_size", None) or (640, 480)
-        renderer = mujoco.Renderer(self.model, height=height, width=width)
-        next_capture = 0.0
-        try:
-            while not self._stop.is_set():
-                timeout = max(0.0, next_capture - time.monotonic())
-                requested = self._camera_request.wait(timeout=timeout)
-                self._camera_request.clear()
-                if self._stop.is_set():
-                    break
-                if not requested and time.monotonic() < next_capture:
-                    continue
-                with self._physics_lock:
-                    mujoco.mj_copyData(self._camera_data, self.model, self.data)
-                for instance_id, local_name, mujoco_name in camera_specs:
-                    renderer.update_scene(self._camera_data, camera=mujoco_name)
-                    image = np.asarray(renderer.render(), dtype=np.uint8).copy()
-                    with self._lock:
-                        self._camera_images[f"{instance_id}:{local_name}"] = image
-                next_capture = time.monotonic() + self._CAMERA_PERIOD
-                self._camera_ready.set()
-        finally:
-            renderer.close()
+        self._cameras.request(wait=wait)
 
     def camera_jpeg(self, name: str, *, instance_id: str | None = None) -> bytes:
-        instance_id = instance_id or self.default_instance_id
-        with self._lock:
-            try:
-                image = self._camera_images[f"{instance_id}:{name}"].copy()
-            except KeyError as exc:
-                raise ValueError(f"unknown camera {name!r}") from exc
         buffer = BytesIO()
-        iio.imwrite(buffer, image, extension=".jpg", quality=82)
+        iio.imwrite(
+            buffer,
+            self.camera_image(name, instance_id=instance_id),
+            extension=".jpg",
+            quality=82,
+        )
         return buffer.getvalue()
 
     def camera_image(self, name: str, *, instance_id: str | None = None) -> np.ndarray:
         instance_id = instance_id or self.default_instance_id
-        with self._lock:
-            try:
-                return self._camera_images[f"{instance_id}:{name}"].copy()
-            except KeyError as exc:
-                raise ValueError(f"unknown camera {name!r}") from exc
+        image = self._cameras.get(f"{instance_id}:{name}")
+        if image is None:
+            raise ValueError(f"unknown camera {name!r}")
+        return image
 
     def render_camera(self, name: str, *, instance_id: str | None = None) -> np.ndarray:
         """Return a cached frame, falling back to a direct render if needed."""

@@ -97,4 +97,4 @@ class ControlLease:
             pass
 
 
-__all__ = ["ControlLease", "DEFAULT_TIMEOUT"]
+__all__ = ["DEFAULT_TIMEOUT", "ControlLease"]

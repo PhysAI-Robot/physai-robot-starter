@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import ClassVar
 from pathlib import Path
+from typing import ClassVar
 
 import mujoco
 import numpy as np

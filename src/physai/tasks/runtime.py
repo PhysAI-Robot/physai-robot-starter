@@ -8,7 +8,6 @@ from ..contracts import Action, Observation
 from ..robots.base import RobotPort, RobotSpec
 from .base import Task
 
-
 # Consecutive steps a task's success condition must hold to count as success.
 DEFAULT_SUCCESS_HOLD_STEPS = 10
 

@@ -2,7 +2,7 @@ from dataclasses import fields, replace
 
 import pytest
 import yaml
-from conftest import requires_assets, requires_turtlebot_assets
+from conftest import requires_assets
 
 from physai.config import SimulationConfig
 from physai.config.compat import (
@@ -13,6 +13,11 @@ from physai.config.compat import (
 )
 
 SIMULATION = SimulationConfig(seed=3)
+
+
+def _task_data() -> dict:
+    with open("configs/tasks/so101/pick_place.yaml", encoding="utf-8") as stream:
+        return yaml.safe_load(stream)
 
 
 def test_a_task_file_becomes_a_one_robot_manifest():
@@ -35,7 +40,7 @@ def test_a_task_file_becomes_a_one_robot_manifest():
 
 
 def test_a_task_files_own_seed_wins_over_the_shared_one(tmp_path):
-    data = yaml.safe_load(open("configs/tasks/so101/pick_place.yaml"))
+    data = _task_data()
     data["env"]["seed"] = 11
     path = tmp_path / "task.yaml"
     path.write_text(yaml.safe_dump(data), encoding="utf-8")
@@ -47,7 +52,7 @@ def test_a_task_files_own_seed_wins_over_the_shared_one(tmp_path):
 
 
 def test_a_task_file_with_mismatched_task_names_fails(tmp_path):
-    data = yaml.safe_load(open("configs/tasks/so101/pick_place.yaml"))
+    data = _task_data()
     data["env"]["task"] = "sorting"
     path = tmp_path / "task.yaml"
     path.write_text(yaml.safe_dump(data), encoding="utf-8")

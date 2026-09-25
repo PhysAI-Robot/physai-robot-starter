@@ -352,7 +352,7 @@ On a laptop with an integrated and a discrete GPU, Windows picks the GPU per
 executable and does not know about MuJoCo's offscreen renderer. Unless the
 *exact* Python executable running the simulation is pointed at the discrete
 GPU, it defaults to the integrated one, which is far slower at the
-`renderer.render()` calls `Host._camera_loop` makes (see
+`renderer.render()` calls the `CameraFeed` worker makes (see
 [docs/ARCHITECTURE.md](ARCHITECTURE.md#host--client-api)).
 
 Check which GPU is actually rendering:
@@ -402,7 +402,7 @@ check to confirm. It is a per-machine Windows setting, so it must be set again
 on any other machine with the same symptom.
 
 Even on the right GPU, the camera stream is capped by
-`Host._CAMERA_PERIOD`/`app.py`'s `_CAMERA_STREAM_PERIOD` (kept in sync, 30 fps
+`CameraFeed.PERIOD`/`app.py`'s `_CAMERA_STREAM_PERIOD` (kept in sync, 30 fps
 by default), and the achieved rate also depends on readback and JPEG-encoding
 overhead.
 
