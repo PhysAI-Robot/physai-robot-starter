@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 
 import _bootstrap  # noqa: F401
+from _common_args import add_robot, add_seed
 
 
 def main() -> int:
@@ -13,9 +14,9 @@ def main() -> int:
     from physai.robots import available_robots, create_ros2_node
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--robot", choices=available_robots(), default="so101")
+    add_robot(parser, choices=available_robots(), default="so101")
     parser.add_argument("--config", type=str)
-    parser.add_argument("--seed", type=int, default=0)
+    add_seed(parser)
     parser.add_argument("--max-ticks", type=int)
     parser.add_argument("--scenario", default=None)
     args = parser.parse_args()

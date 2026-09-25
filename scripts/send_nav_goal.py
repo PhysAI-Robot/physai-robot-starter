@@ -16,6 +16,7 @@ from rclpy.action import ActionClient
 from rclpy.node import Node
 from std_msgs.msg import UInt32
 
+from _common_args import add_robot
 from physai.robots.turtlebot.navigation import Nav2AcceptanceResult
 
 
@@ -145,7 +146,7 @@ class NavigateToPoseClient(Node):
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--robot", default="turtlebot4")
+    add_robot(parser, default="turtlebot4")
     parser.add_argument("--action", default="navigate_to_pose")
     parser.add_argument("--odom-topic", default="/odom")
     parser.add_argument("--collision-topic", default="/simulation/collision_count")

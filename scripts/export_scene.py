@@ -14,6 +14,7 @@ import argparse
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
+from _common_args import add_out, add_robot
 
 from physai.robots.registry import scene_defaults
 from physai.sim import available_scenes, create_scene, export_xml
@@ -21,8 +22,8 @@ from physai.sim import available_scenes, create_scene, export_xml
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", type=Path, default=Path("outputs/scene_pick_place.xml"))
-    ap.add_argument("--robot", default="so101")
+    add_out(ap, default=Path("outputs/scene_pick_place.xml"))
+    add_robot(ap, default="so101")
     ap.add_argument("--scene", default="pick_place_minimal", choices=available_scenes())
     args = ap.parse_args()
 

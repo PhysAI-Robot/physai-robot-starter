@@ -132,3 +132,39 @@ def test_pick_place_task_is_discoverable():
 
     assert "pick_place" in available_tasks()
     assert create_task("pick_place").name == "pick_place"
+
+
+def test_register_embodiment_wires_every_factory_in_one_call():
+    from physai.robots.registry import (
+        RobotDescriptor,
+        available_robots,
+        available_ros2_robots,
+        create_env_config,
+        create_robot,
+        navigate,
+        register_embodiment,
+        robot_kind,
+        scene_defaults,
+    )
+
+    calls: list[str] = []
+    register_embodiment(
+        "_fake_test_embodiment",
+        RobotDescriptor(
+            factory=lambda **_: calls.append("factory") or object(),
+            kind="fake_kind",
+            scene_defaults=lambda: {"fake": True},
+            env_config=lambda **_: calls.append("env_config") or object(),
+            ros2_node=object,
+            navigation=lambda **_: calls.append("navigation") or "ok",
+        ),
+    )
+
+    assert "_fake_test_embodiment" in available_robots()
+    assert robot_kind("_fake_test_embodiment") == "fake_kind"
+    assert scene_defaults("_fake_test_embodiment") == {"fake": True}
+    assert "_fake_test_embodiment" in available_ros2_robots()
+    create_env_config("_fake_test_embodiment")
+    navigate("_fake_test_embodiment")
+    create_robot("_fake_test_embodiment")
+    assert calls == ["env_config", "navigation", "factory"]

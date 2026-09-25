@@ -4,40 +4,65 @@ const controlHint = document.querySelector("#control-hint");
 const controlButtons = new Map(
   [...document.querySelectorAll("[data-control-key]")].map((button) => [button.dataset.controlKey, button]),
 );
-const heldKeys = new Set();
-const heldGripperKeys = new Set();
+const heldKeys = new Map(); // key -> hold-start timestamp (ms), for every ramped key (jog axes and gripper alike)
 let gripper = 1;
 let activeRobot = "";
 let jogAxes = {};
-let yawAxes = {};
-let tiltAxes = {};
+let shoulderPanAxis = {};
+let wristFlexAxis = {};
+let wristRollAxis = {};
 let gripperEnabled = false;
+let enabled = true;
+
+const JOG_RAMP_MS = 600; // ms of continuous hold to reach max speed
+const JOG_LINEAR_MIN = 0.06; // m/s at a tap
+const JOG_LINEAR_MAX = 0.18; // m/s ceiling after a sustained hold
+const JOG_JOINT_MIN = 0.5; // rad/s at a tap (direct joint jog: shoulder pan/wrist)
+const JOG_JOINT_MAX = 1.5; // rad/s ceiling after a sustained hold
+// The gripper actuator runs uncapped force in the viewer (see run_sim.py) so
+// grasps actually hold, which made the old fixed 0.04/tick step feel like a
+// slam on a quick tap. Ramping it the same way as every other jog key keeps
+// a tap gentle and only reaches full speed on a sustained hold.
+const JOG_GRIPPER_MIN = 0.015; // aperture fraction per tick at a tap
+const JOG_GRIPPER_MAX = 0.05; // aperture fraction per tick after a sustained hold
 
 export function setActiveRobot(name) {
   activeRobot = name;
   gripper = 1;
   heldKeys.clear();
-  heldGripperKeys.clear();
+}
+
+function isGripperKey(key) {
+  return key === "f" || key === "g";
 }
 
 export function configureControls(robot) {
   jogAxes = { w: [1, 0, 0], s: [-1, 0, 0] };
-  yawAxes = { a: 1, d: -1 };
-  tiltAxes = {};
+  shoulderPanAxis = {};
+  wristFlexAxis = {};
+  wristRollAxis = {};
   gripperEnabled = false;
   if (robot?.capabilities?.includes("arm_kinematics")) {
-    jogAxes.q = [0, 0, 1];
-    jogAxes.e = [0, 0, -1];
-    tiltAxes = { r: 1, f: -1 };
+    jogAxes.u = [0, 0, 1];
+    jogAxes.j = [0, 0, -1];
+    shoulderPanAxis = { a: -1, d: 1 };
+    wristFlexAxis = { i: -1, k: 1 };
+    wristRollAxis = { q: 1, e: -1 };
     gripperEnabled = robot.capabilities.includes("gripper");
-    controlHint.textContent = "Jog: W/S x · A/D base yaw · Q/E z · R/F grip tilt · O/C gripper.";
+    controlHint.textContent =
+      "Jog: W/S x · U/J z · A/D shoulder pan · I/K wrist tilt · Q/E wrist roll · F/G gripper.";
   } else if (robot?.capabilities?.includes("base_velocity")) {
     controlHint.textContent = "Drive: W/S forward/reverse · A/D turn.";
   } else {
     controlHint.textContent = "Keyboard jog is not configured for this robot.";
   }
   controlButtons.forEach((button, key) => {
-    const enabled = jogAxes[key] || yawAxes[key] || tiltAxes[key] || (gripperEnabled && (key === "o" || key === "c"));
+    const enabled =
+      jogAxes[key] ||
+      shoulderPanAxis[key] ||
+      wristFlexAxis[key] ||
+      wristRollAxis[key] ||
+      (gripperEnabled && isGripperKey(key));
     button.hidden = !enabled;
     button.classList.remove("is-pressed");
     button.setAttribute("aria-disabled", String(!enabled));
@@ -52,46 +77,88 @@ function setKeyVisual(key, pressed) {
 }
 
 function setHeldKey(key, pressed) {
-  const isGripperKey = key === "o" || key === "c";
-  if (isGripperKey && !gripperEnabled) return;
-  if (!jogAxes[key] && !yawAxes[key] && !tiltAxes[key] && !isGripperKey) return;
-  const heldSet = isGripperKey ? heldGripperKeys : heldKeys;
-  if (pressed) heldSet.add(key);
-  else heldSet.delete(key);
+  const gripperKey = isGripperKey(key);
+  if (gripperKey && !gripperEnabled) return;
+  if (
+    !jogAxes[key] &&
+    !shoulderPanAxis[key] &&
+    !wristFlexAxis[key] &&
+    !wristRollAxis[key] &&
+    !gripperKey
+  )
+    return;
+  if (pressed) {
+    if (!heldKeys.has(key)) heldKeys.set(key, performance.now());
+  } else {
+    heldKeys.delete(key);
+  }
   setKeyVisual(key, pressed);
 }
 
+function rampedSpeed(holdStart, min, max) {
+  const elapsed = performance.now() - holdStart;
+  const rampFactor = Math.min(1, elapsed / JOG_RAMP_MS);
+  return min + (max - min) * rampFactor;
+}
+
+// Playback owns the world: jog input must not reach the host meanwhile.
+export function setEnabled(value) {
+  enabled = value;
+  if (!enabled) heldKeys.clear();
+  controlButtons.forEach((button) => {
+    button.disabled = !enabled;
+  });
+}
+
 function sendJog(force = false) {
-  if (!net.isOpen()) return;
-  if (!force && heldKeys.size === 0 && heldGripperKeys.size === 0) return;
+  if (!net.isOpen() || !enabled) return;
+  if (!force && heldKeys.size === 0) return;
   const linear = [0, 0, 0];
-  let yaw = 0;
-  let tilt = 0;
-  if (gripperEnabled && heldGripperKeys.has("o")) gripper = Math.min(1, gripper + 0.04);
-  if (gripperEnabled && heldGripperKeys.has("c")) gripper = Math.max(0, gripper - 0.04);
-  heldKeys.forEach((key) => {
+  let shoulderPanRate = 0;
+  let wristFlexRate = 0;
+  let wristRollRate = 0;
+  let gripperMoved = false;
+  heldKeys.forEach((holdStart, key) => {
     const axis = jogAxes[key];
-    if (axis) axis.forEach((value, index) => { linear[index] += value * 0.06; });
-    yaw += yawAxes[key] || 0;
-    tilt += tiltAxes[key] || 0;
+    if (axis) {
+      const speed = rampedSpeed(holdStart, JOG_LINEAR_MIN, JOG_LINEAR_MAX);
+      axis.forEach((value, index) => { linear[index] += value * speed; });
+    }
+    if (shoulderPanAxis[key]) {
+      shoulderPanRate += shoulderPanAxis[key] * rampedSpeed(holdStart, JOG_JOINT_MIN, JOG_JOINT_MAX);
+    }
+    if (wristFlexAxis[key]) {
+      wristFlexRate += wristFlexAxis[key] * rampedSpeed(holdStart, JOG_JOINT_MIN, JOG_JOINT_MAX);
+    }
+    if (wristRollAxis[key]) {
+      wristRollRate += wristRollAxis[key] * rampedSpeed(holdStart, JOG_JOINT_MIN, JOG_JOINT_MAX);
+    }
+    if (gripperEnabled && isGripperKey(key)) {
+      const step = rampedSpeed(holdStart, JOG_GRIPPER_MIN, JOG_GRIPPER_MAX);
+      gripper = key === "f" ? Math.min(1, gripper + step) : Math.max(0, gripper - step);
+      gripperMoved = true;
+    }
   });
   const action = {
     mode: "twist", linear: { x: linear[0], y: linear[1], z: linear[2] },
-    angular: { x: 0, y: tilt * 0.5, z: yaw * 0.8 },
+    angular: { x: shoulderPanRate, y: wristFlexRate, z: wristRollRate },
   };
-  if (gripperEnabled && heldGripperKeys.size > 0) action.gripper = gripper;
+  if (gripperMoved) action.gripper = gripper;
   net.send({ type: "command", robot: activeRobot, action });
+}
+
+function isRampedKey(key) {
+  return jogAxes[key] || shoulderPanAxis[key] || wristFlexAxis[key] || wristRollAxis[key] || isGripperKey(key);
 }
 
 window.addEventListener("keydown", (event) => {
   const key = event.key.toLowerCase();
-  if (jogAxes[key] || yawAxes[key] || tiltAxes[key]) { setHeldKey(key, true); event.preventDefault(); sendJog(); }
-  if (gripperEnabled && (key === "o" || key === "c")) { setHeldKey(key, true); event.preventDefault(); sendJog(true); }
+  if (isRampedKey(key)) { setHeldKey(key, true); event.preventDefault(); sendJog(); }
 });
 window.addEventListener("keyup", (event) => {
   const key = event.key.toLowerCase();
   setHeldKey(key, false);
-  if (jogAxes[key] || yawAxes[key] || tiltAxes[key]) {
+  if (isRampedKey(key)) {
     if (heldKeys.size === 0) sendJog(true);
     else sendJog();
   }
@@ -106,14 +173,14 @@ controlButtons.forEach((button, key) => {
     event.stopPropagation();
     button.setPointerCapture(event.pointerId);
     setHeldKey(key, true);
-    sendJog(key === "o" || key === "c");
+    sendJog();
   });
   button.addEventListener("pointerup", release);
   button.addEventListener("pointercancel", release);
   button.addEventListener("lostpointercapture", release);
 });
 window.addEventListener("blur", () => {
-  [...heldKeys, ...heldGripperKeys].forEach((key) => setHeldKey(key, false));
+  [...heldKeys.keys()].forEach((key) => setHeldKey(key, false));
   sendJog(true);
 });
 setInterval(sendJog, 40);

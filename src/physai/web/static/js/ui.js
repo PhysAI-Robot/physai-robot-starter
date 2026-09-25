@@ -45,9 +45,13 @@ function resolvedTheme() {
 }
 
 function syncThemeIcon() {
+  // sunIcon/moonIcon are <svg> elements: unlike HTMLElement, SVGElement
+  // does not reflect the `.hidden` IDL property to the `hidden` attribute,
+  // so plain assignment silently no-ops and both icons stay hidden.
+  // toggleAttribute works on any Element regardless of HTML vs SVG.
   const isDark = resolvedTheme() === "dark";
-  sunIcon.hidden = !isDark;
-  moonIcon.hidden = isDark;
+  sunIcon.toggleAttribute("hidden", !isDark);
+  moonIcon.toggleAttribute("hidden", isDark);
   themeToggle.setAttribute("aria-pressed", String(isDark));
 }
 
@@ -70,26 +74,12 @@ darkMediaQuery.addEventListener("change", () => {
 });
 syncThemeIcon();
 
-function startCameraStream(image, name, robotName) {
+export function startCameraStream(image, name, robotName) {
   image.onerror = null;
-  image.src = `/api/camera/${name}/stream?robot=${encodeURIComponent(robotName)}`;
+  const url = `/api/camera/${encodeURIComponent(name)}/stream?robot=${encodeURIComponent(robotName)}`;
+  image.src = url;
   image.onerror = () => {
-    if (image.closest("figure").hidden) return;
+    if (image.closest("figure")?.hidden) return;
     setTimeout(() => startCameraStream(image, name, robotName), 1500);
   };
-}
-
-export function updateCameras(robotName, cameras) {
-  const visible = new Set(cameras);
-  document.querySelectorAll("[data-camera]").forEach((image) => {
-    const name = image.dataset.camera;
-    const isVisible = visible.has(name);
-    image.closest("figure").hidden = !isVisible;
-    image.onerror = null;
-    if (!isVisible) {
-      image.removeAttribute("src");
-      return;
-    }
-    startCameraStream(image, name, robotName);
-  });
 }

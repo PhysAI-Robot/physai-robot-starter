@@ -14,113 +14,59 @@ The fetch includes the upstream `so101_new_calib_camera.xml` variant and its
 wrist camera mount meshes. When that file is present, the simulator selects it
 automatically; otherwise it falls back to the base SO-101 model.
 
-Open the robot in MuJoCo:
+Open the robot interactively in the browser (see the shared
+[Web Viewer Runbook](WEB_VIEWER_RUNBOOK.md) for the full workflow, keyboard
+mapping, and camera-panel configuration):
 
 ```bash
-uv run python scripts/run_sim.py \
-  --robot so101 \
-  --viewer \
-  --seed 0
+uv run python scripts/run_sim.py --robot so101 --serve --seed 0
 ```
 
-Open the checked-in pick-and-place scene:
+Open the checked-in pick-and-place scene the same way:
 
 ```bash
-uv run python scripts/run_sim.py \
-  --config configs/tasks/so101/pick_place.yaml \
-  --viewer \
-  --seed 0
+uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --serve --seed 0
 ```
 
 For headless execution:
 
 ```bash
-uv run python scripts/run_sim.py \
-  --config configs/tasks/so101/pick_place.yaml \
-  --seed 0 \
-  --max-steps 500
+uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --seed 0 --max-steps 500
 ```
 
 Video recording is opt-in. Add `--video` when you want frames written under
-`outputs/`; use `--viewer` only for interactive local runs.
+`outputs/`; use `--serve` (or the native viewer below) only for interactive
+local runs.
 
-The interactive viewer is a single Tk window containing the MuJoCo scene and
-all named cameras discovered in the loaded model. Drag the scene to orbit,
-scroll to zoom, and use the toolbar to pause, resume, or reset:
+MuJoCo's own desktop viewer is also available as a fallback when a browser
+isn't convenient — see [ADR 4](adr/0004-tk-viewer-frozen.md). It
+opens a native window with MuJoCo's built-in scene navigation (drag to orbit,
+scroll to zoom); combine it with `--serve` and use the browser viewer's
+camera grid for per-camera views or debug overlays:
 
 ```bash
-uv run python scripts/run_sim.py \
-  --config configs/tasks/so101/pick_place.yaml \
-  --viewer \
-  --seed 0
+uv run python scripts/run_sim.py --config configs/tasks/so101/pick_place.yaml --viewer --seed 0
 ```
 
-The camera panels are generated automatically, so `front` and `wrist` appear
-without selecting one manually. `--camera-view` is retained as a compatibility
-flag and is no longer required. This mode requires a desktop display and
-Tkinter (`python3-tk` on Debian/Ubuntu).
-
-For the headless browser console, including keyboard jog and multi-robot
-selection, use the shared [Web Viewer Runbook](WEB_VIEWER_RUNBOOK.md).
+This mode requires a desktop display.
 
 ## 2. Run the Basic Task
 
-Run the scripted pick-and-place policy:
-
-```bash
-uv run python scripts/eval_policy.py \
-  --policy scripted \
-  --episodes 5 \
-  --seed 0 \
-  --max-steps 500
-```
-
-Run the documented deterministic reliability check:
-
-```bash
-uv run python scripts/eval_policy.py \
-  --policy scripted \
-  --episodes 20 \
-  --seed 0 \
-  --max-steps 600
-```
-
-The current baseline is **100%** over 100 seeds (95% CI [96%, 100%], measured
-2026-09-21), matching the deterministic `visual_servo` policy. Note that a
-20-seed run could not resolve the pre-fix policy — the same configuration
-scored 45% on seeds 0-19 and 60% on seeds 100-149 — so still use at least 100
-seeds when comparing changes. The root cause and fix are recorded as the
-resolved Phase 2.0 finding in [ROADMAP.md](../ROADMAP.md). Results depend on
-the calibrated jaw pads and the deterministic scene; they are not hardware or
-randomized results.
-
-Use the same seed when comparing parameter changes. Save local results when
-needed:
-
-```bash
-mkdir -p outputs/local
-uv run python scripts/eval_policy.py \
-  --policy scripted \
-  --episodes 5 \
-  --seed 0 \
-  --max-steps 500 \
-  --json-out outputs/local/so101_scripted_seed0.json
-```
+The scripted pick-and-place policy is a privileged-ground-truth expert — see
+[research/scripted_experts/README.md](../research/scripted_experts/README.md)
+for the full run/evaluate workflow, reliability numbers, and interactive
+inspection command.
 
 ## 3. Validate SO-101 Contracts
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest \
-  tests/acceptance/so101/test_kinematics.py \
-  tests/acceptance/so101/test_scene.py \
-  tests/unit/test_robot_registry.py -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/acceptance/so101/test_kinematics.py tests/acceptance/so101/test_scene.py tests/unit/test_robot_registry.py -q
 ```
 
 The transport-level ROS2 check does not require a ROS2 installation:
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest \
-  tests/integration/test_ros2_adapters.py::test_ros2_mujoco_teleop_command_moves_so101 -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/integration/test_ros2_adapters.py::test_ros2_mujoco_teleop_command_moves_so101 -q
 ```
 
 ## 4. Run the Real ROS2 Node
@@ -129,19 +75,14 @@ Real message and executor coverage requires ROS2 Jazzy:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest \
-  tests/robots/so101/test_ros2_node.py -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/robots/so101/test_so101_ros2_node.py -q
 ```
 
 Run a bounded ROS2 MuJoCo smoke test:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-MUJOCO_GL=egl uv run python scripts/run_ros2_sim.py \
-  --robot so101 \
-  --config configs/tasks/so101/pick_place.yaml \
-  --seed 0 \
-  --max-ticks 500
+MUJOCO_GL=egl uv run python scripts/run_ros2_sim.py --robot so101 --config configs/tasks/so101/pick_place.yaml --seed 0 --max-ticks 500
 ```
 
 The node accepts joint trajectory and gripper commands and publishes joint
@@ -157,17 +98,10 @@ uv run python scripts/show_ros2_contract.py
 
 ## 5. Continue to Imitation Learning
 
-After the scripted task is reliable, inspect demonstration collection and ACT:
-
-```bash
-uv run python scripts/collect_demos.py --help
-uv run python scripts/train_act.py --help
-uv run python scripts/eval_policy.py --help
-```
-
-The current prototype supports ACT-shaped data and scripted, replay, and ACT
-policy evaluation. It does not yet export the standard `LeRobotDataset` format
-or provide the planned unified training entry point. This is the Phase 2
+After the scripted task is reliable, collect demonstrations and fine-tune
+ACT — see
+[research/imitation_learning/README.md](../research/imitation_learning/README.md)
+for the full collect -> train -> evaluate workflow. This is the Phase 2
 continuation of the SO-101 journey.
 
 ## 6. Continue to the planner contract
@@ -185,82 +119,16 @@ commands.
 
 ## 7. Phase 2A Visual Servoing Baseline
 
-The deterministic `visual_servo` policy detects the configured RGB blob in the
-front camera, projects its centroid through a pinhole calibration onto the
-configured workspace plane, and executes a bounded pick-and-place state machine
-through the existing IK and joint-position safety path:
-
-```bash
-uv run python scripts/eval_policy.py \
-  --policy visual_servo \
-  --episodes 1 \
-  --seed 0 \
-  --max-steps 400
-```
-
-Run the bounded camera-jitter robustness check and save its per-episode
-metrics as JSON:
-
-```bash
-uv run python scripts/eval_policy.py \
-  --policy visual_servo \
-  --episodes 20 \
-  --seed 0 \
-  --max-steps 600 \
-  --camera-jitter 0.005 \
-  --json-out outputs/visual_servo_20seed_jitter.json
-```
-
-The same evaluation runs on a clean Linux runner through the `Visual servo
-evaluation` workflow (`.github/workflows/visual-servo-eval.yml`). It starts on
-pull requests that touch the code the result depends on, and by hand from the
-Actions tab once the workflow is on the default branch, with the total episode
-count and the jitter as inputs. Software rendering takes about 130 seconds per
-episode, so the seeds are split across four parallel jobs and a final job merges
-them and fails unless every episode succeeded with no collision, timeout, or
-unsafe action. The result table is in the job summary, and the merged JSON, each
-shard's JSON, and one recorded episode are uploaded as artifacts.
-
-The 20-seed run on `ubuntu-24.04` with OSMesa reproduced the outcome above
-(`20/20`, no collisions, timeouts, or unsafe actions). It is not bit-identical
-to a Windows run: 17 of the 20 seeds took the same number of steps and the other
-three differed by one, which is expected from floating-point differences between
-platforms.
-
-The same policy can be inspected interactively with the MuJoCo viewer and live
-front-camera window:
-
-```bash
-uv run python scripts/run_sim.py \
-  --config configs/tasks/so101/pick_place.yaml \
-  --policy visual_servo \
-  --viewer \
-  --camera-view \
-  --camera front \
-  --seed 0
-```
-
-The default detector targets the red pick cube. The fixed front camera performs
-the macro approach; during descent, the moving wrist camera recalibrates from
-its current MuJoCo pose and provides a guarded final alignment correction.
-After detection, the policy closes the gripper, lifts, transfers to the
-configured target, releases, and retreats. Use
-`SO101VisualServoPolicy` directly when the target RGB, target pixel, camera
-intrinsics, or camera-to-base transform must be changed. The public calibration
-uses a right-handed pinhole frame with `+z` forward; MuJoCo's camera `-z`
-viewing convention is converted at the adapter boundary. The fixed front
-camera can derive its calibration from the environment. The wrist camera moves
-with the arm and therefore requires a fresh TF-based calibration each control
-tick before it can be used for metric servoing.
-
-The policy exposes `metrics.visual_error_px`, `metrics.ee_error_m`,
-`metrics.settled`, and `metrics.failure_reason` separately from task reward.
+The deterministic `visual_servo` policy is a classical, model-free baseline —
+see
+[research/classical_control/README.md](../research/classical_control/README.md)
+for the full workflow, calibration notes, and CI evaluation reference.
 
 ## 8. Parameters and Open Work
 
 Main files are `configs/tasks/so101/pick_place.yaml`,
 `src/physai/robots/so101/env.py`, `src/physai/sim/scenes/common.py`, and
-`src/physai/robots/so101/expert.py`.
+`research/scripted_experts/so101_pick_place_expert.py`.
 
 Run the reproducible FK, Jacobian, and IK benchmark with:
 

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import mujoco
 import numpy as np
+
+from .scenes.common import STUDIO_FLOOR_RGB1, STUDIO_FLOOR_RGB2, add_studio_sky
 
 
 @dataclass(frozen=True)
@@ -52,6 +55,11 @@ class SharedWorld:
     Robot-specific adapters consume the returned bindings and remain responsible
     for translating local observations and actions. This class deliberately does
     not merge heterogeneous robot action or observation spaces.
+
+    `shared_attach`, if given, is called as ``shared_attach(robot_name, child)``
+    for every instance being attached, letting a robot inject shared-world-only
+    MJCF (e.g. extra cameras) without this class knowing any robot's name; pass
+    `physai.robots.shared_attach` to wire in whatever robots have registered.
     """
 
     def __init__(
@@ -61,6 +69,7 @@ class SharedWorld:
         timestep: float = 0.002,
         control_hz: float = 30.0,
         add_floor: bool = True,
+        shared_attach: Callable[[str, Any], None] | None = None,
     ) -> None:
         if not instances:
             raise ValueError("shared world requires at least one robot instance")
@@ -72,15 +81,7 @@ class SharedWorld:
 
         spec = mujoco.MjSpec()
         spec.option.timestep = timestep
-        spec.add_texture(
-            name="physai_shared_sky",
-            type=mujoco.mjtTexture.mjTEXTURE_SKYBOX,
-            builtin=mujoco.mjtBuiltin.mjBUILTIN_GRADIENT,
-            rgb1=[0.96, 0.98, 1.0],
-            rgb2=[0.76, 0.84, 0.92],
-            width=256,
-            height=256,
-        )
+        add_studio_sky(spec)
         spec.visual.headlight.ambient = [0.35, 0.35, 0.35]
         spec.visual.headlight.diffuse = [0.65, 0.65, 0.65]
         spec.worldbody.add_light(
@@ -98,34 +99,35 @@ class SharedWorld:
             diffuse=[0.45, 0.5, 0.55],
         )
         if add_floor:
+            spec.add_texture(
+                name="physai_grid",
+                type=mujoco.mjtTexture.mjTEXTURE_2D,
+                builtin=mujoco.mjtBuiltin.mjBUILTIN_CHECKER,
+                rgb1=list(STUDIO_FLOOR_RGB1),
+                rgb2=list(STUDIO_FLOOR_RGB2),
+                width=300,
+                height=300,
+            )
+            spec.add_material(
+                name="physai_grid",
+                textures=["", "physai_grid"],
+                texuniform=True,
+                texrepeat=[6, 6],
+                reflectance=0.1,
+            )
             spec.worldbody.add_geom(
                 name="physai_shared_floor",
                 type=mujoco.mjtGeom.mjGEOM_PLANE,
                 size=[0.0, 0.0, 0.05],
+                material="physai_grid",
             )
 
         prefixes: dict[str, str] = {}
         for instance in instances:
             child = mujoco.MjSpec.from_file(str(instance.model_path))
             prefix = f"{instance.instance_id}__"
-            if instance.robot_name == "so101":
-                child.worldbody.add_camera(
-                    name="front",
-                    pos=[0.62, 0.0, 0.38],
-                    xyaxes=[0.0, 1.0, 0.0, -0.45, 0.0, 0.9],
-                    fovy=48,
-                )
-                camera_body = next(
-                    (body for body in child.bodies if body.name == "wrist_camera"),
-                    None,
-                )
-                if camera_body is not None:
-                    camera_body.add_camera(
-                        name="wrist",
-                        pos=[0.0, 0.0, 0.025],
-                        xyaxes=[1.0, 0.0, 0.0, 0.0, -1.0, 0.0],
-                        fovy=62,
-                    )
+            if shared_attach is not None:
+                shared_attach(instance.robot_name, child)
             frame = spec.worldbody.add_frame(
                 name=f"{instance.instance_id}__root",
                 pos=list(instance.position),

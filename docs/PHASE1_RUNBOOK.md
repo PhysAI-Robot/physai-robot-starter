@@ -7,12 +7,20 @@ Robot-owned task configurations follow `configs/tasks/<robot>/<task>.yaml`,
 robot-owned Nav2 profiles follow `configs/nav2/<robot>/`, and reusable maps
 follow `configs/maps/<environment>/`.
 
-- [SO-101 Runbook](SO101_RUNBOOK.md): viewer, pick-and-place, ROS2, data
-  collection, imitation learning, and planner/VLM/VLA continuation.
+- [SO-101 Runbook](SO101_RUNBOOK.md): viewer, pick-and-place, ROS2, and
+  planner continuation; links onward to the research runbooks below.
 - [TurtleBot4 Runbook](TURTLEBOT4_RUNBOOK.md): viewer, velocity control, ROS2,
   RPP navigation, dummy-map Nav2, and obstacle-navigation continuation.
 - [Web Viewer Runbook](WEB_VIEWER_RUNBOOK.md): headless Three.js console,
   multi-robot selection, keyboard control, cameras, and API contracts.
+
+Each research technique owns its own runbook next to its code, not a
+`docs/*_RUNBOOK.md` file:
+
+- [research/classical_control/README.md](../research/classical_control/README.md):
+  the SO-101 visual-servo baseline.
+- [research/imitation_learning/README.md](../research/imitation_learning/README.md):
+  collect demonstrations, train ACT, evaluate a checkpoint.
 
 ## Shared Setup
 

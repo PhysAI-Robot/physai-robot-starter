@@ -15,6 +15,7 @@ from pathlib import Path
 
 import _bootstrap  # noqa: F401
 import numpy as np
+from _common_args import add_max_steps, add_robot, add_seed
 
 from physai.planner import ScriptedPlanner
 from physai.policy.plan_runner import PlanRunner
@@ -27,14 +28,14 @@ from physai.tasks import TaskRuntime, create_task
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--instruction", default="put the red cube on the green pad")
-    ap.add_argument(
-        "--robot",
+    add_robot(
+        ap,
         default="so101",
         choices=["so101"],
         help="plan_task currently supports the SO-101 manipulation workflow",
     )
-    ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--max-steps", type=int, default=800)
+    add_seed(ap)
+    add_max_steps(ap, default=800)
     ap.add_argument("--dry-run", action="store_true", help="print the plan and exit")
     ap.add_argument("--save-plan", type=Path)
     ap.add_argument(

@@ -20,7 +20,7 @@ dependencies = [
 training = ["gymnasium>=1.3.0,<2.0"]
 vla = ["torch>=2.7,<2.12", "lerobot>=0.6.1"]
 web = ["fastapi>=0.115", "uvicorn[standard]>=0.34", "httpx2>=2.13"]
-dev = ["pytest>=9.1.1", "lark>=1.2", "ruff>=0.16.8"]
+dev = ["pytest>=9.1.1", "lark>=1.2", "ruff>=0.16.8", "import-linter>=2.1"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -37,3 +37,32 @@ markers = [
 
 [tool.uv]
 override-dependencies = ["datasets>=5.0.1", "setuptools>=83"]
+
+[tool.importlinter]
+root_packages = ["physai", "research"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "sim stays out of the ROS2 boundary"
+type = "forbidden"
+source_modules = ["physai.sim"]
+forbidden_modules = ["physai.bridge", "rclpy"]
+
+[[tool.importlinter.contracts]]
+name = "policy, tasks, and planner depend on ports, not MuJoCo"
+type = "forbidden"
+source_modules = ["physai.policy", "physai.tasks", "physai.planner"]
+forbidden_modules = ["mujoco"]
+# policy.registry calls robots.registry.create_robot_policy() to build a
+# robot-owned policy (e.g. so101's "scripted") without importing the robot
+# itself; robots.registry's *own* lazy-loaded robot implementations are what
+# actually touch mujoco, several hops away and behind an opaque return value
+# policy.registry never inspects. That path is accepted, not a violation of
+# "policy depends on ports, not MuJoCo" — policy never sees a MuJoCo type.
+ignore_imports = ["physai.policy.registry -> physai.robots.registry"]
+
+[[tool.importlinter.contracts]]
+name = "core never imports research"
+type = "forbidden"
+source_modules = ["physai"]
+forbidden_modules = ["research"]

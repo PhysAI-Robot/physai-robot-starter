@@ -19,4 +19,5 @@ def scene_defaults() -> dict[str, object]:
         "gripper_joint": "gripper",
         "static_pad_body": "gripper",
         "moving_pad_body": "moving_jaw_so101_v1",
+        "wrist_body": "wrist",
     }
