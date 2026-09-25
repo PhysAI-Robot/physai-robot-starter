@@ -20,10 +20,11 @@ Run one episode:
 uv run python scripts/eval_policy.py --policy scripted --episodes 5 --seed 0 --max-steps 500
 ```
 
-Run the documented deterministic reliability check:
+Run the documented deterministic reliability check (at least 100 seeds; see
+below for why 20 is not enough):
 
 ```bash
-uv run python scripts/eval_policy.py --policy scripted --episodes 20 --seed 0 --max-steps 600
+uv run python scripts/eval_policy.py --policy scripted --episodes 100 --seed 0 --max-steps 600
 ```
 
 The current baseline is **100%** over 100 seeds (95% CI [96%, 100%], measured

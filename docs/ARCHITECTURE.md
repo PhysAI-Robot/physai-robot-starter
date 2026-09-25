@@ -177,9 +177,9 @@ suite via `tests/boundaries/test_import_boundaries.py`, so a violation fails
   importing it.
 - **Composition Root:** `physai.runtime.create_runtime()` is the intended
   composition root; CLI modules under `scripts/` are meant to call it and
-  parse arguments only. `run_sim.py` calls it for the manifest-free
-  single-robot path's robot construction but still assembles the task/policy
-  and (for `--world`) the shared world by hand — see
+  parse arguments only. `run_sim.py` does not call it yet: it builds robots
+  with `create_robot()` and assembles the task, policy, and (for `--world`)
+  the shared world by hand — see
   [Known remaining gaps](#known-remaining-gaps).
 - **Safety Gate:** `SafetyController` validates action mode, joint order,
   finite values, timestamps, joint limits, and configured per-joint step
@@ -386,8 +386,9 @@ Host
 ```
 
 One physics thread runs the control loop (30 Hz by default); a separate
-camera worker thread renders named cameras at a slower, decoupled cadence
-(0.2 s) so camera capture never pauses the physics loop. `Host.physics_lock`
+camera worker thread renders named cameras on its own cadence
+(`Host._CAMERA_PERIOD`, 1/30 s) so camera capture never pauses the physics
+loop. `Host.physics_lock`
 serializes MuJoCo access between the two threads and any renderer client
 (e.g. the native `--viewer`). HTTP camera requests only read the latest
 cached JPEG; they never step or render from the request handler itself.
@@ -637,11 +638,13 @@ reachable area.
 Tracked here rather than silently left implicit, since this document is
 meant to be the frozen reference:
 
-- **Jog resolver ownership.** `TwistToJointResolver` construction is
-  duplicated across `web/host.py`'s single- and shared-world branches and
+- **Jog resolver ownership.** The jog math is shared
+  (`robots/so101/jog.py`), but `TwistToJointResolver` is still constructed
+  separately in `robots/so101/env.py`, `robots/so101/shared.py`, `web/host.py`
+  (a fallback for robots without `resolve_twist_jog`, found by `hasattr`), and
   `scripts/teleop_keyboard.py`, instead of each robot registering its own jog
-  resolver factory on `RobotDescriptor`. The client-facing capability model
-  (UIs render controls from `RobotSpec`) is already correct; only the
+  factory on `RobotDescriptor`. The client-facing capability model (UIs
+  render controls from `RobotSpec`) is already correct; only the
   resolver-construction side needs the extra registry field.
 - **`scripts/` composition-root adoption.** Most scripts other than
   `run_sim.py`'s robot construction still hand-assemble `EnvConfig`/env

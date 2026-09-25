@@ -3,8 +3,9 @@
 ACT/LeRobot training pipeline and checkpoint-backed inference policies.
 
 - `act_dataset.py` — torch `Dataset` + `DatasetStats` over recorded episodes.
-- `vla_adapter.py` — `VLAPolicy` / `LeRobotPolicy`, checkpoint-backed policies
-  (the model-free `ReplayPolicy` stays in core: `physai.policy.replay`).
+- `vla_adapter.py` — `LeRobotPolicy`, the checkpoint-backed policy. It extends
+  `VLAPolicy`, and the model-free `ReplayPolicy` stays in core with it
+  (`physai.policy.replay`).
 - `train_act.py` — ACT training entrypoint.
 
 `vla_adapter.py` registers the `"lerobot"` policy with `physai.policy.registry`
