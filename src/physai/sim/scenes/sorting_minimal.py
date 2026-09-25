@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 import mujoco
 
@@ -11,6 +12,7 @@ from .common import ManipulationSceneConfig, add_cube, build_manipulation_spec
 
 @dataclass
 class SortingMinimalSceneConfig(ManipulationSceneConfig):
+    layout_kind: ClassVar[str] = "sorting"
     cube_half: float = 0.014
     cube_pos: tuple[float, float, float] = (0.20, 0.08, 0.036)
     cube_mass: float = 0.03

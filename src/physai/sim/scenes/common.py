@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from typing import ClassVar
 from pathlib import Path
 
 import mujoco
@@ -92,6 +93,10 @@ class WorldSceneConfig:
 @dataclass
 class ManipulationSceneConfig(WorldSceneConfig):
     """World settings plus end-effector and gripper attachment details."""
+
+    # How a robot should place this scene's objects each episode (a name the
+    # robot maps to its own layout). Not a field: it is not run configuration.
+    layout_kind: ClassVar[str | None] = None
 
     robot_xml: Path | None = None
     ee_site: str | None = None
