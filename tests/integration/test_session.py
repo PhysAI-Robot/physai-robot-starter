@@ -170,3 +170,22 @@ def test_the_heterogeneous_example_manifest_builds():
         assert len(session.instances) == 2
     finally:
         session.close()
+
+
+@requires_assets
+def test_a_scene_override_replaces_a_robot_scene_default(tmp_path):
+    from physai.runtime import create_session
+
+    session = create_session(
+        _manifest(
+            tmp_path,
+            scene={"overrides": {"robot_xml": SO101_MODEL, "camera_width": 64}},
+            robots=[_arm()],
+        )
+    )
+    try:
+        scene = session.runtime.robot.cfg.scene
+        assert scene.camera_width == 64
+        assert scene.robot_xml.name == "so101_new_calib_camera.xml"
+    finally:
+        session.close()

@@ -168,6 +168,11 @@ def load_manifest(path: str | Path) -> SessionManifest:
     config_path = Path(path).resolve()
     with config_path.open(encoding="utf-8") as stream:
         data = yaml.safe_load(stream)
+    return parse_manifest(data, config_path)
+
+
+def parse_manifest(data: Any, config_path: Path) -> SessionManifest:
+    """Validate manifest data; ``config_path`` names the source in errors."""
     if not isinstance(data, dict):
         raise ValueError(f"manifest root must be a mapping: {config_path}")
 
@@ -394,4 +399,5 @@ __all__ = [
     "SessionViewerConfig",
     "SessionWorldConfig",
     "load_manifest",
+    "parse_manifest",
 ]

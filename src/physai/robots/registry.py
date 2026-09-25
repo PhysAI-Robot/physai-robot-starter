@@ -33,6 +33,7 @@ class RobotDescriptor:
     factory: RobotFactory
     kind: str
     scene_defaults: SceneDefaultsFactory | None = None
+    default_task: str | None = None
     env_config: EnvConfigFactory | None = None
     ros2_node: ROS2NodeFactory | None = None
     navigation: NavigationFactory | None = None
@@ -46,6 +47,7 @@ _ROS2_NODE_FACTORIES: dict[str, ROS2NodeFactory] = {}
 _ENV_CONFIG_FACTORIES: dict[str, EnvConfigFactory] = {}
 _NAVIGATION_FACTORIES: dict[str, NavigationFactory] = {}
 _SCENE_DEFAULT_FACTORIES: dict[str, SceneDefaultsFactory] = {}
+_DEFAULT_TASKS: dict[str, str] = {}
 _POLICY_FACTORIES: dict[tuple[str, str], RobotPolicyFactory] = {}
 _SHARED_ATTACH_HOOKS: dict[str, SharedAttachHook] = {}
 _SHARED_INSTANCE_FACTORIES: dict[str, SharedInstanceFactory] = {}
@@ -75,6 +77,8 @@ def register_embodiment(name: str, descriptor: RobotDescriptor) -> RobotDescript
     register_robot(name, descriptor.factory, kind=descriptor.kind)
     if descriptor.scene_defaults is not None:
         register_scene_defaults(name, descriptor.scene_defaults)
+    if descriptor.default_task is not None:
+        _DEFAULT_TASKS[name] = descriptor.default_task
     if descriptor.env_config is not None:
         register_env_config(name, descriptor.env_config)
     if descriptor.ros2_node is not None:
@@ -156,6 +160,12 @@ def scene_defaults(name: str) -> dict[str, Any]:
     _load_builtins()
     factory = _SCENE_DEFAULT_FACTORIES.get(name)
     return {} if factory is None else dict(factory())
+
+
+def default_task(name: str) -> str | None:
+    """The task a robot runs when none is named, or None if it has no task."""
+    _load_builtins()
+    return _DEFAULT_TASKS.get(name)
 
 
 def available_robots() -> tuple[str, ...]:
@@ -280,6 +290,7 @@ def _load_builtins() -> None:
                 factory=make_so101,
                 kind="fixed_base_manipulator",
                 scene_defaults=so101_scene_defaults,
+                default_task="pick_place",
                 env_config=EnvConfig,
                 ros2_node=SO101ROS2Node,
                 shared_attach=so101_shared_attach,
