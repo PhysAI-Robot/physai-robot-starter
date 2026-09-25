@@ -58,9 +58,12 @@ def _load_builtins() -> None:
     _BUILTINS_LOADED = True
 
 
-def _make_constant(**_: Any) -> Policy:
-    from .base import ConstantPolicy
+def _make_constant(*, env: Any = None, **_: Any) -> Policy:
+    """The hold policy shaped for the robot's action space: a base holds a zero twist."""
+    from .base import ConstantPolicy, ConstantTwistPolicy
 
+    if env is not None and env.robot_spec.supports("base_velocity"):
+        return ConstantTwistPolicy()
     return ConstantPolicy()
 
 

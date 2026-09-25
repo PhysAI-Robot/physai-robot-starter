@@ -52,3 +52,22 @@ def test_unknown_policy_lists_available_policies():
 
     with pytest.raises(ValueError, match="constant"):
         create_policy("does-not-exist")
+
+
+def test_constant_policy_holds_a_zero_twist_for_a_base_robot():
+    from types import SimpleNamespace
+
+    from physai.policy import ConstantTwistPolicy, create_policy
+    from physai.robots import RobotSpec
+
+    spec = RobotSpec(
+        name="base",
+        kind="mobile_base",
+        joint_names=("wheel",),
+        action_joint_names=("wheel",),
+        capabilities=("base_velocity",),
+    )
+
+    policy = create_policy("constant", env=SimpleNamespace(robot_spec=spec))
+
+    assert isinstance(policy, ConstantTwistPolicy)
