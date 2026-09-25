@@ -16,6 +16,7 @@ from physai.robots import RobotSpec, shared_attach
 from physai.sim import RobotInstanceConfig, SharedWorld
 from physai.web.actions import action_from_payload
 from physai.web.host import Host
+from physai.web.lease import ControlLease
 from tests.support.fakes import FakeRobotPort
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -175,8 +176,10 @@ def test_control_lease_expiry_discards_queued_action():
     host = make_host()
     action = Action(joint_position=np.array([0.2]))
 
+    now = [100.0]
+    host._lease = ControlLease((host.robot_name,), clock=lambda: now[0])
     host.submit(action, source="browser")
-    host._control_deadline[host.robot_name] = 0.0
+    now[0] += 10.0  # well past the lease timeout
 
     assert host._latest_command(host.robot_name) is None
 
