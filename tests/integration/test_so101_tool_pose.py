@@ -51,7 +51,7 @@ def place_top_down(robot, target, pan=0.0):
     mujoco.mj_forward(robot.model, robot.data)
 
 
-def test_position_is_the_pinch_centre(robot):
+def test_position_is_the_pinch_centre_and_a_top_down_grasp_reads_near_zero(robot):
     place_top_down(robot, [0.22, 0.0, 0.05])
 
     pose = robot.kin.tool_pose(robot.data)
@@ -61,8 +61,7 @@ def test_position_is_the_pinch_centre(robot):
     )
     assert pose.header.frame_id == "base"
 
-
-def test_a_top_down_grasp_reads_near_zero_and_is_far_from_gimbal_lock(robot):
+    # a top-down grasp reads near zero and is far from gimbal lock
     for target in ([0.22, 0.0, 0.05], [0.18, 0.05, 0.04], [0.25, -0.06, 0.06]):
         place_top_down(robot, target)
 
@@ -71,7 +70,7 @@ def test_a_top_down_grasp_reads_near_zero_and_is_far_from_gimbal_lock(robot):
         assert abs(roll) < 5 and abs(pitch) < 5, target
 
 
-def test_panning_the_arm_changes_only_yaw(robot):
+def test_panning_changes_only_yaw_and_the_raw_site_frame_is_singular(robot):
     place_top_down(robot, [0.22, 0.0, 0.05])
     _, _, yaw0 = rpy_deg(robot.kin.tool_pose(robot.data))
 
@@ -84,9 +83,7 @@ def test_panning_the_arm_changes_only_yaw(robot):
         # shoulder_pan is positive clockwise seen from above, yaw counter-clockwise.
         assert yaw - yaw0 == pytest.approx(-pan_deg, abs=1)
 
-
-def test_the_site_frame_itself_is_singular_at_top_down(robot):
-    """Why tool_pose exists: the raw site orientation is at gimbal lock here."""
+    # Why tool_pose exists: the raw site orientation is at gimbal lock here.
     place_top_down(robot, [0.22, 0.0, 0.05])
 
     site_pitch = rpy_deg(robot.kin.fk(robot.data))[1]

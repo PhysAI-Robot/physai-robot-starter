@@ -40,34 +40,24 @@ def record_requests(monkeypatch, listing):
     return seen
 
 
-def test_api_requests_carry_the_token_when_one_is_set(monkeypatch, fetch_assets):
-    monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
-    monkeypatch.delenv("GH_TOKEN", raising=False)
-    seen = record_requests(monkeypatch, [])
+def test_api_requests_use_the_available_token_or_stay_unauthenticated(
+    monkeypatch, fetch_assets
+):
+    cases = [
+        ({"GITHUB_TOKEN": "secret-token"}, "Bearer secret-token"),
+        ({"GH_TOKEN": "gh-token"}, "Bearer gh-token"),  # the fallback name
+        ({}, None),
+    ]
+    for env, expected in cases:
+        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+        monkeypatch.delenv("GH_TOKEN", raising=False)
+        for name, value in env.items():
+            monkeypatch.setenv(name, value)
+        seen = record_requests(monkeypatch, [])
 
-    fetch_assets._get_json("https://api.github.com/repos/o/r/contents/p?ref=main")
+        fetch_assets._get_json("https://api.github.com/repos/o/r/contents/p?ref=main")
 
-    assert seen[0].get_header("Authorization") == "Bearer secret-token"
-
-
-def test_gh_token_is_accepted_as_a_fallback(monkeypatch, fetch_assets):
-    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    monkeypatch.setenv("GH_TOKEN", "gh-token")
-    seen = record_requests(monkeypatch, [])
-
-    fetch_assets._get_json("https://api.github.com/repos/o/r/contents/p?ref=main")
-
-    assert seen[0].get_header("Authorization") == "Bearer gh-token"
-
-
-def test_requests_stay_unauthenticated_without_a_token(monkeypatch, fetch_assets):
-    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    monkeypatch.delenv("GH_TOKEN", raising=False)
-    seen = record_requests(monkeypatch, [])
-
-    fetch_assets._get_json("https://api.github.com/repos/o/r/contents/p?ref=main")
-
-    assert seen[0].get_header("Authorization") is None
+        assert seen[0].get_header("Authorization") == expected, env
 
 
 def test_the_token_is_never_sent_with_file_downloads(
