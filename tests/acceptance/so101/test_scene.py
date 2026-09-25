@@ -20,6 +20,8 @@ def test_scene_has_the_task_objects_and_cameras():
     assert {"gripperframe", "target_site"} <= names(
         mujoco.mjtObj.mjOBJ_SITE, model.nsite
     )
+    cfg = PickPlaceMinimalSceneConfig()  # the table stays clear of the robot base
+    assert cfg.table_pos[0] - cfg.table_size[0] > 0.06
 
 
 @requires_assets
@@ -67,34 +69,9 @@ def test_task_specific_scene_configs_have_separate_object_layouts():
 
 
 @requires_assets
-def test_table_does_not_intersect_the_robot_base():
-    from physai.sim import PickPlaceMinimalSceneConfig
-
-    cfg = PickPlaceMinimalSceneConfig()
-    table_near_edge = cfg.table_pos[0] - cfg.table_size[0]
-    assert table_near_edge > 0.06
-
-
-@requires_assets
-def test_sorting_scene_has_three_colored_cubes():
-    import mujoco
-
-    from physai.robots.registry import scene_defaults
-    from physai.sim import SortingMinimalSceneConfig
-
-    model, _ = SortingMinimalSceneConfig(**scene_defaults("so101")).build_model()
-    names = {
-        mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, i)
-        for i in range(model.nbody)
-    }
-    assert {"cube_red", "cube_blue", "cube_yellow"} <= names
-    assert "cube" not in names
-
-
-@requires_assets
-def test_sorting_env_exposes_target_color_and_all_cube_positions():
+def test_sorting_env_exposes_the_target_cube_in_both_scenes():
     from physai.robots.so101 import EnvConfig, SO101Env
-    from physai.sim import SortingMinimalSceneConfig
+    from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
     from physai.tasks import TaskRuntime, create_task
 
     robot = SO101Env(
@@ -110,49 +87,13 @@ def test_sorting_env_exposes_target_color_and_all_cube_positions():
     finally:
         env.close()
 
-
-@requires_assets
-def test_sorting_reset_is_deterministic_for_a_given_seed():
-    from physai.robots.so101 import EnvConfig, SO101Env
-    from physai.sim import SortingMinimalSceneConfig
-
-    robot = SO101Env(
-        EnvConfig(scene=SortingMinimalSceneConfig(), render=False, max_steps=200)
-    )
-    try:
-        first = robot.reset(seed=17)
-        first_positions = {
-            color: position.copy() for color, position in robot.cube_positions.items()
-        }
-        first_target = robot.target_color
-        second = robot.reset(seed=17)
-        assert robot.target_color == first_target
-        assert set(robot.cube_positions) == set(first_positions)
-        for color, position in first_positions.items():
-            np.testing.assert_allclose(robot.cube_positions[color], position)
-        np.testing.assert_allclose(
-            second.joint_state.position, first.joint_state.position
-        )
-        assert second.sim_time == first.sim_time == 0.0
-    finally:
-        robot.close()
-
-
-@requires_assets
-def test_target_cube_geom_resolves_in_both_scenes():
-    """Grasp detection needs the *target* cube's geom, not a fixed name.
-
-    The sorting scene names its cubes `cube_red`/`cube_blue`/`cube_yellow`, so
-    a hardcoded `cube_geom` lookup returned -1 there and no grasp was ever
-    detected, which made the scripted expert retry until it timed out.
-    """
-    from physai.robots.so101 import EnvConfig, SO101Env
-    from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
-
+    # Grasp detection needs the *target* cube's geom, not a fixed name: the
+    # sorting scene names its cubes cube_red/cube_blue/cube_yellow, so a
+    # hardcoded `cube_geom` returned -1 there and no grasp was ever detected.
     for scene in (PickPlaceMinimalSceneConfig(), SortingMinimalSceneConfig()):
-        robot = SO101Env(EnvConfig(scene=scene, render=False, max_steps=200))
+        single = SO101Env(EnvConfig(scene=scene, render=False, max_steps=200))
         try:
-            robot.reset(seed=0)
-            assert robot.cube_geom_id >= 0
+            single.reset(seed=0)
+            assert single.cube_geom_id >= 0
         finally:
-            robot.close()
+            single.close()

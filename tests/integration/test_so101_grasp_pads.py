@@ -137,7 +137,7 @@ def finger_tip_x(robot, body):
     raise KeyError(body)
 
 
-def test_pads_sit_on_the_finger_centre_line_at_the_tip(robot):
+def test_pads_sit_at_the_tip_and_the_grasp_torque_is_capped(robot):
     close_to(robot, robot.cfg.scene.pad_align_gripper_q)
 
     for name, body in (
@@ -151,8 +151,5 @@ def test_pads_sit_on_the_finger_centre_line_at_the_tip(robot):
         assert centre[0] + half[0] <= tip  # never past the fingertip
         assert centre[0] + half[0] >= tip - 1.5 * MM  # and reaching right up to it
 
-
-def test_the_grasp_torque_cap_is_not_the_models_own_rating(robot):
     limit = robot.model.actuator_forcerange[robot.grip_act_id]
-
-    np.testing.assert_allclose(limit, [-0.3, 0.3])
+    np.testing.assert_allclose(limit, [-0.3, 0.3])  # not the model's own rating
