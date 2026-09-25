@@ -16,8 +16,17 @@ requires_assets = pytest.mark.skipif(
     reason="run `python scripts/fetch_assets.py` to download the SO-101 description",
 )
 
+TURTLEBOT_ASSETS = (
+    Path(__file__).resolve().parents[1] / "assets" / "turtlebot4" / "turtlebot4.xml"
+)
 
-@pytest.fixture(scope="session")
+requires_turtlebot_assets = pytest.mark.skipif(
+    not TURTLEBOT_ASSETS.exists(),
+    reason="run `python scripts/fetch_assets.py --robot turtlebot4`",
+)
+
+
+@pytest.fixture
 def env():
     from physai.robots.so101 import EnvConfig, SO101Env
     from physai.tasks import TaskRuntime, create_task
