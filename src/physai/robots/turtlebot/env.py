@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import cached_property
 from pathlib import Path
 
 import mujoco
@@ -26,11 +27,15 @@ from ...sim.domain_randomization import (
     DomainRandomizationEngine,
     RandomizationMetadata,
 )
-from ...sim.scenes.common import STUDIO_FLOOR_RGB1, STUDIO_FLOOR_RGB2, add_studio_sky
+from ...sim.scenes.common import (
+    REPO_ROOT,
+    STUDIO_FLOOR_RGB1,
+    STUDIO_FLOOR_RGB2,
+    add_studio_sky,
+)
 from ..base import RobotSpec, RobotTrainingContract
 from .contracts import turtlebot4_training_contract
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_MODEL = REPO_ROOT / "assets" / "turtlebot4" / "turtlebot4.xml"
 BASE_BODY = "base"
 CHASE_CAMERA = "physai_chase"
@@ -190,8 +195,9 @@ class TurtleBot4Env(MuJoCoSimulationCore):
             mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, CHASE_CAMERA) >= 0
         )
 
-    @property
+    @cached_property
     def robot_spec(self) -> RobotSpec:
+        """Built once: the Host reads it on every tick."""
         return RobotSpec(
             name="turtlebot4",
             kind="mobile_base",
@@ -328,7 +334,7 @@ class TurtleBot4Env(MuJoCoSimulationCore):
         )
 
     def render_camera(self, name: str = "free") -> np.ndarray:
-        if not hasattr(self, "_camera_width"):
+        if not self.render_enabled:
             raise RuntimeError("env constructed with render=False")
         camera: str | int = name
         if name == "free":
@@ -341,7 +347,7 @@ class TurtleBot4Env(MuJoCoSimulationCore):
 
     def observe(self) -> Observation:
         images = {}
-        if hasattr(self, "_camera_width"):
+        if self.render_enabled:
             images["free"] = ImageFrame(
                 data=self.render_camera(),
                 camera_name="free",

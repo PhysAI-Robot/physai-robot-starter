@@ -28,9 +28,17 @@ class MuJoCoSimulationCore:
         self.step_count = 0
         self._renderer: mujoco.Renderer | None = None
         self._renderer_thread_id: int | None = None
-        if render:
-            self._camera_width = camera_width
-            self._camera_height = camera_height
+        self._camera_size = (camera_width, camera_height) if render else None
+
+    @property
+    def render_enabled(self) -> bool:
+        """Whether this simulation can render camera frames."""
+        return self._camera_size is not None
+
+    @property
+    def camera_size(self) -> tuple[int, int] | None:
+        """(width, height) of rendered frames, or None when rendering is off."""
+        return self._camera_size
 
     def reset_simulation(self) -> None:
         """Reset simulator state before an adapter applies its initial state."""
@@ -44,17 +52,14 @@ class MuJoCoSimulationCore:
         self.step_count += 1
 
     def render_camera(self, name: str) -> object:
-        if not hasattr(self, "_camera_width"):
+        if self._camera_size is None:
             raise RuntimeError("simulation constructed with render=False")
         thread_id = threading.get_ident()
         if self._renderer is None or self._renderer_thread_id != thread_id:
             if self._renderer is not None:
                 self._renderer.close()
-            self._renderer = mujoco.Renderer(
-                self.model,
-                height=self._camera_height,
-                width=self._camera_width,
-            )
+            width, height = self._camera_size
+            self._renderer = mujoco.Renderer(self.model, height=height, width=width)
             self._renderer_thread_id = thread_id
         self._renderer.update_scene(self.data, camera=name)
         return self._renderer.render()

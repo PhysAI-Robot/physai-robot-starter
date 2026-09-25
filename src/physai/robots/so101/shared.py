@@ -16,6 +16,7 @@ from ...contracts import Action, GripperCommand, Header, JointState, Observation
 from ...control.resolver import TwistToJointResolver
 from ..base import RobotSpec
 from .contracts import ALL_JOINT_NAMES, ARM_JOINT_NAMES
+from .env import HOME_QPOS
 from .jog import resolve_jog
 from .kinematics import ArmKinematics
 
@@ -87,7 +88,7 @@ class SO101SharedInstance:
             position_only=True,
             damping=0.03,
         )
-        self._jog_target = np.array([0.0, -1.05, 1.25, 0.75, 0.0])
+        self._jog_target = HOME_QPOS.copy()
         self.robot_spec = RobotSpec(
             name="so101",
             kind="fixed_base_manipulator",

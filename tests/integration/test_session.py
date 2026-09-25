@@ -195,3 +195,31 @@ def test_a_scene_override_replaces_a_robot_scene_default(tmp_path):
         assert scene.robot_xml.name == "so101_new_calib_camera.xml"
     finally:
         session.close()
+
+
+@requires_assets
+def test_render_state_and_camera_size_are_public_properties(tmp_path):
+    from physai.runtime import create_session
+
+    session = create_session(
+        _manifest(
+            tmp_path,
+            scene={"overrides": {"camera_width": 80, "camera_height": 60}},
+            robots=[_arm()],
+        ),
+        render=True,
+    )
+    try:
+        robot = session.runtime.robot
+        assert robot.render_enabled is True
+        assert robot.camera_size == (80, 60)
+        assert robot.robot_spec is robot.robot_spec  # built once, not per access
+    finally:
+        session.close()
+
+    quiet = create_session(_manifest(tmp_path, robots=[_arm()]), render=False)
+    try:
+        assert quiet.runtime.robot.render_enabled is False
+        assert quiet.runtime.robot.camera_size is None
+    finally:
+        quiet.close()
