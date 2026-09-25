@@ -95,8 +95,7 @@ def create_runtime(
             )
         scene_config = create_scene(
             scene_name,
-            **scene_defaults(robot_name),
-            **(scene_kwargs or {}),
+            **{**scene_defaults(robot_name), **(scene_kwargs or {})},
         )
         fields["scene"] = scene_config
 
@@ -110,8 +109,7 @@ def create_runtime(
         ):
             scene_config = create_scene(
                 selected_scene_name,
-                **scene_defaults(robot_name),
-                **(scene_kwargs or {}),
+                **{**scene_defaults(robot_name), **(scene_kwargs or {})},
             )
             fields["scene"] = scene_config
     robot = create_robot(
