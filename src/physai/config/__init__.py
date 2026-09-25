@@ -19,6 +19,7 @@ from .manifest import (
     SessionRobotConfig,
     SessionSceneConfig,
     SessionViewerConfig,
+    SessionWorldConfig,
     load_manifest,
 )
 
@@ -28,6 +29,7 @@ __all__ = [
     "SessionRobotConfig",
     "SessionSceneConfig",
     "SessionViewerConfig",
+    "SessionWorldConfig",
     "SimulationConfig",
     "TaskConfig",
     "WorldConfig",

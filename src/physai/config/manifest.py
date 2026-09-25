@@ -1,10 +1,12 @@
 """The session manifest: one YAML file binding robots, scene, task, policy,
 backend, and viewer options for a run.
 
-A single-robot run is just a manifest with one entry in ``robots``. This is
-additive: `configs/tasks/<robot>/*.yaml` and `configs/worlds/*.yaml` (see
-`physai.config.legacy`) keep working unchanged; nothing here replaces them
-yet.
+A single-robot run is just a manifest with one entry in ``robots``; a
+``world`` block turns a session into one shared MuJoCo world with N robots.
+`physai.runtime.create_session` builds a session from a manifest, and
+`physai.config.compat` converts the older `configs/tasks/<robot>/*.yaml` and
+`configs/worlds/*.yaml` files into one (see `physai.config.legacy` for their
+loaders).
 
 Schema (YAML)::
 
@@ -21,9 +23,16 @@ Schema (YAML)::
 
     backend: direct                  # direct | ros2_sim | ros2_real
 
+    world:                           # optional; present = one shared world
+      timestep: 0.002
+      control_hz: 30.0
+      add_floor: true
+
     robots:                          # required, non-empty
       - id: arm_1                    # required, unique
         robot: so101                 # required; must be a registered robot
+        model: assets/so101/so101_new_calib_camera.xml  # required with world
+        config: {}                   # optional robot env fields (max_steps, ...)
         pose:
           position: [0.0, 0.0, 0.0]
           quaternion: [1.0, 0.0, 0.0, 0.0]
@@ -34,6 +43,7 @@ Schema (YAML)::
 
     task: pick_place                 # optional global default task
     task_kwargs: {}
+    success_hold_steps: 10           # optional; steps a success must hold
     policy: idle                     # optional global default policy
 
     viewer:
@@ -59,6 +69,8 @@ Validation performed at load time (see `load_manifest`):
    raises a clear "not yet implemented" error (see ROADMAP.md: simulation
    only for now).
 8. ``viewer.mode`` must be one of ``none``, ``native``, ``web``, ``both``.
+9. Several robots share one world (default ``world`` settings unless the
+   block sets them), and every robot in a world names its ``model``.
 """
 
 from __future__ import annotations
@@ -71,6 +83,7 @@ import yaml
 
 from ..policy.registry import available_policies
 from ..robots.registry import available_robots, robot_kind
+from ..sim.scenes.common import REPO_ROOT
 from ..sim.scenes.registry import get_scene_definition
 from ..tasks.registry import available_tasks
 from .legacy import SimulationConfig, _parse_simulation_config
@@ -93,6 +106,8 @@ class SessionRobotConfig:
 
     id: str
     robot: str
+    model: Path | None = None
+    config: dict[str, Any] = field(default_factory=dict)
     pose: SessionRobotPose = field(default_factory=SessionRobotPose)
     task: str | None = None
     task_kwargs: dict[str, Any] = field(default_factory=dict)
@@ -104,6 +119,15 @@ class SessionRobotConfig:
 class SessionSceneConfig:
     name: str | None = None
     overrides: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class SessionWorldConfig:
+    """Settings of a shared MuJoCo world: one model, one clock, N robots."""
+
+    timestep: float = 0.002
+    control_hz: float = 30.0
+    add_floor: bool = True
 
 
 @dataclass(frozen=True)
@@ -124,6 +148,8 @@ class SessionManifest:
     scene: SessionSceneConfig = field(default_factory=SessionSceneConfig)
     task: str | None = None
     task_kwargs: dict[str, Any] = field(default_factory=dict)
+    success_hold_steps: int | None = None
+    world: SessionWorldConfig | None = None
     policy: str = "idle"
     simulation: SimulationConfig = field(default_factory=SimulationConfig)
     viewer: SessionViewerConfig = field(default_factory=SessionViewerConfig)
@@ -168,10 +194,10 @@ def load_manifest(path: str | Path) -> SessionManifest:
     scene_data = data.get("scene") or {}
     if not isinstance(scene_data, dict):
         raise ValueError(f"{config_path}: manifest field 'scene' must be a mapping")
-    scene = SessionSceneConfig(
-        name=scene_data.get("name"),
-        overrides=dict(scene_data.get("overrides", {})),
-    )
+    overrides = _tupled(scene_data.get("overrides", {}), "scene.overrides", config_path)
+    if "robot_xml" in overrides:
+        overrides["robot_xml"] = _resolve_path(overrides["robot_xml"])
+    scene = SessionSceneConfig(name=scene_data.get("name"), overrides=overrides)
 
     raw_robots = data.get("robots")
     if not isinstance(raw_robots, list) or not raw_robots:
@@ -206,10 +232,13 @@ def load_manifest(path: str | Path) -> SessionManifest:
                 pose_data.get("quaternion", (1.0, 0.0, 0.0, 0.0)), 4, config_path
             ),
         )
+        model = raw.get("model")
         robots.append(
             SessionRobotConfig(
                 id=instance_id,
                 robot=robot_name,
+                model=None if model is None else _resolve_path(model),
+                config=_tupled(raw.get("config", {}), "robots[].config", config_path),
                 pose=pose,
                 task=raw.get("task"),
                 task_kwargs=dict(raw.get("task_kwargs", {})),
@@ -220,6 +249,24 @@ def load_manifest(path: str | Path) -> SessionManifest:
 
     task = data.get("task")
     policy = data.get("policy", "idle")
+    success_hold_steps = data.get("success_hold_steps")
+    if success_hold_steps is not None and (
+        not isinstance(success_hold_steps, int)
+        or isinstance(success_hold_steps, bool)
+        or success_hold_steps < 1
+    ):
+        raise ValueError(
+            f"{config_path}: success_hold_steps must be a positive integer"
+        )
+    world = _parse_world(data.get("world"), config_path)
+    if world is None and len(robots) > 1:
+        world = SessionWorldConfig()  # several robots always share one world
+    if world is not None:
+        missing = [robot.id for robot in robots if robot.model is None]
+        if missing:
+            raise ValueError(
+                f"{config_path}: world robots need a 'model': {', '.join(missing)}"
+            )
 
     viewer_data = data.get("viewer") or {}
     if not isinstance(viewer_data, dict):
@@ -243,6 +290,8 @@ def load_manifest(path: str | Path) -> SessionManifest:
         scene=scene,
         task=task,
         task_kwargs=dict(data.get("task_kwargs", {})),
+        success_hold_steps=success_hold_steps,
+        world=world,
         policy=policy,
         simulation=simulation,
         viewer=viewer,
@@ -279,6 +328,50 @@ def _validate_names_and_compatibility(manifest: SessionManifest, source: Path) -
                 )
 
 
+def _parse_world(data: Any, source: Path) -> SessionWorldConfig | None:
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise ValueError(f"{source}: manifest field 'world' must be a mapping")
+    world = SessionWorldConfig(
+        timestep=float(data.get("timestep", 0.002)),
+        control_hz=float(data.get("control_hz", 30.0)),
+        add_floor=data.get("add_floor", True),
+    )
+    if world.timestep <= 0 or world.control_hz <= 0:
+        raise ValueError(f"{source}: world timestep and control_hz must be positive")
+    if not isinstance(world.add_floor, bool):
+        raise ValueError(f"{source}: world add_floor must be a boolean")
+    return world
+
+
+def _tupled(value: Any, name: str, source: Path) -> dict[str, Any]:
+    """A copy of a mapping with list values as tuples.
+
+    Typed configs declare fixed-size fields as tuples, while YAML can only
+    write lists, so the conversion happens once here instead of per field.
+    """
+    if not isinstance(value, dict):
+        raise ValueError(f"{source}: {name} must be a mapping")
+    return {
+        key: tuple(item) if isinstance(item, list) else item
+        for key, item in value.items()
+    }
+
+
+def _resolve_path(value: Any) -> Path:
+    """A model path: absolute, else relative to the working directory or the repo."""
+    if not isinstance(value, (str, Path)) or not str(value):
+        raise ValueError("model and robot_xml paths must be non-empty")
+    candidate = Path(value)
+    if candidate.is_absolute():
+        return candidate
+    for base in (Path.cwd(), REPO_ROOT):
+        if (base / candidate).exists():
+            return (base / candidate).resolve()
+    return (REPO_ROOT / candidate).resolve()
+
+
 def _required_string(data: dict[str, Any], key: str, source: Path) -> str:
     value = data.get(key)
     if not isinstance(value, str) or not value:
@@ -299,5 +392,6 @@ __all__ = [
     "SessionRobotPose",
     "SessionSceneConfig",
     "SessionViewerConfig",
+    "SessionWorldConfig",
     "load_manifest",
 ]
