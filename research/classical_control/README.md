@@ -29,8 +29,9 @@ metrics as JSON:
 uv run python scripts/eval_policy.py --policy visual_servo --episodes 20 --seed 0 --max-steps 600 --camera-jitter 0.005 --json-out outputs/visual_servo_20seed_jitter.json
 ```
 
-The same evaluation runs on a clean Linux runner through the `Visual servo
-evaluation` workflow (`.github/workflows/visual-servo-eval.yml`). It starts on
+The same evaluation runs on a clean Linux runner through the `Research: visual
+servo evaluation` workflow
+(`.github/workflows/research-visual-servo-eval.yml`). It starts on
 pull requests that touch the code the result depends on, and by hand from the
 Actions tab once the workflow is on the default branch, with the total episode
 count and the jitter as inputs. Software rendering takes about 130 seconds per
