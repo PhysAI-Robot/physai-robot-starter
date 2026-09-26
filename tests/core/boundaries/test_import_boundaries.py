@@ -16,7 +16,7 @@ import pytest
 
 importlinter_cli = pytest.importorskip("importlinter.cli")
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_dependency_direction_contracts_hold():

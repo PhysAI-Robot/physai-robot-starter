@@ -60,13 +60,13 @@ inspection command.
 ## 3. Validate SO-101 Contracts
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/acceptance/so101/test_kinematics.py tests/acceptance/so101/test_scene.py tests/unit/test_robot_registry.py -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/core/acceptance/so101/test_kinematics.py tests/core/acceptance/so101/test_scene.py tests/core/unit/test_robot_registry.py -q
 ```
 
 The transport-level ROS2 check does not require a ROS2 installation:
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/integration/test_ros2_adapters.py::test_ros2_mujoco_teleop_command_moves_so101 -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/core/integration/test_ros2_adapters.py::test_ros2_mujoco_teleop_command_moves_so101 -q
 ```
 
 ## 4. Run the Real ROS2 Node
@@ -75,7 +75,7 @@ Real message and executor coverage requires ROS2 Jazzy:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/robots/so101/test_so101_ros2_node.py -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/core/robots/so101/test_so101_ros2_node.py -q
 ```
 
 Run a bounded ROS2 MuJoCo smoke test:

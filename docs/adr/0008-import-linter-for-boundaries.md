@@ -21,7 +21,7 @@ AST-walking test. It is a mature, widely used tool with a declarative
 contract format, which is more reliable and less maintenance than
 reimplementing import-graph analysis by hand. Contracts are declared in
 `pyproject.toml`'s `[tool.importlinter]` section and run via `lint-imports`,
-wired into `tests/boundaries/test_import_boundaries.py` so a plain
+wired into `tests/core/boundaries/test_import_boundaries.py` so a plain
 `pytest tests/ -q` fails on a violation.
 
 ## Consequences

@@ -33,7 +33,7 @@ isn't convenient (see [ADR 4](adr/0004-tk-viewer-frozen.md)); add
 ## 2. Validate Basic Differential-Drive Control
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/unit/test_robot_registry.py tests/acceptance/turtlebot/test_navigation.py -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/core/unit/test_robot_registry.py tests/core/acceptance/turtlebot/test_navigation.py -q
 ```
 
 These checks cover registry creation, reset determinism, wheel motion, ground
@@ -45,7 +45,7 @@ Real message and executor coverage requires ROS2 Jazzy:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/robots/turtlebot/test_turtlebot_ros2_node.py -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/core/robots/turtlebot/test_turtlebot_ros2_node.py -q
 ```
 
 Run a bounded ROS2 MuJoCo smoke test:

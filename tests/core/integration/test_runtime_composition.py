@@ -4,7 +4,7 @@ pytestmark = pytest.mark.integration
 
 from physai.contracts import Action, JointState, Observation
 from physai.robots import RobotSpec
-from tests.support.fakes import FakeRobotPort
+from tests.core.support.fakes import FakeRobotPort
 
 
 def test_actions_with_the_wrong_joint_order_or_stale_or_out_of_limit_are_rejected():

@@ -9,7 +9,7 @@ from physai.contracts import Action
 from physai.data import load_episode
 from physai.robots import RobotSpec
 from physai.web.host import Host
-from tests.support.fakes import FakeRobotPort
+from tests.core.support.fakes import FakeRobotPort
 
 XML = """
 <mujoco>

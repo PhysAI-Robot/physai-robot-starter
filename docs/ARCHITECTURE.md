@@ -124,8 +124,8 @@ research/
 
 These four rules are enforced by `uv run lint-imports`
 (`pyproject.toml`'s `[tool.importlinter]`) and run inside the normal test
-suite via `tests/boundaries/test_import_boundaries.py`, so a violation fails
-`pytest tests/ -q` the same way a failing unit test would.
+suite via `tests/core/boundaries/test_import_boundaries.py`, so a violation
+fails `pytest tests/ -q` the same way a failing unit test would.
 
 | Rule | Rationale |
 | --- | --- |
@@ -442,6 +442,14 @@ ships the contracts plus minimal baselines only; per-module placement:
 
 See [ADR 3](adr/0003-research-outside-core.md) for the decision and
 `research/README.md` for the one rule research code follows.
+
+The boundary also holds at test time: `tests/core/` (mirroring `physai`'s
+subpackages, e.g. `tests/core/unit/`, `tests/core/integration/`,
+`tests/core/acceptance/`) sits next to `tests/research/<topic>/` (mirroring
+`research/<topic>/`), and each runs in its own CI job (`test-core` and
+`test-research`). A research topic's failures and any heavier,
+topic-specific dependencies (e.g. `imitation_learning`'s `vla` extra) stay
+isolated there instead of affecting core's job.
 
 ## Runtime compositions
 
