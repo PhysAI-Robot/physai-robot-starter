@@ -1,4 +1,4 @@
-name: Visual servo evaluation
+name: "Research: visual servo evaluation"
 
 # Reproduces the Phase 2A claim on a clean Linux runner: the SO-101 visual servo
 # policy over a seed range with bounded camera jitter. Software rendering costs
@@ -24,13 +24,13 @@ on:
       - "configs/**"
       - "scripts/eval_policy.py"
       - "scripts/report_evaluation.py"
-      - ".github/workflows/visual-servo-eval.yml"
+      - ".github/workflows/research-visual-servo-eval.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: visual-servo-eval-${{ github.ref }}
+  group: research-visual-servo-eval-${{ github.ref }}
   cancel-in-progress: true
 
 env:
