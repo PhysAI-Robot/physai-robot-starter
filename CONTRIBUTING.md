@@ -69,11 +69,12 @@ local links and command names against the current repository.
 Run the test tiers independently when diagnosing failures:
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/unit tests/policy -q
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/integration tests/bridge -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/core/unit tests/core/policy -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/core/integration tests/core/bridge -q
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest -m acceptance -q
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest -m assets -q
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest -m ros2 -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/research -q
 ```
 
 ## Repository hygiene

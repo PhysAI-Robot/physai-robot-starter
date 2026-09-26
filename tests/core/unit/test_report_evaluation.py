@@ -6,7 +6,7 @@ import pytest
 
 from physai.data.evaluation import EvaluationReport
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"
 
 
 def evaluation(*, failed_seeds=(), collisions=0, timeouts=0, unsafe=0) -> dict:

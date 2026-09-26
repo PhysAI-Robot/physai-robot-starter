@@ -10,7 +10,7 @@ from physai.robots import create_robot
 from physai.robots.so101 import TOP_DOWN, EnvConfig
 
 MODEL = (
-    Path(__file__).resolve().parents[2]
+    Path(__file__).resolve().parents[3]
     / "assets"
     / "so101"
     / "so101_new_calib_camera.xml"

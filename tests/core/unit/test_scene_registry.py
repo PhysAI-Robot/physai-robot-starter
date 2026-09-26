@@ -1,7 +1,7 @@
 import pytest
 
 from physai.robots import RobotSpec
-from tests.support.fakes import FakeRobotPort
+from tests.core.support.fakes import FakeRobotPort
 
 
 def test_builtin_scene_registry_returns_typed_configs():

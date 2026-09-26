@@ -58,7 +58,7 @@ boundaries merely to make a local test pass.
   — a research module registers itself with the relevant core registry
   (`physai.robots.registry`, `physai.policy.registry`,
   `physai.planner.registry`) on import instead. This is checked by
-  `uv run lint-imports` and by `tests/boundaries/test_import_boundaries.py`.
+  `uv run lint-imports` and by `tests/core/boundaries/test_import_boundaries.py`.
 - Prefer the smallest compatible change and avoid unrelated refactors.
 - Do not commit downloaded assets, model snapshots, demonstrations, videos, or
   generated plans.
@@ -85,7 +85,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 ```
 
 Use a focused test path first when one exists, then run the full suite for
-changes that cross module boundaries. `tests/boundaries/test_import_boundaries.py`
+changes that cross module boundaries. `tests/core/boundaries/test_import_boundaries.py`
 runs the dependency-direction contracts in `pyproject.toml`'s
 `[tool.importlinter]` section as part of that same suite; a new cross-module
 import can fail there even when its own tests pass. For documentation-only

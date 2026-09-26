@@ -11,7 +11,7 @@ from physai.robots.so101 import EnvConfig
 from physai.sim import PickPlaceMinimalSceneConfig
 
 MODEL = (
-    Path(__file__).resolve().parents[2]
+    Path(__file__).resolve().parents[3]
     / "assets"
     / "so101"
     / "so101_new_calib_camera.xml"

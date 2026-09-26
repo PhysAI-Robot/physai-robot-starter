@@ -6,7 +6,7 @@ import pytest
 
 from physai.robots import RobotSpec
 from physai.web.host import Host
-from tests.support.fakes import FakeRobotPort
+from tests.core.support.fakes import FakeRobotPort
 
 pytest.importorskip("fastapi")
 pytest.importorskip("httpx2")

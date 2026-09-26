@@ -16,9 +16,9 @@ from physai.robots import RobotSpec, shared_attach
 from physai.sim import RobotInstanceConfig, SharedWorld
 from physai.web.actions import action_from_payload
 from physai.web.host import Host
-from tests.support.fakes import FakeRobotPort
+from tests.core.support.fakes import FakeRobotPort
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 SO101_MODEL = ROOT / "assets" / "so101" / "so101_new_calib_camera.xml"
 TURTLEBOT_MODEL = ROOT / "assets" / "turtlebot4" / "turtlebot4.xml"
 

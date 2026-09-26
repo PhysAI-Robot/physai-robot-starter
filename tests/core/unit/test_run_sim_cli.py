@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from conftest import requires_assets
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"
 WORLD = "configs/worlds/heterogeneous.yaml"
 TASK = "configs/tasks/so101/pick_place.yaml"
 

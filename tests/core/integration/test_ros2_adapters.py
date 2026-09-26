@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from tests.support.fakes import RecordingTransport
+from tests.core.support.fakes import RecordingTransport
 
 
 @pytest.mark.integration

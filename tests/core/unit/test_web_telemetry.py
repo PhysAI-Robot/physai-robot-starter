@@ -78,7 +78,7 @@ def test_websocket_route_resolves_fastapi_websocket_annotation():
     from physai.robots import RobotSpec
     from physai.web.app import create_app
     from physai.web.host import Host
-    from tests.support.fakes import FakeRobotPort
+    from tests.core.support.fakes import FakeRobotPort
 
     spec = RobotSpec(name="test", kind="test", joint_names=("joint",))
     app = create_app(host=Host.for_robot(FakeRobotPort(spec), robot_name="test"))
