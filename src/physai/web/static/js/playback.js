@@ -105,7 +105,10 @@ export function applyState(state) {
     return;
   }
   playing = playback.playing;
-  playButton.textContent = playing ? "Pause" : "Play";
+  const playLabel = playing ? "Pause" : "Play";
+  playButton.textContent = playing ? "❚❚" : "▶";
+  playButton.setAttribute("aria-label", playLabel);
+  playButton.title = playLabel;
   speedSelect.value = String(playback.speed);
   scrubber.max = String(playback.length - 1);
   if (!scrubbing) scrubber.value = String(playback.frame);

@@ -173,8 +173,9 @@ For robots with a gripper, the joint panel lists a **Static pad** and a
 **Moving pad** row. The dot lights while that pad touches anything, and the
 number is the summed normal force in newtons over everything the pad touches
 (`–` when nothing; table contact counts like object contact). It is MuJoCo's
-`mj_contactForce` from the latest step, friction excluded, and it reads `–`
-during playback because a restored pose cannot reproduce the recorded squeeze.
+`mj_contactForce` from the latest step, friction excluded, and it reads `n/a`
+while a pad touches something during playback, because a restored pose cannot
+reproduce the recorded squeeze.
 
 Reference from the scripted pick-and-place: each pad reads about 3.8 N while
 holding the cube, and the net vertical force equals the cube's weight. Gripper
@@ -226,9 +227,9 @@ With `--record-dir` set, a Playback panel lists the saved episodes with their
 success tags. Pick one and press **Load**: the world pauses and shows frame 0
 of that episode. Then:
 
-- **◀ / ▶** (or the arrow keys) step one frame and stop playing; the slider
+- **|◀ / ▶|** (or the arrow keys) step one frame and stop playing; the slider
   scrubs to any frame.
-- **Play** runs the episode at **0.5× / 1× / 2× / 4×**. Speed follows the wall
+- **▶ (Play) / ❚❚ (Pause)** runs the episode at **0.5× / 1× / 2× / 4×**. Speed follows the wall
   clock, so 1× is the real time the episode was recorded at (its control
   rate), and playback stops at the last frame; Play again restarts it.
 - **Exit** puts back exactly the world you interrupted, still paused; press

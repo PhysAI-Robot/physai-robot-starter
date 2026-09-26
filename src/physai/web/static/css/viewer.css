@@ -135,7 +135,19 @@ button:disabled { opacity: 0.4; cursor: not-allowed; background: var(--color-sur
 .hint { margin-top: 0; font: 11px var(--font-mono); }
 .record-panel { margin-bottom: var(--space-2); }
 .playback-panel { margin-bottom: var(--space-2); }
-.playback-panel select { max-width: 100%; margin: 0 var(--space-2) var(--space-2) 0; }
+.playback-panel select {
+  max-width: 100%;
+  margin: 0 var(--space-2) var(--space-2) 0;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  background: var(--color-surface-alt);
+  font: 12px var(--font-mono);
+  cursor: pointer;
+}
+.playback-panel select:hover { background: var(--color-border); }
+#playback-play { min-width: 3.2em; }
 .playback-transport { display: flex; flex-wrap: wrap; align-items: center; }
 #playback-scrubber { width: 100%; margin: 0 0 var(--space-2); accent-color: var(--color-accent); }
 #record-start { color: var(--color-danger); }
