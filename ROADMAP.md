@@ -143,6 +143,34 @@ Run the same checkpoint through direct MuJoCo and through the ROS2 bridge to mea
 
 Definition of done: identical seeds on both backends, a results table, and the main causes of any gap identified.
 
+### 2E MuJoCo-Isaac Sim sim-to-sim comparison
+
+Evaluate a policy tuned in MuJoCo (`visual_servo`, ACT) against Isaac Sim to
+measure the gap between simulators, not simulation-vs-ROS2 integration
+overhead (that is 2C). Local RTX GPU only; Isaac Sim installs into its own
+separate virtual environment (see `docs/adr/0013-isaac-sim-optional-backend.md`) and is never installed by CI or this project's own `.venv`. See `docs/adr/0013-isaac-sim-optional-backend.md` for the
+backend itself.
+
+- [x] `physai.isaac` (SimulationApp lifecycle, `RobotDescription` -> USD) and
+  `robots.so101.isaac_env.SO101IsaacEnv`, verified end to end against real
+  Isaac Sim 6.1 on an RTX 3060 (URDF import, actuator gain transfer with no
+  unit conversion, closed-loop joint tracking, camera rendering).
+- [x] Parity ladder tiers 1-2 (static FK/joint-order match, actuator step
+  response) as `pytest.mark.isaac` tests.
+- [ ] Parity ladder tier 3 (contact): a cube grasp-hold test, comparing slip
+  against the MuJoCo no-slip baseline (0.0 mm) — needs `SO101IsaacEnv` to
+  grow task/scene objects first (it is robot-only today).
+- [ ] Parity ladder tier 4 (closed-loop): `visual_servo`/ACT on identical
+  seeds and layouts in both simulators, success rate and failure causes via
+  `scripts/report_evaluation.py`.
+- [ ] `ArmKinematics` (`robots/so101/kinematics.py`) taking joint positions
+  instead of `MjData`, so `SO101IsaacEnv` can reuse it for IK — deferred
+  until tier 3/4 need it (25+ call sites, no second consumer to validate
+  the new shape against yet).
+
+Definition of done: identical seeds/layouts across both simulators, a
+results table per tier, and the main causes of any gap identified.
+
 ### 2D Report and release (v0.2)
 
 - [ ] 2-4 page report in `docs/`: setup, task ladder, three-method comparison, difficulty sweep, ablations, backend comparison, failure analysis, limitations.
@@ -166,4 +194,4 @@ Definition of done: identical seeds on both backends, a results table, and the m
 **Not in focus yet.** Listed only so the architecture keeps room for them.
 
 - **Phase 3, language and planning:** only the planner *contract* and its scripted backend remain (`physai.planner`, `scripts/plan_task.py`). The SmolVLM and Claude backends were removed in the 2026-09-20 cleanup — they were untested, unrunnable without absent dependencies, and out of focus; git history has them. Speech input, plan schemas, error-recovery loops, and a ROS2 VLM node are not planned.
-- **Phase 4, scale and generalization:** VLA fine-tuning, parallel data generation, cross-simulator portability (for example Isaac Lab), a real SO-101 backend, and additional embodiments. These need compute and hardware beyond the current setup.
+- **Phase 4, scale and generalization:** VLA fine-tuning, parallel data generation, a real SO-101 backend, and additional embodiments. Cross-simulator portability moved to 2E (Isaac Sim) once a GPU became available; these remaining items still need compute and hardware beyond the current setup.
