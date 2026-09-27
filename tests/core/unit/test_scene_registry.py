@@ -93,8 +93,12 @@ def test_the_robot_supplies_the_grasp_pad_fit_a_generic_scene_lacks():
     from physai.robots.registry import scene_defaults
     from physai.sim import PickPlaceMinimalSceneConfig
 
-    with pytest.raises(ValueError, match="pad_size.*wrist_cam_pos"):
+    with pytest.raises(ValueError, match="description"):
         PickPlaceMinimalSceneConfig().build_spec()
     defaults = scene_defaults("so101")
-    assert defaults["pad_align_gripper_q"] == 0.16
-    assert len(defaults["wrist_cam_xyaxes"]) == 6
+    description = defaults["description"]
+    assert description.derivation["pad_align_gripper_q"] == 0.16
+    assert {pad.name for pad in description.contact_pads} == {
+        "pad_static",
+        "pad_moving",
+    }

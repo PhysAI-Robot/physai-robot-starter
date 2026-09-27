@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import ClassVar
 
 import mujoco
-import numpy as np
+
+from ...robots.description import RobotDescription
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
@@ -99,34 +100,11 @@ class ManipulationSceneConfig(WorldSceneConfig):
     layout_kind: ClassVar[str | None] = None
 
     robot_xml: Path | None = None
-    ee_site: str | None = None
-    gripper_joint: str | None = None
-    static_pad_body: str | None = None
-    moving_pad_body: str | None = None
-    wrist_body: str | None = None
-    # The grasp-pad fit and the wrist camera pose depend on the gripper's
-    # geometry, so the robot supplies them through its scene defaults
-    # (`robots/so101/scene.py`); they have no generic value.
-    pad_friction: tuple[float, float, float] = (2.0, 0.02, 0.001)
-    # MuJoCo models friction as a soft constraint, so a held object under a
-    # constant load (a cube's own weight, ~0.3 N, against ~4 N of squeeze)
-    # creeps out of the fingers at about 1 mm/s even though the friction
-    # force is a small fraction of its limit; a cube held for ~15 s falls out
-    # regardless of grip force. The no-slip post-solver removes that creep
-    # (0.0 mm over 30 s) for ~30% more solver time. 0 restores the default.
-    noslip_iterations: int = 5
-    pad_size: tuple[float, float, float] | None = None
-    replace_jaw_collision: bool = True
-    pad_align_gripper_q: float | None = None
-    static_pad_pos: tuple[float, float, float] | None = None
-    moving_pad_pos: tuple[float, float, float] | None = None
-    moving_pad_tilt: float | None = None
-    # The pads render in the web viewer (a group-3 box drawn by its rgba) so
-    # their fit can be checked by eye; MuJoCo camera renders skip group 3, so
-    # dataset images are unaffected. Set the alpha (last value) to 0 to hide.
-    pad_rgba: tuple[float, float, float, float] = (0.95, 0.6, 0.1, 0.6)
-    wrist_cam_pos: tuple[float, float, float] | None = None
-    wrist_cam_xyaxes: tuple[float, ...] | None = None
+    # The robot's sim-neutral frames, cameras, contact pads, and MuJoCo-only
+    # tuning (see `robots.description.RobotDescription`); supplied by the
+    # robot's scene defaults (`robots/so101/scene.py`), which have no generic
+    # value for an unattached scene.
+    description: RobotDescription | None = None
     clutter_count: int = 0
     clutter_size: tuple[float, float, float] = (0.018, 0.018, 0.025)
 
@@ -161,22 +139,7 @@ def _find_body(spec: mujoco.MjSpec, name: str):
 
 def _validate_robot_attachment(cfg: ManipulationSceneConfig) -> None:
     missing = [
-        name
-        for name in (
-            "robot_xml",
-            "ee_site",
-            "gripper_joint",
-            "static_pad_body",
-            "moving_pad_body",
-            "pad_size",
-            "pad_align_gripper_q",
-            "static_pad_pos",
-            "moving_pad_pos",
-            "moving_pad_tilt",
-            "wrist_cam_pos",
-            "wrist_cam_xyaxes",
-        )
-        if getattr(cfg, name) is None
+        name for name in ("robot_xml", "description") if getattr(cfg, name) is None
     ]
     if missing:
         raise ValueError(
@@ -184,53 +147,81 @@ def _validate_robot_attachment(cfg: ManipulationSceneConfig) -> None:
         )
 
 
-def _pad_quats(cfg: ManipulationSceneConfig) -> dict[str, np.ndarray]:
-    model = mujoco.MjModel.from_xml_path(str(cfg.robot_xml))
-    data = mujoco.MjData(model)
-    grip_jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, cfg.gripper_joint)
-    data.qpos[model.jnt_qposadr[grip_jid]] = cfg.pad_align_gripper_q
-    mujoco.mj_forward(model, data)
-
-    site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, cfg.ee_site)
-    site_rotation = data.site_xmat[site_id].reshape(3, 3)
-    quaternions: dict[str, np.ndarray] = {}
-    for key, body_name in (
-        ("static", cfg.static_pad_body),
-        ("moving", cfg.moving_pad_body),
-    ):
-        body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name)
-        local_rotation = data.xmat[body_id].reshape(3, 3).T @ site_rotation
-        if key == "moving":
-            c, s = np.cos(cfg.moving_pad_tilt), np.sin(cfg.moving_pad_tilt)
-            local_rotation = local_rotation @ np.array(
-                [[c, 0.0, -s], [0.0, 1.0, 0.0], [s, 0.0, c]]
-            )
-        quaternion = np.zeros(4)
-        mujoco.mju_mat2Quat(quaternion, local_rotation.reshape(9))
-        quaternions[key] = quaternion
-    return quaternions
+def _find_body_optional(spec: mujoco.MjSpec, name: str):
+    for body in spec.bodies:
+        if body.name == name:
+            return body
+    return None
 
 
-def _replace_jaw_collision(spec: mujoco.MjSpec, cfg: ManipulationSceneConfig) -> None:
-    if not cfg.replace_jaw_collision:
-        return
-    for body_name in (cfg.static_pad_body, cfg.moving_pad_body):
-        body = _find_body(spec, body_name)
-        for geom in body.geoms:
-            if geom.type == mujoco.mjtGeom.mjGEOM_MESH and geom.group == 3:
-                geom.contype = 0
-                geom.conaffinity = 0
+def apply_description(
+    spec: mujoco.MjSpec, desc: RobotDescription, *, include_contact_pads: bool = True
+) -> None:
+    """Add a robot's sim-neutral frames and cameras to its compiled spec, plus
+    (when `include_contact_pads`) its contact pads and MuJoCo-only tuning
+    from `desc.mujoco_overrides()`.
 
+    A frame or camera whose `parent_link` is absent from this spec is skipped
+    rather than failing: `desc.cameras` may describe mounts for more than one
+    upstream MJCF variant (see `robots/so101/description.yaml`), and only one
+    variant is loaded at a time.
 
-def _add_wrist_jog_site(spec: mujoco.MjSpec, cfg: ManipulationSceneConfig) -> None:
-    """Add a zero-offset "wristframe" site so a restricted-joint jog IK can
-    target the wrist rather than the gripper tip. Added here (not hand-edited
-    into the fetched MJCF) because `assets/` is downloaded by
-    `scripts/fetch_assets.py` and not committed to the repo.
+    `include_contact_pads=False` is for a shared multi-robot world (see
+    `robots/so101/shared.py`), which attaches a robot for kinematics and
+    control but not grasp-pad physics; every other consumer wants pads too.
     """
-    if cfg.wrist_body is None:
+    for frame in desc.frames:
+        body = _find_body_optional(spec, frame.parent_link)
+        if body is not None:
+            body.add_site(name=frame.name, pos=list(frame.pos), quat=list(frame.quat))
+
+    mounted_cameras: set[str] = set()
+    for camera in desc.cameras:
+        # Two entries may name the same logical camera with different mounts
+        # for different upstream MJCF variants (see `description.yaml`'s two
+        # "wrist" entries); take the first whose parent link this spec has,
+        # in the description's own priority order, and skip the rest.
+        if camera.name in mounted_cameras:
+            continue
+        body = _find_body_optional(spec, camera.parent_link)
+        if body is not None:
+            body.add_camera(
+                name=camera.name,
+                pos=list(camera.pos),
+                quat=list(camera.quat),
+                fovy=camera.fovy_deg,
+            )
+            mounted_cameras.add(camera.name)
+
+    if not include_contact_pads:
         return
-    _find_body(spec, cfg.wrist_body).add_site(name="wristframe", pos=[0, 0, 0])
+
+    overrides = desc.mujoco_overrides()
+    spec.option.noslip_iterations = overrides.get("noslip_iterations", 0)
+    pad_style = overrides.get("pad", {})
+    for pad in desc.contact_pads:
+        body = _find_body(spec, pad.parent_link)
+        if pad.disable_parent_mesh_collision:
+            for geom in body.geoms:
+                if geom.type == mujoco.mjtGeom.mjGEOM_MESH and geom.group == 3:
+                    geom.contype = 0
+                    geom.conaffinity = 0
+        body.add_geom(
+            name=pad.name,
+            type=mujoco.mjtGeom.mjGEOM_BOX,
+            size=list(pad.half_size),
+            pos=list(pad.pos),
+            quat=list(pad.quat),
+            # A collision-only proxy for the jaw mesh. Its rgba only affects
+            # the web viewer (scene.js sets transparent/opacity from
+            # rgba[3]); alpha 0 hides it without touching contact behavior.
+            rgba=list(pad_style.get("rgba", (1.0, 1.0, 1.0, 1.0))),
+            friction=list(pad.friction),
+            condim=int(pad_style.get("condim", 3)),
+            solimp=list(pad_style.get("solimp", (0.9, 0.95, 0.001, 0.5, 2.0))),
+            solref=list(pad_style.get("solref", (0.02, 1.0))),
+            group=int(pad_style.get("group", 0)),
+        )
 
 
 def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
@@ -243,9 +234,6 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
 
     spec = mujoco.MjSpec.from_file(str(cfg.robot_xml))
     spec.option.timestep = cfg.timestep
-    spec.option.noslip_iterations = cfg.noslip_iterations
-    _replace_jaw_collision(spec, cfg)
-    _add_wrist_jog_site(spec, cfg)
     world = spec.worldbody
 
     add_studio_sky(spec)
@@ -322,75 +310,13 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
             friction=[0.8, 0.01, 0.0001],
         )
 
-    quaternions = _pad_quats(cfg)
-
-    def add_pad(body, position, quaternion, name: str) -> None:
-        body.add_geom(
-            name=name,
-            type=mujoco.mjtGeom.mjGEOM_BOX,
-            size=list(cfg.pad_size),
-            pos=list(position),
-            quat=list(quaternion),
-            # A collision-only proxy for the jaw mesh (see
-            # _replace_jaw_collision). Its rgba only affects the web viewer
-            # (scene.js sets transparent/opacity from rgba[3]); alpha 0 hides
-            # it without touching contact behavior. Its solref time constant
-            # is already at the stability floor (2 x timestep): a stiffer
-            # direct solref throws the cube out of the grasp or blows up the
-            # arm at this timestep. The high impedance (solimp) is the safe
-            # remaining lever.
-            rgba=list(cfg.pad_rgba),
-            friction=list(cfg.pad_friction),
-            condim=4,
-            solimp=[0.99, 0.999, 0.001, 0.5, 2.0],
-            solref=[0.004, 1.0],
-            group=3,
-        )
-
-    add_pad(
-        _find_body(spec, cfg.static_pad_body),
-        cfg.static_pad_pos,
-        quaternions["static"],
-        "pad_static",
-    )
-    add_pad(
-        _find_body(spec, cfg.moving_pad_body),
-        cfg.moving_pad_pos,
-        quaternions["moving"],
-        "pad_moving",
-    )
-
     world.add_camera(
         name="front",
         pos=list(cfg.front_cam_pos),
         xyaxes=list(cfg.front_cam_xyaxes),
         fovy=48,
     )
-    camera_body = next(
-        (body for body in spec.bodies if body.name == "wrist_camera"), None
-    )
-    if camera_body is not None:
-        # The official camera variant contains the calibrated mount and camera
-        # body. The sensor is added here because the upstream model only
-        # describes the physical camera mesh, not a MuJoCo render sensor.
-        camera_body.add_camera(
-            name="wrist",
-            # Keep the virtual optical centre just outside the physical lens
-            # housing; placing it at the body origin makes the housing occlude
-            # the rendered image as a large black spot.
-            pos=[0.0, 0.0, 0.025],
-            # The official camera body uses +z as its optical direction while
-            # MuJoCo camera sensors look along local -z.
-            xyaxes=[1.0, 0.0, 0.0, 0.0, -1.0, 0.0],
-            fovy=62,
-        )
-    else:
-        _find_body(spec, cfg.static_pad_body).add_camera(
-            name="wrist",
-            pos=list(cfg.wrist_cam_pos),
-            xyaxes=list(cfg.wrist_cam_xyaxes),
-            fovy=62,
-        )
+    apply_description(spec, cfg.description)
     return spec
 
 

@@ -53,7 +53,8 @@ def close_to(robot, angle):
 
 def test_pad_faces_are_one_cube_apart_at_the_alignment_angle(robot):
     scene = robot.cfg.scene
-    close_to(robot, scene.pad_align_gripper_q)
+    derivation = scene.description.derivation
+    close_to(robot, derivation["pad_align_gripper_q"])
 
     static_centre, static_axes, half = pad_frame(robot, "pad_static")
     moving_centre, moving_axes, _ = pad_frame(robot, "pad_moving")
@@ -62,10 +63,46 @@ def test_pad_faces_are_one_cube_apart_at_the_alignment_angle(robot):
     assert abs(static_axes[2, 2]) == pytest.approx(1.0, abs=1e-3)
     # The moving pad is tilted along its finger's face, by exactly the tilt.
     tilt = np.arctan2(moving_axes[0, 2], moving_axes[2, 2])
-    assert abs(tilt) == pytest.approx(scene.moving_pad_tilt, abs=1e-3)
+    assert abs(tilt) == pytest.approx(derivation["moving_pad_tilt"], abs=1e-3)
     # Face to face at the pad centres, the gap is the cube width.
     gap = (moving_centre[2] - half[2]) - (static_centre[2] + half[2])
     assert gap == pytest.approx(2 * scene.cube_half, abs=0.5 * MM)
+
+
+def test_baked_pad_quaternions_match_their_forward_kinematics_derivation(robot):
+    """`description.yaml`'s `contact_pads[].quat` are baked FK output, not
+    hand-picked (see its `derivation` block and `sim.scenes.common
+    .apply_description`, which only ever reads the baked values). Re-deriving
+    them here — independently of the scene builder — keeps the fit
+    traceable: a future re-tune edits `derivation` and re-runs this test to
+    get the new quaternions to paste back into the YAML.
+    """
+    desc = robot.cfg.scene.description
+    derivation = desc.derivation
+    model = mujoco.MjModel.from_xml_path(str(robot.cfg.scene.robot_xml))
+    data = mujoco.MjData(model)
+    grip_jid = mujoco.mj_name2id(
+        model, mujoco.mjtObj.mjOBJ_JOINT, derivation["gripper_joint"]
+    )
+    data.qpos[model.jnt_qposadr[grip_jid]] = derivation["pad_align_gripper_q"]
+    mujoco.mj_forward(model, data)
+
+    site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, desc.ee_site)
+    site_rotation = data.site_xmat[site_id].reshape(3, 3)
+    pads_by_name = {pad.name: pad for pad in desc.contact_pads}
+    for name, is_moving in (("pad_static", False), ("pad_moving", True)):
+        pad = pads_by_name[name]
+        body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, pad.parent_link)
+        local_rotation = data.xmat[body_id].reshape(3, 3).T @ site_rotation
+        if is_moving:
+            tilt = derivation["moving_pad_tilt"]
+            c, s = np.cos(tilt), np.sin(tilt)
+            local_rotation = local_rotation @ np.array(
+                [[c, 0.0, -s], [0.0, 1.0, 0.0], [s, 0.0, c]]
+            )
+        derived = np.zeros(4)
+        mujoco.mju_mat2Quat(derived, local_rotation.reshape(9))
+        np.testing.assert_allclose(derived, pad.quat, atol=1e-6)
 
 
 def flat_face_slope(robot, body, mesh_prefix, toward_cube):
@@ -100,7 +137,7 @@ def flat_face_slope(robot, body, mesh_prefix, toward_cube):
 
 
 def test_each_pad_lies_along_its_fingers_flat_tip_face(robot):
-    close_to(robot, robot.cfg.scene.pad_align_gripper_q)
+    close_to(robot, robot.cfg.scene.description.derivation["pad_align_gripper_q"])
 
     for name, body, prefix, toward_cube in (
         ("pad_static", "gripper", "wrist_roll_follower", +1),
@@ -138,7 +175,7 @@ def finger_tip_x(robot, body):
 
 
 def test_pads_sit_at_the_tip_and_the_grasp_torque_is_capped(robot):
-    close_to(robot, robot.cfg.scene.pad_align_gripper_q)
+    close_to(robot, robot.cfg.scene.description.derivation["pad_align_gripper_q"])
 
     for name, body in (
         ("pad_static", "gripper"),
