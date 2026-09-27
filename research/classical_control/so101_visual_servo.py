@@ -222,31 +222,38 @@ class SO101VisualServoPolicy(Policy):
         self._last_visual_error_px: float | None = None
         self._last_detections: dict[str, tuple[np.ndarray, VisualFeature]] = {}
 
-    def _calibration_from_env(self, camera: str | None = None) -> CameraCalibration:
+    def _calibration_from_observation(
+        self, observation: Observation, camera: str | None = None
+    ) -> CameraCalibration:
+        """Build a `CameraCalibration` from `ImageFrame.intrinsics`/
+        `.extrinsics` (already in the pinhole convention this module uses;
+        see its module docstring) instead of reaching into the backend's own
+        state, so this policy works against any `RobotPort` that fills those
+        fields in, not only a direct MuJoCo environment.
+        """
         camera = camera or self.camera
-        camera_id = self.env.model.camera(camera).id
-        if camera_id < 0:
-            raise KeyError(f"camera {self.camera!r} missing from model")
-        height = self.env.cfg.scene.camera_height
-        width = self.env.cfg.scene.camera_width
-        fy = height / (
-            2.0 * np.tan(np.deg2rad(self.env.model.cam_fovy[camera_id]) / 2.0)
-        )
+        frame = observation.images.get(camera)
+        if frame is None or frame.intrinsics is None or frame.extrinsics is None:
+            raise KeyError(f"camera {camera!r} has no calibration in this observation")
         return CameraCalibration(
-            fx=fy * width / height,
-            fy=fy,
-            cx=(width - 1) / 2.0,
-            cy=(height - 1) / 2.0,
-            # MuJoCo camera frames use +x right, +y up, and -z forward;
-            # the public pinhole frame uses +x right, +y down, and +z forward.
-            rotation_base_camera=self.env.data.cam_xmat[camera_id].reshape(3, 3)
-            @ np.diag([1.0, -1.0, -1.0]),
-            translation_base_camera=self.env.data.cam_xpos[camera_id],
+            fx=frame.intrinsics.fx,
+            fy=frame.intrinsics.fy,
+            cx=frame.intrinsics.cx,
+            cy=frame.intrinsics.cy,
+            rotation_base_camera=frame.extrinsics.orientation.to_matrix(),
+            translation_base_camera=frame.extrinsics.position.as_array(),
         )
 
     def reset(self, observation: Observation, goal=None, instruction=None) -> None:
         if self.calibration is None:
-            self.calibration = self._calibration_from_env()
+            # A host-driven session renders camera frames on a separate
+            # worker thread and has not populated any yet at reset time (see
+            # `web.host.Host._sync_observation_images`); `act()` retries this
+            # once a frame — and its calibration — actually exists.
+            try:
+                self.calibration = self._calibration_from_observation(observation)
+            except KeyError:
+                pass
         self._limiter.reset(observation.joint_state.position[:5])
         self.metrics = VisualServoMetrics()
         self._phase = VisualServoPhase.APPROACH
@@ -279,10 +286,10 @@ class SO101VisualServoPolicy(Policy):
         )
         self._last_visual_error_px = float(np.linalg.norm(feature.pixel - target_pixel))
         try:
-            candidate = self._calibration_from_env(self.final_camera).pixel_to_plane(
-                feature.pixel, self.target_plane_z
-            )[:2]
-        except ValueError:
+            candidate = self._calibration_from_observation(
+                observation, self.final_camera
+            ).pixel_to_plane(feature.pixel, self.target_plane_z)[:2]
+        except (KeyError, ValueError):
             return
         if np.linalg.norm(candidate - self._target_xy) <= 0.08:
             self._target_xy = candidate
@@ -349,6 +356,18 @@ class SO101VisualServoPolicy(Policy):
                 return Action(
                     joint_position=self._q_cmd, gripper=GripperCommand(position=1.0)
                 )
+            if self.calibration is None:
+                # `reset()` deferred this: the first frame(s) after a
+                # host-driven reset can lag the camera worker.
+                try:
+                    self.calibration = self._calibration_from_observation(observation)
+                except KeyError:
+                    self.metrics = VisualServoMetrics(
+                        failure_reason=f"missing_camera:{self.camera}"
+                    )
+                    return Action(
+                        joint_position=self._q_cmd, gripper=GripperCommand(position=1.0)
+                    )
             feature = self.detector.detect(frame)
             if feature is None:
                 self.metrics = VisualServoMetrics(failure_reason="feature_not_found")
