@@ -69,3 +69,14 @@ name = "core never imports research"
 type = "forbidden"
 source_modules = ["physai"]
 forbidden_modules = ["research"]
+
+[[tool.importlinter.contracts]]
+name = "the robot description schema stays simulator-agnostic"
+type = "forbidden"
+source_modules = ["physai.robots.description"]
+forbidden_modules = ["mujoco"]
+# RobotDescription (frames, cameras, contact pads, actuators, per-simulator
+# overrides) is the seam a future non-MuJoCo backend (e.g. Isaac Sim) reads
+# too; a MuJoCo import here would mean the schema secretly assumes one
+# simulator. Each simulator's own builder (e.g.
+# `sim.scenes.common.apply_description`) imports mujoco, not this module.

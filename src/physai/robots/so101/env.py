@@ -130,7 +130,7 @@ class SO101Env(MuJoCoSimulationCore):
         self.target_sid = mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_SITE, "target_site"
         )
-        self.kin = ArmKinematics(self.model, ee_site=self.cfg.scene.ee_site)
+        self.kin = ArmKinematics(self.model, ee_site=self.cfg.scene.description.ee_site)
         self.jog_kin = ArmKinematics(
             self.model, ee_site="wristframe", joint_names=ARM_JOINT_NAMES[1:3]
         )

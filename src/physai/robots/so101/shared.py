@@ -14,11 +14,13 @@ import numpy as np
 
 from ...contracts import Action, GripperCommand, Header, JointState, Observation
 from ...control.resolver import TwistToJointResolver
+from ...sim.scenes.common import apply_description
 from ..base import RobotSpec
 from .contracts import ALL_JOINT_NAMES, ARM_JOINT_NAMES
 from .env import HOME_QPOS
 from .jog import resolve_jog
 from .kinematics import ArmKinematics
+from .scene import scene_defaults
 
 
 def so101_shared_attach(child_spec) -> None:
@@ -29,7 +31,8 @@ def so101_shared_attach(child_spec) -> None:
     builds these itself; a shared world attaches the bare fetched arm model
     (see `assets/so101/README.md` and `scripts/fetch_assets.py` — the raw
     MJCF is downloaded and not committed to the repo) and needs them added at
-    attach time instead.
+    attach time instead, from the same `RobotDescription` the standalone path
+    uses so the two never drift apart.
     """
     child_spec.worldbody.add_camera(
         name="front",
@@ -37,23 +40,9 @@ def so101_shared_attach(child_spec) -> None:
         xyaxes=[0.0, 1.0, 0.0, -0.45, 0.0, 0.9],
         fovy=48,
     )
-    camera_body = next(
-        (body for body in child_spec.bodies if body.name == "wrist_camera"),
-        None,
+    apply_description(
+        child_spec, scene_defaults()["description"], include_contact_pads=False
     )
-    if camera_body is not None:
-        camera_body.add_camera(
-            name="wrist",
-            pos=[0.0, 0.0, 0.025],
-            xyaxes=[1.0, 0.0, 0.0, 0.0, -1.0, 0.0],
-            fovy=62,
-        )
-    wrist_body = next(
-        (body for body in child_spec.bodies if body.name == "wrist"),
-        None,
-    )
-    if wrist_body is not None:
-        wrist_body.add_site(name="wristframe", pos=[0.0, 0.0, 0.0])
 
 
 class SO101SharedInstance:
