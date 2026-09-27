@@ -8,7 +8,7 @@ import pytest
 
 from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
-from physai.sim import PickPlaceMinimalSceneConfig
+from physai.sim.mujoco import PickPlaceMinimalSceneConfig
 
 MODEL = (
     Path(__file__).resolve().parents[3]

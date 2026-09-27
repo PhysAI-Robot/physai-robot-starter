@@ -5,7 +5,7 @@ import pytest
 def test_the_builtin_robots_are_registered_with_what_they_own():
     from physai import sim
     from physai.robots import (
-        DirectMuJoCoAdapter,
+        DirectAdapter,
         available_robots,
         available_ros2_robots,
         create_jog_resolver,
@@ -14,12 +14,12 @@ def test_the_builtin_robots_are_registered_with_what_they_own():
     )
     from physai.robots.so101 import EnvConfig, SO101Env
     from physai.robots.turtlebot import TurtleBot4Env
-    from physai.sim import MuJoCoSimulationCore
+    from physai.sim.mujoco import MuJoCoSimulationCore
 
     assert "so101" in available_robots()
     env = create_robot("so101", render=False)
     try:
-        assert isinstance(env, DirectMuJoCoAdapter)
+        assert isinstance(env, DirectAdapter)
         assert env.robot_spec.name == "so101"
         assert env.robot_spec.kind == "fixed_base_manipulator"
     finally:
@@ -35,7 +35,7 @@ def test_the_builtin_robots_are_registered_with_what_they_own():
     # the SO-101 environment belongs to its robot package and knows no task
     own = SO101Env(EnvConfig(render=False))
     try:
-        assert SO101Env.__module__ == "physai.robots.so101.env"
+        assert SO101Env.__module__ == "physai.robots.so101.mujoco_env"
         assert not hasattr(own, "task")
     finally:
         own.close()
@@ -176,11 +176,11 @@ def test_registering_an_embodiment_wires_every_factory_and_can_be_extended_once(
 
 
 def test_so101_factory_dispatches_on_simulator_not_a_separate_adapter(monkeypatch):
-    """`DirectMuJoCoAdapter` only wraps a generic `RobotPort` (see its own
+    """`DirectAdapter` only wraps a generic `RobotPort` (see its own
     docstring), so `simulator` picks which port `make_so101` builds and
     `adapter` still wraps either one — there is no `direct_isaac` adapter.
     """
-    from physai.robots import DirectMuJoCoAdapter
+    from physai.robots import DirectAdapter
     from physai.robots.so101 import isaac_env
     from physai.robots.so101.factory import make_so101
 
@@ -195,7 +195,7 @@ def test_so101_factory_dispatches_on_simulator_not_a_separate_adapter(monkeypatc
     monkeypatch.setattr(isaac_env, "SO101IsaacEnv", FakeIsaacEnv)
 
     result = make_so101(simulator="isaac", control_hz=15.0)
-    assert isinstance(result, DirectMuJoCoAdapter)
+    assert isinstance(result, DirectAdapter)
     assert isinstance(result._environment, FakeIsaacEnv)
     assert built[0].config.control_hz == 15.0
 

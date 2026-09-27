@@ -2,8 +2,8 @@
 
 import json
 
-from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
-from physai.sim.scenes.common import REPO_ROOT, build_manipulation_spec
+from physai.sim.mujoco import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
+from physai.sim.mujoco.scenes.common import REPO_ROOT, build_manipulation_spec
 
 
 def test_scene_metadata_is_portable_json(tmp_path):

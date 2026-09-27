@@ -6,7 +6,7 @@ venv's python that has `isaacsim` installed and this repo's `src/` on
 `PYTHONPATH`.
 
 One `SimulationApp` per process is a hard Isaac Sim constraint (see
-`physai.isaac.core`), so every test in this module shares one
+`physai.sim.isaac.core`), so every test in this module shares one
 `SO101IsaacEnv` via a module-scoped fixture rather than constructing its
 own.
 """
@@ -60,11 +60,11 @@ def test_all_actuated_joints_import_with_the_mujoco_side_joint_order(env):
 
 
 def test_reset_teleports_to_the_same_home_pose_as_mujoco(env):
-    """Tier 1 (static): `HOME_QPOS` is shared source with `so101.env`
+    """Tier 1 (static): `HOME_QPOS` is shared source with `so101.mujoco_env`
     (imported from there), so a diff here is a real cross-backend gap, not
     just this module's own bug.
     """
-    from physai.robots.so101.env import HOME_QPOS
+    from physai.robots.so101.mujoco_env import HOME_QPOS
 
     observation = env.reset(seed=0)
     np.testing.assert_allclose(
@@ -96,7 +96,7 @@ def test_actuator_gains_transfer_from_mujoco_with_no_unit_conversion(env):
 
 
 def test_wrist_camera_renders_a_real_non_black_frame(env):
-    """A bare URDF import has no lights (`physai.isaac.scene
+    """A bare URDF import has no lights (`physai.sim.isaac.scene
     .add_studio_lighting` exists because of this); regression-guards that
     the render pipeline still produces a lit frame, not a black one.
     """

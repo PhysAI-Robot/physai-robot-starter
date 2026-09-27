@@ -66,7 +66,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/core/acceptance/s
 The transport-level ROS2 check does not require a ROS2 installation:
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/core/integration/test_ros2_adapters.py::test_ros2_mujoco_teleop_command_moves_so101 -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/core/integration/test_ros2_adapters.py::test_ros2_sim_teleop_command_moves_so101 -q
 ```
 
 ## 4. Run the Real ROS2 Node
@@ -127,8 +127,8 @@ for the full workflow, calibration notes, and CI evaluation reference.
 ## 8. Parameters and Open Work
 
 Main files are `configs/manifests/so101_pick_place.yaml`,
-`src/physai/robots/so101/env.py`, `src/physai/sim/scenes/common.py`, and
-`research/scripted_experts/so101_pick_place_expert.py`.
+`src/physai/robots/so101/mujoco_env.py`, `src/physai/sim/mujoco/scenes/common.py`,
+and `research/scripted_experts/so101_pick_place_expert.py`.
 
 Run the reproducible FK, Jacobian, and IK benchmark with:
 

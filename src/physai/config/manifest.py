@@ -83,8 +83,8 @@ import yaml
 
 from ..policy.registry import available_policies
 from ..robots.registry import available_robots, robot_kind
-from ..sim.scenes.common import REPO_ROOT
-from ..sim.scenes.registry import get_scene_definition
+from ..sim.mujoco.scenes.common import REPO_ROOT
+from ..sim.mujoco.scenes.registry import get_scene_definition
 from ..tasks.registry import available_tasks
 from .legacy import SimulationConfig, _parse_simulation_config
 

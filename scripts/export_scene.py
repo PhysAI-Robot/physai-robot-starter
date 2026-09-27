@@ -17,7 +17,7 @@ import _bootstrap  # noqa: F401
 from _common_args import add_out, add_robot
 
 from physai.robots.registry import scene_defaults
-from physai.sim import available_scenes, create_scene, export_xml
+from physai.sim.mujoco import available_scenes, create_scene, export_xml
 
 
 def main() -> int:

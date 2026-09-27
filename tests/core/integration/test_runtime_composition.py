@@ -68,10 +68,10 @@ def test_runtime_validates_action_before_forwarding(monkeypatch):
         capabilities=("arm_kinematics", "gripper"),
         joint_limits={"a": (-1.0, 1.0)},
     )
-    from physai.robots import DirectMuJoCoAdapter
+    from physai.robots import DirectAdapter
 
     fake = FakeRobotPort(spec)
-    adapter = DirectMuJoCoAdapter(fake)
+    adapter = DirectAdapter(fake)
     monkeypatch.setattr(composition, "create_robot", lambda *args, **kwargs: adapter)
     runtime = composition.create_runtime("arm", task_name="pick_place")
     try:

@@ -21,7 +21,7 @@ training = ["gymnasium>=1.3.0,<2.0"]
 vla = ["torch>=2.7,<2.12", "lerobot>=0.6.1"]
 web = ["fastapi>=0.115", "uvicorn[standard]>=0.53.0", "httpx2>=2.13"]
 dev = ["pytest>=9.1.1", "lark>=1.2", "ruff>=0.16.8", "import-linter>=2.1"]
-# Isaac Sim (physai.isaac, robots.so101.isaac_env) is deliberately NOT a
+# Isaac Sim (physai.sim.isaac, robots.so101.isaac_env) is deliberately NOT a
 # pyproject extra: isaacsim==6.1.0.0 pins numpy==2.3.1, which directly
 # conflicts with this project's own numpy>=2.0,<2.3 (found the hard way --
 # `conflicts=` between extras cannot fix a conflict against a base
@@ -29,7 +29,7 @@ dev = ["pytest>=9.1.1", "lark>=1.2", "ruff>=0.16.8", "import-linter>=2.1"]
 # pre-release opt-in this project does not set globally (see below). Install
 # it into its own, separate virtual environment instead -- never into this
 # project's own .venv -- and point PYTHONPATH at this repo's src/ to use
-# physai.isaac from it:
+# physai.sim.isaac from it:
 #   uv venv --python 3.12 /some/path/isaac-venv
 #   uv pip install --python /some/path/isaac-venv/*/python \
 #     --extra-index-url https://pypi.nvidia.com --prerelease=allow \
@@ -43,7 +43,7 @@ where = ["src"]
 testpaths = ["tests"]
 # A model-attach conflict in the shared world means a robot's options silently
 # lost to the world's; fail instead of scrolling past it.
-filterwarnings = ["error::UserWarning:physai.sim.world"]
+filterwarnings = ["error::UserWarning:physai.sim.mujoco.world"]
 markers = [
     "assets: requires downloaded SO-101 simulation assets",
     "ros2: requires ROS 2 and message packages",
@@ -94,29 +94,44 @@ forbidden_modules = ["mujoco"]
 # overrides) is the seam a future non-MuJoCo backend (e.g. Isaac Sim) reads
 # too; a MuJoCo import here would mean the schema secretly assumes one
 # simulator. Each simulator's own builder (e.g.
-# `sim.scenes.common.apply_description`) imports mujoco, not this module.
+# `sim.mujoco.scenes.common.apply_description`) imports mujoco, not this
+# module.
 
 [[tool.importlinter.contracts]]
 name = "isaacsim/omni/pxr stay confined to the isaac backend"
 type = "forbidden"
 source_modules = ["physai"]
 forbidden_modules = ["isaacsim", "omni", "pxr"]
-# Only physai.isaac (SimulationApp lifecycle, RobotDescription -> USD) and
-# robots.so101.isaac_env (the SO-101 RobotPort built on top of it) may
+# Only physai.sim.isaac (SimulationApp lifecycle, RobotDescription -> USD)
+# and robots.so101.isaac_env (the SO-101 RobotPort built on top of it) may
 # depend on Isaac Sim; every other module reaches it only through the
 # RobotPort/RobotSpec ports, the way it reaches MuJoCo only through
-# physai.sim. Every import below is function-local (Isaac Sim's own
+# physai.sim.mujoco. Every import below is function-local (Isaac Sim's own
 # modules are not import-safe before a SimulationApp exists), but grimp's
 # static graph tracks those too, collapsed to each external package's
 # top-level name.
 ignore_imports = [
-    "physai.isaac.core -> isaacsim",
-    "physai.isaac.core -> omni",
-    "physai.isaac.description -> isaacsim",
-    "physai.isaac.description -> omni",
-    "physai.isaac.description -> pxr",
-    "physai.isaac.scene -> pxr",
+    "physai.sim.isaac.core -> isaacsim",
+    "physai.sim.isaac.core -> omni",
+    "physai.sim.isaac.description -> isaacsim",
+    "physai.sim.isaac.description -> omni",
+    "physai.sim.isaac.description -> pxr",
+    "physai.sim.isaac.scene -> pxr",
     "physai.robots.so101.isaac_env -> isaacsim",
     "physai.robots.so101.isaac_env -> omni",
     "physai.robots.so101.isaac_env -> pxr",
 ]
+
+[[tool.importlinter.contracts]]
+name = "mujoco and isaac backends stay independent"
+type = "independence"
+modules = ["physai.sim.mujoco", "physai.sim.isaac"]
+# Two peer engine backends under physai.sim; neither is the other's
+# implementation detail, so neither may import the other directly (a robot
+# that needs both, e.g. so101, depends on each separately).
+
+[[tool.importlinter.contracts]]
+name = "the isaac backend does not depend on mujoco"
+type = "forbidden"
+source_modules = ["physai.sim.isaac"]
+forbidden_modules = ["mujoco"]

@@ -1,6 +1,6 @@
 """Runtime bridge for driving a MuJoCo robot through ROS2-shaped topics.
 
-The bridge owns the control loop while ``ROS2MuJoCoAdapter`` owns topic
+The bridge owns the control loop while ``ROS2SimAdapter`` owns topic
 translation. A real ROS2 node can provide ``RclpyTransport`` and a
 ``ROS2MessageCodec`` without making ``rclpy`` a core dependency.
 """
@@ -14,7 +14,7 @@ from typing import Any
 from ..contracts import Action, Observation
 from ..control.safety import SafetyController
 from ..robots.base import RobotPort, RobotSpec
-from .adapters import ROS2MuJoCoAdapter, ROS2Transport
+from .adapters import ROS2SimAdapter, ROS2Transport
 from .messages import MessageCodec
 
 
@@ -86,7 +86,7 @@ class MuJoCoROSBridge:
             rate = float(simulation.robot_spec.metadata.get("control_hz", 30.0))
         if rate <= 0:
             raise ValueError("control_hz must be positive")
-        self._adapter = ROS2MuJoCoAdapter(simulation, transport, codec=codec)
+        self._adapter = ROS2SimAdapter(simulation, transport, codec=codec)
         self._control_hz = rate
         self._safety = safety or SafetyController(self.robot_spec)
         self._observation: Observation | None = None

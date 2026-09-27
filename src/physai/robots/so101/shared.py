@@ -14,10 +14,10 @@ import numpy as np
 
 from ...contracts import Action, GripperCommand, Header, JointState, Observation
 from ...control.resolver import TwistToJointResolver
-from ...sim.scenes.common import apply_description
+from ...sim.mujoco.scenes.common import apply_description
 from ..base import RobotSpec
 from .contracts import ALL_JOINT_NAMES, ARM_JOINT_NAMES
-from .env import HOME_QPOS
+from .mujoco_env import HOME_QPOS
 from .jog import resolve_jog
 from .kinematics import ArmKinematics
 from .scene import scene_defaults

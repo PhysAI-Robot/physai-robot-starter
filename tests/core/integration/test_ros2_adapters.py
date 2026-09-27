@@ -7,13 +7,11 @@ from tests.core.support.fakes import RecordingTransport
 
 
 @pytest.mark.integration
-def test_so101_ros2_mujoco_adapter_publishes_contract_topics():
+def test_so101_ros2_sim_adapter_publishes_contract_topics():
     from physai.robots import create_robot
 
     transport = RecordingTransport()
-    env = create_robot(
-        "so101", adapter="ros2_mujoco", transport=transport, render=False
-    )
+    env = create_robot("so101", adapter="ros2_sim", transport=transport, render=False)
     try:
         env.reset(seed=0)
         topics = [topic for topic, _ in transport.messages]
@@ -26,13 +24,11 @@ def test_so101_ros2_mujoco_adapter_publishes_contract_topics():
 
 
 @pytest.mark.integration
-def test_ros2_mujoco_adapter_subscribes_and_assembles_commands():
+def test_ros2_sim_adapter_subscribes_and_assembles_commands():
     from physai.robots import create_robot
 
     transport = RecordingTransport()
-    env = create_robot(
-        "so101", adapter="ros2_mujoco", transport=transport, render=False
-    )
+    env = create_robot("so101", adapter="ros2_sim", transport=transport, render=False)
     try:
         assert {
             "/arm_controller/joint_trajectory",
@@ -62,13 +58,11 @@ def test_ros2_mujoco_adapter_subscribes_and_assembles_commands():
 
 
 @pytest.mark.integration
-def test_ros2_mujoco_teleop_command_moves_so101():
+def test_ros2_sim_teleop_command_moves_so101():
     from physai.robots import create_robot
 
     transport = RecordingTransport()
-    env = create_robot(
-        "so101", adapter="ros2_mujoco", transport=transport, render=False
-    )
+    env = create_robot("so101", adapter="ros2_sim", transport=transport, render=False)
     try:
         observation = env.reset(seed=42)
         initial_position = observation.joint_state.position[:5].copy()
@@ -217,7 +211,7 @@ def test_rclpy_transport_creates_and_cleans_up_ros_entities():
 
 
 @pytest.mark.integration
-def test_ros2_hardware_adapter_uses_shared_transport_boundary():
+def test_ros2_real_adapter_uses_shared_transport_boundary():
     from physai.bridge import ROS2HardwareAdapter
     from physai.contracts import JointState, Observation
     from physai.robots import RobotSpec
@@ -271,7 +265,7 @@ def test_adapter_factories_build_only_what_they_support(monkeypatch):
     from physai.robots import create_robot
 
     with pytest.raises(ValueError, match="requires a ROS2 transport"):
-        create_robot("so101", adapter="ros2_mujoco", render=False)
+        create_robot("so101", adapter="ros2_sim", render=False)
 
     from physai.robots import RobotSpec
     from physai.robots.so101 import factory
@@ -292,7 +286,7 @@ def test_adapter_factories_build_only_what_they_support(monkeypatch):
     monkeypatch.setattr(factory, "SO101Env", fail_if_constructed)
     transport = RecordingTransport()
     adapter = factory.make_so101(
-        adapter="ros2_hardware", transport=transport, hardware=FakeHardware()
+        adapter="ros2_real", transport=transport, hardware=FakeHardware()
     )
     adapter.close()
     assert transport.closed
@@ -305,7 +299,7 @@ def test_adapter_factories_build_only_what_they_support(monkeypatch):
     monkeypatch.setattr(factory, "TurtleBot4Env", fail_if_constructed)
     with pytest.raises(ValueError, match="not supported for turtlebot4"):
         factory.make_turtlebot4(
-            adapter="ros2_hardware", transport=RecordingTransport(), hardware=object()
+            adapter="ros2_real", transport=RecordingTransport(), hardware=object()
         )
 
 

@@ -4,7 +4,7 @@ per-simulator overrides owned by the robot, not by any one simulator.
 A `RobotDescription` is the seam between a robot's fetched, sim-specific
 model files (URDF, MJCF, meshes — never committed, see
 `scripts/fetch_assets.py`) and a simulator's own scene builder (today,
-`sim.scenes.common.apply_description` for MuJoCo). Every pose here is
+`sim.mujoco.scenes.common.apply_description` for MuJoCo). Every pose here is
 expressed in its parent link's frame — position in meters, orientation as a
 `(w, x, y, z)` quaternion, angles in radians — so the same numbers can drive
 a MuJoCo `MjSpec`, a URDF importer, or a USD stage without change.

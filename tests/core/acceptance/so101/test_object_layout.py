@@ -23,7 +23,7 @@ pytestmark = [pytest.mark.acceptance, requires_assets]
 def _build(case: str):
     from physai.robots import create_env_config, create_robot
     from physai.robots.registry import scene_defaults
-    from physai.sim import (
+    from physai.sim.mujoco import (
         DomainRandomizationConfig,
         PickPlaceMinimalSceneConfig,
         SortingMinimalSceneConfig,

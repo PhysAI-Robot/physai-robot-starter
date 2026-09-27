@@ -6,13 +6,13 @@ from typing import Any
 
 from ..adapters import select_adapter
 from ..base import RobotPort
-from .env import EnvConfig, SO101Env
+from .mujoco_env import EnvConfig, SO101Env
 
 
 def make_so101(
     config: Any = None,
     *,
-    adapter: str = "direct_mujoco",
+    adapter: str = "direct",
     simulator: str = "mujoco",
     transport: Any = None,
     hardware: RobotPort | None = None,
@@ -23,18 +23,18 @@ def make_so101(
 
     `simulator` picks which physics engine builds the direct port
     (`mujoco` -> `SO101Env`, `isaac` -> `SO101IsaacEnv`); `adapter` then
-    wraps whichever one was built. `DirectMuJoCoAdapter` only wraps a
-    generic `RobotPort` (observe/reset/step/send_action/close plus a
-    safety gate) and has no MuJoCo-specific behavior itself, so it is the
-    right wrapper for either simulator — there is no separate
-    "direct_isaac" adapter to register.
+    wraps whichever one was built. `DirectAdapter` only wraps a generic
+    `RobotPort` (observe/reset/step/send_action/close plus a safety gate)
+    and has no simulator-specific behavior itself, so it is the right
+    wrapper for either simulator — there is no separate "direct_isaac"
+    adapter to register.
     """
     if config is not None and kwargs:
         raise TypeError("pass either config or a config's keyword fields, not both")
-    if adapter == "ros2_hardware":
+    if adapter == "ros2_real":
         if config is not None or kwargs:
             raise TypeError(
-                "robot config is not used by adapter='ros2_hardware'; "
+                "robot config is not used by adapter='ros2_real'; "
                 "configure the hardware port instead"
             )
         return select_adapter(

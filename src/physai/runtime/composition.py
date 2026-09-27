@@ -11,7 +11,7 @@ from ..policy.base import Policy
 from ..policy.registry import create_policy
 from ..robots.base import RobotPort
 from ..robots.registry import create_robot, robot_kind, scene_defaults
-from ..sim.scenes import create_scene, default_scene_for, get_scene_definition
+from ..sim.mujoco.scenes import create_scene, default_scene_for, get_scene_definition
 from ..tasks import TaskRuntime, create_task
 from ..tasks.base import Task
 
@@ -58,7 +58,7 @@ def create_runtime(
     scene_kwargs: dict[str, Any] | None = None,
     task_kwargs: dict[str, Any] | None = None,
     task_success_hold_steps: int | None = None,
-    adapter: str = "direct_mujoco",
+    adapter: str = "direct",
     transport: Any = None,
     hardware: RobotPort | None = None,
     policy_name: str | None = None,

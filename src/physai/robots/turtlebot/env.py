@@ -21,13 +21,13 @@ from ...contracts import (
     Twist,
     Vector3,
 )
-from ...sim.core import MuJoCoSimulationCore
-from ...sim.domain_randomization import (
+from ...sim.mujoco.core import MuJoCoSimulationCore
+from ...sim.mujoco.domain_randomization import (
     DomainRandomizationConfig,
     DomainRandomizationEngine,
     RandomizationMetadata,
 )
-from ...sim.scenes.common import (
+from ...sim.mujoco.scenes.common import (
     REPO_ROOT,
     STUDIO_FLOOR_RGB1,
     STUDIO_FLOOR_RGB2,
