@@ -592,11 +592,25 @@ class Host:
             return
         data_obj = getattr(self.robot, "data", None)
         stamp = float(data_obj.time) if data_obj is not None else 0.0
+        # `camera_calibration` is an optional, duck-typed convention (like
+        # `debug_frames()` below) rather than a `RobotPort` method: only a
+        # robot whose environment can report a camera's intrinsics/pose (e.g.
+        # SO101Env) provides it, and a vision policy that needs calibration
+        # (visual_servo) already fails clearly without it.
+        calibration = getattr(self.robot, "camera_calibration", None)
         for name, data in cached.items():
+            intrinsics = extrinsics = None
+            if calibration is not None:
+                try:
+                    intrinsics, extrinsics = calibration(name)
+                except (KeyError, ValueError):
+                    pass
             self._observation.images[name] = ImageFrame(
                 data=data,
                 camera_name=name,
                 header=Header(stamp=stamp, frame_id=f"camera_{name}"),
+                intrinsics=intrinsics,
+                extrinsics=extrinsics,
             )
 
     def _publish_debug_frames(self) -> None:

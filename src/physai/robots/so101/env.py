@@ -10,12 +10,16 @@ import numpy as np
 
 from ...contracts import (
     Action,
+    CameraIntrinsics,
     GripperCommand,
     Header,
     ImageFrame,
     JointState,
     Observation,
+    Pose,
+    Quaternion,
     Twist,
+    Vector3,
 )
 from ...control.resolver import TwistToJointResolver
 from ...robots.base import RobotSpec, RobotTrainingContract
@@ -319,6 +323,34 @@ class SO101Env(MuJoCoSimulationCore):
             raise RuntimeError("env constructed with render=False")
         return super().render_camera(name)
 
+    def camera_calibration(self, name: str) -> tuple[CameraIntrinsics, Pose]:
+        """This camera's pinhole intrinsics and its pose in the base frame.
+
+        The pose is converted from MuJoCo's camera-axis convention (x right,
+        y up, z backward) to the ROS optical-frame convention `ImageFrame
+        .extrinsics` documents (x right, y down, z forward), so a policy
+        (`research/classical_control/so101_visual_servo.py`) never has to
+        know a simulator's own axis convention.
+        """
+        camera_id = self.model.camera(name).id
+        width, height = self.cfg.scene.camera_width, self.cfg.scene.camera_height
+        fy = height / (
+            2.0 * np.tan(np.deg2rad(float(self.model.cam_fovy[camera_id])) / 2.0)
+        )
+        intrinsics = CameraIntrinsics(
+            fx=fy * width / height, fy=fy, cx=(width - 1) / 2.0, cy=(height - 1) / 2.0
+        )
+        rotation = self.data.cam_xmat[camera_id].reshape(3, 3) @ np.diag(
+            [1.0, -1.0, -1.0]
+        )
+        quat = np.zeros(4)
+        mujoco.mju_mat2Quat(quat, rotation.reshape(9))
+        extrinsics = Pose(
+            position=Vector3.from_array(self.data.cam_xpos[camera_id]),
+            orientation=Quaternion.from_mujoco(quat),
+        )
+        return intrinsics, extrinsics
+
     def observe(self) -> Observation:
         images: dict[str, ImageFrame] = {}
         if (
@@ -327,6 +359,7 @@ class SO101Env(MuJoCoSimulationCore):
             and self.step_count % self.cfg.camera_stride == 0
         ):
             for camera in self.cfg.cameras:
+                intrinsics, extrinsics = self.camera_calibration(camera)
                 images[camera] = ImageFrame(
                     data=self.render_camera(camera),
                     camera_name=camera,
@@ -334,6 +367,8 @@ class SO101Env(MuJoCoSimulationCore):
                         stamp=float(self.data.time),
                         frame_id=f"camera_{camera}",
                     ),
+                    intrinsics=intrinsics,
+                    extrinsics=extrinsics,
                 )
         return Observation(
             joint_state=self.joint_state(),
