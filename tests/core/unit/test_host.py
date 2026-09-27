@@ -13,7 +13,7 @@ import pytest
 from physai.contracts import Action, Header, Pose, PoseStamped, Vector3
 from physai.data import load_episode
 from physai.robots import RobotSpec, shared_attach
-from physai.sim import RobotInstanceConfig, SharedWorld
+from physai.sim.mujoco import RobotInstanceConfig, SharedWorld
 from physai.web.actions import action_from_payload
 from physai.web.host import Host
 from tests.core.support.fakes import FakeRobotPort

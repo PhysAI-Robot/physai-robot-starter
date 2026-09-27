@@ -166,9 +166,7 @@ def available_ros2_robots() -> tuple[str, ...]:
     return tuple(sorted(_having("ros2_node")))
 
 
-def create_robot(
-    name: str, *, adapter: str = "direct_mujoco", **kwargs: Any
-) -> RobotPort:
+def create_robot(name: str, *, adapter: str = "direct", **kwargs: Any) -> RobotPort:
     """Create a robot through the selected simulation or hardware adapter."""
     _load_builtins()
     try:
@@ -262,7 +260,7 @@ def _load_builtins() -> None:
     # themselves with register_robot_policy() on import. This registry never
     # imports them directly (core must not import research/).
     if "so101" not in _ROBOTS:
-        from .so101.env import EnvConfig
+        from .so101.mujoco_env import EnvConfig
         from .so101.factory import make_so101
         from .so101.jog import so101_jog_resolver
         from .so101.ros2_node import SO101ROS2Node

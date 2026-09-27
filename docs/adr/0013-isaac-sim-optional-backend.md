@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted
+Accepted. The package layout and adapter names below were superseded by
+[ADR 14](0014-simulator-package-layout.md): `physai.isaac` moved to
+`physai.sim.isaac`, and `DirectMuJoCoAdapter` was renamed `DirectAdapter`.
+The decision itself (no new registry seam, `simulator=` kwarg, no manifest
+schema change, no `pyproject.toml` extra) still holds.
 
 ## Context
 

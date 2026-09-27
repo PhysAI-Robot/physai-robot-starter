@@ -1,7 +1,7 @@
 """Apply a `RobotDescription` (`physai.robots.description`) to an Isaac Sim
 USD stage: import the URDF, select a physics variant, and layer the
 robot's own frames, cameras, contact-pad friction, and actuator gains on
-top — the Isaac analogue of `sim.scenes.common.apply_description`.
+top — the Isaac analogue of `sim.mujoco.scenes.common.apply_description`.
 
 Findings this module encodes, verified against Isaac Sim 6.1.0.0 on an
 RTX 3060 (see the plan's Phase 2.0/2.2 notes; there is no public spec for
@@ -33,7 +33,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..robots.description import RobotDescription
+from ...robots.description import RobotDescription
 
 DEFAULT_PHYSICS_VARIANT = "physx"
 
@@ -188,7 +188,7 @@ def apply_cameras(stage: Any, desc: RobotDescription) -> dict[str, str]:
 
     Returns `{camera_name: prim_path}` for the cameras actually added; a
     camera whose `parent_link` this stage lacks is skipped (see
-    `sim.scenes.common.apply_description`'s matching MuJoCo behavior for
+    `sim.mujoco.scenes.common.apply_description`'s matching MuJoCo behavior for
     the same reason — one description may cover more than one upstream
     variant). Only the first match per camera name is added, in the
     description's own priority order.

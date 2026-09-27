@@ -18,7 +18,7 @@ from _common_args import add_episodes, add_max_steps, add_out, add_robot, add_se
 from physai.data import EpisodeRecorder
 from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
-from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
+from physai.sim.mujoco import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
 from physai.tasks import TaskRuntime, create_task
 from research.scripted_experts.so101_pick_place_expert import SO101PickPlaceExpert
 

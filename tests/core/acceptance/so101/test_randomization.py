@@ -8,7 +8,7 @@ pytestmark = [pytest.mark.acceptance, pytest.mark.assets, pytest.mark.slow]
 @requires_assets
 def test_domain_randomization_is_seeded_bounded_and_restores_baseline():
     from physai.robots.registry import scene_defaults
-    from physai.sim import (
+    from physai.sim.mujoco import (
         DomainRandomizationConfig,
         DomainRandomizationEngine,
         PickPlaceMinimalSceneConfig,
@@ -60,7 +60,7 @@ def test_domain_randomization_is_seeded_bounded_and_restores_baseline():
 def test_domain_randomization_metadata_is_recorded_in_episode_info():
     from physai.contracts import Action
     from physai.robots.so101 import EnvConfig, SO101Env
-    from physai.sim import DomainRandomizationConfig
+    from physai.sim.mujoco import DomainRandomizationConfig
 
     env = SO101Env(
         EnvConfig(

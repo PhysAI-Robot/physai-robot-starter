@@ -25,7 +25,7 @@ import numpy as np
 from ..contracts import Action, GripperCommand, Header, ImageFrame, Twist
 from ..robots.base import RobotPort
 from ..robots.registry import create_jog_resolver, create_shared_instance
-from ..sim.world import RobotInstanceConfig, SharedWorld
+from ..sim.mujoco.world import RobotInstanceConfig, SharedWorld
 from .cameras import CameraFeed
 from .lease import ControlLease
 from .playback import Playback

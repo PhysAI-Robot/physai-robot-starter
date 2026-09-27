@@ -17,9 +17,9 @@ from typing import Any
 import yaml
 
 from ..robots import create_env_config
-from ..sim.domain_randomization import DomainRandomizationConfig
-from ..sim.scenes import create_scene, get_scene_definition
-from ..sim.world import RobotInstanceConfig
+from ..sim.mujoco.domain_randomization import DomainRandomizationConfig
+from ..sim.mujoco.scenes import create_scene, get_scene_definition
+from ..sim.mujoco.world import RobotInstanceConfig
 from ..tasks.pick_place_minimal import DEFAULT_SUCCESS_XY_TOL
 from ..tasks.runtime import DEFAULT_SUCCESS_HOLD_STEPS
 

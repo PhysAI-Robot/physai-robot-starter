@@ -5,13 +5,13 @@ from tests.core.support.fakes import FakeRobotPort
 
 
 def test_builtin_scene_registry_returns_typed_configs():
-    from physai.sim import (
+    from physai.sim.mujoco import (
         PickPlaceMinimalSceneConfig,
         SortingMinimalSceneConfig,
         WorldSceneConfig,
         create_scene,
     )
-    from physai.sim.scenes import available_scenes
+    from physai.sim.mujoco.scenes import available_scenes
 
     assert {"pick_place_minimal", "sorting_minimal"} <= set(available_scenes())
     assert isinstance(create_scene("pick_place_minimal"), PickPlaceMinimalSceneConfig)
@@ -77,7 +77,7 @@ def test_scenes_name_their_layout_and_reject_an_unknown_one():
     import pytest
 
     from physai.robots.so101.layout import create_layout
-    from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
+    from physai.sim.mujoco import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
 
     assert PickPlaceMinimalSceneConfig.layout_kind == "single_cube"
     assert SortingMinimalSceneConfig.layout_kind == "sorting"
@@ -91,7 +91,7 @@ def test_the_robot_supplies_the_grasp_pad_fit_a_generic_scene_lacks():
     import pytest
 
     from physai.robots.registry import scene_defaults
-    from physai.sim import PickPlaceMinimalSceneConfig
+    from physai.sim.mujoco import PickPlaceMinimalSceneConfig
 
     with pytest.raises(ValueError, match="description"):
         PickPlaceMinimalSceneConfig().build_spec()

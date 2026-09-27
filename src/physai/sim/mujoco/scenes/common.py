@@ -8,9 +8,9 @@ from typing import ClassVar
 
 import mujoco
 
-from ...robots.description import RobotDescription
+from ....robots.description import RobotDescription
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
+REPO_ROOT = Path(__file__).resolve().parents[5]
 
 # Matches the web viewer's Three.js scene background exactly
 # (`scene.background = new THREE.Color(0xdfe6e2)` in

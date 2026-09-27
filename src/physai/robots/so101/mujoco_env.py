@@ -23,13 +23,13 @@ from ...contracts import (
 )
 from ...control.resolver import TwistToJointResolver
 from ...robots.base import RobotSpec, RobotTrainingContract
-from ...sim.core import MuJoCoSimulationCore
-from ...sim.domain_randomization import (
+from ...sim.mujoco.core import MuJoCoSimulationCore
+from ...sim.mujoco.domain_randomization import (
     DomainRandomizationConfig,
     DomainRandomizationEngine,
     RandomizationMetadata,
 )
-from ...sim.scenes import ManipulationSceneConfig, PickPlaceMinimalSceneConfig
+from ...sim.mujoco.scenes import ManipulationSceneConfig, PickPlaceMinimalSceneConfig
 from .contracts import (
     ALL_JOINT_NAMES,
     ARM_JOINT_NAMES,

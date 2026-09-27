@@ -26,7 +26,7 @@ from physai.policy import create_policy
 from physai.policy.plan_runner import PlanRunner
 from physai.robots.so101 import EnvConfig, SO101Env
 from physai.robots.turtlebot import TurtleBot4Config, TurtleBot4Env
-from physai.sim import (
+from physai.sim.mujoco import (
     ManipulationSceneConfig,
     PickPlaceMinimalSceneConfig,
     SortingMinimalSceneConfig,

@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted
+Accepted. Module paths below were superseded by
+[ADR 14](0014-simulator-package-layout.md): `sim.scenes.common` moved to
+`sim.mujoco.scenes.common`, and `isaac.description` moved to
+`sim.isaac.description`. The schema and per-simulator-builder decision
+itself is unchanged.
 
 ## Context
 

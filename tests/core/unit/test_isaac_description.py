@@ -1,6 +1,6 @@
-"""physai.isaac.description's pure functions: no isaacsim/omni/pxr import,
+"""physai.sim.isaac.description's pure functions: no isaacsim/omni/pxr import,
 so these run in the normal test suite (see the import-linter contract
-confining those to physai.isaac and robots.so101.isaac_env)."""
+confining those to physai.sim.isaac and robots.so101.isaac_env)."""
 
 import math
 
@@ -8,14 +8,14 @@ import pytest
 
 
 def test_urdf_link_name_suffixes_the_mjcf_body_name():
-    from physai.isaac.description import urdf_link_name
+    from physai.sim.isaac.description import urdf_link_name
 
     assert urdf_link_name("gripper") == "gripper_link"
     assert urdf_link_name("wrist_camera") == "wrist_camera_link"
 
 
 def test_fovy_to_focal_length_matches_the_pinhole_relation():
-    from physai.isaac.description import fovy_to_focal_length
+    from physai.sim.isaac.description import fovy_to_focal_length
 
     # A 90-degree vertical FOV means half-FOV is 45 degrees, so the pinhole
     # relation (aperture = 2 * focal_length * tan(fovy / 2)) reduces to
@@ -38,7 +38,7 @@ def test_fovy_to_focal_length_matches_the_pinhole_relation():
 
 
 def test_fovy_to_focal_length_rejects_a_degenerate_fov():
-    from physai.isaac.description import fovy_to_focal_length
+    from physai.sim.isaac.description import fovy_to_focal_length
 
     with pytest.raises(ValueError, match="fovy_deg"):
         fovy_to_focal_length(0.0)

@@ -17,8 +17,8 @@ import mujoco
 import numpy as np
 
 if TYPE_CHECKING:
-    from ...sim.scenes import ManipulationSceneConfig
-    from .env import EnvConfig
+    from ...sim.mujoco.scenes import ManipulationSceneConfig
+    from .mujoco_env import EnvConfig
 
 XY = tuple[float, float]
 _UPRIGHT = [1, 0, 0, 0]

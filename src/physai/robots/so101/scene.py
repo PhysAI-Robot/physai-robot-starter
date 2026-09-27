@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ...sim.scenes.common import REPO_ROOT
+from ...sim.mujoco.scenes.common import REPO_ROOT
 from ..description import load_robot_description
 
 _DESCRIPTION_PATH = Path(__file__).resolve().parent / "description.yaml"

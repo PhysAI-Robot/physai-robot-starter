@@ -1,11 +1,11 @@
-"""Isaac Sim simulation lifecycle: the Isaac analogue of `sim.core
+"""Isaac Sim simulation lifecycle: the Isaac analogue of `sim.mujoco.core
 .MuJoCoSimulationCore` — one process-wide `SimulationApp`, stage and
 physics-scene bootstrap, stepping, and camera rendering.
 
 Only one `SimulationApp` may exist per process (a hard Isaac Sim
 constraint), so this module owns creating it lazily on first use and never
 recreates it; every Isaac-backed robot in the same process shares it. This
-mirrors `sim.core` owning MuJoCo's model/data lifecycle, and is the only
+mirrors `sim.mujoco.core` owning MuJoCo's model/data lifecycle, and is the only
 place besides `robots.so101.isaac_env` that may import `isaacsim`/`omni`/
 `pxr` (see the import-linter contract in `pyproject.toml`).
 """

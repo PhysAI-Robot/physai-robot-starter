@@ -12,16 +12,16 @@ from .env import TurtleBot4Config, TurtleBot4Env
 def make_turtlebot4(
     config: TurtleBot4Config | None = None,
     *,
-    adapter: str = "direct_mujoco",
+    adapter: str = "direct",
     transport: Any = None,
     hardware: RobotPort | None = None,
     codec: Any = None,
     **kwargs: Any,
 ) -> RobotPort:
     """Build TurtleBot4 through the selected robot port adapter."""
-    if adapter == "ros2_hardware":
+    if adapter == "ros2_real":
         raise ValueError(
-            "adapter='ros2_hardware' is not supported for turtlebot4; "
+            "adapter='ros2_real' is not supported for turtlebot4; "
             "the hardware-specific mobile-base adapter is not implemented"
         )
     if config is not None and kwargs:

@@ -7,7 +7,7 @@ pytestmark = [pytest.mark.acceptance, pytest.mark.assets, pytest.mark.slow]
 @requires_assets
 def test_visual_servo_pick_place_settles_from_multiple_seeds():
     from physai.robots.so101 import EnvConfig, SO101Env
-    from physai.sim import PickPlaceMinimalSceneConfig
+    from physai.sim.mujoco import PickPlaceMinimalSceneConfig
     from physai.tasks import TaskRuntime, create_task
     from research.classical_control.so101_visual_servo import SO101VisualServoPolicy
 

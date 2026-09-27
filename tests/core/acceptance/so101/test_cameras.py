@@ -8,7 +8,7 @@ pytestmark = [pytest.mark.acceptance, pytest.mark.assets, pytest.mark.slow]
 @requires_assets
 def test_both_observation_cameras_carry_signal():
     from physai.robots.so101 import EnvConfig, SO101Env
-    from physai.sim import PickPlaceMinimalSceneConfig
+    from physai.sim.mujoco import PickPlaceMinimalSceneConfig
 
     robot = SO101Env(
         EnvConfig(

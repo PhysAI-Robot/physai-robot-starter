@@ -17,7 +17,7 @@ from _common_args import add_seed
 
 from physai.robots.so101 import EnvConfig, SO101Env
 from physai.robots.so101.kinematics import top_down_quat
-from physai.sim import PickPlaceMinimalSceneConfig
+from physai.sim.mujoco import PickPlaceMinimalSceneConfig
 
 TARGET_OFFSETS = (
     (0.00, -0.03, 0.01),

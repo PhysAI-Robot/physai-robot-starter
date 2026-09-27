@@ -1,6 +1,6 @@
 # Sim-neutral SO-101 robot data, loaded by `physai.robots.description` and
 # consumed by each simulator's own scene builder (today, MuJoCo via
-# `sim.scenes.common.apply_description`). See that module's docstring for the
+# `sim.mujoco.scenes.common.apply_description`). See that module's docstring for the
 # frame/unit conventions (parent-link-relative poses, wxyz quaternions,
 # meters, radians).
 #

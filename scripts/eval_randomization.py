@@ -16,7 +16,7 @@ from physai.config import DomainRandomizationConfig
 from physai.policy import create_policy
 from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
-from physai.sim import PickPlaceMinimalSceneConfig
+from physai.sim.mujoco import PickPlaceMinimalSceneConfig
 from physai.tasks import TaskRuntime, create_task
 
 # Registers so101's "scripted" policy with the robot registry.

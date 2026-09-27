@@ -27,8 +27,8 @@ from physai.data import EvaluationReport, load_episode
 from physai.policy import available_policies, create_policy
 from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
-from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
-from physai.sim.domain_randomization import DomainRandomizationConfig
+from physai.sim.mujoco import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
+from physai.sim.mujoco.domain_randomization import DomainRandomizationConfig
 from physai.tasks import TaskRuntime, create_task
 
 # Registers so101's "scripted"/"visual_servo" policies and the checkpoint-

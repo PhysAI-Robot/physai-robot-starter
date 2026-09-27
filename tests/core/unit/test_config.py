@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[3]
 def test_the_legacy_loaders_still_read_the_shipped_files():
     from physai.config import load_sim_config, load_task_config, load_world_config
     from physai.robots.so101 import EnvConfig
-    from physai.sim import PickPlaceMinimalSceneConfig
+    from physai.sim.mujoco import PickPlaceMinimalSceneConfig
 
     task = load_task_config(ROOT / "configs" / "tasks" / "so101" / "pick_place.yaml")
     assert task.robot == "so101"

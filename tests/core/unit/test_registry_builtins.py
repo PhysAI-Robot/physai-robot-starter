@@ -21,7 +21,7 @@ REGISTRIES = [
         "physai.robots.adapters",
         "register_adapter",
         "available_adapters",
-        "direct_mujoco",
+        "direct",
     ),
 ]
 

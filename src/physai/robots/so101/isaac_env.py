@@ -1,8 +1,8 @@
-"""SO-101 robot environment backed by Isaac Sim (`physai.isaac`).
+"""SO-101 robot environment backed by Isaac Sim (`physai.sim.isaac`).
 
 A robot-owned backend, like `SO101Env`: observation, action, and lifecycle
 only, no task (`TaskRuntime` wraps either backend the same way). Only this
-module and `physai.isaac` may import `isaacsim`/`omni`/`pxr`
+module and `physai.sim.isaac` may import `isaacsim`/`omni`/`pxr`
 (`pyproject.toml`'s import-linter contracts enforce this), so nothing above
 the `RobotPort` boundary needs Isaac installed to import `physai.robots`.
 
@@ -29,10 +29,10 @@ from ...contracts import (
     JointState,
     Observation,
 )
-from ...isaac.core import IsaacSimulationCore, ensure_simulation_app
-from ...isaac.description import apply_actuators, apply_cameras, apply_frames
-from ...isaac.description import import_robot as isaac_import_robot
-from ...isaac.scene import add_ground_plane, add_studio_lighting
+from ...sim.isaac.core import IsaacSimulationCore, ensure_simulation_app
+from ...sim.isaac.description import apply_actuators, apply_cameras, apply_frames
+from ...sim.isaac.description import import_robot as isaac_import_robot
+from ...sim.isaac.scene import add_ground_plane, add_studio_lighting
 from ..base import RobotSpec, RobotTrainingContract
 from ..description import RobotDescription, load_robot_description
 from .contracts import (
@@ -51,7 +51,7 @@ HOME_QPOS = np.array([0.0, -1.05, 1.25, 0.75, 0.0], dtype=np.float64)
 class IsaacEnvConfig:
     """SO-101-on-Isaac simulation and observation settings.
 
-    Deliberately narrower than `so101.env.EnvConfig`: no `scene` (no task
+    Deliberately narrower than `so101.mujoco_env.EnvConfig`: no `scene` (no task
     objects yet, see this module's docstring) and no domain randomization
     (Isaac's own randomization tooling is a separate integration).
     """

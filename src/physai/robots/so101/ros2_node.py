@@ -16,7 +16,7 @@ from ...bridge.cartesian import (
 )
 from ...bridge.messages import ROS2MessageCodec
 from ...bridge.mujoco_ros_bridge import MuJoCoROSBridge, RclpyTransport
-from .env import EnvConfig, SO101Env
+from .mujoco_env import EnvConfig, SO101Env
 
 
 def _quaternion_from_rotation(

@@ -10,7 +10,7 @@ def test_scene_has_the_task_objects_and_cameras():
     import mujoco
 
     from physai.robots.registry import scene_defaults
-    from physai.sim import PickPlaceMinimalSceneConfig
+    from physai.sim.mujoco import PickPlaceMinimalSceneConfig
 
     model, _ = PickPlaceMinimalSceneConfig(**scene_defaults("so101")).build_model()
     names = lambda kind, n: {mujoco.mj_id2name(model, kind, i) for i in range(n)}
@@ -29,7 +29,7 @@ def test_calibrated_pads_replace_jaw_collision_meshes():
     import mujoco
 
     from physai.robots.registry import scene_defaults
-    from physai.sim import PickPlaceMinimalSceneConfig
+    from physai.sim.mujoco import PickPlaceMinimalSceneConfig
 
     model, _ = PickPlaceMinimalSceneConfig(**scene_defaults("so101")).build_model()
     jaw_bodies = {
@@ -53,7 +53,7 @@ def test_task_specific_scene_configs_have_separate_object_layouts():
     import mujoco
 
     from physai.robots.registry import scene_defaults
-    from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
+    from physai.sim.mujoco import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
 
     defaults = scene_defaults("so101")
     pick_model, _ = PickPlaceMinimalSceneConfig(**defaults).build_model()
@@ -71,7 +71,7 @@ def test_task_specific_scene_configs_have_separate_object_layouts():
 @requires_assets
 def test_sorting_env_exposes_the_target_cube_in_both_scenes():
     from physai.robots.so101 import EnvConfig, SO101Env
-    from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
+    from physai.sim.mujoco import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
     from physai.tasks import TaskRuntime, create_task
 
     robot = SO101Env(

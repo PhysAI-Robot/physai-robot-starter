@@ -14,8 +14,8 @@ from typing import Any
 
 from ..config.manifest import SessionManifest, SessionRobotConfig
 from ..robots.registry import create_env_config, robot_kind, shared_attach
-from ..sim.scenes import default_scene_for
-from ..sim.world import RobotInstanceConfig, SharedWorld
+from ..sim.mujoco.scenes import default_scene_for
+from ..sim.mujoco.world import RobotInstanceConfig, SharedWorld
 from .composition import RuntimeComposition, create_runtime
 
 # Settings the `simulation` block owns; a robot's own `config` must not repeat
