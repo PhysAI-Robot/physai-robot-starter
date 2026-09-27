@@ -144,6 +144,58 @@ def test_a_world_block_builds_one_shared_world(tmp_path):
         example.close()
 
 
+def test_a_manifest_routes_simulator_through_the_existing_config_field(
+    tmp_path, monkeypatch
+):
+    """`simulator` is not a manifest schema field: a robot's free-form
+    `config` mapping already reaches `create_robot(**kwargs)` unfiltered
+    (see `runtime.session._robot_fields`), so `config: {simulator: isaac}`
+    routes to `so101.factory.make_so101(simulator="isaac", ...)` with no
+    schema change, ADR, or `schema_version` bump needed.
+    """
+    from physai.robots import RobotSpec
+    from physai.runtime import composition, create_session
+    from tests.core.support.fakes import FakeRobotPort
+
+    captured: dict = {}
+
+    def fake_create_robot(robot_name, **kwargs):
+        captured["robot_name"] = robot_name
+        captured["kwargs"] = kwargs
+        return FakeRobotPort(
+            RobotSpec(
+                name=robot_name,
+                kind="fixed_base_manipulator",
+                joint_names=("joint",),
+                action_joint_names=("joint",),
+                action_modes=("joint_position",),
+                capabilities=(),
+            ),
+            validate_actions=False,
+        )
+
+    monkeypatch.setattr(composition, "create_robot", fake_create_robot)
+
+    # No task: a task would auto-select a scene (see composition.py), and
+    # IsaacEnvConfig has no `scene` field yet (SO101IsaacEnv is robot-only
+    # for now, see its module docstring) — a real manifest combining a task
+    # with simulator: isaac is not supported yet.
+    create_session(
+        _manifest(
+            tmp_path,
+            robots=[
+                {
+                    "id": "arm_1",
+                    "robot": "so101",
+                    "config": {"simulator": "isaac", "render": False},
+                }
+            ],
+        )
+    )
+    assert captured["kwargs"]["simulator"] == "isaac"
+    assert captured["kwargs"]["render"] is False
+
+
 def test_a_session_refuses_what_it_cannot_build(tmp_path):
     from physai.runtime import create_session
 
