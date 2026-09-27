@@ -192,7 +192,7 @@ Every seam is one new file plus one registration call, except where noted.
 | Planner (core baseline) | `planner/base.py` | `register_planner(name, factory)` in `planner/registry.py:_load_builtins()` |
 | Planner (research) | `research/<topic>/<name>.py` | `register_planner(name, factory)`, called by the module itself on import |
 | Transport adapter | `robots/adapters.py` (a new builder function) | `register_adapter(name, builder)` in `robots/adapters.py:_load_builtins()` |
-| Simulator engine | `sim/<engine>/` package (mirrors `sim/mujoco/`) | Today, per-robot: the robot's own factory branches on `simulator=` (see `robots/so101/factory.py`); not yet a registry seam — see [Known remaining gaps](#known-remaining-gaps) |
+| Simulator engine | `sim/<engine>/` package (mirrors `sim/mujoco/`) | Add the engine to a `RobotDescriptor.simulators` tuple in `robots/registry.py:_load_builtins()`; the robot's own factory branches on `simulator=` to build the right port (see `robots/so101/factory.py`), and its `env_config` factory branches the same way if it needs a second config type. See [ADR 15](adr/0015-simulator-engine-selection.md). |
 | Client capability control | `web/static/js/controls.js` / `ui.js` | None — capabilities are declarative data (`RobotSpec.action_modes`/`capabilities`), rendered conditionally; this is a UI branch on data, not a registry |
 
 Robot registration touches one function in one file (`_load_builtins()`),
@@ -306,6 +306,7 @@ simulation: {seed: 0}            # the one source of seed and randomization
 scene:
   name: pick_place_minimal
   overrides: {camera_width: 640}  # scene fields, including robot_xml
+simulator: mujoco                # optional; default mujoco. See below.
 backend: direct                  # direct | ros2_sim | ros2_real
 task: pick_place                 # optional session-wide default
 success_hold_steps: 10
@@ -326,6 +327,19 @@ a `create_runtime()` composition, a `world` becomes a `SharedWorld` (whose
 robots run no task or policy yet). It injects the `simulation` seed and
 randomization into any robot config that declares those fields and rejects a
 robot config that repeats them.
+
+`simulator` (default `"mujoco"`) picks the physics engine every robot in the
+session is built with (`robots.registry.available_simulators()` per robot;
+`RobotDescriptor.simulators` is where a robot declares which ones it
+supports — so101 is the only one with more than one today). A robot's own
+`config` must not repeat it, the same way it must not repeat `simulation`'s
+fields. A non-`"mujoco"` engine rejects a `world` block (or more than one
+robot, which implies one), `backend: ros2_sim`, and any `viewer.mode` other
+than `none` — see [ADR 15](adr/0015-simulator-engine-selection.md) and
+`configs/manifests/so101_isaac.yaml` for a working example.
+`scripts/run_sim.py --sim {mujoco,isaac}` overrides it from the command line
+(`physai.config.compat.with_overrides`, which re-runs this same validation
+since a bare field replace would skip it).
 
 `scripts/run_sim.py` builds every run this way. Its older `--config` (task
 file), `--world` (world file), and bare `--robot` inputs are converted by
@@ -595,3 +609,15 @@ meant to be the frozen reference:
 - **Registry granularity.** Adding a robot is "one `RobotDescriptor` + one
   `register_embodiment()` call," not literally one line — a robot supplying
   every optional factory sets up to six fields on that one descriptor.
+- **Isaac Sim only runs headless episodes.** `scripts/run_sim.py --viewer`/
+  `--serve`, all of `physai.web`, `physai.sim.mujoco.world.SharedWorld`, the
+  ROS2 bridge, and `robots/so101/kinematics.py`'s `ArmKinematics` are
+  MuJoCo-only; a manifest combining `simulator: isaac` with any of them is
+  rejected at load time (see [ADR 15](adr/0015-simulator-engine-selection.md))
+  rather than silently failing deep, but none of the limitations are
+  resolved by that rejection. `scripts/collect_demos.py` and
+  `scripts/eval_policy.py` do not accept `--sim` either, since neither calls
+  `create_runtime()`/`create_session()` (see the composition-root gap
+  above) and both depend on MuJoCo-only privileged state
+  (`research/scripted_experts/so101_pick_place_expert.py`'s `ArmKinematics`
+  and `robot.data.qpos` access).

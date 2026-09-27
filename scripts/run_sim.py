@@ -9,6 +9,14 @@ python scripts/run_sim.py --policy lerobot --checkpoint outputs/act_ckpt
 python scripts/run_sim.py --viewer             # native MuJoCo viewer
 python scripts/run_sim.py --viewer --serve     # native viewer plus shared web host
 python scripts/run_sim.py --serve              # web host only, no desktop window
+python scripts/run_sim.py --sim isaac --manifest configs/manifests/so101_isaac.yaml
+                                                # headless episodes on Isaac Sim instead
+                                                # (needs isaacsim installed separately,
+                                                # see README.md; the manifest must set no
+                                                # `task` — SO101IsaacEnv has no scene/task
+                                                # objects yet; --viewer/--serve stay
+                                                # MuJoCo-only; not exercised by this
+                                                # repo's own CI)
 
 A run is described by a session manifest (`--manifest`). The older `--config`
 (task file), `--world` (world file), and bare `--robot` inputs are converted
@@ -25,8 +33,6 @@ import time
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
-import mujoco
-import mujoco.viewer
 import numpy as np
 from _common_args import (
     add_checkpoint,
@@ -36,6 +42,7 @@ from _common_args import (
     add_policy,
     add_robot,
     add_seed,
+    add_simulator,
 )
 
 # Registers so101's "scripted"/"visual_servo" policies and the checkpoint-
@@ -115,6 +122,7 @@ def parse_args(
     add_robot(
         ap, choices=available_robots(), help="the robot to run when no file selects one"
     )
+    add_simulator(ap)
     # "lerobot" belongs here: main() handles it and the module docstring
     # documents it, but dropping it from choices made argparse reject the
     # documented command before it ever got there.
@@ -205,6 +213,7 @@ def build_manifest(
         max_steps=args.max_steps,
         camera_size=args.camera_size,
         policy=args.policy,
+        simulator=args.simulator,
     )
 
 
@@ -226,6 +235,11 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("a shared-world session requires --viewer or --serve")
     if args.record_dir and manifest.world is not None:
         ap.error("--record-dir is not available with a shared world")
+    if manifest.simulator != "mujoco" and (args.viewer or args.serve):
+        ap.error(
+            f"--viewer/--serve are MuJoCo-only for now; simulator "
+            f"{manifest.simulator!r} only runs headless episodes"
+        )
 
     if args.viewer or args.serve:
         return run_viewer(args, manifest)
@@ -261,7 +275,9 @@ def run_episodes(args: argparse.Namespace, manifest: SessionManifest) -> int:
 
     for ep in range(args.episodes):
         obs = runtime.reset(seed=seed + ep)
-        print(f"  randomization={env.randomization_metadata.as_dict()}")
+        randomization = getattr(env, "randomization_metadata", None)
+        if randomization is not None:
+            print(f"  randomization={randomization.as_dict()}")
         frames, total_reward, info = [], 0.0, {}
 
         for _ in range(max_steps):
@@ -338,6 +354,9 @@ def build_host(
 
 
 def run_viewer(args: argparse.Namespace, manifest: SessionManifest) -> int:
+    if args.viewer:
+        import mujoco
+        import mujoco.viewer
     host, _session = build_host(args, manifest)
     host.start()
     server = None

@@ -9,6 +9,17 @@ from ..base import RobotPort
 from .mujoco_env import EnvConfig, SO101Env
 
 
+def so101_env_config(*, simulator: str = "mujoco", **kwargs: Any) -> Any:
+    """The SO-101 environment config type for one simulator engine."""
+    if simulator == "isaac":
+        from .isaac_env import IsaacEnvConfig
+
+        return IsaacEnvConfig(**kwargs)
+    if simulator == "mujoco":
+        return EnvConfig(**kwargs)
+    raise ValueError(f"unknown simulator {simulator!r}; available: isaac, mujoco")
+
+
 def make_so101(
     config: Any = None,
     *,
@@ -41,11 +52,13 @@ def make_so101(
             adapter, None, transport=transport, hardware=hardware, codec=codec
         )
     if simulator == "isaac":
-        from .isaac_env import IsaacEnvConfig, SO101IsaacEnv
+        from .isaac_env import SO101IsaacEnv
 
-        direct: RobotPort = SO101IsaacEnv(config or IsaacEnvConfig(**kwargs))
+        direct: RobotPort = SO101IsaacEnv(
+            config or so101_env_config(simulator="isaac", **kwargs)
+        )
     elif simulator == "mujoco":
-        direct = SO101Env(config or EnvConfig(**kwargs))
+        direct = SO101Env(config or so101_env_config(simulator="mujoco", **kwargs))
     else:
         raise ValueError(f"unknown simulator {simulator!r}; available: isaac, mujoco")
     return select_adapter(

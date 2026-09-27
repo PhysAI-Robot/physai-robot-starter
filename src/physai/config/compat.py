@@ -18,7 +18,7 @@ import yaml
 
 from ..robots.registry import default_task
 from .legacy import SimulationConfig, _required_mapping, _required_string
-from .manifest import SCHEMA_VERSION, SessionManifest, parse_manifest
+from .manifest import SCHEMA_VERSION, SessionManifest, parse_manifest, validate_manifest
 
 # The camera resolution a bare `--robot` run has always rendered at; scene
 # files that name a task without one use the scene's own (smaller) default.
@@ -131,6 +131,7 @@ def with_overrides(
     max_steps: int | None = None,
     camera_size: int | None = None,
     policy: str | None = None,
+    simulator: str | None = None,
 ) -> SessionManifest:
     """The manifest with command-line overrides applied; ``None`` keeps a value."""
     changes: dict[str, Any] = {}
@@ -158,7 +159,16 @@ def with_overrides(
             )
             for robot in manifest.robots
         )
-    return replace(manifest, **changes)
+    if simulator is not None:
+        changes["simulator"] = simulator
+    updated = replace(manifest, **changes)
+    if simulator is not None:
+        # A bare `replace()` skips registry/cross-field checks; --sim can
+        # select a simulator a robot does not support or that conflicts with
+        # world/backend/viewer, so the override is re-validated the same way
+        # the manifest itself was at load time.
+        validate_manifest(updated, Path("<--sim override>"))
+    return updated
 
 
 def _with_simulation(

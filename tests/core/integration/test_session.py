@@ -144,14 +144,11 @@ def test_a_world_block_builds_one_shared_world(tmp_path):
         example.close()
 
 
-def test_a_manifest_routes_simulator_through_the_existing_config_field(
-    tmp_path, monkeypatch
-):
-    """`simulator` is not a manifest schema field: a robot's free-form
-    `config` mapping already reaches `create_robot(**kwargs)` unfiltered
-    (see `runtime.session._robot_fields`), so `config: {simulator: isaac}`
-    routes to `so101.factory.make_so101(simulator="isaac", ...)` with no
-    schema change, ADR, or `schema_version` bump needed.
+def test_a_manifest_routes_its_top_level_simulator_field(tmp_path, monkeypatch):
+    """The manifest's top-level `simulator` field reaches
+    `create_robot(simulator=...)` (see `runtime.session._create_single_session`
+    and `_robot_fields`); a robot `config` that repeats it is rejected (see
+    `test_a_robot_config_must_not_repeat_the_manifest_simulator` below).
     """
     from physai.robots import RobotSpec
     from physai.runtime import composition, create_session
@@ -183,17 +180,67 @@ def test_a_manifest_routes_simulator_through_the_existing_config_field(
     create_session(
         _manifest(
             tmp_path,
+            simulator="isaac",
             robots=[
                 {
                     "id": "arm_1",
                     "robot": "so101",
-                    "config": {"simulator": "isaac", "render": False},
+                    "config": {"render": False},
                 }
             ],
         )
     )
     assert captured["kwargs"]["simulator"] == "isaac"
     assert captured["kwargs"]["render"] is False
+
+
+def test_a_robot_config_must_not_repeat_the_manifest_simulator(tmp_path):
+    from physai.runtime import create_session
+
+    with pytest.raises(ValueError, match="manifest's top level"):
+        create_session(
+            _manifest(
+                tmp_path,
+                robots=[
+                    {
+                        "id": "arm_1",
+                        "robot": "so101",
+                        "config": {"simulator": "isaac", "render": False},
+                    }
+                ],
+            )
+        )
+
+
+def test_a_manifest_rejects_a_simulator_unsupported_by_a_robot(tmp_path):
+    with pytest.raises(ValueError, match="does not support simulator 'isaac'"):
+        _manifest(
+            tmp_path,
+            simulator="isaac",
+            robots=[{"id": "base_1", "robot": "turtlebot4", "config": {}}],
+        )
+
+
+def test_a_manifest_rejects_a_world_with_a_non_mujoco_simulator(tmp_path):
+    with pytest.raises(ValueError, match="does not support a"):
+        _manifest(
+            tmp_path,
+            simulator="isaac",
+            world={},
+            robots=[
+                {"id": "arm_1", "robot": "so101", "model": "assets/so101/so101.xml"}
+            ],
+        )
+
+
+def test_a_manifest_rejects_ros2_sim_with_a_non_mujoco_simulator(tmp_path):
+    with pytest.raises(ValueError, match="does not support backend='ros2_sim'"):
+        _manifest(
+            tmp_path,
+            simulator="isaac",
+            backend="ros2_sim",
+            robots=[{"id": "arm_1", "robot": "so101", "config": {}}],
+        )
 
 
 def test_a_session_refuses_what_it_cannot_build(tmp_path):

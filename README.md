@@ -200,7 +200,23 @@ uv pip install --python /some/path/isaac-venv/*/python \
 PYTHONPATH=/path/to/physai-robot-starter/src /some/path/isaac-venv/*/python your_script.py
 ```
 
-Then select it per robot instance, either in Python:
+Then select it, either from the command line:
+
+```bash
+python scripts/run_sim.py --sim isaac --manifest configs/manifests/so101_isaac.yaml
+```
+
+in a session manifest's top-level `simulator` field (see
+`configs/manifests/so101_isaac.yaml`):
+
+```yaml
+simulator: isaac
+robots:
+  - id: arm_1
+    robot: so101
+```
+
+or in Python:
 
 ```python
 from physai.robots import create_robot
@@ -208,21 +224,12 @@ from physai.robots import create_robot
 robot = create_robot("so101", simulator="isaac")
 ```
 
-or in a session manifest, with the existing per-robot `config:` mapping (no
-schema change):
-
-```yaml
-robots:
-  - id: arm_1
-    robot: so101
-    config:
-      simulator: isaac
-```
-
 `SO101IsaacEnv` is robot-only for now (no task or scene objects yet — see
-`docs/adr/0013-isaac-sim-optional-backend.md`); it works today with a
-manifest that sets no `task`. `pytest -m isaac` runs the Isaac-backed
-acceptance tests wherever `isaacsim` is importable.
+`docs/adr/0013-isaac-sim-optional-backend.md`); a manifest or `--sim isaac`
+run must set no `task` (`configs/manifests/so101_isaac.yaml` doesn't), and
+`--viewer`/`--serve` stay MuJoCo-only (see
+`docs/adr/0015-simulator-engine-selection.md`). `pytest -m isaac` runs the
+Isaac-backed acceptance tests wherever `isaacsim` is importable.
 
 ## Python API
 
