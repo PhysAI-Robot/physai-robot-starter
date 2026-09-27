@@ -10,17 +10,27 @@ from .env import EnvConfig, SO101Env
 
 
 def make_so101(
-    config: EnvConfig | None = None,
+    config: Any = None,
     *,
     adapter: str = "direct_mujoco",
+    simulator: str = "mujoco",
     transport: Any = None,
     hardware: RobotPort | None = None,
     codec: Any = None,
     **kwargs: Any,
 ) -> RobotPort:
-    """Build the SO-101 through the selected robot port adapter."""
+    """Build the SO-101 through the selected simulator and robot port adapter.
+
+    `simulator` picks which physics engine builds the direct port
+    (`mujoco` -> `SO101Env`, `isaac` -> `SO101IsaacEnv`); `adapter` then
+    wraps whichever one was built. `DirectMuJoCoAdapter` only wraps a
+    generic `RobotPort` (observe/reset/step/send_action/close plus a
+    safety gate) and has no MuJoCo-specific behavior itself, so it is the
+    right wrapper for either simulator — there is no separate
+    "direct_isaac" adapter to register.
+    """
     if config is not None and kwargs:
-        raise TypeError("pass either config or EnvConfig keyword fields, not both")
+        raise TypeError("pass either config or a config's keyword fields, not both")
     if adapter == "ros2_hardware":
         if config is not None or kwargs:
             raise TypeError(
@@ -30,7 +40,14 @@ def make_so101(
         return select_adapter(
             adapter, None, transport=transport, hardware=hardware, codec=codec
         )
-    direct = SO101Env(config or EnvConfig(**kwargs))
+    if simulator == "isaac":
+        from .isaac_env import IsaacEnvConfig, SO101IsaacEnv
+
+        direct: RobotPort = SO101IsaacEnv(config or IsaacEnvConfig(**kwargs))
+    elif simulator == "mujoco":
+        direct = SO101Env(config or EnvConfig(**kwargs))
+    else:
+        raise ValueError(f"unknown simulator {simulator!r}; available: isaac, mujoco")
     return select_adapter(
         adapter, direct, transport=transport, hardware=hardware, codec=codec
     )

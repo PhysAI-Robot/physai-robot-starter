@@ -173,3 +173,31 @@ def test_registering_an_embodiment_wires_every_factory_and_can_be_extended_once(
         register_env_config("_fake_missing", lambda **_: None)
     with pytest.raises(ValueError, match="already registered"):
         register_robot("_fake_piecemeal", lambda **_: object())
+
+
+def test_so101_factory_dispatches_on_simulator_not_a_separate_adapter(monkeypatch):
+    """`DirectMuJoCoAdapter` only wraps a generic `RobotPort` (see its own
+    docstring), so `simulator` picks which port `make_so101` builds and
+    `adapter` still wraps either one — there is no `direct_isaac` adapter.
+    """
+    from physai.robots import DirectMuJoCoAdapter
+    from physai.robots.so101 import isaac_env
+    from physai.robots.so101.factory import make_so101
+
+    built: list[object] = []
+
+    class FakeIsaacEnv:
+        def __init__(self, config):
+            self.config = config
+            self.robot_spec = None
+            built.append(self)
+
+    monkeypatch.setattr(isaac_env, "SO101IsaacEnv", FakeIsaacEnv)
+
+    result = make_so101(simulator="isaac", control_hz=15.0)
+    assert isinstance(result, DirectMuJoCoAdapter)
+    assert isinstance(result._environment, FakeIsaacEnv)
+    assert built[0].config.control_hz == 15.0
+
+    with pytest.raises(ValueError, match="unknown simulator"):
+        make_so101(simulator="not-a-real-simulator")

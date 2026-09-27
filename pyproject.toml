@@ -21,6 +21,20 @@ training = ["gymnasium>=1.3.0,<2.0"]
 vla = ["torch>=2.7,<2.12", "lerobot>=0.6.1"]
 web = ["fastapi>=0.115", "uvicorn[standard]>=0.53.0", "httpx2>=2.13"]
 dev = ["pytest>=9.1.1", "lark>=1.2", "ruff>=0.16.8", "import-linter>=2.1"]
+# Isaac Sim (physai.isaac, robots.so101.isaac_env) is deliberately NOT a
+# pyproject extra: isaacsim==6.1.0.0 pins numpy==2.3.1, which directly
+# conflicts with this project's own numpy>=2.0,<2.3 (found the hard way --
+# `conflicts=` between extras cannot fix a conflict against a base
+# dependency present in every environment). It also needs an index/
+# pre-release opt-in this project does not set globally (see below). Install
+# it into its own, separate virtual environment instead -- never into this
+# project's own .venv -- and point PYTHONPATH at this repo's src/ to use
+# physai.isaac from it:
+#   uv venv --python 3.12 /some/path/isaac-venv
+#   uv pip install --python /some/path/isaac-venv/*/python \
+#     --extra-index-url https://pypi.nvidia.com --prerelease=allow \
+#     --index-strategy unsafe-best-match "isaacsim[all,extscache]==6.1.0.0"
+# See docs/adr/0013-isaac-sim-optional-backend.md for the verified recipe.
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -36,6 +50,7 @@ markers = [
     "integration: crosses multiple PhysAI module boundaries",
     "acceptance: validates a complete robot workflow",
     "slow: takes longer than a normal unit test",
+    "isaac: requires isaacsim installed in a separate venv on PYTHONPATH; GPU-bound",
 ]
 
 [tool.uv]
@@ -80,3 +95,28 @@ forbidden_modules = ["mujoco"]
 # too; a MuJoCo import here would mean the schema secretly assumes one
 # simulator. Each simulator's own builder (e.g.
 # `sim.scenes.common.apply_description`) imports mujoco, not this module.
+
+[[tool.importlinter.contracts]]
+name = "isaacsim/omni/pxr stay confined to the isaac backend"
+type = "forbidden"
+source_modules = ["physai"]
+forbidden_modules = ["isaacsim", "omni", "pxr"]
+# Only physai.isaac (SimulationApp lifecycle, RobotDescription -> USD) and
+# robots.so101.isaac_env (the SO-101 RobotPort built on top of it) may
+# depend on Isaac Sim; every other module reaches it only through the
+# RobotPort/RobotSpec ports, the way it reaches MuJoCo only through
+# physai.sim. Every import below is function-local (Isaac Sim's own
+# modules are not import-safe before a SimulationApp exists), but grimp's
+# static graph tracks those too, collapsed to each external package's
+# top-level name.
+ignore_imports = [
+    "physai.isaac.core -> isaacsim",
+    "physai.isaac.core -> omni",
+    "physai.isaac.description -> isaacsim",
+    "physai.isaac.description -> omni",
+    "physai.isaac.description -> pxr",
+    "physai.isaac.scene -> pxr",
+    "physai.robots.so101.isaac_env -> isaacsim",
+    "physai.robots.so101.isaac_env -> omni",
+    "physai.robots.so101.isaac_env -> pxr",
+]
