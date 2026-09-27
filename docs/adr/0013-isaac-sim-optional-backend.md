@@ -5,8 +5,12 @@
 Accepted. The package layout and adapter names below were superseded by
 [ADR 14](0014-simulator-package-layout.md): `physai.isaac` moved to
 `physai.sim.isaac`, and `DirectMuJoCoAdapter` was renamed `DirectAdapter`.
-The decision itself (no new registry seam, `simulator=` kwarg, no manifest
-schema change, no `pyproject.toml` extra) still holds.
+[ADR 15](0015-simulator-engine-selection.md) superseded the "no manifest
+schema change" and "no new registry seam" parts below: `simulator` is now a
+top-level manifest field and a `RobotDescriptor.simulators` registry check,
+not only a `config:`-routed factory kwarg. The rest of the decision (install
+recipe, no `pyproject.toml` extra, `SO101IsaacEnv`'s narrower scope) still
+holds.
 
 ## Context
 

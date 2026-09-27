@@ -59,6 +59,7 @@ def create_runtime(
     task_kwargs: dict[str, Any] | None = None,
     task_success_hold_steps: int | None = None,
     adapter: str = "direct",
+    simulator: str = "mujoco",
     transport: Any = None,
     hardware: RobotPort | None = None,
     policy_name: str | None = None,
@@ -76,7 +77,8 @@ def create_runtime(
     ``robot_config`` and ``robot_kwargs`` are kept separate so callers can
     pass either an existing typed config or factory fields, but not silently
     merge both. Task semantics are composed around the robot port after the
-    robot is built.
+    robot is built. ``simulator`` picks the physics engine (default
+    ``"mujoco"``); ``create_robot`` rejects one a robot does not support.
     """
     if robot_config is not None and robot_kwargs:
         raise TypeError("pass either robot_config or robot_kwargs, not both")
@@ -115,6 +117,7 @@ def create_runtime(
     robot = create_robot(
         robot_name,
         adapter=adapter,
+        simulator=simulator,
         transport=transport,
         hardware=hardware,
         **({"config": robot_config} if robot_config is not None else fields),

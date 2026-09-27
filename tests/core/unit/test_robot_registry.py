@@ -201,3 +201,25 @@ def test_so101_factory_dispatches_on_simulator_not_a_separate_adapter(monkeypatc
 
     with pytest.raises(ValueError, match="unknown simulator"):
         make_so101(simulator="not-a-real-simulator")
+
+
+def test_the_registry_validates_simulator_support_before_building():
+    from physai.robots import create_robot
+    from physai.robots.registry import available_simulators, create_env_config
+
+    assert available_simulators("so101") == ("mujoco", "isaac")
+    assert available_simulators("turtlebot4") == ("mujoco",)
+    with pytest.raises(ValueError, match="turtlebot4.*does not support"):
+        create_robot("turtlebot4", simulator="isaac")
+
+    from physai.robots.so101.mujoco_env import EnvConfig
+
+    assert isinstance(create_env_config("so101"), EnvConfig)
+    assert isinstance(create_env_config("so101", simulator="mujoco"), EnvConfig)
+
+    from physai.robots.so101.isaac_env import IsaacEnvConfig
+
+    assert isinstance(create_env_config("so101", simulator="isaac"), IsaacEnvConfig)
+    # turtlebot4's config factory never has to accept a `simulator` kwarg it
+    # has no second value for.
+    assert create_env_config("turtlebot4").max_steps > 0

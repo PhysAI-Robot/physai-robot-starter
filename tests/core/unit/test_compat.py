@@ -87,6 +87,20 @@ def test_a_bare_robot_gets_its_defaults_and_command_line_overrides():
     assert changed.scene.overrides == {"camera_width": 128, "camera_height": 128}
     assert with_overrides(arm) == arm
 
+    assert with_overrides(arm, simulator="isaac").simulator == "isaac"
+    with pytest.raises(ValueError, match="does not support simulator"):
+        with_overrides(base, simulator="isaac")  # turtlebot4: mujoco only
+
+
+def test_with_overrides_revalidates_a_simulator_override(tmp_path):
+    """A bare `dataclasses.replace()` would not re-check `--sim` against a
+    shared world; `with_overrides` must, the same way `parse_manifest` does
+    at load time (see `physai.config.manifest.validate_manifest`).
+    """
+    world = manifest_from_world_file(WORLD_FILE, simulation=SIMULATION)
+    with pytest.raises(ValueError, match="does not support a"):
+        with_overrides(world, simulator="isaac")
+
 
 @requires_assets
 def test_the_converted_task_file_builds_the_robot_the_legacy_loader_described():

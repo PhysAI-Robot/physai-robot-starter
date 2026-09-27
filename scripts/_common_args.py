@@ -60,3 +60,14 @@ def add_policy(
     help: str | None = None,
 ) -> None:
     parser.add_argument("--policy", default=default, choices=choices, help=help)
+
+
+def add_simulator(parser: argparse.ArgumentParser, *, help: str | None = None) -> None:
+    """`--sim`: overrides the manifest's `simulator` field (default: mujoco)."""
+    parser.add_argument(
+        "--sim",
+        dest="simulator",
+        choices=("mujoco", "isaac"),
+        default=None,
+        help=help or "override the manifest's simulator engine",
+    )

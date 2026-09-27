@@ -1,0 +1,15 @@
+# SO-101 on Isaac Sim instead of MuJoCo. Run it (in the separate Isaac venv,
+# see README.md) with:
+#   python scripts/run_sim.py --manifest configs/manifests/so101_isaac.yaml
+# Sets no `task`: SO101IsaacEnv is robot-only for now (no scene/task objects
+# yet, see docs/adr/0013-isaac-sim-optional-backend.md), so a manifest that
+# names one fails at construction. --viewer/--serve are MuJoCo-only for now.
+schema_version: 1
+
+simulator: isaac
+
+robots:
+  - id: arm_1
+    robot: so101
+    config:
+      render: false

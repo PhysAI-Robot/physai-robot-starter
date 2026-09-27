@@ -34,6 +34,7 @@ class RobotDescriptor:
 
     factory: RobotFactory
     kind: str | None
+    simulators: tuple[str, ...] = ("mujoco",)
     scene_defaults: SceneDefaultsFactory | None = None
     default_task: str | None = None
     env_config: EnvConfigFactory | None = None
@@ -166,15 +167,33 @@ def available_ros2_robots() -> tuple[str, ...]:
     return tuple(sorted(_having("ros2_node")))
 
 
-def create_robot(name: str, *, adapter: str = "direct", **kwargs: Any) -> RobotPort:
-    """Create a robot through the selected simulation or hardware adapter."""
+def available_simulators(name: str) -> tuple[str, ...]:
+    """The simulator engines a registered robot's factory can build."""
+    _load_builtins()
+    try:
+        return _ROBOTS[name].simulators
+    except KeyError as exc:
+        choices = ", ".join(available_robots())
+        raise ValueError(f"unknown robot {name!r}; available: {choices}") from exc
+
+
+def create_robot(
+    name: str, *, adapter: str = "direct", simulator: str = "mujoco", **kwargs: Any
+) -> RobotPort:
+    """Create a robot through the selected simulator engine and transport adapter."""
     _load_builtins()
     try:
         descriptor = _ROBOTS[name]
     except KeyError as exc:
         choices = ", ".join(available_robots())
         raise ValueError(f"unknown robot {name!r}; available: {choices}") from exc
-    return descriptor.factory(adapter=adapter, **kwargs)
+    if simulator not in descriptor.simulators:
+        choices = ", ".join(descriptor.simulators)
+        raise ValueError(
+            f"robot {name!r} does not support simulator {simulator!r}; "
+            f"available: {choices}"
+        )
+    return descriptor.factory(adapter=adapter, simulator=simulator, **kwargs)
 
 
 def create_robot_policy(robot_name: str, policy_name: str, **kwargs: Any) -> Any:
@@ -198,14 +217,23 @@ def create_ros2_node(name: str, node: Any, **kwargs: Any) -> Any:
     return factory(node, **kwargs)
 
 
-def create_env_config(name: str, **kwargs: Any) -> Any:
-    """Create an embodiment-owned environment config through the registry."""
+def create_env_config(name: str, *, simulator: str | None = None, **kwargs: Any) -> Any:
+    """Create an embodiment-owned environment config through the registry.
+
+    `simulator` is only forwarded to the robot's factory when it declares
+    more than one supported simulator (see `RobotDescriptor.simulators`);
+    a single-simulator robot's config factory never has to accept or ignore
+    a parameter it has no second value for.
+    """
+    _load_builtins()
     factories = _having("env_config")
     try:
         factory = factories[name]
     except KeyError as exc:
         choices = ", ".join(sorted(factories))
         raise ValueError(f"unknown robot {name!r}; available: {choices}") from exc
+    if len(_ROBOTS[name].simulators) > 1:
+        kwargs = {"simulator": simulator or _ROBOTS[name].simulators[0], **kwargs}
     return factory(**kwargs)
 
 
@@ -260,8 +288,7 @@ def _load_builtins() -> None:
     # themselves with register_robot_policy() on import. This registry never
     # imports them directly (core must not import research/).
     if "so101" not in _ROBOTS:
-        from .so101.mujoco_env import EnvConfig
-        from .so101.factory import make_so101
+        from .so101.factory import make_so101, so101_env_config
         from .so101.jog import so101_jog_resolver
         from .so101.ros2_node import SO101ROS2Node
         from .so101.scene import scene_defaults as so101_scene_defaults
@@ -272,9 +299,10 @@ def _load_builtins() -> None:
             RobotDescriptor(
                 factory=make_so101,
                 kind="fixed_base_manipulator",
+                simulators=("mujoco", "isaac"),
                 scene_defaults=so101_scene_defaults,
                 default_task="pick_place",
-                env_config=EnvConfig,
+                env_config=so101_env_config,
                 ros2_node=SO101ROS2Node,
                 shared_attach=so101_shared_attach,
                 shared_instance=SO101SharedInstance,

@@ -101,6 +101,7 @@ def _create_single_session(
     )
     kwargs: dict[str, Any] = {
         "robot_kwargs": fields_,
+        "simulator": manifest.simulator,
         "scene_name": scene_name,
         "scene_kwargs": dict(manifest.scene.overrides),
         "task_name": task_name,
@@ -163,13 +164,21 @@ def _robot_fields(
     never have to know which robot defines what. A robot that renders inline
     and can be told to stop (`camera_stride`) hands its cameras to the host.
     """
+    if "simulator" in robot.config:
+        raise ValueError(
+            f"robot {robot.id!r} config sets 'simulator'; set it at the "
+            "manifest's top level instead"
+        )
     duplicated = [key for key in _SIMULATION_OWNED if key in robot.config]
     if duplicated:
         raise ValueError(
             f"robot {robot.id!r} config sets {', '.join(duplicated)}; "
             "set it under 'simulation' instead"
         )
-    accepted = {item.name for item in fields(create_env_config(robot.robot))}
+    accepted = {
+        item.name
+        for item in fields(create_env_config(robot.robot, simulator=manifest.simulator))
+    }
     simulation = manifest.simulation
     result = {
         key: value

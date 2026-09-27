@@ -188,6 +188,7 @@ class SO101Env(MuJoCoSimulationCore):
             metadata={
                 "control_hz": self.cfg.control_hz,
                 "action_schema": "so101.joint_position.v1",
+                "simulator": "mujoco",
             },
             joint_state_frame="base",
             camera_frames={"front": "camera_front", "wrist": "camera_wrist"},
