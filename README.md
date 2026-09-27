@@ -183,6 +183,47 @@ commands in, shared safety gate). The real `rclpy` nodes add TF and CameraInfo
 for SO-101 and odometry, scans, and TF for TurtleBot4; the acceptance paths are
 in the robot runbooks.
 
+## Isaac Sim (optional, local GPU only)
+
+A second, optional backend for evaluating a MuJoCo-tuned policy's sim-to-sim
+gap (see `docs/adr/0013-isaac-sim-optional-backend.md`). Verified against
+Isaac Sim 6.1.0.0 on an RTX 3060. Not installable into this project's own
+`.venv`: `isaacsim` pins `numpy==2.3.1`, which conflicts with this project's
+own `numpy>=2.0,<2.3`. Install it into a **separate** virtual environment
+instead, and point that environment at this repo's `src/`:
+
+```bash
+uv venv --python 3.12 /some/path/isaac-venv
+uv pip install --python /some/path/isaac-venv/*/python \
+  --extra-index-url https://pypi.nvidia.com --prerelease=allow \
+  --index-strategy unsafe-best-match "isaacsim[all,extscache]==6.1.0.0"
+PYTHONPATH=/path/to/physai-robot-starter/src /some/path/isaac-venv/*/python your_script.py
+```
+
+Then select it per robot instance, either in Python:
+
+```python
+from physai.robots import create_robot
+
+robot = create_robot("so101", simulator="isaac")
+```
+
+or in a session manifest, with the existing per-robot `config:` mapping (no
+schema change):
+
+```yaml
+robots:
+  - id: arm_1
+    robot: so101
+    config:
+      simulator: isaac
+```
+
+`SO101IsaacEnv` is robot-only for now (no task or scene objects yet — see
+`docs/adr/0013-isaac-sim-optional-backend.md`); it works today with a
+manifest that sets no `task`. `pytest -m isaac` runs the Isaac-backed
+acceptance tests wherever `isaacsim` is importable.
+
 ## Python API
 
 `physai.runtime.create_runtime` composes a registered robot, task, policy, and

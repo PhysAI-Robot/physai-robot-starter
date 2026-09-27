@@ -79,6 +79,7 @@ translate to the same `Observation` and `Action` at the boundary.
 | `physai.robots` | Embodiment discovery, `RobotSpec`, robot ports, factories, environments, robot-specific adapters, backend registry (`adapters.py`), and shared-world instance/attach factories | Task reward, planner decisions, or model SDKs |
 | `physai.tasks` | Task state, reset rules, reward, metrics, and termination | Robot internals or action generation |
 | `physai.sim` | MuJoCo simulation core, generic scene primitives, task-specific scene builders, the shared multi-robot world, rendering, and simulation time | Robot-specific environment logic, ROS2 transport, QoS, callbacks, or any robot-name branch (`SharedWorld` takes an optional `shared_attach` hook instead) |
+| `physai.isaac` | Isaac Sim's `SimulationApp` lifecycle, applying a `RobotDescription` to a USD stage (frames, cameras, contact-pad friction, actuator gains), and generic world extras (lighting, ground plane) — the Isaac analogue of `physai.sim` | Robot-specific environment logic or task/scene composition (see `robots.so101.isaac_env`, the only other module allowed to import Isaac Sim) |
 | `physai.planner` | Instruction and image grounding, `Plan`, `SubGoal` production, and the planner registry | Control-rate motor commands; research planners |
 | `physai.policy` | Control-rate `Action` production, core baseline policies (`constant`, `constant_twist`, `replay`), and the policy registry | Task scoring, robot discovery, or checkpoint-backed inference |
 | `physai.control` | Action resolution, capability checks, and rate limiting | High-level planning or task semantics |
@@ -98,11 +99,13 @@ src/physai/
 ├── contracts.py       shared message-shaped values
 ├── config/            typed YAML runtime configuration (legacy.py, manifest.py)
 ├── robots/            embodiment ports, adapters, registries, and factories
-│   ├── so101/         SO-101 environment, object layouts, kinematics, and shared-world adapter
+│   ├── description.py sim-neutral RobotDescription schema + YAML loader
+│   ├── so101/         SO-101 environment, object layouts, kinematics, shared-world adapter, isaac_env.py
 │   └── turtlebot/     TurtleBot4 environment and shared-world adapter
 ├── tasks/             task rules and registry
 ├── sim/               MuJoCo simulation core, shared world, and scene orchestration
 │   └── scenes/        shared world builder and task-specific scene variants
+├── isaac/             Isaac Sim core, RobotDescription -> USD, generic world extras (optional backend)
 ├── planner/           Planner contract, ScriptedPlanner baseline, and registry
 ├── policy/            Policy contract, core baselines, and registry
 ├── control/           action resolution and rate limiting
@@ -132,6 +135,8 @@ fails `pytest tests/ -q` the same way a failing unit test would.
 | `physai.sim` must not import `physai.bridge` or `rclpy` | Keeps ROS2 optional for fast, deterministic MuJoCo-only workflows |
 | `physai.policy`, `physai.tasks`, `physai.planner` must not import `mujoco` | Policy/task/planner code depends on ports (`RobotPort`, `RobotSpec`), never on MuJoCo types. One accepted, documented indirect path exists: `policy.registry` calls `robots.registry.create_robot_policy()` to build a robot-owned policy without importing the robot itself; `robots.registry`'s own lazily loaded robot implementations are what actually touch MuJoCo, and policy never inspects the returned object's type. |
 | `physai` (core) must not import `research` | Research plugs in by registering itself into a core registry on import; core never reaches back into it. See [Research boundary](#research-boundary). |
+| `physai.robots.description` must not import `mujoco` | The sim-neutral `RobotDescription` schema is read by every simulator's builder; a MuJoCo import here would mean it secretly assumed one simulator. |
+| Only `physai.isaac` and `physai.robots.so101.isaac_env` may import `isaacsim`, `omni`, or `pxr` | Isaac Sim is an optional, local-only backend installed into a separate virtual environment (see `docs/adr/0013-isaac-sim-optional-backend.md`); every other module reaches it only through the `RobotPort`/`RobotSpec` ports, the way it reaches MuJoCo only through `physai.sim`. |
 | A robot-name branch in generic code is a bug | `SharedWorld`, `web.host.Host`, and the web static client must resolve behavior through `RobotSpec` capabilities or a registry lookup, never `if robot_name == "..."`. Not import-linter-checked (it is a code-shape rule, not an import-graph rule); enforced by review. |
 
 ## Design patterns in use
