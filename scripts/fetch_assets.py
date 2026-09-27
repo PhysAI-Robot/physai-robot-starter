@@ -37,11 +37,19 @@ class AssetSource:
 
 
 SOURCES: dict[str, AssetSource] = {
-    "so101": AssetSource("TheRobotStudio/SO-ARM100", "Simulation/SO101", "main"),
+    # Pinned to a commit, not a branch: an upstream push must not change what
+    # this project fetches. Bump deliberately (see THIRD_PARTY_NOTICES.md) and
+    # re-run the full test suite plus a `visual_servo` eval before adopting a
+    # new commit.
+    "so101": AssetSource(
+        "TheRobotStudio/SO-ARM100",
+        "Simulation/SO101",
+        "5f6d2b876a53a4872e405b991dd925556c9e38a4",
+    ),
     "turtlebot4": AssetSource(
         "narcispr/turtlebot4_mujoco",
         "",
-        "main",
+        "e5d772caf426179b3d93eb91741965529239ae80",
         description_globs=("*.xml",),
         include=("turtlebot4.xml", "assets/meshes/*.stl", "assets/meshes/*.obj"),
     ),
