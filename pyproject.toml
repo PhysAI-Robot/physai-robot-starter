@@ -10,31 +10,57 @@ requires-python = ">=3.12,<3.13"
 license = { file = "LICENSE" }
 dependencies = [
     "mujoco>=3.2",
-    "numpy>=2.0,<2.3",
+    "numpy>=2.0",
     "imageio>=2.34",
     "imageio-ffmpeg>=0.6.0",
     "PyYAML>=6.0",
+    # The browser viewer (physai.web, --serve). Base, not a "web" extra:
+    # --viewer needs neither this nor an extra (mujoco.viewer ships with
+    # mujoco above), and folding it in here means it is never a choice
+    # someone has to make against `isaac` below (isaacsim-kernel pins
+    # uvicorn==0.29.0 exactly; the >=0.29 floor here is deliberately loose
+    # so that pin is a valid resolution, not a conflict, when isaac is
+    # selected -- see docs/adr/0016).
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.29",
+    # Dev/test tooling. Base, not a "dev" extra: this is a starter repo you
+    # clone and work in directly, not a library installed as someone else's
+    # dependency, so there is no audience that wants physai without the
+    # ability to run its own test suite.
+    "pytest>=9.1.1",
+    "lark>=1.2",
+    "ruff>=0.16.8",
+    "import-linter>=2.1",
 ]
 
 [project.optional-dependencies]
 training = ["gymnasium>=1.3.0,<2.0"]
-vla = ["torch>=2.7,<2.12", "lerobot>=0.6.1"]
-web = ["fastapi>=0.115", "uvicorn[standard]>=0.53.0", "httpx2>=2.13"]
-dev = ["pytest>=9.1.1", "lark>=1.2", "ruff>=0.16.8", "import-linter>=2.1"]
-# Isaac Sim (physai.sim.isaac, robots.so101.isaac_env) is deliberately NOT a
-# pyproject extra: isaacsim==6.1.0.0 pins numpy==2.3.1, which directly
-# conflicts with this project's own numpy>=2.0,<2.3 (found the hard way --
-# `conflicts=` between extras cannot fix a conflict against a base
-# dependency present in every environment). It also needs an index/
-# pre-release opt-in this project does not set globally (see below). Install
-# it into its own, separate virtual environment instead -- never into this
-# project's own .venv -- and point PYTHONPATH at this repo's src/ to use
-# physai.sim.isaac from it:
-#   uv venv --python 3.12 /some/path/isaac-venv
-#   uv pip install --python /some/path/isaac-venv/*/python \
-#     --extra-index-url https://pypi.nvidia.com --prerelease=allow \
-#     --index-strategy unsafe-best-match "isaacsim[all,extscache]==6.1.0.0"
-# See docs/adr/0013-isaac-sim-optional-backend.md for the verified recipe.
+# lerobot is temporarily dropped: lerobot==0.6.1 pins numpy<2.3.0, which is
+# what forced this project's own numpy ceiling (removed above). Re-add it
+# once a lerobot release supports numpy>=2.3; until then, research/
+# imitation_learning/{train_act,vla_adapter}.py's lazy `from lerobot...`
+# imports raise ImportError if actually called (unchanged from before --
+# neither is imported at module scope, so nothing else breaks).
+vla = ["torch>=2.7,<2.12"]
+# httpx2 is only used by tests/core/unit/test_web_app_streaming.py (guarded
+# by pytest.importorskip("httpx2"), so it skips cleanly without this extra).
+# Kept out of base, unlike fastapi/uvicorn/pytest above: httpx2 itself
+# requires idna>=3.18, and isaacsim-kernel pins idna==3.10 exactly -- a
+# real conflict with no loosenable floor on physai's side, unlike the
+# uvicorn case. `[tool.uv] conflicts` below marks it against `isaac` so a
+# combined sync fails fast instead of `uv lock` refusing everything.
+webtest = ["httpx2>=2.13"]
+# isaacsim as a real extra of this project (`uv sync --extra isaac`),
+# replacing the separate-venv recipe docs/adr/0013 used to document.
+# Verified end to end: `uv lock` resolves it (index-strategy =
+# "unsafe-best-match" below, no prerelease allowance needed) and a real
+# headless episode ran against actual Isaac Sim 6.1.0.0 on an RTX 3060.
+# See docs/adr/0016.
+isaac = ["isaacsim[all,extscache]==6.1.0.0"]
+
+[[tool.uv.index]]
+name = "nvidia"
+url = "https://pypi.nvidia.com"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -50,11 +76,16 @@ markers = [
     "integration: crosses multiple PhysAI module boundaries",
     "acceptance: validates a complete robot workflow",
     "slow: takes longer than a normal unit test",
-    "isaac: requires isaacsim installed in a separate venv on PYTHONPATH; GPU-bound",
+    "isaac: requires isaacsim (uv sync --extra isaac); GPU-bound",
 ]
 
 [tool.uv]
 override-dependencies = ["datasets>=5.0.1", "setuptools>=83"]
+conflicts = [[{ extra = "isaac" }, { extra = "webtest" }]]
+index-strategy = "unsafe-best-match"
+
+[tool.ty.rules]
+unresolved-attribute = "ignore"
 
 [tool.importlinter]
 root_packages = ["physai", "research"]

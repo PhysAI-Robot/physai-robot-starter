@@ -11,10 +11,11 @@ owns the robot, task configuration, seed, policy, MuJoCo model, physics clock,
 and command arbitration. The desktop viewer and browser render the same state
 and send control intents to that one host.
 
-Install the web and training dependencies once from the project root:
+Install the training dependencies once from the project root (the browser
+viewer itself is part of the base install):
 
 ```bash
-uv sync --extra web --extra training
+uv sync --extra training
 ```
 
 After that setup, the commands below use plain `uv run`.
@@ -77,7 +78,7 @@ On a server, in a container, or in any environment with no display, drop
 but no desktop window is opened:
 
 ```bash
-MUJOCO_GL=egl uv run --extra web python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml --policy visual_servo --serve --seed 0
+MUJOCO_GL=egl uv run python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml --policy visual_servo --serve --seed 0
 ```
 
 The host runs until `Ctrl+C` or `SIGTERM`, then stops the web server and the
@@ -93,14 +94,14 @@ keep such a port on a private network or behind an authenticated tunnel.
 
 `.devcontainer/devcontainer.json` describes a Python 3.12 container for a
 cloud workspace. On creation it installs the OSMesa software-rendering
-libraries, syncs the locked `web` and `dev` extras with `uv`, and fetches the
-SO-101 assets. Codespaces machines have no GPU, so the container sets
-`MUJOCO_GL=osmesa`.
+libraries, syncs the locked `dev` extra with `uv` (the browser viewer is
+part of the base install), and fetches the SO-101 assets. Codespaces
+machines have no GPU, so the container sets `MUJOCO_GL=osmesa`.
 
 Once the workspace is ready, start the headless host in its terminal:
 
 ```bash
-uv run --extra web python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml --policy visual_servo --serve --seed 0
+uv run python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml --policy visual_servo --serve --seed 0
 ```
 
 Port 8000 is declared as forwarded. Open it from the Ports panel and leave its

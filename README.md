@@ -38,16 +38,20 @@ root:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync --extra web --extra training
+uv sync --extra training
 ```
 
-The base install contains MuJoCo, NumPy, image/video support, and YAML
-configuration; `web` adds the browser viewer and `training` the Gymnasium
-bridge. ROS2, VLM, and VLA dependencies are separate (`--extra vla` for
-ACT/LeRobot). To run the test suite:
+The base install contains MuJoCo, NumPy, image/video support, YAML
+configuration, the browser viewer (FastAPI/uvicorn, `--serve`), and the
+dev/test tooling (pytest, ruff, import-linter) — this is a starter repo you
+work in directly, not a library, so there is no reason to make any of that
+optional. `training` (Gymnasium) and `isaac` (see
+[Isaac Sim](#isaac-sim-optional-local-gpu-only) below) are this project's
+two real extras, and combine with each other freely. ROS2 and VLA
+dependencies are separate too (`--extra vla` for ACT/LeRobot). To run the
+test suite:
 
 ```bash
-uv sync --extra dev --extra web --extra training
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 ```
 
@@ -186,19 +190,26 @@ in the robot runbooks.
 ## Isaac Sim (optional, local GPU only)
 
 A second, optional backend for evaluating a MuJoCo-tuned policy's sim-to-sim
-gap (see `docs/adr/0013-isaac-sim-optional-backend.md`). Verified against
-Isaac Sim 6.1.0.0 on an RTX 3060. Not installable into this project's own
-`.venv`: `isaacsim` pins `numpy==2.3.1`, which conflicts with this project's
-own `numpy>=2.0,<2.3`. Install it into a **separate** virtual environment
-instead, and point that environment at this repo's `src/`:
+gap (see `docs/adr/0013-isaac-sim-optional-backend.md`). Verified end to end
+against real Isaac Sim 6.1.0.0 on an RTX 3060, installed straight into this
+project's own `.venv`:
 
 ```bash
-uv venv --python 3.12 /some/path/isaac-venv
-uv pip install --python /some/path/isaac-venv/*/python \
-  --extra-index-url https://pypi.nvidia.com --prerelease=allow \
-  --index-strategy unsafe-best-match "isaacsim[all,extscache]==6.1.0.0"
-PYTHONPATH=/path/to/physai-robot-starter/src /some/path/isaac-venv/*/python your_script.py
+uv sync --extra isaac --extra training
 ```
+
+Dev tooling (pytest, ruff, ...) and the browser viewer are both part of the
+base install now, not extras to choose between — only `training` (this
+project's two real extras are `training` and `isaac`) installs alongside
+`isaac` with no conflict; the only extra `isaac` conflicts with is
+`webtest` (`httpx2`, needed by exactly one test). `--viewer` needs neither
+`isaac` nor anything extra at all (`mujoco.viewer` is part of the base
+install). See `docs/adr/0016-isaacsim-as-a-project-extra.md` for why.
+Isaac Sim's own
+NVIDIA Omniverse EULA must be accepted once per machine, non-interactively,
+by setting `OMNI_KIT_ACCEPT_EULA=YES` in the environment before running
+anything that constructs a `SimulationApp` — set it yourself; nothing in
+this project sets it for you.
 
 Then select it, either from the command line:
 

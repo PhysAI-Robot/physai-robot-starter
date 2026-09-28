@@ -8,9 +8,11 @@ Accepted. The package layout and adapter names below were superseded by
 [ADR 15](0015-simulator-engine-selection.md) superseded the "no manifest
 schema change" and "no new registry seam" parts below: `simulator` is now a
 top-level manifest field and a `RobotDescriptor.simulators` registry check,
-not only a `config:`-routed factory kwarg. The rest of the decision (install
-recipe, no `pyproject.toml` extra, `SO101IsaacEnv`'s narrower scope) still
-holds.
+not only a `config:`-routed factory kwarg. [ADR 16](0016-isaacsim-as-a-project-extra.md)
+superseded the "isaacsim is not a `pyproject.toml` extra, install into a
+separate venv" part: it is now `uv sync --extra isaac`, into this project's
+own `.venv`. `SO101IsaacEnv`'s narrower scope (no jog/IK/task-scene objects)
+still holds.
 
 ## Context
 

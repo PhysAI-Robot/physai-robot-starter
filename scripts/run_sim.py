@@ -259,6 +259,12 @@ def policy_inputs(args: argparse.Namespace, manifest: SessionManifest) -> dict:
 
 def run_episodes(args: argparse.Namespace, manifest: SessionManifest) -> int:
     if manifest.policy_for(manifest.robots[0]) == "idle":
+        if manifest.simulator != "mujoco":
+            raise SystemExit(
+                f"--policy is required for simulator {manifest.simulator!r}: the "
+                f"default headless policy ({DEFAULT_HEADLESS_POLICY!r}) needs "
+                "MuJoCo-only kinematics (ArmKinematics)"
+            )
         manifest = with_overrides(manifest, policy=DEFAULT_HEADLESS_POLICY)
     # Built once — a lerobot checkpoint is expensive to reload per episode.
     session = create_session(
