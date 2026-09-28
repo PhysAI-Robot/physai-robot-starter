@@ -94,9 +94,9 @@ keep such a port on a private network or behind an authenticated tunnel.
 
 `.devcontainer/devcontainer.json` describes a Python 3.12 container for a
 cloud workspace. On creation it installs the OSMesa software-rendering
-libraries, syncs the locked `dev` extra with `uv` (the browser viewer is
-part of the base install), and fetches the SO-101 assets. Codespaces
-machines have no GPU, so the container sets `MUJOCO_GL=osmesa`.
+libraries, runs the locked `uv sync` (dev tooling and the browser viewer
+are both part of the base install), and fetches the SO-101 assets.
+Codespaces machines have no GPU, so the container sets `MUJOCO_GL=osmesa`.
 
 Once the workspace is ready, start the headless host in its terminal:
 
@@ -187,7 +187,7 @@ cube into the pads.
 The translucent orange boxes on the fingertips are the grasp pads, the only
 parts of the fingers that collide, fitted to each fingertip's flat face
 (`ManipulationSceneConfig` in
-[common.py](../src/physai/sim/scenes/common.py)); set the alpha of `pad_rgba`
+[common.py](../src/physai/sim/mujoco/scenes/common.py)); set the alpha of `pad_rgba`
 there to 0 to hide them. A held cube does not creep out of the fingers because
 manipulation scenes run MuJoCo's no-slip pass (`noslip_iterations = 5`).
 

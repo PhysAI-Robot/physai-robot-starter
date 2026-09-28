@@ -10,12 +10,10 @@ ACT/LeRobot training pipeline and checkpoint-backed inference policies.
 
 `vla_adapter.py` registers the `"lerobot"` policy with `physai.policy.registry`
 on import; core never imports this package. Requires the `training`/`vla`
-extras (`uv sync --extra training --extra vla`) plus `lerobot` itself
-installed manually (`uv pip install lerobot>=0.6.1`) — `lerobot` is
-temporarily out of the `vla` extra because `lerobot==0.6.1` pins
-`numpy<2.3.0`, which forced this project's own numpy ceiling; see
-`pyproject.toml`'s `vla` extra comment. Re-add it there once a lerobot
-release supports `numpy>=2.3`.
+extras (`uv sync --extra training --extra vla`). `vla` cannot combine with
+`isaac` in the same sync — `lerobot==0.6.1` pins `numpy<2.3.0`, incompatible
+with isaacsim's `numpy==2.3.1` — so `[tool.uv] conflicts` rejects that
+combination instead of `uv lock` failing on the whole project.
 
 ## SO-101 collect -> train -> evaluate workflow
 

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from conftest import requires_assets
+from tests.conftest import requires_assets
 
 _isaacsim = pytest.importorskip(
     "isaacsim", reason="uv sync --extra isaac installs isaacsim"

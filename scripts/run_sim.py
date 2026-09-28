@@ -375,7 +375,7 @@ def run_viewer(args: argparse.Namespace, manifest: SessionManifest) -> int:
         except ImportError as exc:
             host.stop()
             raise SystemExit(
-                "install web dependencies with: uv sync --extra web"
+                "fastapi/uvicorn are missing; reinstall with: uv sync"
             ) from exc
         server = uvicorn.Server(
             uvicorn.Config(

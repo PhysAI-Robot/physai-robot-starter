@@ -2,7 +2,7 @@ from dataclasses import fields, replace
 
 import pytest
 import yaml
-from conftest import requires_assets
+from tests.conftest import requires_assets
 
 from physai.config import SimulationConfig
 from physai.config.compat import (
