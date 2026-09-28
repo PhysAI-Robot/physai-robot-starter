@@ -6,12 +6,15 @@ module and `physai.sim.isaac` may import `isaacsim`/`omni`/`pxr`
 (`pyproject.toml`'s import-linter contracts enforce this), so nothing above
 the `RobotPort` boundary needs Isaac installed to import `physai.robots`.
 
-Kept deliberately smaller than `SO101Env` for now: no Cartesian jog, IK, or
-privileged world state (cube/target positions) — `ArmKinematics` is a MuJoCo
-model today (see the plan's Phase 1.4 note on why that signature change is
-deferred), and a scene with graspable objects is Phase 3 work. This env
-proves out the `RobotPort` contract (joint-position actions, joint-state and
-image observations) against real Isaac Sim control.
+Deliberately smaller than `SO101Env`: no Cartesian jog, task/scene objects
+beyond an optional grasp cube (`cfg.cube`, ROADMAP.md's 2E tier-3 parity
+test only — not a `ManipulationSceneConfig` port; no table, target, layout,
+or randomization). `self.kin` is a real `ArmKinematics`, backed by a MuJoCo
+model loaded purely as an FK/IK math tool and never simulated — Isaac's own
+physics runs everything; this only reuses already-verified kinematics math
+instead of reimplementing it against USD/PhysX (importing `mujoco` here is
+fine: only `isaacsim`/`omni`/`pxr` are import-linter-restricted to this
+module and `physai.sim.isaac`, and `mujoco` is a base dependency regardless).
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import mujoco
 import numpy as np
 
 from ...contracts import (
@@ -30,8 +34,14 @@ from ...contracts import (
     Observation,
 )
 from ...sim.isaac.core import IsaacSimulationCore, ensure_simulation_app
-from ...sim.isaac.description import apply_actuators, apply_cameras, apply_frames
+from ...sim.isaac.description import (
+    apply_actuators,
+    apply_cameras,
+    apply_contact_friction,
+    apply_frames,
+)
 from ...sim.isaac.description import import_robot as isaac_import_robot
+from ...sim.isaac.objects import add_cube, prim_world_position
 from ...sim.isaac.scene import add_ground_plane, add_studio_lighting
 from ..base import RobotSpec, RobotTrainingContract
 from ..description import RobotDescription, load_robot_description
@@ -41,6 +51,7 @@ from .contracts import (
     GRIPPER_JOINT_NAME,
     so101_training_contract,
 )
+from .kinematics import ArmKinematics
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 _DESCRIPTION_PATH = Path(__file__).resolve().parent / "description.yaml"
@@ -48,12 +59,30 @@ HOME_QPOS = np.array([0.0, -1.05, 1.25, 0.75, 0.0], dtype=np.float64)
 
 
 @dataclass
+class GraspCubeConfig:
+    """A minimal graspable cube for the tier-3 grasp-hold parity test
+    (`ROADMAP.md`'s 2E) — not a `ManipulationSceneConfig` port: no table,
+    target, layout, or randomization, just enough to grasp-and-hold. `position`
+    and `friction` default to `PickPlaceMinimalSceneConfig`'s own values
+    (`cube_pos`, the sliding-friction component of `add_cube`'s
+    `friction=[1.2, ...]`), placed directly on Isaac's ground plane rather
+    than on a modeled table.
+    """
+
+    position: tuple[float, float, float] = (0.20, 0.08, 0.014)
+    half_size: float = 0.014
+    mass: float = 0.03
+    friction: float = 1.2
+
+
+@dataclass
 class IsaacEnvConfig:
     """SO-101-on-Isaac simulation and observation settings.
 
-    Deliberately narrower than `so101.mujoco_env.EnvConfig`: no `scene` (no task
-    objects yet, see this module's docstring) and no domain randomization
-    (Isaac's own randomization tooling is a separate integration).
+    Deliberately narrower than `so101.mujoco_env.EnvConfig`: no `scene` (no
+    task objects beyond the optional `cube` below) and no domain
+    randomization (Isaac's own randomization tooling is a separate
+    integration).
     """
 
     description: RobotDescription | None = None
@@ -70,6 +99,7 @@ class IsaacEnvConfig:
     max_steps: int = 400
     seed: int | None = None
     gripper_force_limit: float = 0.3
+    cube: GraspCubeConfig | None = None
 
 
 class SO101IsaacEnv:
@@ -104,7 +134,21 @@ class SO101IsaacEnv:
         add_studio_lighting(self.stage)
         add_ground_plane(self.stage)
         apply_frames(self.stage, self.description)
+        apply_contact_friction(self.stage, self.description)
         self._camera_prims = apply_cameras(self.stage, self.description)
+
+        self._cube_path: str | None = None
+        if self.cfg.cube is not None:
+            self._cube_path = add_cube(
+                self.stage,
+                "/World_cube",
+                position=self.cfg.cube.position,
+                half_size=self.cfg.cube.half_size,
+                mass=self.cfg.cube.mass,
+                friction=self.cfg.cube.friction,
+            )
+
+        self.kin = self._build_kinematics_oracle()
 
         first_camera = self.description.cameras[0] if self.description.cameras else None
         self.core = IsaacSimulationCore(
@@ -142,6 +186,36 @@ class SO101IsaacEnv:
         self.step_count = 0
         self._last_action = Action(joint_position=HOME_QPOS.copy())
 
+    def _build_kinematics_oracle(self) -> ArmKinematics:
+        """A MuJoCo model used purely as an FK/IK math tool, never simulated.
+
+        Loads the same MJCF the MuJoCo backend simulates (so joint and site
+        names match), only to reuse `ArmKinematics`'s existing FK/IK math
+        instead of reimplementing it against USD/PhysX. Isaac's own physics
+        (`self.articulation`, `self.core`) is what actually runs the robot.
+        """
+        mjcf_path = self.cfg.assets_root / self.description.mjcf
+        model = mujoco.MjModel.from_xml_path(str(mjcf_path))
+        return ArmKinematics(model)
+
+    @property
+    def cube_pos(self) -> np.ndarray:
+        if self._cube_path is None:
+            raise AttributeError("this SO101IsaacEnv has no cube (cfg.cube is None)")
+        return prim_world_position(self.stage, self._cube_path)
+
+    def _arm_qpos(self) -> np.ndarray:
+        return np.asarray(self.articulation.get_dof_positions())[0, self._arm_indices]
+
+    @property
+    def ee_pos(self) -> np.ndarray:
+        pos, _ = self.kin.qpos_to_site_pose(self._arm_qpos())
+        return pos
+
+    def pinch_center(self) -> np.ndarray:
+        """Where the gripper's pinch point currently is, from observed joint state."""
+        return self.kin.pinch_center_from_qpos(self._arm_qpos())
+
     @property
     def robot_spec(self) -> RobotSpec:
         return RobotSpec(
@@ -153,7 +227,7 @@ class SO101IsaacEnv:
             observation_modalities=("state", "images")
             if self.cfg.cameras
             else ("state",),
-            capabilities=("joint_position", "gripper")
+            capabilities=("joint_position", "arm_kinematics", "gripper")
             + (("images",) if self.cfg.cameras else ()),
             joint_limits={
                 name: (float(lo), float(hi))
@@ -267,4 +341,4 @@ class SO101IsaacEnv:
         self.core.close()
 
 
-__all__ = ["IsaacEnvConfig", "SO101IsaacEnv"]
+__all__ = ["GraspCubeConfig", "IsaacEnvConfig", "SO101IsaacEnv"]

@@ -150,6 +150,7 @@ ignore_imports = [
     "physai.sim.isaac.description -> omni",
     "physai.sim.isaac.description -> pxr",
     "physai.sim.isaac.scene -> pxr",
+    "physai.sim.isaac.objects -> pxr",
     "physai.robots.so101.isaac_env -> isaacsim",
     "physai.robots.so101.isaac_env -> omni",
     "physai.robots.so101.isaac_env -> pxr",
