@@ -185,6 +185,7 @@ class SO101VisualServoPolicy(Policy):
         calibration: CameraCalibration | None = None,
         target_pixel: tuple[float, float] | None = None,
         target_plane_z: float = 0.035,
+        squeeze_grip: float = SQUEEZE_GRIP,
         kp: float = 2.0,
         max_speed: float = 0.08,
         pixel_tolerance: float = 8.0,
@@ -200,6 +201,12 @@ class SO101VisualServoPolicy(Policy):
         self.calibration = calibration
         self.target_pixel = target_pixel
         self.target_plane_z = float(target_plane_z)
+        # How far normalized 0 (closed) to 1 (open) `_waypoint()` squeezes
+        # during CLOSE/LIFT/TRANSFER/LOWER. Defaults to `SQUEEZE_GRIP`, the
+        # value tuned against MuJoCo's contact solver; a stiffer engine (or
+        # a different cube/pad friction setup) may need a deeper squeeze to
+        # actually hold the object against its own weight before slipping.
+        self.squeeze_grip = float(squeeze_grip)
         self.kp = float(kp)
         self.max_speed = float(max_speed)
         self.pixel_tolerance = float(pixel_tolerance)
@@ -333,17 +340,17 @@ class SO101VisualServoPolicy(Policy):
         if self._phase in (VisualServoPhase.DESCEND, VisualServoPhase.CLOSE):
             return np.array(
                 [*self._target_xy, cube_z]
-            ), 1.0 if self._phase is VisualServoPhase.DESCEND else SQUEEZE_GRIP
+            ), 1.0 if self._phase is VisualServoPhase.DESCEND else self.squeeze_grip
         if self._phase is VisualServoPhase.LIFT:
-            return np.array([*self._target_xy, rest_z + 0.035]), SQUEEZE_GRIP
+            return np.array([*self._target_xy, rest_z + 0.035]), self.squeeze_grip
         if self._phase is VisualServoPhase.TRANSFER:
             return np.array(
                 [self.env.target_pos[0], self.env.target_pos[1], rest_z + 0.035]
-            ), SQUEEZE_GRIP
+            ), self.squeeze_grip
         if self._phase in (VisualServoPhase.LOWER, VisualServoPhase.RELEASE):
             return np.array(
                 [self.env.target_pos[0], self.env.target_pos[1], rest_z + 0.016]
-            ), SQUEEZE_GRIP if self._phase is VisualServoPhase.LOWER else 1.0
+            ), self.squeeze_grip if self._phase is VisualServoPhase.LOWER else 1.0
         return np.array(
             [self.env.target_pos[0], self.env.target_pos[1], rest_z + 0.035]
         ), 1.0
