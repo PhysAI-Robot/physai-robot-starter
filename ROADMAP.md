@@ -185,17 +185,33 @@ itself).
   `add_world_camera`; and `camera_calibration()`'s `fx = fy * width /
   height` was wrong for a pinhole camera whose horizontal aperture is
   itself scaled by that same ratio — should just be `fx = fy` — mirrored
-  from the identical, still-unfixed formula in `mujoco_env.py`). Blocked on
-  an actual pick: the "gripper" joint's PhysX drive reads/writes correctly
-  and spins its full range, but the moving jaw's own rigid-body prim does
-  not move at all regardless of commanded position — confirmed by holding a
-  full squeeze at the (now pixel-accurate) cube location for 60 steps and
-  lifting: the cube never leaves the ground. Joint wiring (body0/body1),
-  `RigidBodyAPI`/mass/inertia, and articulation flags
-  (`excludeFromArticulation`, `jointEnabled`) all look identical to the
-  working arm joints; root cause not found via scripted USD/PhysX attribute
-  inspection alone — needs GUI-based physics debugging or a diff against a
-  known-working Isaac Sim parallel-jaw gripper sample.
+  from the identical, still-unfixed formula in `mujoco_env.py`). Not yet a
+  reliable pick: `SQUEEZE_GRIP = 0.15` is tuned to just barely hold against
+  MuJoCo's contact solver (see `research/scripted_experts/FINDINGS.md`'s
+  "grasp pads were later refitted" note); the shared `SO101VisualServoPolicy`
+  now takes an optional `squeeze_grip` override, and the scripted expert's
+  own deeper `0.06` (independently proven in
+  `test_so101_grasp_hold_isaac.py` to hold a cube for 12s of real Isaac Sim
+  time) gets real, measurable engagement in the closed loop too — the cube
+  moves 2+cm versus ~0 at the shared default. Still not enough to survive
+  the ride to the target: traced to `act()`'s `_settle_steps >= 8` CLOSE-exit
+  checking that the actual gripper position tracks the *ramping* (fixed
+  `0.9 rad/s`) commanded one, not that it has reached any depth — Isaac's
+  gripper tracks that ramp with ~no lag, so CLOSE always exits after the
+  same ~8 steps at ~24% squeezed regardless of the target depth (confirmed
+  with `squeeze_grip=0.0`, the deepest available value, exiting at the same
+  point), well before the squeeze passes the cube's jam point, and the arm
+  is already moving through LIFT while the grip is still mid-ramp.
+  (Correcting an earlier note here: this is not a broken joint or PhysX
+  articulation wiring bug — that read came from measuring the wrong thing;
+  the scripted-expert test above already proves this same gripper holds a
+  cube fine once its own fixed-step-count phases give the squeeze enough
+  time to complete.) Fixing this within `visual_servo`'s existing
+  settle-based timing needs either a depth-aware settle condition or a
+  slower gripper response relative to the ramp rate; reducing the gripper
+  joint's own drive stiffness/damping in `SO101IsaacEnv` was tried and left
+  inconclusive (a single run took several times longer without confirming
+  convergence in a reasonable wall-clock budget).
 - [x] `ArmKinematics` (`robots/so101/kinematics.py`) partially converted:
   `qpos_to_site_pose`/`pinch_center_from_qpos`, new additive methods aside
   `fk`/`tool_pose`/`pinch_center`'s existing `MjData`-taking ones, cover
