@@ -26,9 +26,9 @@ def add_studio_lighting(stage: Any) -> None:
     if stage.GetPrimAtPath("/World_lights").IsValid():
         return
     dome = UsdLux.DomeLight.Define(stage, "/World_lights/dome")
-    dome.CreateIntensityAttr(1000.0)
+    dome.CreateIntensityAttr(300.0)
     key = UsdLux.DistantLight.Define(stage, "/World_lights/key")
-    key.CreateIntensityAttr(3000.0)
+    key.CreateIntensityAttr(500.0)
     key.CreateAngleAttr(1.0)
 
 
@@ -46,3 +46,44 @@ def add_ground_plane(stage: Any, *, size: float = 5.0) -> None:
     plane.AddScaleOp().Set(Gf.Vec3f(size, size, 0.01))
     plane.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.0, -0.005))
     UsdPhysics.CollisionAPI.Apply(plane.GetPrim())
+
+
+def add_world_camera(
+    stage: Any,
+    path: str,
+    *,
+    position: tuple[float, float, float],
+    quat_wxyz: tuple[float, float, float, float],
+    fovy_deg: float,
+    width: int,
+    height: int,
+) -> str:
+    """A world-fixed camera, not attached to the robot's own articulation --
+    unlike `sim.isaac.description.apply_cameras`'s link-mounted cameras
+    (which move with the arm). The Isaac analogue of MuJoCo's own
+    world-body camera (`sim.mujoco.scenes.common.build_manipulation_spec`'s
+    "front" camera). `quat_wxyz` is already in USD's own convention
+    (callers needing MuJoCo's `xyaxes` convention -- x/y axis vectors, not
+    a quaternion -- convert with `mujoco.mju_mat2Quat` first, since
+    `physai.sim.isaac` itself must not import `mujoco`).
+    """
+    from pxr import Gf, UsdGeom
+
+    from .description import (
+        DEFAULT_CLIPPING_RANGE_M,
+        DEFAULT_VERTICAL_APERTURE_MM,
+        fovy_to_focal_length,
+    )
+
+    cam = UsdGeom.Camera.Define(stage, path)
+    cam.AddTranslateOp().Set(Gf.Vec3d(*position))
+    w, x, y, z = quat_wxyz
+    cam.AddOrientOp().Set(Gf.Quatf(w, Gf.Vec3f(x, y, z)))
+    vertical_aperture_mm = DEFAULT_VERTICAL_APERTURE_MM
+    cam.CreateFocalLengthAttr(
+        fovy_to_focal_length(fovy_deg, vertical_aperture_mm=vertical_aperture_mm)
+    )
+    cam.CreateVerticalApertureAttr(vertical_aperture_mm)
+    cam.CreateHorizontalApertureAttr(vertical_aperture_mm * width / height)
+    cam.CreateClippingRangeAttr(Gf.Vec2f(*DEFAULT_CLIPPING_RANGE_M))
+    return path
