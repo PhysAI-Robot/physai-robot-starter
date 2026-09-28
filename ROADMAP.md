@@ -1,6 +1,6 @@
 # Project Roadmap: physai-robot-starter
 
-`physai-robot-starter` is an open-source starter kit for embodied AI and robotics research. It provides stable robot, task, observation, and action contracts so the same policy can be evaluated across backends: direct MuJoCo, ROS2 + MuJoCo, and (in the future) real robots.
+`physai-robot-starter` is an open-source starter kit for embodied AI and robotics research. It provides stable robot, task, observation, and action contracts so the same policy can be evaluated across transports (direct, ROS2, and in the future real robots) and simulator engines (MuJoCo, Isaac Sim).
 
 ## Supported robots
 
@@ -114,7 +114,7 @@ A camera-only state-machine pipeline (color segmentation or fiducials, pose esti
 
 - [x] Perception module without simulator ground truth (`ColorBlobDetector` in `research/classical_control/so101_visual_servo.py`; reads camera calibration only, never object pose).
 - [x] State machine covering approach, grasp, lift, place, and recovery on failure (`SO101VisualServoPolicy`, registered as the `visual_servo` policy).
-- [x] All actions pass the safety layer: `SafetyController` now gates the direct-MuJoCo path inside `DirectMuJoCoAdapter`, not only the ROS2 and Gymnasium paths.
+- [x] All actions pass the safety layer: `SafetyController` now gates the direct path inside `DirectAdapter`, not only the ROS2 and Gymnasium paths.
 - [ ] Diagnose the `visual_servo` timeouts (95/100 on seeds 0-99: seeds 13, 15, 28, 64, 76) that appeared after the fingertip pad refit; the visual-servo CI check (20 seeds, all must succeed) is expected to fail until this is fixed.
 - [ ] Report position error, settling time, and categorized failure reasons.
 - [ ] Give it a fair tuning effort; it must not be a strawman.
@@ -147,11 +147,12 @@ Definition of done: identical seeds on both backends, a results table, and the m
 
 Evaluate a policy tuned in MuJoCo (`visual_servo`, ACT) against Isaac Sim to
 measure the gap between simulators, not simulation-vs-ROS2 integration
-overhead (that is 2C). Local RTX GPU only; Isaac Sim installs into its own
-separate virtual environment (see `docs/adr/0013-isaac-sim-optional-backend.md`) and is never installed by CI or this project's own `.venv`. See `docs/adr/0013-isaac-sim-optional-backend.md` for the
-backend itself.
+overhead (that is 2C). Local RTX GPU only; never installed by CI (see
+`docs/adr/0016-isaacsim-as-a-project-extra.md` for the `--extra isaac`
+install, `docs/adr/0013-isaac-sim-optional-backend.md` for the backend
+itself).
 
-- [x] `physai.isaac` (SimulationApp lifecycle, `RobotDescription` -> USD) and
+- [x] `physai.sim.isaac` (SimulationApp lifecycle, `RobotDescription` -> USD) and
   `robots.so101.isaac_env.SO101IsaacEnv`, verified end to end against real
   Isaac Sim 6.1 on an RTX 3060 (URDF import, actuator gain transfer with no
   unit conversion, closed-loop joint tracking, camera rendering).

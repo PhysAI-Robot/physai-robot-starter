@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from conftest import requires_assets
+from tests.conftest import requires_assets
 
 SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"
 WORLD = "configs/worlds/heterogeneous.yaml"

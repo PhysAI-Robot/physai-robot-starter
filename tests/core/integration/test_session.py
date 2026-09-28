@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from conftest import requires_assets, requires_turtlebot_assets
+from tests.conftest import requires_assets, requires_turtlebot_assets
 
 pytestmark = [pytest.mark.integration]
 

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from conftest import requires_assets
+from tests.conftest import requires_assets
 
 GOLDEN = json.loads(
     (Path(__file__).with_name("golden_layouts.json")).read_text(encoding="utf-8")

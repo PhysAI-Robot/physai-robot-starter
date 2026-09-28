@@ -20,7 +20,7 @@ def create_app(*, host: Host):
         from fastapi.staticfiles import StaticFiles
     except ImportError as exc:
         raise RuntimeError(
-            "web dependencies are missing; install with `uv sync --extra web`"
+            "fastapi/uvicorn are missing; reinstall with `uv sync`"
         ) from exc
 
     static_dir = Path(__file__).with_name("static")

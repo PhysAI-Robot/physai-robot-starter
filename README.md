@@ -189,58 +189,26 @@ in the robot runbooks.
 
 ## Isaac Sim (optional, local GPU only)
 
-A second, optional backend for evaluating a MuJoCo-tuned policy's sim-to-sim
-gap (see `docs/adr/0013-isaac-sim-optional-backend.md`). Verified end to end
-against real Isaac Sim 6.1.0.0 on an RTX 3060, installed straight into this
-project's own `.venv`:
+A second backend for measuring a MuJoCo-tuned policy's sim-to-sim gap.
+Verified end to end against real Isaac Sim 6.1.0.0 on an RTX 3060, and
+installs straight into this project's own `.venv` — no separate
+environment (see [ADR 16](docs/adr/0016-isaacsim-as-a-project-extra.md)):
 
 ```bash
 uv sync --extra isaac --extra training
+OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/run_sim.py --sim isaac --manifest configs/manifests/so101_isaac.yaml
 ```
 
-Dev tooling (pytest, ruff, ...) and the browser viewer are both part of the
-base install now, not extras to choose between — only `training` (this
-project's two real extras are `training` and `isaac`) installs alongside
-`isaac` with no conflict; the only extra `isaac` conflicts with is
-`webtest` (`httpx2`, needed by exactly one test). `--viewer` needs neither
-`isaac` nor anything extra at all (`mujoco.viewer` is part of the base
-install). See `docs/adr/0016-isaacsim-as-a-project-extra.md` for why.
-Isaac Sim's own
-NVIDIA Omniverse EULA must be accepted once per machine, non-interactively,
-by setting `OMNI_KIT_ACCEPT_EULA=YES` in the environment before running
-anything that constructs a `SimulationApp` — set it yourself; nothing in
-this project sets it for you.
+`OMNI_KIT_ACCEPT_EULA=YES` accepts the NVIDIA Omniverse EULA
+non-interactively — set it yourself; nothing here does it for you. Select
+Isaac the same way from a manifest's `simulator: isaac` field (see
+`configs/manifests/so101_isaac.yaml`) or `create_robot(..., simulator=
+"isaac")` in Python.
 
-Then select it, either from the command line:
-
-```bash
-python scripts/run_sim.py --sim isaac --manifest configs/manifests/so101_isaac.yaml
-```
-
-in a session manifest's top-level `simulator` field (see
-`configs/manifests/so101_isaac.yaml`):
-
-```yaml
-simulator: isaac
-robots:
-  - id: arm_1
-    robot: so101
-```
-
-or in Python:
-
-```python
-from physai.robots import create_robot
-
-robot = create_robot("so101", simulator="isaac")
-```
-
-`SO101IsaacEnv` is robot-only for now (no task or scene objects yet — see
-`docs/adr/0013-isaac-sim-optional-backend.md`); a manifest or `--sim isaac`
-run must set no `task` (`configs/manifests/so101_isaac.yaml` doesn't), and
-`--viewer`/`--serve` stay MuJoCo-only (see
-`docs/adr/0015-simulator-engine-selection.md`). `pytest -m isaac` runs the
-Isaac-backed acceptance tests wherever `isaacsim` is importable.
+`SO101IsaacEnv` is robot-only for now (no task/scene objects), so a
+manifest must set no `task`, and `--viewer`/`--serve` stay MuJoCo-only
+(see [ADR 15](docs/adr/0015-simulator-engine-selection.md)). `pytest -m
+isaac` runs the Isaac-backed acceptance tests.
 
 ## Python API
 

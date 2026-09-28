@@ -2,17 +2,14 @@
 
 ## Status
 
-Accepted. The package layout and adapter names below were superseded by
-[ADR 14](0014-simulator-package-layout.md): `physai.isaac` moved to
-`physai.sim.isaac`, and `DirectMuJoCoAdapter` was renamed `DirectAdapter`.
-[ADR 15](0015-simulator-engine-selection.md) superseded the "no manifest
-schema change" and "no new registry seam" parts below: `simulator` is now a
-top-level manifest field and a `RobotDescriptor.simulators` registry check,
-not only a `config:`-routed factory kwarg. [ADR 16](0016-isaacsim-as-a-project-extra.md)
-superseded the "isaacsim is not a `pyproject.toml` extra, install into a
-separate venv" part: it is now `uv sync --extra isaac`, into this project's
-own `.venv`. `SO101IsaacEnv`'s narrower scope (no jog/IK/task-scene objects)
-still holds.
+Accepted, but mostly superseded: [ADR 14](0014-simulator-package-layout.md)
+moved `physai.isaac` to `physai.sim.isaac` and renamed
+`DirectMuJoCoAdapter` to `DirectAdapter`; [ADR 15](0015-simulator-engine-selection.md)
+made `simulator` a top-level manifest field and registry check instead of
+only a `config:`-routed kwarg; [ADR 16](0016-isaacsim-as-a-project-extra.md)
+replaced the separate-venv install below with `uv sync --extra isaac`.
+Only `SO101IsaacEnv`'s narrower scope (no jog/IK/task-scene objects) still
+holds as written.
 
 ## Context
 

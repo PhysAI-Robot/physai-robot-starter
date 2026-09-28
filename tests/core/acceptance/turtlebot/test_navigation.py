@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from conftest import requires_turtlebot_assets
+from tests.conftest import requires_turtlebot_assets
 
 pytestmark = [pytest.mark.acceptance, pytest.mark.slow, requires_turtlebot_assets]
 
