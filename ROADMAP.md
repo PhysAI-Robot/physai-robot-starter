@@ -158,16 +158,32 @@ itself).
   unit conversion, closed-loop joint tracking, camera rendering).
 - [x] Parity ladder tiers 1-2 (static FK/joint-order match, actuator step
   response) as `pytest.mark.isaac` tests.
-- [ ] Parity ladder tier 3 (contact): a cube grasp-hold test, comparing slip
-  against the MuJoCo no-slip baseline (0.0 mm) — needs `SO101IsaacEnv` to
-  grow task/scene objects first (it is robot-only today).
+- [x] Parity ladder tier 3 (contact): a cube grasp-hold test
+  (`tests/research/scripted_experts/test_so101_grasp_hold_isaac.py`),
+  passing against real Isaac Sim on an RTX 3060 (<1 mm drift over 12 s,
+  matching MuJoCo's own tolerance). `SO101IsaacEnv` grew a minimal,
+  opt-in `cube` (`GraspCubeConfig`, `sim.isaac.objects.add_cube`) — not a
+  `ManipulationSceneConfig` port (no table, target, layout, or
+  randomization), scoped to exactly this test. `apply_contact_friction`
+  was wired in (previously defined but never called) and both it and the
+  cube's material force PhysX's friction-combine mode to "max", matching
+  MuJoCo's own combine policy instead of PhysX's default (average).
 - [ ] Parity ladder tier 4 (closed-loop): `visual_servo`/ACT on identical
   seeds and layouts in both simulators, success rate and failure causes via
-  `scripts/report_evaluation.py`.
-- [ ] `ArmKinematics` (`robots/so101/kinematics.py`) taking joint positions
-  instead of `MjData`, so `SO101IsaacEnv` can reuse it for IK — deferred
-  until tier 3/4 need it (25+ call sites, no second consumer to validate
-  the new shape against yet).
+  `scripts/report_evaluation.py`. Needs cross-simulator seed/layout
+  determinism (`robots/so101/layout.py`'s RNG-draw-order contract has no
+  Isaac equivalent yet) and `IsaacEnvConfig` to carry the geometry
+  `visual_servo` itself reads (`env.cfg.scene.table_pos`/`table_size`/
+  `cube_half`), on top of tier 3's cube.
+- [x] `ArmKinematics` (`robots/so101/kinematics.py`) partially converted:
+  `qpos_to_site_pose`/`pinch_center_from_qpos`, new additive methods aside
+  `fk`/`tool_pose`/`pinch_center`'s existing `MjData`-taking ones, cover
+  what tier 3 needed. `ik`/`ik_pinch` already took only joint positions
+  and needed no change. `forbidden_contact_body_pairs` (full-scene
+  collision detection, not just this arm's FK) remains MuJoCo-only — no
+  Isaac contact-query API is wired up yet; deferred until something
+  besides `so101_pick_place_expert.py`'s own MuJoCo-only `_cube_grasped`
+  needs it.
 
 Definition of done: identical seeds/layouts across both simulators, a
 results table per tier, and the main causes of any gap identified.
