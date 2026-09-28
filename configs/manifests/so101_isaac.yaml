@@ -1,12 +1,15 @@
-# SO-101 on Isaac Sim instead of MuJoCo. Run it (in the separate Isaac venv,
+# SO-101 on Isaac Sim instead of MuJoCo. Run it (needs isaacsim installed,
 # see README.md) with:
 #   python scripts/run_sim.py --manifest configs/manifests/so101_isaac.yaml
 # Sets no `task`: SO101IsaacEnv is robot-only for now (no scene/task objects
 # yet, see docs/adr/0013-isaac-sim-optional-backend.md), so a manifest that
-# names one fails at construction. --viewer/--serve are MuJoCo-only for now.
+# names one fails at construction. `policy: constant` because the headless
+# default ("scripted") needs MuJoCo-only ArmKinematics. --viewer/--serve are
+# MuJoCo-only for now. Verified end to end (see docs/adr/0016).
 schema_version: 1
 
 simulator: isaac
+policy: constant
 
 robots:
   - id: arm_1

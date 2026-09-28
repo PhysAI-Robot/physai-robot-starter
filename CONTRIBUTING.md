@@ -55,7 +55,7 @@ commit. A roadmap update should normally be a separate `[docs]` commit.
 Install development dependencies and run the test suite from the project root:
 
 ```bash
-uv sync --extra dev --extra web --extra training
+uv sync --extra training
 uv run ruff format --check .
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 ```

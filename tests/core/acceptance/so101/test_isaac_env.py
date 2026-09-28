@@ -1,9 +1,7 @@
 """Phase 3 parity-ladder tiers 1-2 against real Isaac Sim: URDF import and
-actuator step response. Skipped wherever `isaacsim` is not importable (this
-project's own dev venv does not, and cannot cleanly, install it — see
-`docs/adr/0013-isaac-sim-optional-backend.md`); run these with a separate
-venv's python that has `isaacsim` installed and this repo's `src/` on
-`PYTHONPATH`.
+actuator step response. Skipped wherever `isaacsim` is not installed —
+`uv sync --extra isaac` installs it into this project's own venv (see
+`docs/adr/0016-isaacsim-as-a-project-extra.md`).
 
 One `SimulationApp` per process is a hard Isaac Sim constraint (see
 `physai.sim.isaac.core`), so every test in this module shares one
@@ -17,9 +15,20 @@ import numpy as np
 import pytest
 from conftest import requires_assets
 
-pytest.importorskip(
-    "isaacsim", reason="run with a separate venv's python that has isaacsim installed"
+_isaacsim = pytest.importorskip(
+    "isaacsim", reason="uv sync --extra isaac installs isaacsim"
 )
+if not hasattr(_isaacsim, "SimulationApp"):
+    # `isaacsim` can still be a bare, empty namespace package after `uv sync`
+    # drops the `isaac` extra: it only removes files the wheel's own RECORD
+    # lists, not the extsUser/kit directories isaacsim writes under its own
+    # install path at runtime, so a stale `isaacsim/` directory can outlive
+    # the real package and make a plain `importorskip("isaacsim")` succeed
+    # on nothing.
+    pytest.skip(
+        "isaacsim package is present but empty (stale extra switch?)",
+        allow_module_level=True,
+    )
 
 pytestmark = [
     pytest.mark.acceptance,
