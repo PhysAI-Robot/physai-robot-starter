@@ -229,10 +229,11 @@ def apply_contact_friction(stage: Any, desc: RobotDescription) -> None:
     link's collision geometry.
 
     PhysX combines two materials' friction by averaging by default, where
-    MuJoCo takes the max; a like-for-like comparison needs one side's
-    combine mode set explicitly, which is left to `desc.sim_overrides
-    ["physx"]` rather than hardcoded here (a global solver policy, not
-    per-pad data).
+    MuJoCo takes the max; the combine mode is forced to "max" here (see
+    `sim.isaac.objects.add_cube`'s matching fix on the object side) so a
+    grasp/slip comparison isn't confounded by the two engines disagreeing
+    on combine policy before either engine's grasp physics enters the
+    picture.
     """
     from pxr import PhysxSchema, UsdPhysics, UsdShade
 
@@ -246,7 +247,8 @@ def apply_contact_friction(stage: Any, desc: RobotDescription) -> None:
         physics_material = UsdPhysics.MaterialAPI.Apply(material.GetPrim())
         physics_material.CreateStaticFrictionAttr(pad.friction[0])
         physics_material.CreateDynamicFrictionAttr(pad.friction[0])
-        PhysxSchema.PhysxMaterialAPI.Apply(material.GetPrim())
+        physx_material = PhysxSchema.PhysxMaterialAPI.Apply(material.GetPrim())
+        physx_material.CreateFrictionCombineModeAttr("max")
         parent_prim = stage.GetPrimAtPath(parent_path)
         if parent_prim.IsValid():
             UsdShade.MaterialBindingAPI.Apply(parent_prim).Bind(
