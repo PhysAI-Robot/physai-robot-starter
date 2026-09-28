@@ -27,11 +27,15 @@ import numpy as np
 
 from ...contracts import (
     Action,
+    CameraIntrinsics,
     GripperCommand,
     Header,
     ImageFrame,
     JointState,
     Observation,
+    Pose,
+    Quaternion,
+    Vector3,
 )
 from ...sim.isaac.core import IsaacSimulationCore, ensure_simulation_app
 from ...sim.isaac.description import (
@@ -42,7 +46,7 @@ from ...sim.isaac.description import (
 )
 from ...sim.isaac.description import import_robot as isaac_import_robot
 from ...sim.isaac.objects import add_cube, prim_world_position
-from ...sim.isaac.scene import add_ground_plane, add_studio_lighting
+from ...sim.isaac.scene import add_ground_plane, add_studio_lighting, add_world_camera
 from ..base import RobotSpec, RobotTrainingContract
 from ..description import RobotDescription, load_robot_description
 from .contracts import (
@@ -76,13 +80,32 @@ class GraspCubeConfig:
 
 
 @dataclass
+class FrontCameraConfig:
+    """A world-fixed camera, for `SO101VisualServoPolicy`'s default
+    `camera="front"` (tier-4 parity, `ROADMAP.md`'s 2E) — not attached to
+    the robot's articulation, unlike `IsaacEnvConfig.cameras`' other
+    entries (link-mounted, via `RobotDescription.cameras`). Defaults mirror
+    `WorldSceneConfig.front_cam_pos`/`front_cam_xyaxes` and
+    `build_manipulation_spec`'s hardcoded `fovy=48` exactly, so both
+    simulators frame the scene the same way.
+    """
+
+    position: tuple[float, float, float] = (0.62, 0.0, 0.38)
+    x_axis: tuple[float, float, float] = (0.0, 1.0, 0.0)
+    y_axis: tuple[float, float, float] = (-0.45, 0.0, 0.9)
+    fovy_deg: float = 48.0
+    width: int = 320
+    height: int = 240
+
+
+@dataclass
 class IsaacEnvConfig:
     """SO-101-on-Isaac simulation and observation settings.
 
     Deliberately narrower than `so101.mujoco_env.EnvConfig`: no `scene` (no
-    task objects beyond the optional `cube` below) and no domain
-    randomization (Isaac's own randomization tooling is a separate
-    integration).
+    task objects beyond the optional `cube`/`front_camera`/`target_pos`
+    below) and no domain randomization (Isaac's own randomization tooling
+    is a separate integration).
     """
 
     description: RobotDescription | None = None
@@ -100,6 +123,11 @@ class IsaacEnvConfig:
     seed: int | None = None
     gripper_force_limit: float = 0.3
     cube: GraspCubeConfig | None = None
+    front_camera: FrontCameraConfig | None = None
+    # (x, y) is what SO101VisualServoPolicy's TRANSFER/LOWER/RELEASE phases
+    # actually read (see `_waypoint()`); z is recomputed from `rest_z`
+    # separately, matching the MuJoCo side's own `target_pos` exactly.
+    target_pos: tuple[float, float, float] | None = None
 
 
 class SO101IsaacEnv:
@@ -136,6 +164,27 @@ class SO101IsaacEnv:
         apply_frames(self.stage, self.description)
         apply_contact_friction(self.stage, self.description)
         self._camera_prims = apply_cameras(self.stage, self.description)
+
+        if self.cfg.front_camera is not None:
+            front = self.cfg.front_camera
+            x_axis = np.asarray(front.x_axis, dtype=np.float64)
+            y_axis = np.asarray(front.y_axis, dtype=np.float64)
+            x_axis /= np.linalg.norm(x_axis)
+            y_axis /= np.linalg.norm(y_axis)
+            z_axis = np.cross(x_axis, y_axis)
+            quat = np.zeros(4)
+            mujoco.mju_mat2Quat(
+                quat, np.stack([x_axis, y_axis, z_axis], axis=1).reshape(9)
+            )
+            self._camera_prims["front"] = add_world_camera(
+                self.stage,
+                "/World_front_camera",
+                position=front.position,
+                quat_wxyz=tuple(quat),
+                fovy_deg=front.fovy_deg,
+                width=front.width,
+                height=front.height,
+            )
 
         self._cube_path: str | None = None
         if self.cfg.cube is not None:
@@ -203,6 +252,73 @@ class SO101IsaacEnv:
         if self._cube_path is None:
             raise AttributeError("this SO101IsaacEnv has no cube (cfg.cube is None)")
         return prim_world_position(self.stage, self._cube_path)
+
+    @property
+    def rest_z(self) -> float:
+        """Height a cube rests at — `SO101VisualServoPolicy`'s `_waypoint()`
+        reads this instead of MuJoCo's `cfg.scene.table_pos`/`table_size`/
+        `cube_half` (this env has no table; `cfg.cube` sits directly on the
+        ground plane, see `GraspCubeConfig`'s own docstring)."""
+        if self.cfg.cube is None:
+            raise AttributeError("this SO101IsaacEnv has no cube (cfg.cube is None)")
+        return self.cfg.cube.position[2]
+
+    @property
+    def target_pos(self) -> np.ndarray:
+        if self.cfg.target_pos is None:
+            raise AttributeError(
+                "this SO101IsaacEnv has no target (cfg.target_pos is None)"
+            )
+        return np.asarray(self.cfg.target_pos, dtype=np.float64)
+
+    def camera_calibration(self, name: str) -> tuple[CameraIntrinsics, Pose]:
+        """This camera's pinhole intrinsics and its pose in the base frame.
+
+        Only implemented for `"front"` (a world-fixed camera at a known,
+        static pose — see `FrontCameraConfig`); a link-mounted camera (e.g.
+        `"wrist"`) moves with the arm and has no equivalent here yet.
+        `SO101VisualServoPolicy._refine_from_final_camera` already treats a
+        missing calibration as "skip this refinement", not a hard failure,
+        so this is enough for tier 4's control loop to run.
+        """
+        if name != "front" or self.cfg.front_camera is None:
+            raise KeyError(f"camera {name!r} has no calibration in this env")
+        front = self.cfg.front_camera
+        width, height = self.core.camera_size
+        # A pinhole camera's focal length is one physical quantity; fx == fy
+        # in pixel units once the horizontal aperture is itself scaled by
+        # width/height (`add_world_camera`'s `CreateHorizontalApertureAttr`
+        # call does this) -- an `fx = fy * width / height` cross term here
+        # double-counts that scaling and mis-triangulates any pixel whose
+        # horizontal axis isn't aligned with a world axis this ratio cancels
+        # out for by symmetry (verified against the tier-4 visual-servo
+        # test: this camera's horizontal pixel axis maps to world Y, and a
+        # 4:3 aspect miscalibration here showed up as a ~2cm world-Y offset
+        # between the triangulated cube position and its real position).
+        fy = height / (2.0 * np.tan(np.deg2rad(front.fovy_deg) / 2.0))
+        intrinsics = CameraIntrinsics(
+            fx=fy, fy=fy, cx=(width - 1) / 2.0, cy=(height - 1) / 2.0
+        )
+        # MuJoCo's own camera axes (x right, y up, z backward) -> the ROS
+        # optical-frame convention ImageFrame.extrinsics documents (x right,
+        # y down, z forward); mirrors mujoco_env.py's camera_calibration()
+        # exactly, since `front.x_axis`/`front.y_axis` are given in that
+        # same MuJoCo `xyaxes` convention.
+        x_axis = np.asarray(front.x_axis, dtype=np.float64)
+        y_axis = np.asarray(front.y_axis, dtype=np.float64)
+        x_axis /= np.linalg.norm(x_axis)
+        y_axis /= np.linalg.norm(y_axis)
+        z_axis = np.cross(x_axis, y_axis)
+        rotation = np.stack([x_axis, y_axis, z_axis], axis=1) @ np.diag(
+            [1.0, -1.0, -1.0]
+        )
+        quat = np.zeros(4)
+        mujoco.mju_mat2Quat(quat, rotation.reshape(9))
+        extrinsics = Pose(
+            position=Vector3.from_array(np.asarray(front.position)),
+            orientation=Quaternion.from_mujoco(quat),
+        )
+        return intrinsics, extrinsics
 
     def _arm_qpos(self) -> np.ndarray:
         return np.asarray(self.articulation.get_dof_positions())[0, self._arm_indices]
@@ -304,6 +420,10 @@ class SO101IsaacEnv:
             for camera in self.cfg.cameras:
                 if camera not in self._camera_prims:
                     continue
+                try:
+                    intrinsics, extrinsics = self.camera_calibration(camera)
+                except KeyError:
+                    intrinsics, extrinsics = None, None
                 images[camera] = ImageFrame(
                     data=self.render_camera(camera),
                     camera_name=camera,
@@ -311,6 +431,8 @@ class SO101IsaacEnv:
                         stamp=self.step_count * self.core.control_dt,
                         frame_id=f"camera_{camera}",
                     ),
+                    intrinsics=intrinsics,
+                    extrinsics=extrinsics,
                 )
         return Observation(
             joint_state=self._joint_state(),
@@ -341,4 +463,9 @@ class SO101IsaacEnv:
         self.core.close()
 
 
-__all__ = ["GraspCubeConfig", "IsaacEnvConfig", "SO101IsaacEnv"]
+__all__ = [
+    "FrontCameraConfig",
+    "GraspCubeConfig",
+    "IsaacEnvConfig",
+    "SO101IsaacEnv",
+]

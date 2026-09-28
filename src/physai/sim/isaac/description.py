@@ -163,6 +163,13 @@ def apply_frames(stage: Any, desc: RobotDescription) -> None:
 #: the MuJoCo-style `fovy` (full vertical angle) is solved against.
 DEFAULT_VERTICAL_APERTURE_MM = 20.955
 
+#: USD's own default camera clipping range is `(1, 1_000_000)` stage units;
+#: with this project's meter-scale stage, that 1-unit near plane clips away
+#: everything closer than 1 metre -- this robot's whole reach (~0.2-0.6 m)
+#: and any wrist-mounted camera's typical subject distance. Both
+#: `apply_cameras` and `sim.isaac.scene.add_world_camera` set this instead.
+DEFAULT_CLIPPING_RANGE_M = (0.01, 100.0)
+
 
 def fovy_to_focal_length(
     fovy_deg: float, *, vertical_aperture_mm: float = DEFAULT_VERTICAL_APERTURE_MM
@@ -218,6 +225,7 @@ def apply_cameras(stage: Any, desc: RobotDescription) -> dict[str, str]:
         cam.CreateHorizontalApertureAttr(
             vertical_aperture_mm * camera.width / camera.height
         )
+        cam.CreateClippingRangeAttr(Gf.Vec2f(*DEFAULT_CLIPPING_RANGE_M))
         added[camera.name] = prim_path
     return added
 

@@ -412,3 +412,23 @@ class SO101Env(MuJoCoSimulationCore):
     @property
     def cube_half(self) -> float:
         return self.cfg.scene.cube_half
+
+    @property
+    def rest_z(self) -> float:
+        """Height a cube resting on the table sits at.
+
+        `SO101VisualServoPolicy._waypoint()` reads this instead of
+        `table_top + cube_half` inline, so the same call works against
+        `SO101IsaacEnv` (which has no table or `cfg.scene` at all).
+        """
+        return self.table_top + self.cube_half
+
+    def pinch_center(self) -> np.ndarray:
+        """Where the gripper's pinch point currently is.
+
+        A no-arg wrapper of `self.kin.pinch_center(self.data)`, so callers
+        (`SO101PickPlaceExpert`, `SO101VisualServoPolicy`) can read it
+        without holding a MuJoCo `data` reference — `SO101IsaacEnv` has the
+        same method, backed by observed joint state instead.
+        """
+        return self.kin.pinch_center(self.data)

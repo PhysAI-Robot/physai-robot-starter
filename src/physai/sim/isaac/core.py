@@ -106,7 +106,8 @@ class IsaacSimulationCore:
         import omni.replicator.core as rep
 
         annotator = self._render_products.get(prim_path)
-        if annotator is None:
+        is_new = annotator is None
+        if is_new:
             width, height = self._camera_size
             render_product = rep.create.render_product(
                 prim_path, resolution=(width, height)
@@ -115,8 +116,19 @@ class IsaacSimulationCore:
             annotator.attach(render_product)
             self._render_products[prim_path] = annotator
         rep.orchestrator.step(rt_subframes=1)
-        frame = annotator.get_data()
-        return np.asarray(frame)[:, :, :3].copy()
+        frame = np.asarray(annotator.get_data())
+        # A render product's first frame, right after attach(), can come
+        # back empty (1-D) when this process's Replicator orchestrator is
+        # already running from an earlier env instance's camera(s) -- a
+        # fresh-in-process orchestrator doesn't need this, but stepping a
+        # couple more times costs little and makes a later env's first
+        # render call as reliable as its own second one.
+        retries = 5 if is_new else 0
+        while frame.ndim != 3 and retries > 0:
+            rep.orchestrator.step(rt_subframes=1)
+            frame = np.asarray(annotator.get_data())
+            retries -= 1
+        return frame[:, :, :3].copy()
 
     def close(self) -> None:
         self._render_products.clear()

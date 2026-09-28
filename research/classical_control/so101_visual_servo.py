@@ -206,7 +206,10 @@ class SO101VisualServoPolicy(Policy):
         self.ee_tolerance = float(ee_tolerance)
         control_dt = dt or (1.0 / float(getattr(env.cfg, "control_hz", 30.0)))
         self._resolver = TwistToJointResolver(
-            env.kin, data=env.data, dt=control_dt, max_joint_step=0.08
+            env.kin,
+            state_provider=lambda: env.data,
+            dt=control_dt,
+            max_joint_step=0.08,
         )
         self._limiter = JointRateLimiter(max_joint_rate, control_dt)
         self.metrics = VisualServoMetrics()
@@ -323,8 +326,7 @@ class SO101VisualServoPolicy(Policy):
     def _waypoint(self) -> tuple[np.ndarray, float]:
         if self._target_xy is None:
             raise RuntimeError("visual target is not initialized")
-        table_top = self.env.cfg.scene.table_pos[2] + self.env.cfg.scene.table_size[2]
-        rest_z = table_top + self.env.cfg.scene.cube_half
+        rest_z = self.env.rest_z
         cube_z = self.target_plane_z
         if self._phase is VisualServoPhase.APPROACH:
             return np.array([*self._target_xy, cube_z + 0.045]), 1.0
@@ -402,7 +404,7 @@ class SO101VisualServoPolicy(Policy):
             np.clip(grip_goal, self._grip - 0.9 * self._dt, self._grip + 0.9 * self._dt)
         )
         self._q_cmd = self._limiter(self._solve(target))
-        pinch = self.env.kin.pinch_center(self.env.data)
+        pinch = self.env.pinch_center()
         reached = float(np.linalg.norm(pinch - target)) <= self.ee_tolerance
         self._elapsed_steps += 1
         if reached and self._settling_time_s is None:
