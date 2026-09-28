@@ -174,7 +174,28 @@ itself).
   determinism (`robots/so101/layout.py`'s RNG-draw-order contract has no
   Isaac equivalent yet) and `IsaacEnvConfig` to carry the geometry
   `visual_servo` itself reads (`env.cfg.scene.table_pos`/`table_size`/
-  `cube_half`), on top of tier 3's cube.
+  `cube_half`), on top of tier 3's cube. First pass verified against real
+  Isaac Sim (`tests/research/classical_control/test_so101_visual_servo_isaac.py`):
+  the unmodified `SO101VisualServoPolicy` runs its full detect -> approach ->
+  descend -> close -> lift -> transfer -> lower -> release -> retreat phase
+  sequence end to end, and the front-camera vision/triangulation pipeline is
+  accurate to ~1-2mm (fixed two real bugs along the way: USD's default
+  camera `clippingRange` of `(1, 1e6)` stage units was clipping the entire
+  workspace at this project's meter scale, in both `apply_cameras` and
+  `add_world_camera`; and `camera_calibration()`'s `fx = fy * width /
+  height` was wrong for a pinhole camera whose horizontal aperture is
+  itself scaled by that same ratio — should just be `fx = fy` — mirrored
+  from the identical, still-unfixed formula in `mujoco_env.py`). Blocked on
+  an actual pick: the "gripper" joint's PhysX drive reads/writes correctly
+  and spins its full range, but the moving jaw's own rigid-body prim does
+  not move at all regardless of commanded position — confirmed by holding a
+  full squeeze at the (now pixel-accurate) cube location for 60 steps and
+  lifting: the cube never leaves the ground. Joint wiring (body0/body1),
+  `RigidBodyAPI`/mass/inertia, and articulation flags
+  (`excludeFromArticulation`, `jointEnabled`) all look identical to the
+  working arm joints; root cause not found via scripted USD/PhysX attribute
+  inspection alone — needs GUI-based physics debugging or a diff against a
+  known-working Isaac Sim parallel-jaw gripper sample.
 - [x] `ArmKinematics` (`robots/so101/kinematics.py`) partially converted:
   `qpos_to_site_pose`/`pinch_center_from_qpos`, new additive methods aside
   `fk`/`tool_pose`/`pinch_center`'s existing `MjData`-taking ones, cover
