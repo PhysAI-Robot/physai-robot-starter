@@ -33,11 +33,7 @@ def evaluate_mode(args: argparse.Namespace, randomized: bool) -> dict:
     robot = create_robot(
         "so101",
         config=EnvConfig(
-            scene=PickPlaceMinimalSceneConfig(
-                camera_width=128,
-                camera_height=128,
-                clutter_count=args.clutter_count,
-            ),
+            scene=PickPlaceMinimalSceneConfig(clutter_count=args.clutter_count),
             max_steps=args.max_steps,
             render=False,
             domain_randomization=config,

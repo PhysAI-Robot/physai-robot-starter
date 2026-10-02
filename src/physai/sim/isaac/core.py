@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ...contracts import CAMERA_HEIGHT, CAMERA_WIDTH
+
 _APP: Any | None = None
 
 
@@ -59,8 +61,8 @@ class IsaacSimulationCore:
         control_hz: float,
         physics_hz: float = 60.0,
         render: bool = False,
-        camera_width: int = 640,
-        camera_height: int = 480,
+        camera_width: int = CAMERA_WIDTH,
+        camera_height: int = CAMERA_HEIGHT,
     ) -> None:
         if control_hz <= 0 or physics_hz <= 0:
             raise ValueError("control_hz and physics_hz must be positive")

@@ -22,7 +22,14 @@ import imageio.v3 as iio
 import mujoco
 import numpy as np
 
-from ..contracts import Action, GripperCommand, Header, ImageFrame, Twist
+from ..contracts import (
+    CAMERA_SIZE,
+    Action,
+    GripperCommand,
+    Header,
+    ImageFrame,
+    Twist,
+)
 from ..robots.base import RobotPort
 from ..robots.registry import create_jog_resolver, create_shared_instance
 from ..sim.mujoco.world import RobotInstanceConfig, SharedWorld
@@ -88,6 +95,7 @@ class Host:
         self._physics_lock = threading.Lock()
         self._state: dict[str, Any] | None = None
         self._thread: threading.Thread | None = None
+        self._inline = False
         self._stop = threading.Event()
         self._paused = False
         self._observation = None
@@ -234,8 +242,22 @@ class Host:
         )
         self._thread.start()
 
+    def run(self) -> None:
+        """Step the host on the calling thread until `stop()` is requested.
+
+        For a simulator whose runtime must stay on the thread that created it
+        (Isaac Sim); `start()` runs the same loop on a worker thread instead.
+        """
+        if self._thread is not None:
+            raise RuntimeError("host already started")
+        self._start_camera_thread()
+        self._inline = True
+        self._run()
+
     def stop(self) -> None:
         self._stop.set()
+        if self._inline:
+            return  # run()'s own finally closes the robot
         if self._thread is None:
             self._close()
             return
@@ -726,9 +748,9 @@ class Host:
         if not camera_specs:
             return
         if self._shared:
-            size = (320, 240)
+            size = CAMERA_SIZE
         else:
-            size = getattr(self.robot, "camera_size", None) or (640, 480)
+            size = getattr(self.robot, "camera_size", None) or CAMERA_SIZE
         self._cameras.start(
             self.model,
             self.data,

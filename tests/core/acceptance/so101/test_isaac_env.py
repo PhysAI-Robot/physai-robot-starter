@@ -113,3 +113,29 @@ def test_wrist_camera_renders_a_real_non_black_frame(env):
     frame = observation.images["wrist"]
     assert frame.data.shape == (240, 320, 3)
     assert frame.data.mean() > 10.0
+
+
+def test_wrist_calibration_follows_the_rendering_camera_prim(env):
+    """The wrist pose `visual_servo` triangulates with comes from the mirror's
+    forward kinematics, so it must agree with the USD camera that actually
+    renders -- at home and after the arm has moved."""
+    from pxr import Usd, UsdGeom
+
+    from physai.contracts import Action
+
+    def usd_camera_position() -> np.ndarray:
+        prim = env.stage.GetPrimAtPath(env._camera_prims["wrist"])
+        matrix = UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(
+            Usd.TimeCode.Default()
+        )
+        return np.array(matrix.ExtractTranslation())
+
+    env.reset()
+    for _ in range(2):
+        _, extrinsics = env.camera_calibration("wrist")
+        np.testing.assert_allclose(
+            extrinsics.position.as_array(), usd_camera_position(), atol=0.01
+        )
+        for _ in range(30):
+            env.step(Action(joint_position=np.array([0.5, -0.5, 0.5, 0.5, 0.0])))
+        env.observe()

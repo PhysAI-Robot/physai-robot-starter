@@ -7,6 +7,7 @@ from tests.conftest import requires_assets
 SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"
 WORLD = "configs/worlds/heterogeneous.yaml"
 TASK = "configs/tasks/so101/pick_place.yaml"
+ISAAC = "configs/manifests/so101_isaac.yaml"
 
 
 @pytest.fixture
@@ -38,7 +39,7 @@ def test_serve_alone_runs_headless_and_overrides_reach_the_manifest(
     captured = capture_viewer(
         run_sim,
         monkeypatch,
-        ["--serve", "--seed", "4", "--max-steps", "77", "--camera-size", "96"],
+        ["--serve", "--seed", "4", "--max-steps", "77"],
     )
 
     assert (captured["args"].viewer, captured["args"].serve) == (False, True)
@@ -46,7 +47,30 @@ def test_serve_alone_runs_headless_and_overrides_reach_the_manifest(
     assert manifest.task == "pick_place"
     assert manifest.simulation.seed == 4
     assert manifest.robots[0].config["max_steps"] == 77
-    assert manifest.scene.overrides["camera_height"] == 96
+
+
+def test_isaac_serve_reaches_the_viewer_path(run_sim, monkeypatch):
+    captured = capture_viewer(
+        run_sim, monkeypatch, ["--sim", "isaac", "--manifest", ISAAC, "--serve"]
+    )
+
+    assert captured["manifest"].simulator == "isaac"
+
+
+def test_camera_res_flag_reaches_the_manifest_and_rejects_other_sizes(
+    run_sim, monkeypatch
+):
+    captured = capture_viewer(
+        run_sim, monkeypatch, ["--serve", "--camera-res", "640x480"]
+    )
+    assert captured["manifest"].simulation.camera_resolution == "640x480"
+
+    default = capture_viewer(run_sim, monkeypatch, ["--serve"])
+    assert default["manifest"].simulation.camera_resolution == "320x240"
+
+    monkeypatch.setattr(sys, "argv", ["run_sim.py", "--camera-res", "64x64"])
+    with pytest.raises(SystemExit):
+        run_sim.main()
 
 
 def test_turtlebot_viewer_gets_a_resolved_step_limit(run_sim, monkeypatch):
@@ -95,6 +119,14 @@ def test_incompatible_flags_are_rejected(run_sim, monkeypatch, capsys):
             "not available with a shared world",
         ),
         (["--config", TASK, "--robot", "turtlebot4"], "does not match"),
+        (
+            ["--sim", "isaac", "--manifest", ISAAC, "--viewer"],
+            "--viewer is MuJoCo-only",
+        ),
+        (
+            ["--sim", "isaac", "--manifest", ISAAC, "--serve", "--record-dir", "d"],
+            "--record-dir is MuJoCo-only",
+        ),
     ]
 
     for argv, message in cases:
@@ -126,7 +158,7 @@ def test_headless_episodes_run_from_a_manifest_and_name_their_video(
 
     # with no policy named, the video is named after the one actually run
     videos = tmp_path / "videos"
-    video_run = ["run_sim.py", "--video", "--max-steps", "3", "--camera-size", "64"]
+    video_run = ["run_sim.py", "--video", "--max-steps", "3"]
     monkeypatch.setattr(sys, "argv", [*video_run, "--out", str(videos)])
     assert run_sim.main() == 0
     assert [path.stem for path in videos.iterdir()] == ["scripted_ep000"]

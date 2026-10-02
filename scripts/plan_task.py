@@ -48,7 +48,7 @@ def main() -> int:
     robot = create_robot(
         args.robot,
         config=EnvConfig(
-            scene=PickPlaceMinimalSceneConfig(camera_width=512, camera_height=384),
+            scene=PickPlaceMinimalSceneConfig(),
             seed=args.seed,
             max_steps=args.max_steps,
             render=True,

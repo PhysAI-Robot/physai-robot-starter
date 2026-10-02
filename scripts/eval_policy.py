@@ -15,6 +15,7 @@ from pathlib import Path
 
 import _bootstrap  # noqa: F401
 from _common_args import (
+    add_camera_resolution,
     add_checkpoint,
     add_episodes,
     add_max_steps,
@@ -23,6 +24,7 @@ from _common_args import (
     add_seed,
 )
 
+from physai.contracts import DEFAULT_CAMERA_RESOLUTION
 from physai.data import EvaluationReport, load_episode
 from physai.policy import available_policies, create_policy
 from physai.robots import create_robot
@@ -59,13 +61,7 @@ def main() -> int:
     )
     ap.add_argument("--dataset", type=Path, help="required for --policy replay")
     add_checkpoint(ap, help="required for --policy lerobot")
-    ap.add_argument(
-        "--camera-size",
-        type=int,
-        default=224,
-        help="env camera render resolution (downscaled to the "
-        "checkpoint's training size internally)",
-    )
+    add_camera_resolution(ap)
     ap.add_argument(
         "--render",
         action="store_true",
@@ -82,13 +78,10 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    # An image-conditioned policy cannot run without rendered cameras, and it
-    # must see them at the resolution --camera-size asks for. Both were lost
-    # when env construction moved behind create_robot(): render defaulted to
-    # --render alone (so `--policy lerobot` died on an empty images dict) and
-    # --camera-size stopped reaching the scene config entirely.
+    # An image-conditioned policy cannot run without rendered cameras: render
+    # defaulted to --render alone (so `--policy lerobot` died on an empty
+    # images dict) once env construction moved behind create_robot().
     needs_images = args.policy in {"lerobot", "visual_servo"}
-    scene_kwargs = {"camera_width": args.camera_size, "camera_height": args.camera_size}
     scene_type = (
         SortingMinimalSceneConfig if args.sorting else PickPlaceMinimalSceneConfig
     )
@@ -101,7 +94,9 @@ def main() -> int:
     robot = create_robot(
         args.robot,
         config=EnvConfig(
-            scene=scene_type(**scene_kwargs),
+            scene=scene_type(
+                camera_resolution=args.camera_resolution or DEFAULT_CAMERA_RESOLUTION
+            ),
             seed=args.seed,
             max_steps=args.max_steps,
             render=args.render or needs_images,

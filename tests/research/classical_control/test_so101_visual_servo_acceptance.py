@@ -13,7 +13,7 @@ def test_visual_servo_pick_place_settles_from_multiple_seeds():
 
     robot = SO101Env(
         EnvConfig(
-            scene=PickPlaceMinimalSceneConfig(camera_width=224, camera_height=224),
+            scene=PickPlaceMinimalSceneConfig(),
             seed=0,
             render=True,
             max_steps=400,

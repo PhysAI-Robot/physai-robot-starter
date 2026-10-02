@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import ClassVar
 
 import mujoco
 
+from ....contracts import DEFAULT_CAMERA_RESOLUTION, parse_camera_resolution
 from ....robots.description import RobotDescription
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
@@ -67,10 +68,18 @@ class WorldSceneConfig:
     table_pos: tuple[float, float, float] = (0.30, 0.0, 0.01)
     target_pos: tuple[float, float, float] = (0.20, -0.10, 0.021)
     target_radius: float = 0.035
-    camera_width: int = 320
-    camera_height: int = 240
+    # One of `physai.contracts.CAMERA_RESOLUTIONS`; the pixel size below is
+    # derived from it (so it stays in dataset metadata) and not an argument.
+    camera_resolution: str = DEFAULT_CAMERA_RESOLUTION
+    camera_width: int = field(default=0, init=False)
+    camera_height: int = field(default=0, init=False)
     front_cam_pos: tuple[float, float, float] = (0.62, 0.0, 0.38)
     front_cam_xyaxes: tuple[float, ...] = (0.0, 1.0, 0.0, -0.45, 0.0, 0.9)
+
+    def __post_init__(self) -> None:
+        self.camera_width, self.camera_height = parse_camera_resolution(
+            self.camera_resolution
+        )
 
     def to_metadata(self) -> dict:
         """This config as JSON-safe data for dataset metadata.
@@ -234,6 +243,12 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
 
     spec = mujoco.MjSpec.from_file(str(cfg.robot_xml))
     spec.option.timestep = cfg.timestep
+    # The offscreen framebuffer must hold the chosen camera image (MuJoCo's
+    # default is 640 x 480, too small for 1280 x 720).
+    spec.visual.global_.offwidth = max(spec.visual.global_.offwidth, cfg.camera_width)
+    spec.visual.global_.offheight = max(
+        spec.visual.global_.offheight, cfg.camera_height
+    )
     world = spec.worldbody
 
     add_studio_sky(spec)

@@ -13,8 +13,16 @@ import argparse
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
-from _common_args import add_episodes, add_max_steps, add_out, add_robot, add_seed
+from _common_args import (
+    add_camera_resolution,
+    add_episodes,
+    add_max_steps,
+    add_out,
+    add_robot,
+    add_seed,
+)
 
+from physai.contracts import DEFAULT_CAMERA_RESOLUTION, parse_camera_resolution
 from physai.data import EpisodeRecorder
 from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
@@ -35,8 +43,7 @@ def main() -> int:
     add_out(ap, default=Path("data/pickplace_v1"))
     add_seed(ap)
     add_max_steps(ap, default=600)
-    ap.add_argument("--width", type=int, default=224)
-    ap.add_argument("--height", type=int, default=224)
+    add_camera_resolution(ap)
     ap.add_argument("--keep-failures", action="store_true")
     ap.add_argument(
         "--no-images",
@@ -53,7 +60,8 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    scene_kwargs = {"camera_width": args.width, "camera_height": args.height}
+    resolution = args.camera_resolution or DEFAULT_CAMERA_RESOLUTION
+    width, height = parse_camera_resolution(resolution)
     env_kwargs = {
         "seed": args.seed,
         "max_steps": args.max_steps,
@@ -65,7 +73,7 @@ def main() -> int:
     robot = create_robot(
         args.robot,
         config=EnvConfig(
-            scene=scene_type(**scene_kwargs),
+            scene=scene_type(camera_resolution=resolution),
             **env_kwargs,
         ),
     )
@@ -92,7 +100,7 @@ def main() -> int:
             "randomize_target": env.cfg.randomize_target,
         },
         camera_config={
-            name: {"width": args.width, "height": args.height, "encoding": "rgb8"}
+            name: {"width": width, "height": height, "encoding": "rgb8"}
             for name in env.cfg.cameras
         },
         scene_name="sorting_minimal" if args.sorting else "pick_place_minimal",

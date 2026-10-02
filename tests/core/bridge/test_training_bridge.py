@@ -7,6 +7,8 @@ import pytest
 pytestmark = pytest.mark.integration
 
 from physai.contracts import (
+    CAMERA_HEIGHT,
+    CAMERA_WIDTH,
     Action,
     Header,
     JointState,
@@ -77,7 +79,7 @@ def test_recorder_writes_versioned_training_metadata(tmp_path):
         store_images=False,
         task_name="pick_place",
         simulator_config={"seed": 4},
-        camera_config={"front": {"width": 224, "height": 224}},
+        camera_config={"front": {"width": CAMERA_WIDTH, "height": CAMERA_HEIGHT}},
         split={"train": [0]},
         action_encoder=lambda action, gripper_joint: (
             so101_action_values(action, gripper_joint=gripper_joint or 0.0),
@@ -85,7 +87,7 @@ def test_recorder_writes_versioned_training_metadata(tmp_path):
         ),
         action_schema=so101_action_schema(),
         observation_schema=so101_observation_schema(
-            camera_config={"front": {"width": 224, "height": 224}}
+            camera_config={"front": {"width": CAMERA_WIDTH, "height": CAMERA_HEIGHT}}
         ),
     )
     recorder.start_episode()
@@ -100,7 +102,7 @@ def test_recorder_writes_versioned_training_metadata(tmp_path):
     assert meta["action_schema"]["names"] == list(ALL_JOINT_NAMES)
     assert meta["seeds"] == [4]
     assert meta["task_name"] == "pick_place"
-    assert meta["camera_config"]["front"]["width"] == 224
+    assert meta["camera_config"]["front"]["width"] == CAMERA_WIDTH
 
 
 def test_recorder_records_the_scene_identity_and_serializes_paths(tmp_path):
