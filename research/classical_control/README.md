@@ -76,3 +76,17 @@ calibration each control tick before it can be used for metric servoing.
 
 The policy exposes `metrics.visual_error_px`, `metrics.ee_error_m`,
 `metrics.settled`, and `metrics.failure_reason` separately from task reward.
+
+Isaac Sim closed-loop status (parity ladder tier 4) is tracked in
+[ROADMAP.md](../../ROADMAP.md)'s 2E section; the trace evidence behind it is
+in [FINDINGS.md](FINDINGS.md).
+
+### Debugging the Isaac Sim tier-4 loop
+
+Record the front camera, or watch live in the web viewer (the arm is
+mirrored; the cube shows in the camera feeds):
+
+```bash
+uv run python scripts/run_sim.py --manifest configs/manifests/so101_isaac_visual_servo.yaml --video --camera front
+uv run python scripts/run_sim.py --manifest configs/manifests/so101_isaac_visual_servo.yaml --serve
+```

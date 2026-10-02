@@ -184,34 +184,70 @@ itself).
   workspace at this project's meter scale, in both `apply_cameras` and
   `add_world_camera`; and `camera_calibration()`'s `fx = fy * width /
   height` was wrong for a pinhole camera whose horizontal aperture is
-  itself scaled by that same ratio — should just be `fx = fy` — mirrored
-  from the identical, still-unfixed formula in `mujoco_env.py`). Not yet a
-  reliable pick: `SQUEEZE_GRIP = 0.15` is tuned to just barely hold against
-  MuJoCo's contact solver (see `research/scripted_experts/FINDINGS.md`'s
-  "grasp pads were later refitted" note); the shared `SO101VisualServoPolicy`
-  now takes an optional `squeeze_grip` override, and the scripted expert's
-  own deeper `0.06` (independently proven in
-  `test_so101_grasp_hold_isaac.py` to hold a cube for 12s of real Isaac Sim
-  time) gets real, measurable engagement in the closed loop too — the cube
-  moves 2+cm versus ~0 at the shared default. Still not enough to survive
-  the ride to the target: traced to `act()`'s `_settle_steps >= 8` CLOSE-exit
-  checking that the actual gripper position tracks the *ramping* (fixed
-  `0.9 rad/s`) commanded one, not that it has reached any depth — Isaac's
-  gripper tracks that ramp with ~no lag, so CLOSE always exits after the
-  same ~8 steps at ~24% squeezed regardless of the target depth (confirmed
-  with `squeeze_grip=0.0`, the deepest available value, exiting at the same
-  point), well before the squeeze passes the cube's jam point, and the arm
-  is already moving through LIFT while the grip is still mid-ramp.
-  (Correcting an earlier note here: this is not a broken joint or PhysX
-  articulation wiring bug — that read came from measuring the wrong thing;
-  the scripted-expert test above already proves this same gripper holds a
-  cube fine once its own fixed-step-count phases give the squeeze enough
-  time to complete.) Fixing this within `visual_servo`'s existing
-  settle-based timing needs either a depth-aware settle condition or a
-  slower gripper response relative to the ramp rate; reducing the gripper
-  joint's own drive stiffness/damping in `SO101IsaacEnv` was tried and left
-  inconclusive (a single run took several times longer without confirming
-  convergence in a reasonable wall-clock budget).
+  itself scaled by that same ratio — should just be `fx = fy`, since fixed
+  in `mujoco_env.py` too, see below). The shared
+  `SO101VisualServoPolicy` also takes an optional `squeeze_grip` override; it
+  was needed on Isaac only while the pad geometry mismatched (see below) and
+  the shared default `0.15` now works unmodified.
+
+  **CLOSE-exit timing bug: fixed and verified (2026-09-29).** The original
+  cause (see `research/classical_control/FINDINGS.md` for the full trace
+  evidence): `act()`'s CLOSE/RELEASE settle check compared the actual
+  gripper position against the *ramping* (fixed `0.9 rad/s`) commanded
+  position, not the final target. MuJoCo's own gripper lags that ramp
+  enough that this accidentally worked; Isaac's PhysX position drive tracks
+  it with ~no lag, so CLOSE always exited after a fixed ~8 steps at
+  whatever fraction of the ramp had elapsed by then — as little as ~21%
+  closed against a `squeeze_grip=0.06` target, well before the squeeze
+  reached the cube's actual jam point, with the arm already moving into
+  LIFT while the grip was still mid-ramp. Fixed by requiring the ramp to
+  finish (`ramp_done`) before accepting either `tracking` (actual position
+  close to the now-fixed command) or a long-enough `stalled` (jaw stopped
+  moving before reaching the command — the normal case once a squeeze is
+  deep enough to jam) as settled; `_GRIP_STALL_SETTLE_STEPS` gives a
+  transient stick-slip pause time to resolve into further closing on its
+  own before it's accepted, which is what kept an earlier, shorter-patience
+  version of this fix from also fixing a secondary symptom (the delayed
+  slip-through landing mid-LIFT instead of mid-CLOSE, letting momentum
+  fling the cube). Verified: 100/100 MuJoCo seeds unaffected (identical
+  95/100 success, identical 5 timeout seeds, before and after), full test
+  suite unaffected, and against real Isaac Sim CLOSE now reaches close to
+  the genuine squeeze depth and the cube rises smoothly (1-4cm) instead of
+  ~0 or a multi-cm single-step launch.
+
+  **TRANSFER hold: fixed by matching contact geometry (2026-09-29).** The
+  cube slipping out during TRANSFER was not a friction, force-cap, or solver
+  problem: MuJoCo grips with two fitted 12 x 12 x 6 mm pad boxes, while Isaac
+  had only ever received the pads' friction material on the raw jaw mesh.
+  `sim.isaac.description.apply_contact_pad_colliders` now builds the same pads
+  from the shared `contact_pads` spec (pad-centre distance at the alignment
+  angle checked: 33.9 mm vs the expected 34 mm). With that, `visual_servo` on
+  Isaac delivers the cube 9 mm from the target with the *shared default*
+  `squeeze_grip=0.15` (no per-simulator override; only `target_plane_z`, which
+  is scene geometry), passing 3 of 3 consecutive runs of
+  `test_visual_servo_runs_the_full_pick_and_place_loop`, which now asserts
+  delivery within 4 cm; tier 3 and the Isaac env tests still pass. Five
+  parameter experiments run *before* this (a deeper `squeeze_grip`, raising
+  `gripper_force_limit`, per-body and scene-wide PhysX solver iterations,
+  doubling pad friction, compliant pad contact) each failed or regressed
+  tier 3 — kept in `research/classical_control/FINDINGS.md` as the record of
+  what not to try against mismatched geometry. Still open for tier 4:
+  cross-simulator seed/layout parity (a matched success-rate table over many
+  seeds, not one fixed layout) and ACT.
+
+  **Identical scene and policy defaults (2026-10-02).** Isaac now builds the
+  same workspace as MuJoCo (table, target pad, cube on the table, the same
+  front camera), has a wrist-camera calibration, restores the cube on
+  `reset()`, and runs the unmodified policy with new shared defaults
+  (`align_before_descend`, `grasp_offset_xy`). Camera resolution is one of
+  320 x 240 / 640 x 480 / 1280 x 720 for every simulator, script and test
+  (default 320 x 240, `--camera-res` or the manifest's
+  `simulation.camera_resolution`), with `fx = fy` in both simulators.
+  Measured: MuJoCo 20/20 at all three resolutions; Isaac delivers the cube
+  in 10/10, 8/8 and 6/6 episodes at 320 x 240, 640 x 480 and 1280 x 720 (one
+  fixed layout). Root causes and the sweep behind the defaults are in
+  `research/classical_control/FINDINGS.md`. `--sim isaac --serve` opens the
+  web viewer with a display mirror of the arm (ADR 15).
 - [x] `ArmKinematics` (`robots/so101/kinematics.py`) partially converted:
   `qpos_to_site_pose`/`pinch_center_from_qpos`, new additive methods aside
   `fk`/`tool_pose`/`pinch_center`'s existing `MjData`-taking ones, cover

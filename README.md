@@ -68,9 +68,10 @@ It runs headlessly and writes evaluation output to `outputs/`; add `--video`
 to record the episode. A run is described by a session manifest
 (`--manifest configs/manifests/so101_pick_place.yaml` is the checked-in task;
 its `simulation` block holds the seed and the domain-randomization switch,
-which stays off for the deterministic baseline), and `--seed`, `--max-steps`,
-and `--camera-size` override it. Image-conditioned policies need a square
-`--camera-size` matching their training resolution, such as `128` or `224`.
+which stays off for the deterministic baseline), and `--seed` and
+`--max-steps` override it. Camera resolution is not a setting: every
+simulator, script, and test renders at `physai.contracts.CAMERA_SIZE`
+(320 x 240), so results stay comparable.
 
 ### Interactive viewer
 
@@ -206,8 +207,9 @@ Isaac the same way from a manifest's `simulator: isaac` field (see
 "isaac")` in Python.
 
 `SO101IsaacEnv` is robot-only for now (no task/scene objects), so a
-manifest must set no `task`, and `--viewer`/`--serve` stay MuJoCo-only
-(see [ADR 15](docs/adr/0015-simulator-engine-selection.md)). `pytest -m
+manifest must set no `task`, and `--viewer` stays MuJoCo-only (`--video`
+records a camera; `--serve` opens the web viewer with a mirrored arm; see
+[ADR 15](docs/adr/0015-simulator-engine-selection.md)). `pytest -m
 isaac` runs the Isaac-backed acceptance tests.
 
 ## Python API
