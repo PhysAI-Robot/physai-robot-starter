@@ -338,8 +338,11 @@ class SO101Env(MuJoCoSimulationCore):
         fy = height / (
             2.0 * np.tan(np.deg2rad(float(self.model.cam_fovy[camera_id])) / 2.0)
         )
+        # `fovy` is the vertical field of view and pixels are square, so the
+        # focal length in pixels is the same on both axes at every aspect
+        # ratio (the horizontal field of view already carries it).
         intrinsics = CameraIntrinsics(
-            fx=fy * width / height, fy=fy, cx=(width - 1) / 2.0, cy=(height - 1) / 2.0
+            fx=fy, fy=fy, cx=(width - 1) / 2.0, cy=(height - 1) / 2.0
         )
         rotation = self.data.cam_xmat[camera_id].reshape(3, 3) @ np.diag(
             [1.0, -1.0, -1.0]
