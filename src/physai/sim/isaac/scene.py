@@ -43,8 +43,13 @@ def add_ground_plane(stage: Any, *, size: float = 5.0) -> None:
         return
     plane = UsdGeom.Cube.Define(stage, path)
     plane.CreateSizeAttr(1.0)
-    plane.AddScaleOp().Set(Gf.Vec3f(size, size, 0.01))
+    # Translate before scale: USD applies the first-listed op last, so
+    # listing scale first scaled the -0.005 z offset by 0.01 too, leaving the
+    # slab's top face ~5 mm *above* z=0 -- objects spawned at z=half_size
+    # started interpenetrating it and were pushed out on the first step, and
+    # every resting height read 5 mm high.
     plane.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.0, -0.005))
+    plane.AddScaleOp().Set(Gf.Vec3f(size, size, 0.01))
     UsdPhysics.CollisionAPI.Apply(plane.GetPrim())
 
 

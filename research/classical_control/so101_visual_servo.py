@@ -31,6 +31,25 @@ from physai.robots.registry import register_robot_policy
 # old, proud pads as 0.19; 0.13-0.17 all work with the current ones.
 SQUEEZE_GRIP = 0.15
 
+# Per-control-step gripper displacement below which the jaw is treated as
+# physically stalled (blocked by the object) rather than still closing, used
+# by the CLOSE/RELEASE settle condition below. MuJoCo's own slowest,
+# still-converging closing rate during a normal CLOSE is about 0.006 per
+# step (measured via research/classical_control/FINDINGS.md's trace); a
+# gripper actuator that is genuinely jammed against an object (seen on
+# Isaac's PhysX position drive, which otherwise tracks its ramping command
+# with ~no lag) stops moving almost entirely (~0 per step). This sits below
+# the former and above simulator noise.
+_GRIP_STALL_EPS = 0.003
+
+# Consecutive stalled steps required before CLOSE/RELEASE accepts a stall as
+# final settlement (much longer than `tracking`'s 8-step patience -- see the
+# comment in `act()`): long enough to outlast the stick-slip pause measured
+# against real Isaac Sim (about 15 steps stuck before it let go the rest of
+# the way), short enough to stay well under the 120-step phase cap for a
+# jaw that is genuinely, permanently blocked.
+_GRIP_STALL_SETTLE_STEPS = 30
+
 
 @dataclass(frozen=True)
 class VisualFeature:
@@ -193,6 +212,9 @@ class SO101VisualServoPolicy(Policy):
         max_joint_rate: float = 1.2,
         dt: float | None = None,
         final_camera: str = "wrist",
+        grasp_offset_xy: tuple[float, float] = (-0.006, -0.006),
+        align_before_descend: bool = True,
+        align_tolerance: float = 0.004,
     ) -> None:
         self.env = env
         self.camera = camera
@@ -207,6 +229,22 @@ class SO101VisualServoPolicy(Policy):
         # a different cube/pad friction setup) may need a deeper squeeze to
         # actually hold the object against its own weight before slipping.
         self.squeeze_grip = float(squeeze_grip)
+        # Added to the estimated object xy for the pick phases (APPROACH
+        # through LIFT). The static jaw leaves ~1 mm of clearance beside a
+        # 28 mm cube, so a few mm of estimation bias toward it lands the jaw
+        # on top of the object. With correct intrinsics (fx == fy) the blob
+        # centroid sits a few mm toward +y/+x of the cube in both simulators;
+        # biasing the target 6 mm toward -x/-y keeps the jaws on the safe
+        # side. Measured: 20/20 in MuJoCo at 320x240, 640x480 and 1280x720.
+        self.grasp_offset_xy = np.asarray(grasp_offset_xy, dtype=np.float64)
+        # DESCEND lowers the pinch in a few control steps while the wrist
+        # refinement is still shifting xy, so a first estimate that is off by
+        # about a centimetre lands the static jaw on top of the object.
+        # DESCEND therefore hovers at the approach height until the pinch is
+        # within `align_tolerance` of the refined xy, then lowers.
+        self.align_before_descend = bool(align_before_descend)
+        self.align_tolerance = float(align_tolerance)
+        self._aligned = False
         self.kp = float(kp)
         self.max_speed = float(max_speed)
         self.pixel_tolerance = float(pixel_tolerance)
@@ -224,6 +262,7 @@ class SO101VisualServoPolicy(Policy):
         self._phase = VisualServoPhase.APPROACH
         self._phase_steps = 0
         self._settle_steps = 0
+        self._stall_steps = 0
         self._target_xy: np.ndarray | None = None
         self._q_cmd: np.ndarray | None = None
         self._grip = 1.0
@@ -231,6 +270,7 @@ class SO101VisualServoPolicy(Policy):
         self._settling_time_s: float | None = None
         self._last_visual_error_px: float | None = None
         self._last_detections: dict[str, tuple[np.ndarray, VisualFeature]] = {}
+        self._prev_grip_now: float | None = None
 
     def _calibration_from_observation(
         self, observation: Observation, camera: str | None = None
@@ -269,6 +309,7 @@ class SO101VisualServoPolicy(Policy):
         self._phase = VisualServoPhase.APPROACH
         self._phase_steps = 0
         self._settle_steps = 0
+        self._stall_steps = 0
         self._target_xy = None
         self._q_cmd = observation.joint_state.position[:5].copy()
         self._grip = 1.0
@@ -276,6 +317,8 @@ class SO101VisualServoPolicy(Policy):
         self._settling_time_s = None
         self._last_visual_error_px = None
         self._last_detections = {}
+        self._prev_grip_now = None
+        self._aligned = False
 
     def _refine_from_final_camera(self, observation: Observation) -> None:
         if self._target_xy is None:
@@ -329,20 +372,42 @@ class SO101VisualServoPolicy(Policy):
         self._phase = order[min(order.index(self._phase) + 1, len(order) - 1)]
         self._phase_steps = 0
         self._settle_steps = 0
+        self._stall_steps = 0
+
+    def _descend_ready(self) -> bool:
+        """Whether DESCEND may lower the pinch (latched once xy is aligned)."""
+        if not self.align_before_descend or self._aligned:
+            return True
+        pinch = self.env.pinch_center()
+        error = np.linalg.norm(pinch[:2] - (self._target_xy + self.grasp_offset_xy))
+        self._aligned = bool(error <= self.align_tolerance)
+        return self._aligned
+
+    def _hovering_before_descent(self) -> bool:
+        """DESCEND is still holding at hover height, so `reached` means the
+        hover point, not the grasp point."""
+        return (
+            self.align_before_descend
+            and self._phase is VisualServoPhase.DESCEND
+            and not self._aligned
+        )
 
     def _waypoint(self) -> tuple[np.ndarray, float]:
         if self._target_xy is None:
             raise RuntimeError("visual target is not initialized")
         rest_z = self.env.rest_z
         cube_z = self.target_plane_z
+        pick_xy = self._target_xy + self.grasp_offset_xy
         if self._phase is VisualServoPhase.APPROACH:
-            return np.array([*self._target_xy, cube_z + 0.045]), 1.0
+            return np.array([*pick_xy, cube_z + 0.045]), 1.0
+        if self._phase is VisualServoPhase.DESCEND and not self._descend_ready():
+            return np.array([*pick_xy, cube_z + 0.045]), 1.0
         if self._phase in (VisualServoPhase.DESCEND, VisualServoPhase.CLOSE):
             return np.array(
-                [*self._target_xy, cube_z]
+                [*pick_xy, cube_z]
             ), 1.0 if self._phase is VisualServoPhase.DESCEND else self.squeeze_grip
         if self._phase is VisualServoPhase.LIFT:
-            return np.array([*self._target_xy, rest_z + 0.035]), self.squeeze_grip
+            return np.array([*pick_xy, rest_z + 0.035]), self.squeeze_grip
         if self._phase is VisualServoPhase.TRANSFER:
             return np.array(
                 [self.env.target_pos[0], self.env.target_pos[1], rest_z + 0.035]
@@ -417,13 +482,47 @@ class SO101VisualServoPolicy(Policy):
         if reached and self._settling_time_s is None:
             self._settling_time_s = self._elapsed_steps * self._dt
         grip_now = self.env.joint_to_gripper(observation.joint_state.position[-1])
-        settled_gripper = abs(grip_now - self._grip) < 0.06
+        # A gripper actuator that tracks its ramping command with ~no lag
+        # (seen on Isaac's PhysX position drive) satisfies `tracking` a
+        # handful of steps after CLOSE/RELEASE starts, long before the ramp
+        # itself reaches `grip_goal` -- exiting the squeeze at whatever
+        # fraction of the ramp had elapsed by then instead of at the
+        # requested depth. `ramp_done` requires the ramp to finish first.
+        ramp_done = self._grip == grip_goal
+        tracking = ramp_done and abs(grip_now - self._grip) < 0.06
+        # A jaw physically resisted by the object (position stopped moving,
+        # but still farther than 0.06 from the fully-ramped command) would
+        # then never satisfy `tracking` -- `stalled` is the alternative
+        # settle path. But a jammed position-controlled gripper can stick on
+        # static friction for a while and then suddenly slip several steps
+        # later once it overcomes it (confirmed against real Isaac Sim: held
+        # at ~0.27 open, 0.21 short of a 0.06 target, for about 15 steps,
+        # then closed the rest of the way in 2); treating that mid-slip
+        # pause as final settlement exits CLOSE, and therefore starts the
+        # next phase's arm motion, before the slip finishes -- the launch
+        # this policy's shared grasp choreography otherwise avoids by never
+        # moving the arm until the squeeze is done (as CLOSE's own waypoint,
+        # and `grasp_and_lift` in test_so101_grasp_hold_isaac.py, both do).
+        # Requiring a much longer stall before accepting it gives a mid-slip
+        # pause time to resolve on its own first.
+        stalled = ramp_done and (
+            self._prev_grip_now is not None
+            and abs(grip_now - self._prev_grip_now) < _GRIP_STALL_EPS
+        )
+        self._prev_grip_now = grip_now
         self._phase_steps += 1
         if self._phase in (VisualServoPhase.CLOSE, VisualServoPhase.RELEASE):
-            self._settle_steps = self._settle_steps + 1 if settled_gripper else 0
-            if self._settle_steps >= 8:
+            self._settle_steps = self._settle_steps + 1 if tracking else 0
+            self._stall_steps = self._stall_steps + 1 if stalled else 0
+            if (
+                self._settle_steps >= 8
+                or self._stall_steps >= _GRIP_STALL_SETTLE_STEPS
+                or self._phase_steps >= 120
+            ):
                 self._advance()
-        elif reached or self._phase_steps >= 120:
+        elif (
+            reached and not self._hovering_before_descent()
+        ) or self._phase_steps >= 120:
             self._advance()
         self.metrics = VisualServoMetrics(
             visual_error_px=self._last_visual_error_px,

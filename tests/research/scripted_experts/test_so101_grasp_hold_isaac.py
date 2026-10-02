@@ -52,6 +52,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 _GRIP_OPEN = 0.55
 _GRIP_SQUEEZE = 0.06
 _HOVER_HEIGHT = 0.045
+_MAX_JOINT_STEP = 1.2 / 30.0  # rad per control tick, visual_servo's rate
 _LIFT_HEIGHT = 0.06
 _STEPS_PER_PHASE = (
     60  # 2 s at 30 Hz -- generous given the 0.3 rad/3 s settling tier-2 verified
@@ -64,6 +65,7 @@ def env():
         GraspCubeConfig,
         IsaacEnvConfig,
         SO101IsaacEnv,
+        TableConfig,
     )
 
     cfg = IsaacEnvConfig(
@@ -72,7 +74,9 @@ def env():
         render=False,
         cameras=(),
         max_steps=1000,
-        cube=GraspCubeConfig(),
+        # The same table scene the MuJoCo grasp-hold test grasps in.
+        table=TableConfig(),
+        cube=GraspCubeConfig(position=(0.20, 0.08, 0.036)),
     )
     instance = SO101IsaacEnv(cfg)
     try:
@@ -87,11 +91,16 @@ def _move_toward(env, target_xyz, grip: float, steps: int) -> np.ndarray:
     from physai.robots.so101.kinematics import TOP_DOWN
 
     q = env._arm_qpos()
+    q_cmd = q.copy()
     for _ in range(steps):
         result = env.kin.ik_pinch(target_xyz, TOP_DOWN, q_init=q)
         q = result.qpos
-        env.step(Action(joint_position=q, gripper=GripperCommand(position=grip)))
-    return q
+        # Rate-limit the command like visual_servo's JointRateLimiter: jumping
+        # straight to the IK solution swings the arm fast enough to sweep the
+        # cube off the table on the way to the hover point.
+        q_cmd = q_cmd + np.clip(q - q_cmd, -_MAX_JOINT_STEP, _MAX_JOINT_STEP)
+        env.step(Action(joint_position=q_cmd, gripper=GripperCommand(position=grip)))
+    return q_cmd
 
 
 def grasp_and_lift(env) -> np.ndarray:
@@ -131,7 +140,7 @@ def test_a_held_cube_does_not_creep_out_of_the_fingers(env):
     """
     from physai.contracts import Action, GripperCommand
 
-    spawn_height = env.cfg.cube.position[2]
+    spawn_height = env.rest_z
     grasp_and_lift(env)
     assert env.cube_pos[2] > spawn_height + 0.02  # lifted, not left on the ground
 
