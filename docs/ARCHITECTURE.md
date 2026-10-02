@@ -224,6 +224,13 @@ joint targets or a Cartesian/base `Twist`, plus a normalized gripper command;
 the robot's capabilities decide which is valid, and an action never carries
 both modes.
 
+The SO-101's camera resolution is one contract constant,
+`physai.contracts.CAMERA_SIZE` (320 x 240, 4:3). Both simulators' scene
+configs, the Isaac env, the web host, the training contract, scripts, and
+tests all read it; none takes a size argument or flag, so results from
+different simulators or runs always see the same image. The robot
+description's camera entries are data and a test keeps them equal to it.
+
 `RobotSpec` describes an embodiment without exposing simulator or hardware
 API: joint names, action modes, observation modalities, named capabilities,
 joint limits, and optional per-joint command-step limits. Workflow code calls
@@ -305,7 +312,7 @@ schema_version: 1
 simulation: {seed: 0}            # the one source of seed and randomization
 scene:
   name: pick_place_minimal
-  overrides: {camera_width: 640}  # scene fields, including robot_xml
+  overrides: {target_radius: 0.04}  # scene fields, including robot_xml
 simulator: mujoco                # optional; default mujoco. See below.
 backend: direct                  # direct | ros2_sim | ros2_real
 task: pick_place                 # optional session-wide default
@@ -609,8 +616,13 @@ meant to be the frozen reference:
 - **Registry granularity.** Adding a robot is "one `RobotDescriptor` + one
   `register_embodiment()` call," not literally one line — a robot supplying
   every optional factory sets up to six fields on that one descriptor.
-- **Isaac Sim only runs headless episodes.** `scripts/run_sim.py --viewer`/
-  `--serve`, all of `physai.web`, `physai.sim.mujoco.world.SharedWorld`, the
+- **Isaac Sim runs headless episodes, plus `--serve` for one robot.**
+  `--serve` drives `physai.web.Host` on the main thread (`Host.run()`; Isaac
+  must stay on the thread that created it) and shows a MuJoCo display mirror
+  of the arm (`SO101IsaacEnv.model`/`data`, refreshed from Isaac's joint
+  state, never simulated); the cube appears only in the Isaac-rendered
+  camera feeds, and `--record-dir` stays unavailable. `scripts/run_sim.py
+  --viewer`, shared worlds (`physai.sim.mujoco.world.SharedWorld`), the
   ROS2 bridge, and `robots/so101/kinematics.py`'s `ArmKinematics` are
   MuJoCo-only; a manifest combining `simulator: isaac` with any of them is
   rejected at load time (see [ADR 15](adr/0015-simulator-engine-selection.md))

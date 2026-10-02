@@ -59,10 +59,23 @@ already has for transport adapters:
   `with_overrides` re-runs them through the manifest module's new
   `validate_manifest()` (the same function `parse_manifest` itself calls)
   whenever `simulator` is overridden. `run_sim.py` also rejects `--sim
-  isaac` combined with `--viewer`/`--serve` before attempting either (both
-  are MuJoCo-only — see Consequences), and its module-level `import mujoco`
-  moved into the `--viewer` branch so a headless `--sim isaac` run never
-  needs MuJoCo importable.
+  isaac` combined with `--viewer` (MuJoCo's native window), or `--serve` with
+  `--record-dir`, before attempting either; plain `--serve` is supported
+  (see "Isaac `--serve`" below). Its module-level `import mujoco` moved into
+  the `--viewer` branch so a headless `--sim isaac` run never needs MuJoCo
+  importable.
+- **Isaac `--serve`.** `run_sim.py --sim isaac --serve` reuses the web
+  `Host`, with two Isaac-specific adaptations. Isaac must stay on the thread
+  that created its `SimulationApp`, so the host loop runs on the main thread
+  (`Host.run()`) and uvicorn runs on a worker thread with its own event loop
+  (Kit replaces `asyncio.run` with a version that rejects uvicorn's
+  `loop_factory`). `Host` and the browser read a MuJoCo `model`/`data`, so
+  `SO101IsaacEnv` exposes a display/telemetry mirror: the kinematics-oracle
+  model plus an `MjData` that `observe()` refreshes from Isaac's joint state
+  and never simulates. The 3D view therefore shows the arm only (no task
+  objects, no contacts); the cube appears in the Isaac-rendered camera feeds.
+  Cartesian jog is absent (`so101_jog_resolver` returns `None` for an env
+  without `resolve_twist_jog`) and recording/playback stay MuJoCo-only.
 - `SO101Env.robot_spec.metadata` gains `"simulator": "mujoco"`, matching
   `SO101IsaacEnv`'s existing `"simulator": "isaac"` — a recorded dataset now
   says which engine produced it either way.
@@ -84,9 +97,11 @@ message (unsupported robot, conflicting `config.simulator`, or an
 incompatible `world`/`backend`/`viewer` combination) instead of failing deep
 inside a robot factory or, worse, silently misbehaving (the `_robot_fields`
 bug). `configs/manifests/so101_isaac.yaml` is the worked example: no `task`
-(required, since `SO101IsaacEnv` has no scene/task objects yet), headless.
+(required, since `SO101IsaacEnv` has no scene/task objects yet), headless;
+`so101_isaac_visual_servo.yaml` adds the tier-4 cube/front camera and is
+meant for `--video`/`--serve` debugging.
 
-`scripts/run_sim.py --viewer`/`--serve`, `physai.web` more generally,
+`scripts/run_sim.py --viewer`, `physai.web` recording/playback,
 `physai.sim.mujoco.world.SharedWorld`, the ROS2 bridge, and
 `robots/so101/kinematics.py`'s `ArmKinematics` all remain MuJoCo-only; this
 ADR makes that explicit at the manifest-validation boundary but does not
