@@ -4,6 +4,8 @@ import pytest
 import yaml
 from tests.conftest import requires_assets, requires_turtlebot_assets
 
+from physai.contracts import CAMERA_SIZE
+
 pytestmark = [pytest.mark.integration]
 
 SO101_MODEL = "assets/so101/so101_new_calib_camera.xml"
@@ -42,8 +44,6 @@ def test_a_single_robot_manifest_builds_a_task_wrapped_runtime(tmp_path):
             scene={
                 "overrides": {
                     "robot_xml": SO101_MODEL,  # replaces the robot's own default
-                    "camera_width": 80,
-                    "camera_height": 60,
                 }
             },
         ),
@@ -59,11 +59,25 @@ def test_a_single_robot_manifest_builds_a_task_wrapped_runtime(tmp_path):
         assert runtime.policy is None
         assert robot.cfg.scene.robot_xml.name == "so101_new_calib_camera.xml"
         assert robot.render_enabled is True
-        assert robot.camera_size == (80, 60)
+        assert robot.camera_size == CAMERA_SIZE
         assert robot.robot_spec is robot.robot_spec  # built once, not per access
         assert runtime.reset(seed=5).joint_state.position.size == 6
     finally:
         session.close()
+
+    chosen = create_session(
+        _manifest(
+            tmp_path,
+            robots=[_arm()],
+            simulation={"seed": 5, "camera_resolution": "640x480"},
+            scene={"overrides": {"robot_xml": SO101_MODEL}},
+        ),
+        render=True,
+    )
+    try:
+        assert chosen.runtime.robot.camera_size == (640, 480)
+    finally:
+        chosen.close()
 
     quiet = create_session(_manifest(tmp_path, robots=[_arm()]), render=False)
     try:

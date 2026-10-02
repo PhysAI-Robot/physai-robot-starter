@@ -16,6 +16,63 @@ from __future__ import annotations
 from typing import Any
 
 
+def _bind_friction_material(stage: Any, prim: Any, path: str, friction: float) -> None:
+    """Bind a PhysX material with this friction (combine mode "max") to `prim`."""
+    from pxr import PhysxSchema, UsdPhysics, UsdShade
+
+    material_path = f"{path}_material"
+    material = UsdShade.Material.Define(stage, material_path)
+    physics_material = UsdPhysics.MaterialAPI.Apply(material.GetPrim())
+    physics_material.CreateStaticFrictionAttr(friction)
+    physics_material.CreateDynamicFrictionAttr(friction)
+    physx_material = PhysxSchema.PhysxMaterialAPI.Apply(material.GetPrim())
+    physx_material.CreateFrictionCombineModeAttr("max")
+    UsdShade.MaterialBindingAPI.Apply(prim).Bind(material, materialPurpose="physics")
+
+
+def add_static_box(
+    stage: Any,
+    path: str,
+    *,
+    position: tuple[float, float, float],
+    half_extents: tuple[float, float, float],
+    friction: float,
+    rgba: tuple[float, float, float, float],
+) -> str:
+    """Add a static, collidable box centered at `position` (the Isaac analogue
+    of a MuJoCo body-less box geom, e.g. the manipulation scene's table)."""
+    from pxr import Gf, UsdGeom, UsdPhysics
+
+    box = UsdGeom.Cube.Define(stage, path)
+    box.CreateSizeAttr(1.0)
+    # Translate before scale; see `scene.add_ground_plane` for why the order matters.
+    box.AddTranslateOp().Set(Gf.Vec3d(*position))
+    box.AddScaleOp().Set(Gf.Vec3f(*(2.0 * h for h in half_extents)))
+    box.CreateDisplayColorAttr([Gf.Vec3f(*rgba[:3])])
+    UsdPhysics.CollisionAPI.Apply(box.GetPrim())
+    _bind_friction_material(stage, box.GetPrim(), path, friction)
+    return path
+
+
+def add_target_pad(
+    stage: Any,
+    path: str,
+    *,
+    position: tuple[float, float, float],
+    radius: float,
+    rgba: tuple[float, float, float, float] = (0.2, 0.7, 0.35, 1.0),
+) -> str:
+    """Add a visual-only, non-colliding disc (MuJoCo's `target_pad`)."""
+    from pxr import Gf, UsdGeom
+
+    pad = UsdGeom.Cylinder.Define(stage, path)
+    pad.CreateRadiusAttr(radius)
+    pad.CreateHeightAttr(0.002)
+    pad.AddTranslateOp().Set(Gf.Vec3d(*position))
+    pad.CreateDisplayColorAttr([Gf.Vec3f(*rgba[:3])])
+    return path
+
+
 def add_cube(
     stage: Any,
     path: str,
@@ -37,7 +94,7 @@ def add_cube(
     confounding a slip comparison before either engine's grasp physics
     enters the picture.
     """
-    from pxr import Gf, PhysxSchema, UsdGeom, UsdPhysics, UsdShade
+    from pxr import Gf, UsdGeom, UsdPhysics
 
     cube = UsdGeom.Cube.Define(stage, path)
     cube.CreateSizeAttr(2.0 * half_size)
@@ -49,14 +106,7 @@ def add_cube(
     UsdPhysics.RigidBodyAPI.Apply(prim)
     UsdPhysics.MassAPI.Apply(prim).CreateMassAttr(mass)
 
-    material_path = f"{path}_material"
-    material = UsdShade.Material.Define(stage, material_path)
-    physics_material = UsdPhysics.MaterialAPI.Apply(material.GetPrim())
-    physics_material.CreateStaticFrictionAttr(friction)
-    physics_material.CreateDynamicFrictionAttr(friction)
-    physx_material = PhysxSchema.PhysxMaterialAPI.Apply(material.GetPrim())
-    physx_material.CreateFrictionCombineModeAttr("max")
-    UsdShade.MaterialBindingAPI.Apply(prim).Bind(material, materialPurpose="physics")
+    _bind_friction_material(stage, prim, path, friction)
     return path
 
 
@@ -75,4 +125,4 @@ def prim_world_position(stage: Any, path: str) -> Any:
     return np.array([translation[0], translation[1], translation[2]])
 
 
-__all__ = ["add_cube", "prim_world_position"]
+__all__ = ["add_cube", "add_static_box", "add_target_pad", "prim_world_position"]

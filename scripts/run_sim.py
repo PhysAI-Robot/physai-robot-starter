@@ -10,12 +10,13 @@ python scripts/run_sim.py --viewer             # native MuJoCo viewer
 python scripts/run_sim.py --viewer --serve     # native viewer plus shared web host
 python scripts/run_sim.py --serve              # web host only, no desktop window
 python scripts/run_sim.py --sim isaac --manifest configs/manifests/so101_isaac.yaml
-                                                # headless episodes on Isaac Sim instead
+                                                # headless episodes on Isaac Sim instead;
+                                                # --video records a camera, --serve opens
+                                                # the web viewer (no --viewer/--record-dir)
                                                 # (needs isaacsim installed separately,
                                                 # see README.md; the manifest must set no
                                                 # `task` — SO101IsaacEnv has no scene/task
-                                                # objects yet; --viewer/--serve stay
-                                                # MuJoCo-only; not exercised by this
+                                                # objects yet; not exercised by this
                                                 # repo's own CI)
 
 A run is described by a session manifest (`--manifest`). The older `--config`
@@ -35,6 +36,7 @@ from pathlib import Path
 import _bootstrap  # noqa: F401
 import numpy as np
 from _common_args import (
+    add_camera_resolution,
     add_checkpoint,
     add_episodes,
     add_max_steps,
@@ -139,15 +141,7 @@ def parse_args(
         help="camera to record with --video (default: the robot's first camera)",
     )
     add_checkpoint(ap)
-    ap.add_argument(
-        "--camera-size",
-        type=int,
-        help="square render resolution. IMPORTANT for --policy lerobot: "
-        "a policy trained on square images (collect_demos.py's "
-        "default) sees a stretched, off-distribution image if "
-        "you render non-square here — pass the training size "
-        "(e.g. 128) to avoid the mismatch.",
-    )
+    add_camera_resolution(ap)
     add_out(ap, default=Path("outputs"))
     ap.add_argument(
         "--video", action="store_true", help="render frames and write an episode video"
@@ -211,7 +205,7 @@ def build_manifest(
         manifest,
         seed=args.seed,
         max_steps=args.max_steps,
-        camera_size=args.camera_size,
+        camera_resolution=args.camera_resolution,
         policy=args.policy,
         simulator=args.simulator,
     )
@@ -235,11 +229,14 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("a shared-world session requires --viewer or --serve")
     if args.record_dir and manifest.world is not None:
         ap.error("--record-dir is not available with a shared world")
-    if manifest.simulator != "mujoco" and (args.viewer or args.serve):
-        ap.error(
-            f"--viewer/--serve are MuJoCo-only for now; simulator "
-            f"{manifest.simulator!r} only runs headless episodes"
-        )
+    if manifest.simulator != "mujoco":
+        if args.viewer:
+            ap.error(
+                f"--viewer is MuJoCo-only; simulator {manifest.simulator!r} "
+                "supports --serve (web viewer) or headless episodes"
+            )
+        if args.serve and args.record_dir:
+            ap.error("--record-dir is MuJoCo-only")
 
     if args.viewer or args.serve:
         return run_viewer(args, manifest)
@@ -359,12 +356,25 @@ def build_host(
     return host, session
 
 
+def serve_on_own_loop(server) -> None:
+    """Run uvicorn without `asyncio.run`, which Isaac Sim's Kit app replaces
+    with a version that rejects uvicorn's `loop_factory` argument."""
+    import asyncio
+
+    loop = asyncio.new_event_loop()
+    try:
+        loop.run_until_complete(server.serve())
+    finally:
+        loop.close()
+
+
 def run_viewer(args: argparse.Namespace, manifest: SessionManifest) -> int:
     if args.viewer:
         import mujoco
         import mujoco.viewer
     host, _session = build_host(args, manifest)
-    host.start()
+    if manifest.simulator == "mujoco":
+        host.start()
     server = None
     server_thread = None
     if args.serve:
@@ -373,7 +383,8 @@ def run_viewer(args: argparse.Namespace, manifest: SessionManifest) -> int:
 
             from physai.web.app import create_app
         except ImportError as exc:
-            host.stop()
+            if manifest.simulator == "mujoco":
+                host.stop()
             raise SystemExit(
                 "fastapi/uvicorn are missing; reinstall with: uv sync"
             ) from exc
@@ -385,11 +396,23 @@ def run_viewer(args: argparse.Namespace, manifest: SessionManifest) -> int:
                 log_level="info",
             )
         )
-        server_thread = threading.Thread(target=server.run, daemon=True)
+        server_thread = threading.Thread(
+            target=server.run if manifest.simulator == "mujoco" else serve_on_own_loop,
+            args=() if manifest.simulator == "mujoco" else (server,),
+            daemon=True,
+        )
         server_thread.start()
 
     try:
-        if not args.viewer:
+        if manifest.simulator != "mujoco":
+            # Isaac Sim must be driven from the thread that created it, so
+            # the host loop takes the main thread; signals just stop it.
+            print(f"Isaac host running. Web viewer: http://{args.host}:{args.port}/")
+            print("Press Ctrl+C to stop.")
+            signal.signal(signal.SIGINT, lambda *_: host.stop())
+            signal.signal(signal.SIGTERM, lambda *_: host.stop())
+            host.run()
+        elif not args.viewer:
             # No desktop window: --serve alone runs headless.
             print(f"Headless host running. Web viewer: http://{args.host}:{args.port}/")
             print("Press Ctrl+C to stop.")

@@ -6,6 +6,8 @@ import threading
 
 import mujoco
 
+from ...contracts import CAMERA_HEIGHT, CAMERA_WIDTH
+
 
 class MuJoCoSimulationCore:
     """Own model state, stepping, rendering, and simulation time."""
@@ -16,8 +18,8 @@ class MuJoCoSimulationCore:
         *,
         control_hz: float,
         render: bool = False,
-        camera_width: int = 640,
-        camera_height: int = 480,
+        camera_width: int = CAMERA_WIDTH,
+        camera_height: int = CAMERA_HEIGHT,
     ) -> None:
         if control_hz <= 0:
             raise ValueError("control_hz must be positive")

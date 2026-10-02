@@ -4,8 +4,8 @@
 # Sets no `task`: SO101IsaacEnv is robot-only for now (no scene/task objects
 # yet, see docs/adr/0013-isaac-sim-optional-backend.md), so a manifest that
 # names one fails at construction. `policy: constant` because the headless
-# default ("scripted") needs MuJoCo-only ArmKinematics. --viewer/--serve are
-# MuJoCo-only for now. Verified end to end (see docs/adr/0016).
+# default ("scripted") needs MuJoCo-only ArmKinematics. --serve works; --viewer is
+# MuJoCo-only. Verified end to end (see docs/adr/0016).
 schema_version: 1
 
 simulator: isaac

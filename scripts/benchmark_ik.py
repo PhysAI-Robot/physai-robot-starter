@@ -31,7 +31,7 @@ TARGET_OFFSETS = (
 def benchmark(args: argparse.Namespace) -> dict:
     env = SO101Env(
         EnvConfig(
-            scene=PickPlaceMinimalSceneConfig(camera_width=64, camera_height=64),
+            scene=PickPlaceMinimalSceneConfig(),
             render=False,
             max_steps=1,
         )

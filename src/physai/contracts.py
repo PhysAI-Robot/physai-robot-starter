@@ -218,6 +218,30 @@ class GripperCommand:
         return float(np.clip(self.position, 0.0, 1.0))
 
 
+# The SO-101 camera resolutions a simulation may render at (4:3 webcam-like
+# 320x240, 640x480, and 16:9 1280x720). The first is the default every test,
+# script and run uses unless a resolution is chosen on purpose; choosing is
+# done in one place (the manifest's `simulation.camera_resolution` or a
+# script's `--camera-res`), never by a scene, env or test setting its own size.
+CAMERA_RESOLUTIONS = ("320x240", "640x480", "1280x720")
+DEFAULT_CAMERA_RESOLUTION = CAMERA_RESOLUTIONS[0]
+
+
+def parse_camera_resolution(resolution: str) -> tuple[int, int]:
+    """`(width, height)` of a supported resolution name such as "640x480"."""
+    if resolution not in CAMERA_RESOLUTIONS:
+        raise ValueError(
+            f"unsupported camera resolution {resolution!r}; "
+            f"choose one of {', '.join(CAMERA_RESOLUTIONS)}"
+        )
+    width, height = resolution.split("x")
+    return int(width), int(height)
+
+
+CAMERA_SIZE = parse_camera_resolution(DEFAULT_CAMERA_RESOLUTION)
+CAMERA_WIDTH, CAMERA_HEIGHT = CAMERA_SIZE
+
+
 @dataclass(frozen=True)
 class CameraIntrinsics:
     """sensor_msgs/msg/CameraInfo's pinhole intrinsics, no distortion model."""

@@ -1,0 +1,20 @@
+# SO-101 visual servo on Isaac Sim (the tier-4 scene of ROADMAP.md's 2E).
+# Debug it with a video of the front camera:
+#   python scripts/run_sim.py --manifest configs/manifests/so101_isaac_visual_servo.yaml --video --camera front
+# or live in the web viewer (the arm is mirrored; the cube shows in the cameras):
+#   python scripts/run_sim.py --manifest configs/manifests/so101_isaac_visual_servo.yaml --serve
+schema_version: 1
+
+simulator: isaac
+policy: visual_servo
+
+robots:
+  - id: arm_1
+    robot: so101
+    config:
+      cameras: [front, wrist]
+      table: {}
+      cube: {position: [0.20, 0.08, 0.036]}
+      front_camera: {}
+      target_pos: [0.20, -0.10, 0.021]
+      max_steps: 2000

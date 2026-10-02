@@ -190,7 +190,12 @@ def fovy_to_focal_length(
     return vertical_aperture_mm / (2.0 * math.tan(math.radians(fovy_deg) / 2.0))
 
 
-def apply_cameras(stage: Any, desc: RobotDescription) -> dict[str, str]:
+def apply_cameras(
+    stage: Any,
+    desc: RobotDescription,
+    *,
+    size: tuple[int, int] | None = None,
+) -> dict[str, str]:
     """Add `desc.cameras` as USD cameras under their URDF link prim.
 
     Returns `{camera_name: prim_path}` for the cameras actually added; a
@@ -198,7 +203,9 @@ def apply_cameras(stage: Any, desc: RobotDescription) -> dict[str, str]:
     `sim.mujoco.scenes.common.apply_description`'s matching MuJoCo behavior for
     the same reason — one description may cover more than one upstream
     variant). Only the first match per camera name is added, in the
-    description's own priority order.
+    description's own priority order. `size` is the render `(width, height)`
+    every camera uses (the description's own is only the default), which sets
+    the horizontal aperture so pixels stay square at any aspect ratio.
     """
     from pxr import Gf, UsdGeom
 
@@ -222,9 +229,8 @@ def apply_cameras(stage: Any, desc: RobotDescription) -> dict[str, str]:
             )
         )
         cam.CreateVerticalApertureAttr(vertical_aperture_mm)
-        cam.CreateHorizontalApertureAttr(
-            vertical_aperture_mm * camera.width / camera.height
-        )
+        width, height = size or (camera.width, camera.height)
+        cam.CreateHorizontalApertureAttr(vertical_aperture_mm * width / height)
         cam.CreateClippingRangeAttr(Gf.Vec2f(*DEFAULT_CLIPPING_RANGE_M))
         added[camera.name] = prim_path
     return added
@@ -260,6 +266,64 @@ def apply_contact_friction(stage: Any, desc: RobotDescription) -> None:
         parent_prim = stage.GetPrimAtPath(parent_path)
         if parent_prim.IsValid():
             UsdShade.MaterialBindingAPI.Apply(parent_prim).Bind(
+                material, materialPurpose="physics"
+            )
+
+
+def apply_contact_pad_colliders(stage: Any, desc: RobotDescription) -> None:
+    """Add each `desc.contact_pads` entry as a box collider under its parent
+    link, and (where `disable_parent_mesh_collision`) turn off that link's own
+    collision meshes -- the Isaac analogue of what
+    `sim.mujoco.scenes.common` does with its pad box geoms.
+
+    Without this, only `apply_contact_friction`'s material reached Isaac: the
+    gripper gripped with the raw jaw mesh, not the 12 x 12 x 6 mm fingertip
+    pads MuJoCo grips with (position, tilt, contact patch all differ), so
+    "same friction, same solver" was never a like-for-like comparison.
+
+    The URDF importer wraps each link's collision mesh in an instanceable
+    `<mesh>_1` Xform whose Mesh is an instance proxy (read-only), so the
+    collision is removed by deactivating that wrapper rather than by
+    clearing `physics:collisionEnabled` on the mesh.
+    """
+    from pxr import Gf, Usd, UsdGeom, UsdPhysics, UsdShade
+
+    root = stage.GetDefaultPrim().GetName()
+    pad_names = {pad.name for pad in desc.contact_pads}
+    for pad in desc.contact_pads:
+        subpath = _geometry_subpath(stage, pad.parent_link)
+        if subpath is None:
+            continue
+        link_path = f"/{root}/Geometry/{subpath}"
+        link = stage.GetPrimAtPath(link_path)
+        if not link.IsValid():
+            continue
+        if pad.disable_parent_mesh_collision:
+            for child in link.GetChildren():
+                if (
+                    child.GetName() in pad_names
+                    or child.HasAPI(UsdPhysics.RigidBodyAPI)
+                    or child.IsA(UsdShade.Material)
+                ):
+                    continue  # a pad, a nested link, or a material
+                if any(
+                    p.HasAPI(UsdPhysics.CollisionAPI)
+                    for p in Usd.PrimRange(child, Usd.TraverseInstanceProxies())
+                ):
+                    child.SetActive(False)
+        cube = UsdGeom.Cube.Define(stage, f"{link_path}/{pad.name}")
+        cube.CreateSizeAttr(1.0)
+        cube.AddTranslateOp().Set(Gf.Vec3d(*pad.pos))
+        w, x, y, z = pad.quat
+        cube.AddOrientOp().Set(Gf.Quatf(w, Gf.Vec3f(x, y, z)))
+        cube.AddScaleOp().Set(Gf.Vec3f(*(2.0 * s for s in pad.half_size)))
+        # A collision-only proxy: `guide` purpose keeps it out of camera
+        # renders (MuJoCo hides its pad with alpha 0 for the same reason).
+        cube.CreatePurposeAttr(UsdGeom.Tokens.guide)
+        UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
+        material = UsdShade.Material.Get(stage, f"{link_path}/{pad.name}_material")
+        if material:
+            UsdShade.MaterialBindingAPI.Apply(cube.GetPrim()).Bind(
                 material, materialPurpose="physics"
             )
 

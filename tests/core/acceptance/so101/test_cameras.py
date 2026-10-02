@@ -12,7 +12,7 @@ def test_both_observation_cameras_carry_signal():
 
     robot = SO101Env(
         EnvConfig(
-            scene=PickPlaceMinimalSceneConfig(camera_width=128, camera_height=128),
+            scene=PickPlaceMinimalSceneConfig(),
             seed=0,
             render=True,
             max_steps=200,

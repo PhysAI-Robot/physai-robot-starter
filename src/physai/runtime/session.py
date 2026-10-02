@@ -20,7 +20,7 @@ from .composition import RuntimeComposition, create_runtime
 
 # Settings the `simulation` block owns; a robot's own `config` must not repeat
 # them, so each default has exactly one source.
-_SIMULATION_OWNED = ("seed", "domain_randomization")
+_SIMULATION_OWNED = ("seed", "domain_randomization", "camera_resolution")
 
 
 @dataclass
@@ -103,7 +103,7 @@ def _create_single_session(
         "robot_kwargs": fields_,
         "simulator": manifest.simulator,
         "scene_name": scene_name,
-        "scene_kwargs": dict(manifest.scene.overrides),
+        "scene_kwargs": _scene_kwargs(manifest),
         "task_name": task_name,
         "task_kwargs": {**manifest.task_kwargs, **robot.task_kwargs},
         "task_success_hold_steps": manifest.success_hold_steps,
@@ -150,6 +150,18 @@ def _create_world_session(manifest: SessionManifest) -> Session:
     return Session(manifest, world=world, instances=instances)
 
 
+def _scene_kwargs(manifest: SessionManifest) -> dict[str, Any]:
+    """The scene's overrides plus the simulation block's camera resolution."""
+    if "camera_resolution" in manifest.scene.overrides:
+        raise ValueError(
+            "scene overrides set camera_resolution; set it under 'simulation' instead"
+        )
+    return {
+        **manifest.scene.overrides,
+        "camera_resolution": manifest.simulation.camera_resolution,
+    }
+
+
 def _robot_fields(
     manifest: SessionManifest,
     robot: SessionRobotConfig,
@@ -185,6 +197,7 @@ def _robot_fields(
         for key, value in {
             "seed": simulation.seed,
             "domain_randomization": simulation.domain_randomization,
+            "camera_resolution": simulation.camera_resolution,
         }.items()
         if key in accepted
     }

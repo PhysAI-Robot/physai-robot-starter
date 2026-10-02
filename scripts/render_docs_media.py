@@ -58,7 +58,7 @@ def _so101(scene: ManipulationSceneConfig, task: str, seed: int, max_steps: int 
 def render_pick_place(seed: int = 0) -> None:
     print("[so101] scripted pick-and-place")
     robot, env = _so101(
-        PickPlaceMinimalSceneConfig(camera_width=640, camera_height=480),
+        PickPlaceMinimalSceneConfig(),
         "pick_place",
         seed,
     )
@@ -81,7 +81,7 @@ def render_camera_views(seed: int = 0) -> None:
     """Both observation cameras at the moment the jaws close on the cube."""
     print("[so101] observation cameras")
     _robot, env = _so101(
-        PickPlaceMinimalSceneConfig(camera_width=480, camera_height=480),
+        PickPlaceMinimalSceneConfig(),
         "pick_place",
         seed,
     )
@@ -103,7 +103,7 @@ def render_camera_views(seed: int = 0) -> None:
 
 def render_sorting(seed: int = 0, planner_seed: int = 1) -> None:
     print("[so101] sorting task")
-    scene = SortingMinimalSceneConfig(camera_width=640, camera_height=480)
+    scene = SortingMinimalSceneConfig()
 
     robot, env = _so101(scene, "sorting", seed)
     obs = env.reset(seed=seed)

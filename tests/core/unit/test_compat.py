@@ -71,21 +71,24 @@ def test_a_world_file_becomes_a_shared_world_manifest():
 def test_a_bare_robot_gets_its_defaults_and_command_line_overrides():
     arm = manifest_for_robot("so101", simulation=SIMULATION)
     assert arm.task == "pick_place"
-    assert arm.scene.overrides == {"camera_width": 640, "camera_height": 480}
+    assert arm.scene.overrides == {}
     assert arm.robots[0].config == {"max_steps": 600}
 
     base = manifest_for_robot("turtlebot4", simulation=SIMULATION)
     assert base.task is None
     assert base.scene.overrides == {}
 
-    changed = with_overrides(
-        arm, seed=9, max_steps=50, camera_size=128, policy="constant"
-    )
+    changed = with_overrides(arm, seed=9, max_steps=50, policy="constant")
     assert changed.simulation.seed == 9
     assert changed.robots[0].config["max_steps"] == 50
     assert changed.robots[0].policy == "constant"
-    assert changed.scene.overrides == {"camera_width": 128, "camera_height": 128}
     assert with_overrides(arm) == arm
+
+    assert arm.simulation.camera_resolution == "320x240"
+    hd = with_overrides(arm, camera_resolution="1280x720")
+    assert hd.simulation.camera_resolution == "1280x720"
+    with pytest.raises(ValueError, match="unsupported camera resolution"):
+        with_overrides(arm, camera_resolution="64x64")
 
     assert with_overrides(arm, simulator="isaac").simulator == "isaac"
     with pytest.raises(ValueError, match="does not support simulator"):
