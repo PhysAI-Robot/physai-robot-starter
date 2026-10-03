@@ -423,7 +423,7 @@ reads that region.
 - `fx = fy` in both simulators (square pixels at any aspect ratio).
 - `SO101VisualServoPolicy` defaults: `align_before_descend=True` (hover at the
   approach height until the pinch is within 4 mm of the refined xy, then
-  lower) and `grasp_offset_xy=(-0.006, -0.006)` (bias the pick target to the
+  lower; removed on 2026-10-04, see the re-ablation below) and `grasp_offset_xy=(-0.006, -0.006)` (bias the pick target to the
   safe side). The offset was found by sweeping on Isaac: y = -6 mm succeeded
   6/8 without align versus 1/4 at y = 0; x had no effect inside the swept
   range. With align on, 4/4 at (-6, -6) and 3/4 at (0, 0).
@@ -505,3 +505,239 @@ the ramp with no lag and settles in ~36 (see the CLOSE-exit section above).
   did not make runs identical (the same seed gave 128, 134 and 600 steps
   without it and 600, 133 and 134 with it), so it was reverted. Run-to-run
   variation remains; the far-corner cubes were the most sensitive.
+
+## The 2026-10-03 baseline hardening and difficulty sweep
+
+The 100/100 on both simulators above was one trial per seed, with policy
+defaults chosen before the render and timing fixes. This section re-checks the
+defaults, measures how the baseline degrades under camera, lighting and
+clutter changes, and records how its failures look. Commands are in the
+[README](README.md#difficulty-sweep-and-report).
+
+### The defaults, re-ablated
+
+Decision rule, fixed before the runs: keep `align_before_descend=True` and
+`grasp_offset_xy=(-0.006, -0.006)` unless another setting is better on both
+simulators by more than the Wilson intervals.
+
+| align | offset (mm) | MuJoCo, seeds 0-99 | mean steps | Isaac, 19 seeds |
+|---|---|---:|---:|---:|
+| on | (-6, -6) (default) | 100/100 | 200.4 | 18/19 |
+| off | (-6, -6) | 100/100 | 198.1 | 19/19 |
+| on | (0, 0) | 100/100 | 220.3 | 6/19 |
+| off | (0, 0) | 100/100 | 210.1 | 15/19 |
+
+The Isaac seeds are the nine far-corner ones (x > 0.23 and y > 0.11: 5, 13,
+28, 41, 50, 55, 76, 82, 98) plus seeds 0-4 and 6-10. MuJoCo no longer
+separates the settings: the saturation detector made all four perfect. Every
+Isaac failure was `finished_not_placed` (the whole sequence ran and the cube
+is nowhere near the target).
+
+- **The offset matters on Isaac**: without it 6/19 and 15/19, with it 18/19 and
+  19/19.
+- **`align` is not shown to help.** Five repeats of the nine far-corner seeds at
+  the default offset gave 44/45 with align on (Wilson 88% to 100%) and 43/45
+  with it off (85% to 99%). Seed 76 failed once with each setting and seed 82
+  once with align off. The setting was added when the detector was weaker; at
+  offset (0, 0) it was worse on Isaac (6/19 against 15/19, not explained).
+- **Outcome:** both defaults stay, because nothing beats them on both
+  simulators. `align_before_descend` costs 2 to 10 control steps on MuJoCo
+  and has no measured benefit.
+- **Removed (2026-10-04).** `align_before_descend` and `align_tolerance` are
+  gone from `SO101VisualServoPolicy`. Check on seeds 100-149 with align off,
+  against the sweep above (align on): nominal 50/50 and 50/50, camera shift
+  10 mm 46 and 47, 20 mm 23 and 23, two boxes 45 and 44, four boxes 44 and 44.
+  The one-episode differences are within noise, and the MuJoCo and Isaac
+  ablations above show no benefit.
+
+### Held-out seeds and the sweep
+
+Seeds 100-149 were never used to choose a default or tune a knob. The tables
+in this and the next sections were measured with the policy as it stood before
+the 2026-10-04 changes (`align_before_descend` on, no grasp check); the last
+section before the glitch notes gives the same cells afterwards. The sweep
+runs one `eval_policy.py` per cell, friction and mass nominal, 50 seeds per
+cell in MuJoCo.
+
+| axis | level | MuJoCo | Wilson 95% | place error mm (median / p90) | failures |
+|---|---|---:|---|---:|---|
+| baseline | nominal | 50/50 | 93-100% | 6.0 / 6.5 | none |
+| lighting | x0.5, x0.7, x1.3, x1.6 | 50/50 each | 93-100% | 6.0-6.2 / 6.5-6.6 | none |
+| camera shift (policy not told) | 5 mm | 50/50 | 93-100% | 6.2 / 10.0 | none |
+| | 10 mm | 47/50 | 84-98% | 5.9 / 13.8 | not placed x3 |
+| | 20 mm | 23/50 | 33-60% | 7.5 / 12.7 | not placed x25, release timeout x2 |
+| camera shift (policy told) | 20 mm | 47/50 | 84-98% | 5.6 / 6.5 | release timeout x2, not placed x1 |
+| clutter | 1 box | 47/50 | 84-98% | 6.0 / 6.5 | release timeout x2, not placed x1 |
+| | 2 boxes | 44/50 | 76-94% | 6.0 / 6.5 | not placed x2, release timeout x2, unsafe x2 |
+| | 4 boxes | 44/50 | 76-94% | 6.0 / 6.5 | release timeout x4, not placed x2 |
+
+"Camera shift" moves both cameras by a uniform offset of up to that many
+millimetres per axis, drawn per episode. "Policy not told" leaves the
+calibration at the nominal pose (a bumped or mis-mounted camera);
+"told" reports the shifted pose. The earlier `--camera-jitter` check was the
+"told" case, which is why it never exposed this. Lighting scales only MuJoCo's
+diffuse lights (ambient and headlight stay), which still moves the mean
+front-camera brightness from 205 to 130 at x0.5 and 242 at x1.6.
+
+Isaac Sim, 20 held-out seeds per cell (seeds 100-119), same policy and
+scene; lighting multiplies the dome and key lights, and each camera is moved
+by the same kind of per-episode uniform offset with the calibration left
+nominal:
+
+| axis | level | Isaac | Wilson 95% | place error mm (median / p90) | failures |
+|---|---|---:|---|---:|---|
+| baseline | nominal | 20/20 | 84-100% | 5.0 / 8.7 | none |
+| lighting | x0.5 | 20/20 | 84-100% | 5.0 / 10.4 | none |
+| lighting | x1.6 | 20/20 | 84-100% | 5.2 / 11.9 | none |
+| camera shift (not told) | 10 mm | 16/20 | 58-92% | 5.8 / 15.4 | not placed x4 |
+| | 20 mm | 3/20 | 5-36% | 19.5 / 20.5 | not placed x17 |
+
+Clutter is MuJoCo only. The two simulators agree: lighting does not matter and
+camera miscalibration does. At 10 mm the Isaac and MuJoCo intervals overlap
+(58-92% against 84-98%); at 20 mm Isaac is lower (5-36% against 33-60%), the
+two touching at 33-36%. The offsets are drawn differently in the two
+simulators (different RNG order), so these are the same distribution of
+miscalibration, not the same episodes.
+
+### Why it fails
+
+- **Lighting: nothing to fix.** The saturation and hue detector (above) does
+  not depend on brightness.
+- **Camera shift: it is the wrist camera.** Shifting only the front camera by
+  +/-20 mm per axis left 40/40 (the wrist refinement corrects it); shifting
+  only the wrist camera left 27/40, and both the same 27/40 (seeds 0-39, policy
+  not told). A wrist mount error becomes a grasp offset directly, and the
+  jaw clearance is about 1 mm. Telling the policy the shifted pose restores
+  47/50.
+- **Clutter: the arm is blocked and nothing notices.** The distractor boxes
+  are grey-blue, so the detector does not pick them. Seeds 100 and 134 with
+  one box (8 and 5 cm from the cube, on the robot's side) ran every phase to
+  RELEASE with the cube moved 0.000 m, so the grasp never took hold; the box
+  is probably under the descending jaw, which was not checked directly. The
+  state machine advances on timers and has no grasp check, so a missed grasp is
+  carried through to the end. With two boxes, seeds 109 and 124 were stopped by
+  the safety gate in TRANSFER: the arm was held against a box while the policy's
+  own command kept advancing 0.04 rad per step until it was 0.75 rad ahead of
+  the joint.
+- Every failure ends with the cube 10 to 27 cm from the target, so the
+  phase named in a failure category (`timeout_in_release`) is where the
+  sequence stopped, not where the cube was lost.
+
+### Tuning attempts (seeds 0-39, wrist camera shifted, policy not told)
+
+| change | shifted wrist | nominal |
+|---|---:|---:|
+| none (default) | 27/40 | 40/40 |
+| `final_camera='front'` (skip the wrist refinement) | 38/40 | 38/40 |
+| `align_tolerance=0.002` (option since removed) | 25/40 | not measured |
+| `grasp_offset_xy=(-0.009, -0.009)` | 28/40 | not measured |
+
+Only skipping the wrist refinement helps, and it trades about 5 points of
+nominal accuracy for tolerance to a wrist mount error. The default stays; the
+option is `--policy-arg "final_camera='front'"`. No threshold or offset can
+recover a miscalibrated wrist camera, because the wrist view is what fixes the
+grasp point.
+
+### What the evaluation tooling had to learn
+
+- `info["unsafe_action"]` was never set anywhere: the safety gate raised a plain
+  `ValueError`, so the unsafe-action counter read 0 and one violation aborted
+  the whole run (it did, at seed 109 with two boxes). The gate now raises
+  `SafetyViolation` (still a `ValueError`) and `eval_policy.py` records it as an
+  unsafe-action episode.
+- The policy's `failure_reason` is only set for perception errors, so a timeout
+  had none. `report_evaluation.py` now derives a category from the recorded
+  fields (`unsafe_action`, `collision`, `feature_not_found`, `finished_not_placed`
+  when the sequence reached `DONE`, `timeout_in_<phase>`), and reports the
+  Wilson interval and the median and 90th percentile of place error (the
+  cube-to-target distance of successful episodes) and of settling time (the
+  time the pinch first reached its first waypoint).
+- Kit swallows the exit status of a Python error under the app: a render
+  glitch at start-up exits 0 with no result file. Retry logic has to test for the
+  result file (and the message), not the exit code.
+
+### Run-to-run variation on Isaac
+
+The same 100 seeds were run a second time on Isaac (ten-seed shards, same code
+for the policy and scene): 100/100 again, against 100/100 the first time.
+Steps per seed differ by a median of 1 (90th percentile 3, maximum 5; no seed
+by more than 5), mean steps are 116.6 and 116.4, and median place error is
+5.5 and 5.7 mm. The nine far-corner seeds ran 90 more times in the ablation
+repeats with 87 successes and 3 failures (seeds 76 twice, 82 once; the two
+settings pooled), so the failure probability per episode there is about 3%.
+PhysX is not bit-reproducible (above), but its variation is small next to the
+effects measured in the sweep; the sweep cells use 20 seeds on Isaac, which
+is why their intervals are wide.
+
+### Missed-grasp detection (2026-10-04)
+
+The policy used to run every phase on timers whether or not the cube was in the
+jaws. It now checks from the wrist camera and the joint angles only (no contact
+or simulator state; the SO-101 has no grasp sensor):
+
+- At the end of CLOSE the cube must appear near where the pinch point projects
+  into the wrist image (`CameraCalibration.project` of `pinch_center()`),
+  within 25% of the image height. Held cubes were 10 to 25 px from it at
+  320 x 240; missed ones 138 to 174 px, or not visible at all.
+- At the end of LIFT the blob must be within 4% of the image height of where it
+  was at the end of CLOSE: a held cube rides with the camera (0.7 px of motion
+  in the clean scene) while one left on the table moved 16 and 23 px. This
+  catches grasps that looked fine and then let go.
+- A miss opens the gripper and restarts from APPROACH, at most twice, then the
+  policy stops with `failure_reason="grasp_missed"`. The retry aims at where the
+  wrist camera sees the cube from the pose that missed (falling back to the
+  front camera when the wrist sees nothing), and it is not attempted when the
+  steps left cannot fit another attempt (what the failed one took plus 80).
+
+Gripper position and effort were measured first and are not enough: a held cube
+reads 0.164 and an empty close 0.158 (the squeeze command, 0.15, is almost the
+cube width), and effort sits at the 0.3 cap in both.
+
+Held-out seeds 100-149, MuJoCo, before (`align` on, no checks) and now (`align`
+removed, both checks):
+
+| cell | before | now | episodes with a retry | recovered by it |
+|---|---:|---:|---:|---:|
+| nominal | 50 | 50 | 0 | n/a |
+| 1 / 2 / 4 boxes | 47 / 44 / 44 | 48 / 45 / 45 | 2 / 5 / 6 | 0 / 0 / 1 |
+| camera shift 10 mm | 47 | 47 | 4 | 1 |
+| camera shift 20 mm | 23 | 23 | 24 | 0 |
+
+Seeds 0-99 stay 100/100 with no retry in any episode (mean steps 198). What the
+checks buy is a correct label: in the 20 mm cell 13 of the 27 failures are now
+`grasp_missed` instead of an empty gripper completing the sequence. What they do
+not buy is recovery: 2 of the 41 retried episodes succeeded, because a miss here
+is systematic (a box under the jaw, a biased wrist estimate) and the second
+attempt makes the same mistake. The small gains in the clutter cells came from
+removing `align` (seeds 138 and 140 improved without a retry), not from the
+retry. One seed (133, two boxes) was a true miss detected at step 357; its retry
+held the cube but ran out of the 600-step budget.
+
+The end-of-CLOSE check is absolute, so a miscalibrated wrist camera biases it
+(the pinch projection shifts with the camera); the end-of-LIFT check is relative
+and does not.
+
+**Aiming the retry at the wrist estimate did not help.** The first retry
+re-detected the cube with the front camera. Aiming it at the wrist view of the
+pose that missed, with the step-budget rule, gave the same successes in the
+same cells (nominal 100 and 50; 48 / 45 / 45 with 1 / 2 / 4 boxes; 47 at 10 mm;
+24 against 23 at 20 mm; seeds 121 and 126 swapped at 10 mm), with 3 of the 28
+retried held-out episodes recovered (one each at 4 boxes, 10 mm and 20 mm). The cause
+is not a position error the wrist can read: with a shifted wrist camera its
+estimate carries the same shift, and with a box under the jaw the cube is
+where the policy thinks it is. What the budget rule did change is the label:
+failures that used to time out in CLOSE are now `grasp_missed` (2, 3 and 4 in
+the clutter cells, 21 of 26 at 20 mm). Ideas not tried: approach from the other
+side, nudge the pick offset after a miss, or move the box.
+
+### The render glitch, tabulated
+
+In the final sharded queue, 4 of 24 attempts glitched. Across the 23 Isaac process starts logged while running the ablations, 9
+glitched at construction, in bursts (3 in a row, then 4 of 14 spread over an
+hour). Starts made within a minute of the previous process ending glitched 8
+of 17 times, starts after a 90 s pause 1 of 5 (Fisher exact p = 0.36), so a
+cool-down is a cheap precaution (`run_sharded_eval.py --cooldown`, 60 s by
+default) but is not shown to work. Lighting does not cause it: at x0.5 the
+health-check difference is 19.5 on the wrist camera and 4.1 on the front,
+against a threshold of 3.0, and three glitches in a row at that setting were
+followed by a clean start. The cause is still unknown.

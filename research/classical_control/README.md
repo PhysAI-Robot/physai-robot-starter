@@ -41,15 +41,45 @@ timeout, or unsafe action. The result table is in the job summary, and the
 merged JSON, each shard's JSON, and one recorded episode are uploaded as
 artifacts.
 
-The current baseline is **95/100** with 5 timeouts and no collisions or unsafe
-actions (see [Results](../scripted_experts/README.md#results)); it was 100%
-before the fingertip pad refit (`fad205d`), and the timeouts are not yet
-diagnosed. Seeds 13 and 15 time out without camera jitter, so expect the
-workflow's all-success check on 20 seeds to fail until this is fixed. Before
-the refit, a 20-seed run on `ubuntu-24.04` with OSMesa reproduced 20/20; it was
-not bit-identical to a Windows run (17 of 20 seeds took the same number of
-steps, the other three differed by one), as expected from floating-point
-differences between platforms.
+The current baseline is **100/100** on seeds 0-99 in MuJoCo and on Isaac Sim
+with the same scene and seeds, and 50/50 on the held-out seeds 100-149 (see
+[FINDINGS](FINDINGS.md#the-2026-10-03-baseline-hardening-and-difficulty-sweep)).
+The CI workflow's all-success check on 20 seeds is expected to pass. A 20-seed
+run on `ubuntu-24.04` with OSMesa is not bit-identical to a Windows run, as
+expected from floating-point differences between platforms.
+
+### Difficulty sweep and report
+
+`scripts/sweep_difficulty.py` runs the policy over lighting, camera shift and
+clutter levels (one `eval_policy.py` process per cell, seeds 100-149 so the
+baseline is held out) and writes a Markdown table with the success rate and its
+Wilson interval, place error, settling time and failure categories:
+
+```bash
+uv run python scripts/sweep_difficulty.py --out-dir outputs/difficulty
+uv run python scripts/sweep_difficulty.py --axis camera --episodes 50
+uv run python scripts/sweep_difficulty.py --table-only --out-dir outputs/difficulty
+```
+
+A single cell can be run by hand with `eval_policy.py --lighting-scale 0.5`,
+`--camera-jitter 0.01 --camera-shift-unknown`, `--clutter-count 2` and
+`--nominal-physics` (friction and mass stay nominal so only that axis varies).
+`--camera-shift-unknown` leaves the policy's calibration at the nominal camera
+pose while the camera has moved; without it the policy is told the new pose.
+`--policy-arg KEY=VALUE` overrides a policy option (for example
+`--policy-arg final_camera=front`) and `--seeds 5,13,28` runs an
+explicit seed list.
+
+Isaac Sim takes `--lighting-scale` and `--camera-jitter` with
+`--camera-shift-unknown` (clutter is MuJoCo only). Its evaluations are slow and
+Isaac sometimes starts without drawing the robot, so run them in shards that
+retry on that failure:
+
+```bash
+OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/run_sharded_eval.py     --out-dir outputs/eval/isaac_rerun --seed 0 --episodes 100 --shard-size 10     -- --sim isaac --policy visual_servo --max-steps 600
+```
+
+`report_evaluation.py` and `compare_evaluations.py` read the merged JSON.
 
 Inspect the policy interactively in the browser — the front and wrist camera
 panels are configurable, and a `front:detections`/`wrist:detections` debug

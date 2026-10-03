@@ -215,8 +215,8 @@ OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/eval_policy.py --sim isaac --poli
 uv run python scripts/compare_evaluations.py outputs/mujoco.json outputs/isaac.json
 ```
 
-Isaac supports single-cube scenes with a fixed target and no domain
-randomization, and only observation-based policies (`visual_servo`,
+Isaac supports single-cube scenes with a fixed target, no domain
+randomization beyond a lighting scale and a camera position jitter, and only observation-based policies (`visual_servo`,
 `constant`); `--viewer` stays MuJoCo-only (`--serve` opens the web viewer
 with a mirrored arm; see [ADR 15](docs/adr/0015-simulator-engine-selection.md)).
 Each Isaac run must be a separate process, and `pytest -m isaac` is run one
