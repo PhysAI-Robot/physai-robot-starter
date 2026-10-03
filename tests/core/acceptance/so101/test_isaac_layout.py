@@ -38,10 +38,10 @@ GOLDEN = json.loads(
 @pytest.fixture(scope="module")
 def env():
     from physai.robots.so101.isaac_env import IsaacEnvConfig, SO101IsaacEnv
-    from physai.sim.mujoco import PickPlaceMinimalSceneConfig
+    from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
 
     cfg = IsaacEnvConfig(
-        scene=PickPlaceMinimalSceneConfig(),
+        scene=SingleCubeFixedPlaceSceneConfig(),
         usd_out_dir=REPO_ROOT / ".isaac_cache" / "so101_layout_test",
         headless=True,
         render=True,
@@ -103,7 +103,7 @@ def test_the_task_layer_reads_isaacs_state(env):
     from physai.robots.so101.isaac_env import HOME_QPOS
     from physai.tasks import TaskRuntime, create_task
 
-    runtime = TaskRuntime(env, create_task("pick_place"))
+    runtime = TaskRuntime(env, create_task("single_cube_fixed_place"))
     runtime.reset(seed=0)
     _, _, terminated, _, info = runtime.step(Action(joint_position=HOME_QPOS.copy()))
 

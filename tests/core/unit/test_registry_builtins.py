@@ -16,7 +16,12 @@ REGISTRIES = [
         "available_planners",
         "scripted_planner",
     ),
-    ("physai.tasks.registry", "register_task", "available_tasks", "pick_place"),
+    (
+        "physai.tasks.registry",
+        "register_task",
+        "available_tasks",
+        "single_cube_fixed_place",
+    ),
     (
         "physai.robots.adapters",
         "register_adapter",

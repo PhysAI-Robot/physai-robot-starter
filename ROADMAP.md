@@ -241,7 +241,7 @@ itself).
   manifest's `simulation.camera_resolution`), with `fx = fy` in both. The
   policy has new shared defaults (`align_before_descend`, `grasp_offset_xy`).
   The same manifest runs on both engines (`run_sim.py --manifest
-  configs/manifests/so101_pick_place.yaml --sim isaac`). Matched result on
+  configs/manifests/so101_single_cube_fixed_place.yaml --sim isaac`). Matched result on
   seeds 0-99 at 320 x 240: **MuJoCo 100/100 and Isaac 100/100** (Wilson 95%
   96-100% each, all 100 seeds agree); 640 x 480 and 1280 x 720 are 20/20 in
   MuJoCo and 8/8 in Isaac. Getting there needed two perception fixes beyond

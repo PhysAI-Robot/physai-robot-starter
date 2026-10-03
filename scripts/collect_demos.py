@@ -26,7 +26,7 @@ from physai.contracts import DEFAULT_CAMERA_RESOLUTION, parse_camera_resolution
 from physai.data import EpisodeRecorder
 from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
-from physai.sim.mujoco import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
+from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig, SortingMinimalSceneConfig
 from physai.tasks import TaskRuntime, create_task
 from research.scripted_experts.so101_pick_place_expert import SO101PickPlaceExpert
 
@@ -68,7 +68,7 @@ def main() -> int:
         "render": not args.no_images,
     }
     scene_type = (
-        SortingMinimalSceneConfig if args.sorting else PickPlaceMinimalSceneConfig
+        SortingMinimalSceneConfig if args.sorting else SingleCubeFixedPlaceSceneConfig
     )
     robot = create_robot(
         args.robot,
@@ -79,13 +79,13 @@ def main() -> int:
     )
     env = TaskRuntime(
         robot,
-        create_task("sorting" if args.sorting else "pick_place"),
+        create_task("sorting" if args.sorting else "single_cube_fixed_place"),
     )
     training_contract = robot.training_contract
     rec = EpisodeRecorder(
         args.out,
         task=args.task,
-        task_name="sorting" if args.sorting else "pick_place",
+        task_name="sorting" if args.sorting else "single_cube_fixed_place",
         fps=env.cfg.control_hz,
         store_images=not args.no_images,
         robot_spec=robot.robot_spec,
@@ -103,7 +103,7 @@ def main() -> int:
             name: {"width": width, "height": height, "encoding": "rgb8"}
             for name in env.cfg.cameras
         },
-        scene_name="sorting_minimal" if args.sorting else "pick_place_minimal",
+        scene_name="sorting_minimal" if args.sorting else "single_cube_fixed_place",
         scene_config=env.cfg.scene.to_metadata(),
     )
 

@@ -281,7 +281,7 @@ sim/mujoco/scenes/common.py
      +-- ManipulationSceneConfig: configurable end-effector and pad attachments
      +-- shared manipulation-world builder
 
-sim/mujoco/scenes/pick_place_minimal.py
+sim/mujoco/scenes/single_cube_fixed_place.py
      +-- one cube and one target layout
 
 sim/mujoco/scenes/sorting_minimal.py
@@ -311,11 +311,11 @@ list and validation rules are in that module's docstring) and
 schema_version: 1
 simulation: {seed: 0}            # the one source of seed and randomization
 scene:
-  name: pick_place_minimal
+  name: single_cube_fixed_place
   overrides: {target_radius: 0.04}  # scene fields, including robot_xml
 simulator: mujoco                # optional; default mujoco. See below.
 backend: direct                  # direct | ros2_sim | ros2_real
-task: pick_place                 # optional session-wide default
+task: single_cube_fixed_place                 # optional session-wide default
 success_hold_steps: 10
 robots:
   - id: arm_1
@@ -489,18 +489,18 @@ isolated there instead of affecting core's job.
 ## Runtime compositions
 
 ```text
-so101 + pick_place + scripted, visual-servo, or Planner + PlanRunner + MuJoCo
+so101 + single_cube_fixed_place + scripted, visual-servo, or Planner + PlanRunner + MuJoCo
 turtlebot4 + generic smoke test + constant twist policy + MuJoCo
 ```
 
 `so101` and `turtlebot4` are registered embodiments, not names that belong in
-generic contracts. `pick_place` needs arm and gripper capabilities, so the
+generic contracts. `single_cube_fixed_place` needs arm and gripper capabilities, so the
 policy, demo, and planner workflows are SO-101-specific today. TurtleBot4
 (native model, differential drive, RPP navigation, ROS2/Nav2 acceptance path)
 shows the capability abstraction generalizes and is not a development focus
 ([ADR 5](adr/0005-turtlebot4-kept-as-second-embodiment.md)). The pick-place
-and sorting tasks are minimal baselines (`physai.tasks.pick_place_minimal`,
-`sorting_minimal`; registry keys `pick_place` and `sorting`).
+and sorting tasks are minimal baselines (`physai.tasks.single_cube_fixed_place`,
+`sorting_minimal`; registry keys `single_cube_fixed_place` and `sorting`).
 
 ## Model roles
 

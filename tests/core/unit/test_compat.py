@@ -13,7 +13,7 @@ from physai.config.compat import (
 )
 
 SIMULATION = SimulationConfig(seed=3)
-TASK_FILE = "configs/tasks/so101/pick_place.yaml"
+TASK_FILE = "configs/tasks/so101/single_cube_fixed_place.yaml"
 WORLD_FILE = "configs/worlds/heterogeneous.yaml"
 
 
@@ -31,8 +31,8 @@ def test_a_task_file_becomes_a_one_robot_manifest(tmp_path):
 
     (robot,) = manifest.robots
     assert (robot.id, robot.robot) == ("so101", "so101")
-    assert manifest.task == "pick_place"
-    assert manifest.scene.name == "pick_place_minimal"
+    assert manifest.task == "single_cube_fixed_place"
+    assert manifest.scene.name == "single_cube_fixed_place"
     assert manifest.success_hold_steps == 10
     assert manifest.task_kwargs == {"success_xy_tol": 0.04}
     assert robot.config["cameras"] == ("front", "wrist")
@@ -70,7 +70,7 @@ def test_a_world_file_becomes_a_shared_world_manifest():
 
 def test_a_bare_robot_gets_its_defaults_and_command_line_overrides():
     arm = manifest_for_robot("so101", simulation=SIMULATION)
-    assert arm.task == "pick_place"
+    assert arm.task == "single_cube_fixed_place"
     assert arm.scene.overrides == {}
     assert arm.robots[0].config == {"max_steps": 600}
 
@@ -142,9 +142,9 @@ def test_the_shipped_manifests_match_the_legacy_files_they_replace():
     # The run decides rendering (--video, --serve), so the manifest omits it.
     (robot,) = task.robots
     config = {k: v for k, v in robot.config.items() if k != "render"}
-    assert load_manifest("configs/manifests/so101_pick_place.yaml") == replace(
-        task, robots=(replace(robot, config=config),)
-    )
+    assert load_manifest(
+        "configs/manifests/so101_single_cube_fixed_place.yaml"
+    ) == replace(task, robots=(replace(robot, config=config),))
 
     world = manifest_from_world_file(WORLD_FILE, simulation=SimulationConfig())
     shipped = load_manifest("configs/manifests/heterogeneous_world.yaml")

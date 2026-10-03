@@ -1,7 +1,7 @@
 """Run one episode, optionally writing a video. The 30-second sanity check.
 
 python scripts/run_sim.py                      # scripted expert, 1 episode
-python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml
+python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml
 python scripts/run_sim.py --episodes 5 --seed 0
 python scripts/run_sim.py --video --episodes 5 --seed 0
 python scripts/run_sim.py --policy constant    # baseline: do nothing
@@ -103,7 +103,7 @@ def parse_args(
     ap.add_argument(
         "--manifest",
         type=Path,
-        help="session manifest YAML (for example configs/manifests/so101_pick_place.yaml)",
+        help="session manifest YAML (for example configs/manifests/so101_single_cube_fixed_place.yaml)",
     )
     ap.add_argument(
         "--sim-config",
@@ -114,7 +114,7 @@ def parse_args(
     ap.add_argument(
         "--config",
         type=Path,
-        help="deprecated: task YAML (for example configs/tasks/so101/pick_place.yaml)",
+        help="deprecated: task YAML (for example configs/tasks/so101/single_cube_fixed_place.yaml)",
     )
     ap.add_argument(
         "--world",
@@ -188,7 +188,9 @@ def build_manifest(
             note_deprecated("--world", "configs/manifests/heterogeneous_world.yaml")
             manifest = manifest_from_world_file(args.world, simulation=simulation)
         elif args.config:
-            note_deprecated("--config", "configs/manifests/so101_pick_place.yaml")
+            note_deprecated(
+                "--config", "configs/manifests/so101_single_cube_fixed_place.yaml"
+            )
             manifest = manifest_from_task_file(args.config, simulation=simulation)
             configured = manifest.robots[0].robot
             if args.robot and args.robot != configured:

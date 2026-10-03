@@ -28,7 +28,7 @@ from physai.robots.so101 import EnvConfig, SO101Env
 from physai.robots.turtlebot import TurtleBot4Config, TurtleBot4Env
 from physai.sim.mujoco import (
     ManipulationSceneConfig,
-    PickPlaceMinimalSceneConfig,
+    SingleCubeFixedPlaceSceneConfig,
     SortingMinimalSceneConfig,
 )
 from physai.tasks import TaskRuntime, create_task
@@ -55,11 +55,11 @@ def _so101(scene: ManipulationSceneConfig, task: str, seed: int, max_steps: int 
     return robot, TaskRuntime(robot, create_task(task))
 
 
-def render_pick_place(seed: int = 0) -> None:
+def render_single_cube_fixed_place(seed: int = 0) -> None:
     print("[so101] scripted pick-and-place")
     robot, env = _so101(
-        PickPlaceMinimalSceneConfig(),
-        "pick_place",
+        SingleCubeFixedPlaceSceneConfig(),
+        "single_cube_fixed_place",
         seed,
     )
     obs = env.reset(seed=seed)
@@ -81,8 +81,8 @@ def render_camera_views(seed: int = 0) -> None:
     """Both observation cameras at the moment the jaws close on the cube."""
     print("[so101] observation cameras")
     _robot, env = _so101(
-        PickPlaceMinimalSceneConfig(),
-        "pick_place",
+        SingleCubeFixedPlaceSceneConfig(),
+        "single_cube_fixed_place",
         seed,
     )
     obs = env.reset(seed=seed)
@@ -170,7 +170,7 @@ def render_turtlebot(seed: int = 0) -> None:
 
 
 GROUPS = {
-    "so101": (render_pick_place, render_camera_views),
+    "so101": (render_single_cube_fixed_place, render_camera_views),
     "sorting": (render_sorting,),
     "turtlebot4": (render_turtlebot,),
 }

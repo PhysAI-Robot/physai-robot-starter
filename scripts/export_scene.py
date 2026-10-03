@@ -5,7 +5,7 @@ scene to another tool:
 
     python scripts/export_scene.py
     python scripts/export_scene.py --scene sorting_minimal
-    python -m mujoco.viewer --mjcf=outputs/scene_pick_place.xml
+    python -m mujoco.viewer --mjcf=outputs/scene_single_cube_fixed_place.xml
 """
 
 from __future__ import annotations
@@ -22,9 +22,11 @@ from physai.sim.mujoco import available_scenes, create_scene, export_xml
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    add_out(ap, default=Path("outputs/scene_pick_place.xml"))
+    add_out(ap, default=Path("outputs/scene_single_cube_fixed_place.xml"))
     add_robot(ap, default="so101")
-    ap.add_argument("--scene", default="pick_place_minimal", choices=available_scenes())
+    ap.add_argument(
+        "--scene", default="single_cube_fixed_place", choices=available_scenes()
+    )
     args = ap.parse_args()
 
     cfg = create_scene(args.scene, **scene_defaults(args.robot))

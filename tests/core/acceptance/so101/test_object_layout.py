@@ -25,12 +25,14 @@ def _build(case: str):
     from physai.robots.registry import scene_defaults
     from physai.sim.mujoco import (
         DomainRandomizationConfig,
-        PickPlaceMinimalSceneConfig,
+        SingleCubeFixedPlaceSceneConfig,
         SortingMinimalSceneConfig,
     )
 
     sorting = case.startswith("sorting")
-    scene_type = SortingMinimalSceneConfig if sorting else PickPlaceMinimalSceneConfig
+    scene_type = (
+        SortingMinimalSceneConfig if sorting else SingleCubeFixedPlaceSceneConfig
+    )
     fields = {}
     if case.endswith("fixed_cube_random_target"):
         fields = {"randomize_cube": False, "randomize_target": True}

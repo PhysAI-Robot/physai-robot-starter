@@ -30,7 +30,7 @@ from physai.data import EvaluationReport, load_episode
 from physai.policy import available_policies, create_policy
 from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
-from physai.sim.mujoco import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
+from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig, SortingMinimalSceneConfig
 from physai.sim.mujoco.domain_randomization import DomainRandomizationConfig
 from physai.tasks import TaskRuntime, create_task
 
@@ -89,7 +89,7 @@ def main() -> int:
     # images dict) once env construction moved behind create_robot().
     needs_images = args.policy in {"lerobot", "visual_servo"}
     scene_type = (
-        SortingMinimalSceneConfig if args.sorting else PickPlaceMinimalSceneConfig
+        SortingMinimalSceneConfig if args.sorting else SingleCubeFixedPlaceSceneConfig
     )
     if args.camera_jitter < 0:
         ap.error("--camera-jitter must be non-negative")
@@ -134,7 +134,7 @@ def main() -> int:
         )
     env = TaskRuntime(
         robot,
-        create_task("sorting" if args.sorting else "pick_place"),
+        create_task("sorting" if args.sorting else "single_cube_fixed_place"),
     )
 
     episodes = None
@@ -268,7 +268,7 @@ def main() -> int:
     report = EvaluationReport(
         policy=args.policy,
         robot=args.robot,
-        task="sorting" if args.sorting else "pick_place",
+        task="sorting" if args.sorting else "single_cube_fixed_place",
         results=tuple(results),
     )
     summary = report.summary

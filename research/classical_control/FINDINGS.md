@@ -172,7 +172,7 @@ did not add margin, it destabilized the grasp Isaac already had. Reverted to
 `noslip_iterations` analogue) was also tried and also made it worse
 (reverted).** Friction *coefficients* are not the mismatch: `add_cube`
 already copies MuJoCo's own sliding-friction value
-(`PickPlaceMinimalSceneConfig`'s cube `friction=[1.2, ...]` ==
+(`SingleCubeFixedPlaceSceneConfig`'s cube `friction=[1.2, ...]` ==
 `GraspCubeConfig.friction=1.2`) onto the PhysX material, and both
 `add_cube` and `apply_contact_friction` already force PhysX's
 friction-combine mode to "max" to match MuJoCo's own combine policy

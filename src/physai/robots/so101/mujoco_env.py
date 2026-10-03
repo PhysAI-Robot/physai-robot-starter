@@ -29,7 +29,10 @@ from ...sim.mujoco.domain_randomization import (
     DomainRandomizationEngine,
     RandomizationMetadata,
 )
-from ...sim.mujoco.scenes import ManipulationSceneConfig, PickPlaceMinimalSceneConfig
+from ...sim.mujoco.scenes import (
+    ManipulationSceneConfig,
+    SingleCubeFixedPlaceSceneConfig,
+)
 from .contracts import (
     ALL_JOINT_NAMES,
     ARM_JOINT_NAMES,
@@ -49,7 +52,7 @@ class EnvConfig:
     """SO-101-specific simulation and observation settings."""
 
     scene: ManipulationSceneConfig = field(
-        default_factory=lambda: PickPlaceMinimalSceneConfig(**scene_defaults())
+        default_factory=lambda: SingleCubeFixedPlaceSceneConfig(**scene_defaults())
     )
     control_hz: float = 30.0
     render: bool = True
