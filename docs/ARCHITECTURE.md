@@ -616,7 +616,11 @@ meant to be the frozen reference:
 - **Registry granularity.** Adding a robot is "one `RobotDescriptor` + one
   `register_embodiment()` call," not literally one line — a robot supplying
   every optional factory sets up to six fields on that one descriptor.
-- **Isaac Sim runs headless episodes, plus `--serve` for one robot.**
+- **Isaac Sim runs the single-cube pick-and-place scene, headless or with `--serve`.**
+  `IsaacEnvConfig.scene` takes the same scene config as MuJoCo (table, cube,
+  target, front camera, per-seed cube layout) and a `TaskRuntime` wraps the
+  env; no domain randomization, a fixed target, and only observation-based
+  policies.
   `--serve` drives `physai.web.Host` on the main thread (`Host.run()`; Isaac
   must stay on the thread that created it) and shows a MuJoCo display mirror
   of the arm (`SO101IsaacEnv.model`/`data`, refreshed from Isaac's joint

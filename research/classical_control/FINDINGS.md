@@ -345,8 +345,8 @@ above), not by the buggy early-exit path. Confirmed unaffected:
 
 With the contact geometry matched (above), `visual_servo` still failed on
 Isaac once the scene was made identical to MuJoCo's (table, target pad, the
-same 320 x 240 camera) and the wrist camera was calibrated. This records what
-the failures were and the measurements behind the policy defaults.
+same camera) and the wrist camera was calibrated. This records what the
+failures were and the measurements behind the policy defaults.
 
 ### What was wrong
 
@@ -357,10 +357,9 @@ the failures were and the measurements behind the policy defaults.
    clearance; a few mm of estimation bias toward +x puts the pad over the
    cube. Pad geometry itself matches MuJoCo (pad positions relative to the
    pinch agree to the millimetre in xy, 2.5 mm in z).
-2. **The first estimate is ~12 mm off, and DESCEND outran the refinement.**
-   The front-camera estimate was +12 mm in x. Without a wrist calibration on
-   Isaac the refinement never ran; with one, the pinch still dropped in ~5
-   control steps while xy was still converging.
+2. **The first estimate is off by about a centimetre, and DESCEND outran the
+   refinement.** The pinch dropped in ~5 control steps while the wrist
+   refinement was still moving xy.
 3. **Isaac had no wrist calibration at all**, so `_refine_from_final_camera`
    silently skipped. `SO101IsaacEnv.camera_calibration("wrist")` now composes
    the mount with the link pose from the display mirror (matches the USD
@@ -371,6 +370,53 @@ the failures were and the measurements behind the policy defaults.
    MuJoCo to 17/20. At 16:9 the factor is wrong by a different amount.
 5. **`reset()` did not restore the cube** after a previous episode threw it,
    which invalidated one whole parameter sweep until it was caught.
+6. **Rendering advanced Isaac's physics.** Each `rep.orchestrator.step` in
+   `render_camera` stepped the simulation once, so with two cameras one
+   control step ran 4 physics steps instead of 2 (counted: 48 steps for 12
+   `env.step`s against 24 with rendering off): Isaac ran at twice the
+   intended simulated time per control step, and everything measured on it
+   before this was fixed (including an earlier 100/100) is void. It now
+   renders with `delta_time=0.0`; joint trajectories with rendering on and
+   off are identical.
+7. **The first image after `reset()` was stale.** Poses written through the
+   tensor API reach the renderer only after a physics step, so the first
+   observation still showed the previous episode, a cube on the target pad,
+   and the policy aimed at it. With rendering no longer stepping physics this
+   showed up as a perfect alternation (even seeds succeed, odd seeds fail);
+   `reset()` now holds for one control step before observing.
+
+### The two perception gaps that remained (found by matching seeds)
+
+Once the above was fixed and both simulators ran the same seeds, Isaac still
+scored 79/100 against MuJoCo's 100/100 (21 failures, all seeds MuJoCo won,
+concentrated at the far corner of the cube layout: none for x < 0.211 or
+y < 0.07). Two causes, both in what the cameras see rather than in physics:
+
+- **Colour thresholding was lighting-dependent.** `ColorBlobDetector` kept
+  pixels within a distance of one bright red, so it dropped the shadowed part
+  of the cube, and Isaac's shadows are deeper. The wrist blob was ~1700 px
+  against MuJoCo's ~3900 and its centroid sat 13-20 px above the cube's
+  projection: the wrist estimate was +9 to +15 mm off in y in Isaac and
+  ~-1 mm in MuJoCo. The detector now uses saturation and hue
+  (`(r - max(g, b)) / r >= 0.25`, and `(g - b) / (r - b) <= 0.35` to keep
+  out the yellow arm): the same blob, to within 1 px, in both simulators.
+- **Isaac washed the cube out.** Its default ACES tone mapping and sRGB
+  encoding gave the cube's top face a saturation of 0.2 (MuJoCo: 0.7), so the
+  front-camera blob was a 28-136 px fragment, the initial estimate wandered
+  from -36 to +15 mm, and for the farthest cubes the hover point fell outside
+  what IK reaches from HOME: the arm did not move for 230 steps (APPROACH and
+  DESCEND each hit their 120-step cap). Linear output without the gamma step
+  (`sim.isaac.core.configure_render_output`, applied once the stage exists)
+  gives the cube faces to within a few levels of MuJoCo's (front face 111, 32,
+  25 against 112, 33, 26) and an initial estimate within +1..+5 mm.
+
+Light intensities were then fitted for that output (`sim/studio.py`): table
+colour 224, 216, 197 against MuJoCo's 226, 217, 199 and a wrist-camera cube
+mean of 100, 30, 24, identical to MuJoCo's. Table brightness is about linear
+in dome + key; a sum near 1400 matches and much more clips the table to
+white. The far floor near the horizon still renders darker than MuJoCo's,
+which is why the mean pixel difference (~50) is not a useful score: no policy
+reads that region.
 
 ### What changed
 
@@ -381,31 +427,81 @@ the failures were and the measurements behind the policy defaults.
   safe side). The offset was found by sweeping on Isaac: y = -6 mm succeeded
   6/8 without align versus 1/4 at y = 0; x had no effect inside the swept
   range. With align on, 4/4 at (-6, -6) and 3/4 at (0, 0).
+- `ColorBlobDetector` segments by saturation and hue; Isaac renders linear
+  output with matte materials and a checkered floor (tile 1/6 m, aligned to
+  MuJoCo's) from the shared palette in `sim/studio.py`.
+- Isaac builds its scene from the same `ManipulationSceneConfig` as MuJoCo and
+  draws the cube per seed with the same RNG order (`layout.draw_cube_xy`,
+  checked against `golden_layouts.json`); a `TaskRuntime` wraps it.
 - Camera resolution is one of 320x240 / 640x480 / 1280x720
   (`physai.contracts.CAMERA_RESOLUTIONS`); every camera in a run uses it.
 
-### Results (cube placed at the same spot; MuJoCo draws it at random)
+### Results
 
-| simulator | 320 x 240 | 640 x 480 | 1280 x 720 |
-|---|---|---|---|
-| MuJoCo, `fx = fy`, policy defaults (20 episodes) | 20/20 | 20/20 | 20/20 |
-| MuJoCo, `fx = fy`, align off (20 episodes) | 17/20 | 18/20 | 19/20 |
-| Isaac, policy defaults, delivered within 4 cm | 10/10 | 8/8 | 6/6 |
+Same seeds 0-99, same scene, policy defaults, 320 x 240
+(`scripts/eval_policy.py` for each simulator, `scripts/compare_evaluations.py`):
 
-Isaac final distances were 4-13 mm at every resolution. The Isaac runs use one
-fixed layout, so they show the loop works at each resolution, not a matched
-success-rate comparison.
+| simulator | success | Wilson 95% | mean steps |
+|---|---:|---|---:|
+| MuJoCo | 100/100 | 96% to 100% | 200 |
+| Isaac | 100/100 | 96% to 100% | 117 |
+
+All 100 seeds agree (both succeed). The Isaac evaluation was run in ten-seed
+shards, each in its own process, because of the render glitch below (a shard
+that the glitch check aborted was simply repeated). Before the perception
+fixes Isaac scored 79/100; with the saturation detector alone it scored
+95/100 (the five misses were the far-corner cubes whose hover point IK could
+not reach; repeated, those seeds succeeded about half the time). Those runs,
+and a later 100/100, were taken with the two Isaac measurement bugs above
+(6 and 7) still in, so they are not evidence of parity; the table is the run
+after both were fixed.
+
+Other resolutions (MuJoCo 20 seeds / Isaac 8 seeds, after the fixes):
+
+| resolution | MuJoCo | Isaac |
+|---|---:|---:|
+| 640 x 480 | 20/20 | 8/8 |
+| 1280 x 720 | 20/20 | 8/8 |
+
+MuJoCo with `fx = fy` and the previous colour detector, align off: 17/20,
+18/20, 19/20 at the three resolutions; align on: 20/20 at all three.
+
+Isaac finishes episodes in 117 steps on average against MuJoCo's 200, and
+that gap is one phase. Mean phase length over seeds 0-3 (steps), MuJoCo /
+Isaac: APPROACH 29.8 / 29.5, DESCEND 6.5 / 6.8, CLOSE 117 / 36, LIFT 4.2 /
+4.5, TRANSFER 25 / 25, LOWER 2 / 2, RELEASE 9 / 9.8. The arm motion matches
+to within a step, which also confirms the timing fix; CLOSE differs because
+MuJoCo's gripper lags its ramping command, so the settle check rarely passes
+and CLOSE runs to its 120-step cap, while Isaac's PhysX position drive tracks
+the ramp with no lag and settles in ~36 (see the CLOSE-exit section above).
 
 ### Bugs found along the way
 
 - The wrist calibration took its pixel size from the description (320 x 240)
   instead of the chosen resolution, which at 640 x 480 halved cx/cy/fy and
-  misplaced the cube by ~12 cm (all 16 higher-resolution Isaac episodes
-  failed until this was fixed).
+  misplaced the cube by ~12 cm.
+- Isaac's joint limits are float32, so an IK solution exactly at a limit
+  exceeded them by 3e-6 and the safety gate rejected it; the spec now takes
+  its limits from the kinematics model and `send_action` clips to Isaac's.
 - Isaac Kit replaces `asyncio.run`, which broke uvicorn's server thread for
   `--serve`; the server now runs on its own event loop.
-- A first run against a fresh `.isaac_cache` directory can render without the
-  robot; it renders normally once the cache is warm (cause not investigated).
 - The tier-3 grasp-hold test swept the cube with a jumping joint command once
   the ground plane was made flush with z = 0; it now rate-limits commands like
   `visual_servo` does and grasps in the table scene.
+- **Render glitch (open).** Isaac Sim sometimes renders without the robot (no
+  arm, no shadow) for a whole process while its physics works, so camera
+  policies fail for reasons unrelated to the policy. It is random per
+  process, comes in bursts (none in dozens of consecutive processes, then
+  several in a row) and shows at every resolution. VRAM is not the cause
+  (peak 1.3-1.8 GB of 6 GB); extra `app.update()` calls, toggling visibility
+  and re-selecting the physics variant were tried, and it did not reproduce
+  while collecting logs, so the cause is unknown. `SO101IsaacEnv.robot_is_rendered()`
+  detects it without relying on colours (render with the robot shown and
+  hidden, compare), the env refuses to start if it fails, and
+  `eval_policy --sim isaac` checks at every episode start and stops, so no
+  episode is recorded with a robot-less camera. Run long Isaac evaluations in
+  shards and retry an aborted one.
+- **Determinism (negative result).** Setting PhysX `enableEnhancedDeterminism`
+  did not make runs identical (the same seed gave 128, 134 and 600 steps
+  without it and 600, 133 and 134 with it), so it was reverted. Run-to-run
+  variation remains; the far-corner cubes were the most sensitive.

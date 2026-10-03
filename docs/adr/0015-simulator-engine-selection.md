@@ -80,15 +80,22 @@ already has for transport adapters:
   `SO101IsaacEnv`'s existing `"simulator": "isaac"` — a recorded dataset now
   says which engine produced it either way.
 
-`scripts/collect_demos.py` and `scripts/eval_policy.py` do **not** gain
-`--sim`: neither calls `create_runtime`/`create_session` at all — both
-hand-build a MuJoCo `EnvConfig` directly and, for `collect_demos.py`, use
-`SO101PickPlaceExpert` (a privileged ground-truth expert reading MuJoCo
-object pose and `ArmKinematics` directly) and raw `robot.data.qpos` access.
-Adding the flag would not work today regardless: `IsaacEnvConfig` has no
-scene/task objects and no matching expert. This is the existing "scripts/
-composition-root adoption" gap in `docs/ARCHITECTURE.md`'s known-gaps list,
-not something to paper over with a flag that always errors.
+- **The same scene on both engines.** `IsaacEnvConfig.scene` takes the
+  `ManipulationSceneConfig` MuJoCo builds from, so the table, cube, target,
+  front camera and the per-seed cube position come from one source (the seed
+  draws go through `robots.so101.layout.draw_cube_xy`, the order pinned by
+  `golden_layouts.json`). `SO101IsaacEnv` also exposes `table_top`/
+  `cube_half`, so a `TaskRuntime` wraps it like MuJoCo's env and reports
+  `success`/`dist_cube_target`. One manifest therefore describes the
+  environment for both engines: `run_sim.py --manifest
+  configs/manifests/so101_pick_place.yaml --sim isaac`. Limits: single-cube
+  scenes, a fixed target, no domain randomization, and policies that read
+  only observations (`visual_servo`, `constant`).
+- `scripts/eval_policy.py` gains `--sim isaac` on that basis (same scene,
+  seeds, task and report schema; `scripts/compare_evaluations.py` tabulates
+  the two). `scripts/collect_demos.py` still does not: its
+  `SO101PickPlaceExpert` is a privileged ground-truth expert reading MuJoCo
+  object pose and `ArmKinematics` directly, which has no Isaac equivalent.
 
 ## Consequences
 
@@ -96,10 +103,9 @@ A manifest or `--sim isaac` run now fails at load time with a specific
 message (unsupported robot, conflicting `config.simulator`, or an
 incompatible `world`/`backend`/`viewer` combination) instead of failing deep
 inside a robot factory or, worse, silently misbehaving (the `_robot_fields`
-bug). `configs/manifests/so101_isaac.yaml` is the worked example: no `task`
-(required, since `SO101IsaacEnv` has no scene/task objects yet), headless;
-`so101_isaac_visual_servo.yaml` adds the tier-4 cube/front camera and is
-meant for `--video`/`--serve` debugging.
+bug). `configs/manifests/so101_isaac.yaml` is the robot-only smoke
+manifest (no scene, `policy: constant`); `so101_pick_place.yaml` with
+`--sim isaac --policy visual_servo --video` runs the full task.
 
 `scripts/run_sim.py --viewer`, `physai.web` recording/playback,
 `physai.sim.mujoco.world.SharedWorld`, the ROS2 bridge, and
