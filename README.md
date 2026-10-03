@@ -66,7 +66,7 @@ uv run python scripts/run_sim.py
 
 It runs headlessly and writes evaluation output to `outputs/`; add `--video`
 to record the episode. A run is described by a session manifest
-(`--manifest configs/manifests/so101_pick_place.yaml` is the checked-in task;
+(`--manifest configs/manifests/so101_single_cube_fixed_place.yaml` is the checked-in task;
 its `simulation` block holds the seed and the domain-randomization switch,
 which stays off for the deterministic baseline), and `--seed` and
 `--max-steps` override it. Camera resolution is not a setting: every
@@ -154,7 +154,7 @@ Inspection helpers:
 uv run python scripts/workspace_map.py
 uv run python scripts/show_ros2_contract.py
 uv run python scripts/teleop_keyboard.py
-uv run python scripts/export_scene.py --out outputs/scene_pick_place.xml
+uv run python scripts/export_scene.py --out outputs/scene_single_cube_fixed_place.xml
 uv run python scripts/render_docs_media.py --only so101
 ```
 
@@ -210,7 +210,7 @@ The Isaac env builds the same scene as MuJoCo from the shared scene
 config, so one manifest runs on both engines:
 
 ```bash
-OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml --sim isaac --policy visual_servo --video
+OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --sim isaac --policy visual_servo --video
 OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/eval_policy.py --sim isaac --policy visual_servo --episodes 100 --json-out outputs/isaac.json
 uv run python scripts/compare_evaluations.py outputs/mujoco.json outputs/isaac.json
 ```
@@ -234,7 +234,7 @@ safety boundary:
 ```python
 from physai.runtime import create_runtime
 
-runtime = create_runtime("so101", task_name="pick_place")
+runtime = create_runtime("so101", task_name="single_cube_fixed_place")
 observation = runtime.reset(seed=0)
 try:
     ...  # pass actions from a policy or resolver here

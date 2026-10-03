@@ -6,7 +6,7 @@ from tests.conftest import requires_assets
 
 SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"
 WORLD = "configs/worlds/heterogeneous.yaml"
-TASK = "configs/tasks/so101/pick_place.yaml"
+TASK = "configs/tasks/so101/single_cube_fixed_place.yaml"
 ISAAC = "configs/manifests/so101_isaac.yaml"
 
 
@@ -44,7 +44,7 @@ def test_serve_alone_runs_headless_and_overrides_reach_the_manifest(
 
     assert (captured["args"].viewer, captured["args"].serve) == (False, True)
     manifest = captured["manifest"]
-    assert manifest.task == "pick_place"
+    assert manifest.task == "single_cube_fixed_place"
     assert manifest.simulation.seed == 4
     assert manifest.robots[0].config["max_steps"] == 77
 
@@ -89,13 +89,17 @@ def test_a_manifest_selects_the_run_and_the_old_flags_work_with_a_notice(
     manifest = capture_viewer(
         run_sim,
         monkeypatch,
-        ["--manifest", "configs/manifests/so101_pick_place.yaml", "--serve"],
+        [
+            "--manifest",
+            "configs/manifests/so101_single_cube_fixed_place.yaml",
+            "--serve",
+        ],
     )["manifest"]
     assert manifest.robots[0].id == "so101"
     assert manifest.robots[0].config["max_steps"] == 400
 
     config = capture_viewer(run_sim, monkeypatch, ["--config", TASK, "--serve"])
-    assert config["manifest"].scene.name == "pick_place_minimal"
+    assert config["manifest"].scene.name == "single_cube_fixed_place"
     assert "--config is deprecated" in capsys.readouterr().err
 
     world = capture_viewer(run_sim, monkeypatch, ["--world", WORLD, "--serve"])
@@ -144,7 +148,7 @@ def test_headless_episodes_run_from_a_manifest_and_name_their_video(
     manifest_run = [
         "run_sim.py",
         "--manifest",
-        "configs/manifests/so101_pick_place.yaml",
+        "configs/manifests/so101_single_cube_fixed_place.yaml",
         "--max-steps",
         "3",
         "--episodes",

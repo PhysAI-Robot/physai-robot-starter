@@ -87,7 +87,7 @@ class GraspCubeConfig:
     """A minimal graspable cube for the tier-3 grasp-hold parity test
     (`ROADMAP.md`'s 2E) — not a `ManipulationSceneConfig` port: no table,
     target, layout, or randomization, just enough to grasp-and-hold. `position`
-    and `friction` default to `PickPlaceMinimalSceneConfig`'s own values
+    and `friction` default to `SingleCubeFixedPlaceSceneConfig`'s own values
     (`cube_pos`, the sliding-friction component of `add_cube`'s
     `friction=[1.2, ...]`), placed directly on Isaac's ground plane rather
     than on a modeled table.
@@ -181,7 +181,9 @@ class IsaacEnvConfig:
     `target_pos` below describe a bare test scene.
     """
 
-    scene: Any = None  # a ManipulationSceneConfig (e.g. PickPlaceMinimalSceneConfig)
+    scene: Any = (
+        None  # a ManipulationSceneConfig (e.g. SingleCubeFixedPlaceSceneConfig)
+    )
     description: RobotDescription | None = None
     assets_root: Path = field(default_factory=lambda: REPO_ROOT / "assets" / "so101")
     usd_out_dir: Path = field(

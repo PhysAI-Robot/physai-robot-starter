@@ -3,7 +3,7 @@ from typing import ClassVar
 import numpy as np
 
 
-class FakePickPlaceBackend:
+class FakeSingleCubeFixedPlaceBackend:
     cube_pos = np.array([0.2, 0.0, 0.034])
     target_pos = np.array([0.2, 0.0, 0.021])
     ee_pos = np.array([0.2, 0.0, 0.08])
@@ -11,11 +11,11 @@ class FakePickPlaceBackend:
     cube_half = 0.014
 
 
-def test_pick_place_task_owns_metrics_and_reward():
-    from physai.tasks import PickPlaceTask
+def test_single_cube_fixed_place_task_owns_metrics_and_reward():
+    from physai.tasks import SingleCubeFixedPlaceTask
 
-    task = PickPlaceTask(success_xy_tol=0.04)
-    backend = FakePickPlaceBackend()
+    task = SingleCubeFixedPlaceTask(success_xy_tol=0.04)
+    backend = FakeSingleCubeFixedPlaceBackend()
     info = task.evaluate(backend)
 
     assert info["at_target"]
@@ -23,7 +23,7 @@ def test_pick_place_task_owns_metrics_and_reward():
     assert task.reward(backend, info) > 0
 
 
-class FakeSortingBackend(FakePickPlaceBackend):
+class FakeSortingBackend(FakeSingleCubeFixedPlaceBackend):
     target_color = "blue"
     cube_positions: ClassVar = {
         "red": np.array([0.25, 0.10, 0.034]),

@@ -25,7 +25,7 @@ def _arm(**extra) -> dict:
     return {
         "id": "arm_1",
         "robot": "so101",
-        "task": "pick_place",
+        "task": "single_cube_fixed_place",
         "config": {"render": False, "max_steps": 10},
         **extra,
     }
@@ -274,7 +274,7 @@ def test_a_session_refuses_what_it_cannot_build(tmp_path):
                         "id": "arm_1",
                         "robot": "so101",
                         "model": SO101_MODEL,
-                        "task": "pick_place",
+                        "task": "single_cube_fixed_place",
                     }
                 ],
             ),

@@ -115,9 +115,9 @@ def test_wrist_calibration_follows_the_chosen_resolution():
 
 def test_isaac_config_takes_its_objects_from_the_shared_scene():
     from physai.robots.so101.isaac_env import IsaacEnvConfig
-    from physai.sim.mujoco import PickPlaceMinimalSceneConfig
+    from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
 
-    scene = PickPlaceMinimalSceneConfig(
+    scene = SingleCubeFixedPlaceSceneConfig(
         table_pos=(0.31, 0.01, 0.012), cube_pos=(0.21, 0.07, 0.04)
     )
     cfg = IsaacEnvConfig(scene=scene)
@@ -152,19 +152,22 @@ def test_isaac_config_rejects_what_it_cannot_build():
     import pytest
 
     from physai.robots.so101.isaac_env import IsaacEnvConfig
-    from physai.sim.mujoco import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
+    from physai.sim.mujoco import (
+        SingleCubeFixedPlaceSceneConfig,
+        SortingMinimalSceneConfig,
+    )
 
     with pytest.raises(ValueError, match="single-cube"):
         IsaacEnvConfig(scene=SortingMinimalSceneConfig())
     with pytest.raises(ValueError, match="camera_resolution"):
         IsaacEnvConfig(
-            scene=PickPlaceMinimalSceneConfig(camera_resolution="640x480"),
+            scene=SingleCubeFixedPlaceSceneConfig(camera_resolution="640x480"),
         )
     with pytest.raises(ValueError, match="randomize_target"):
         IsaacEnvConfig(randomize_target=True)
 
 
-def test_the_pick_place_manifest_builds_a_config_for_either_simulator():
+def test_the_single_cube_fixed_place_manifest_builds_a_config_for_either_simulator():
     """One manifest describes the environment for both engines, so every robot
     config key it sets must be a field of each env config."""
     from dataclasses import fields
@@ -173,7 +176,7 @@ def test_the_pick_place_manifest_builds_a_config_for_either_simulator():
     from physai.config.compat import with_overrides
     from physai.robots import create_env_config
 
-    manifest = load_manifest("configs/manifests/so101_pick_place.yaml")
+    manifest = load_manifest("configs/manifests/so101_single_cube_fixed_place.yaml")
     isaac = with_overrides(manifest, simulator="isaac")
     assert isaac.simulator == "isaac"
     accepted = {f.name for f in fields(create_env_config("so101", simulator="isaac"))}
@@ -185,10 +188,10 @@ def test_isaac_config_accepts_every_resolution_its_scene_can_have():
     --camera-res` builds both from the same value."""
     from physai.contracts import CAMERA_RESOLUTIONS, parse_camera_resolution
     from physai.robots.so101.isaac_env import IsaacEnvConfig
-    from physai.sim.mujoco import PickPlaceMinimalSceneConfig
+    from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
 
     for resolution in CAMERA_RESOLUTIONS:
-        scene = PickPlaceMinimalSceneConfig(camera_resolution=resolution)
+        scene = SingleCubeFixedPlaceSceneConfig(camera_resolution=resolution)
         cfg = IsaacEnvConfig(scene=scene, camera_resolution=scene.camera_resolution)
         assert parse_camera_resolution(cfg.camera_resolution) == (
             scene.camera_width,

@@ -88,7 +88,7 @@ already has for transport adapters:
   `cube_half`, so a `TaskRuntime` wraps it like MuJoCo's env and reports
   `success`/`dist_cube_target`. One manifest therefore describes the
   environment for both engines: `run_sim.py --manifest
-  configs/manifests/so101_pick_place.yaml --sim isaac`. Limits: single-cube
+  configs/manifests/so101_single_cube_fixed_place.yaml --sim isaac`. Limits: single-cube
   scenes, a fixed target, no domain randomization, and policies that read
   only observations (`visual_servo`, `constant`).
 - `scripts/eval_policy.py` gains `--sim isaac` on that basis (same scene,
@@ -104,7 +104,7 @@ message (unsupported robot, conflicting `config.simulator`, or an
 incompatible `world`/`backend`/`viewer` combination) instead of failing deep
 inside a robot factory or, worse, silently misbehaving (the `_robot_fields`
 bug). `configs/manifests/so101_isaac.yaml` is the robot-only smoke
-manifest (no scene, `policy: constant`); `so101_pick_place.yaml` with
+manifest (no scene, `policy: constant`); `so101_single_cube_fixed_place.yaml` with
 `--sim isaac --policy visual_servo --video` runs the full task.
 
 `scripts/run_sim.py --viewer`, `physai.web` recording/playback,

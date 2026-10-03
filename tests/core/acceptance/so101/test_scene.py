@@ -10,9 +10,9 @@ def test_scene_has_the_task_objects_and_cameras():
     import mujoco
 
     from physai.robots.registry import scene_defaults
-    from physai.sim.mujoco import PickPlaceMinimalSceneConfig
+    from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
 
-    model, _ = PickPlaceMinimalSceneConfig(**scene_defaults("so101")).build_model()
+    model, _ = SingleCubeFixedPlaceSceneConfig(**scene_defaults("so101")).build_model()
     names = lambda kind, n: {mujoco.mj_id2name(model, kind, i) for i in range(n)}
     assert {"front", "wrist"} <= names(mujoco.mjtObj.mjOBJ_CAMERA, model.ncam)
     assert {"cube", "table"} <= names(mujoco.mjtObj.mjOBJ_BODY, model.nbody)
@@ -20,7 +20,7 @@ def test_scene_has_the_task_objects_and_cameras():
     assert {"gripperframe", "target_site"} <= names(
         mujoco.mjtObj.mjOBJ_SITE, model.nsite
     )
-    cfg = PickPlaceMinimalSceneConfig()  # the table stays clear of the robot base
+    cfg = SingleCubeFixedPlaceSceneConfig()  # the table stays clear of the robot base
     assert cfg.table_pos[0] - cfg.table_size[0] > 0.06
 
 
@@ -29,9 +29,9 @@ def test_calibrated_pads_replace_jaw_collision_meshes():
     import mujoco
 
     from physai.robots.registry import scene_defaults
-    from physai.sim.mujoco import PickPlaceMinimalSceneConfig
+    from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
 
-    model, _ = PickPlaceMinimalSceneConfig(**scene_defaults("so101")).build_model()
+    model, _ = SingleCubeFixedPlaceSceneConfig(**scene_defaults("so101")).build_model()
     jaw_bodies = {
         mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
         for name in ("gripper", "moving_jaw_so101_v1")
@@ -53,10 +53,13 @@ def test_task_specific_scene_configs_have_separate_object_layouts():
     import mujoco
 
     from physai.robots.registry import scene_defaults
-    from physai.sim.mujoco import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
+    from physai.sim.mujoco import (
+        SingleCubeFixedPlaceSceneConfig,
+        SortingMinimalSceneConfig,
+    )
 
     defaults = scene_defaults("so101")
-    pick_model, _ = PickPlaceMinimalSceneConfig(**defaults).build_model()
+    pick_model, _ = SingleCubeFixedPlaceSceneConfig(**defaults).build_model()
     sorting_model, _ = SortingMinimalSceneConfig(**defaults).build_model()
     body_names = lambda model: {
         mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, index)
@@ -71,7 +74,10 @@ def test_task_specific_scene_configs_have_separate_object_layouts():
 @requires_assets
 def test_sorting_env_exposes_the_target_cube_in_both_scenes():
     from physai.robots.so101 import EnvConfig, SO101Env
-    from physai.sim.mujoco import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
+    from physai.sim.mujoco import (
+        SingleCubeFixedPlaceSceneConfig,
+        SortingMinimalSceneConfig,
+    )
     from physai.tasks import TaskRuntime, create_task
 
     robot = SO101Env(
@@ -90,7 +96,7 @@ def test_sorting_env_exposes_the_target_cube_in_both_scenes():
     # Grasp detection needs the *target* cube's geom, not a fixed name: the
     # sorting scene names its cubes cube_red/cube_blue/cube_yellow, so a
     # hardcoded `cube_geom` returned -1 there and no grasp was ever detected.
-    for scene in (PickPlaceMinimalSceneConfig(), SortingMinimalSceneConfig()):
+    for scene in (SingleCubeFixedPlaceSceneConfig(), SortingMinimalSceneConfig()):
         single = SO101Env(EnvConfig(scene=scene, render=False, max_steps=200))
         try:
             single.reset(seed=0)

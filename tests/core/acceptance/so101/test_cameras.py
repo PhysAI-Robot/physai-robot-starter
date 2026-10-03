@@ -8,11 +8,11 @@ pytestmark = [pytest.mark.acceptance, pytest.mark.assets, pytest.mark.slow]
 @requires_assets
 def test_both_observation_cameras_carry_signal():
     from physai.robots.so101 import EnvConfig, SO101Env
-    from physai.sim.mujoco import PickPlaceMinimalSceneConfig
+    from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
 
     robot = SO101Env(
         EnvConfig(
-            scene=PickPlaceMinimalSceneConfig(),
+            scene=SingleCubeFixedPlaceSceneConfig(),
             seed=0,
             render=True,
             max_steps=200,
@@ -35,7 +35,7 @@ def test_wrist_camera_looks_toward_the_object_it_is_grasping():
     from physai.tasks import TaskRuntime, create_task
 
     robot = SO101Env(EnvConfig(seed=0, render=False, max_steps=200))
-    env = TaskRuntime(robot, create_task("pick_place"))
+    env = TaskRuntime(robot, create_task("single_cube_fixed_place"))
     try:
         env.reset(seed=0)
         cam = mujoco.mj_name2id(robot.model, mujoco.mjtObj.mjOBJ_CAMERA, "wrist")

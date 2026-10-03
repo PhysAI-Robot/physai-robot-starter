@@ -21,7 +21,7 @@ from physai.planner import ScriptedPlanner
 from physai.policy.plan_runner import PlanRunner
 from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
-from physai.sim.mujoco import PickPlaceMinimalSceneConfig
+from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
 from physai.tasks import TaskRuntime, create_task
 
 
@@ -48,13 +48,13 @@ def main() -> int:
     robot = create_robot(
         args.robot,
         config=EnvConfig(
-            scene=PickPlaceMinimalSceneConfig(),
+            scene=SingleCubeFixedPlaceSceneConfig(),
             seed=args.seed,
             max_steps=args.max_steps,
             render=True,
         ),
     )
-    env = TaskRuntime(robot, create_task("pick_place"))
+    env = TaskRuntime(robot, create_task("single_cube_fixed_place"))
     obs = env.reset(seed=args.seed)
 
     if args.save_frames:

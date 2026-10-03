@@ -1,13 +1,13 @@
 # Configuration for the minimal single-cube pick-and-place task.
-# Deprecated: use configs/manifests/so101_pick_place.yaml with `run_sim.py --manifest`.
-# `run_sim.py --config configs/tasks/so101/pick_place.yaml` still works and is
+# Deprecated: use configs/manifests/so101_single_cube_fixed_place.yaml with `run_sim.py --manifest`.
+# `run_sim.py --config configs/tasks/so101/single_cube_fixed_place.yaml` still works and is
 # converted into that manifest on load.
 
 robot: so101
 
 task:
-  name: pick_place
-  scene: pick_place_minimal
+  name: single_cube_fixed_place
+  scene: single_cube_fixed_place
 
 scene:
   robot_xml: assets/so101/so101_new_calib_camera.xml
