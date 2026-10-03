@@ -206,11 +206,25 @@ Isaac the same way from a manifest's `simulator: isaac` field (see
 `configs/manifests/so101_isaac.yaml`) or `create_robot(..., simulator=
 "isaac")` in Python.
 
-`SO101IsaacEnv` is robot-only for now (no task/scene objects), so a
-manifest must set no `task`, and `--viewer` stays MuJoCo-only (`--video`
-records a camera; `--serve` opens the web viewer with a mirrored arm; see
-[ADR 15](docs/adr/0015-simulator-engine-selection.md)). `pytest -m
-isaac` runs the Isaac-backed acceptance tests.
+The Isaac env builds the same scene as MuJoCo from the shared scene
+config, so one manifest runs on both engines:
+
+```bash
+OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml --sim isaac --policy visual_servo --video
+OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/eval_policy.py --sim isaac --policy visual_servo --episodes 100 --json-out outputs/isaac.json
+uv run python scripts/compare_evaluations.py outputs/mujoco.json outputs/isaac.json
+```
+
+Isaac supports single-cube scenes with a fixed target and no domain
+randomization, and only observation-based policies (`visual_servo`,
+`constant`); `--viewer` stays MuJoCo-only (`--serve` opens the web viewer
+with a mirrored arm; see [ADR 15](docs/adr/0015-simulator-engine-selection.md)).
+Each Isaac run must be a separate process, and `pytest -m isaac` is run one
+test file at a time. Isaac sometimes starts without drawing the robot, which
+blinds camera policies; the env detects it (`robot_is_rendered()`) and stops
+with a clear error, so run long evaluations in shards of ten seeds and repeat
+one that aborts (`scripts/report_evaluation.py` merges the shard JSONs).
+`scripts/compare_cameras.py` compares what the two simulators' cameras see.
 
 ## Python API
 

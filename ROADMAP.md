@@ -115,7 +115,7 @@ A camera-only state-machine pipeline (color segmentation or fiducials, pose esti
 - [x] Perception module without simulator ground truth (`ColorBlobDetector` in `research/classical_control/so101_visual_servo.py`; reads camera calibration only, never object pose).
 - [x] State machine covering approach, grasp, lift, place, and recovery on failure (`SO101VisualServoPolicy`, registered as the `visual_servo` policy).
 - [x] All actions pass the safety layer: `SafetyController` now gates the direct path inside `DirectAdapter`, not only the ROS2 and Gymnasium paths.
-- [ ] Diagnose the `visual_servo` timeouts (95/100 on seeds 0-99: seeds 13, 15, 28, 64, 76) that appeared after the fingertip pad refit; the visual-servo CI check (20 seeds, all must succeed) is expected to fail until this is fixed.
+- [x] Diagnose the `visual_servo` timeouts (95/100 on seeds 0-99 after the fingertip pad refit). They were seeds where the static jaw landed on the cube; hovering until the pinch is aligned, a 6 mm safe-side pick offset and `fx = fy` in the camera calibration fix them: 100/100 on seeds 0-99 and the 20-seed CI check passes at every resolution (research/classical_control/FINDINGS.md).
 - [ ] Report position error, settling time, and categorized failure reasons.
 - [ ] Give it a fair tuning effort; it must not be a strawman.
 
@@ -168,13 +168,11 @@ itself).
   was wired in (previously defined but never called) and both it and the
   cube's material force PhysX's friction-combine mode to "max", matching
   MuJoCo's own combine policy instead of PhysX's default (average).
-- [ ] Parity ladder tier 4 (closed-loop): `visual_servo`/ACT on identical
-  seeds and layouts in both simulators, success rate and failure causes via
-  `scripts/report_evaluation.py`. Needs cross-simulator seed/layout
-  determinism (`robots/so101/layout.py`'s RNG-draw-order contract has no
-  Isaac equivalent yet) and `IsaacEnvConfig` to carry the geometry
-  `visual_servo` itself reads (`env.cfg.scene.table_pos`/`table_size`/
-  `cube_half`), on top of tier 3's cube. First pass verified against real
+- [x] Parity ladder tier 4 (closed-loop) for `visual_servo`: identical seeds
+  and scene in both simulators, success rate and failure causes via
+  `scripts/eval_policy.py --sim isaac` and `scripts/compare_evaluations.py`
+  (ACT on Isaac is the next item). History of how it got there, starting
+  with a first pass verified against real
   Isaac Sim (`tests/research/classical_control/test_so101_visual_servo_isaac.py`):
   the unmodified `SO101VisualServoPolicy` runs its full detect -> approach ->
   descend -> close -> lift -> transfer -> lower -> release -> retreat phase
@@ -231,23 +229,43 @@ itself).
   `gripper_force_limit`, per-body and scene-wide PhysX solver iterations,
   doubling pad friction, compliant pad contact) each failed or regressed
   tier 3 — kept in `research/classical_control/FINDINGS.md` as the record of
-  what not to try against mismatched geometry. Still open for tier 4:
-  cross-simulator seed/layout parity (a matched success-rate table over many
-  seeds, not one fixed layout) and ACT.
+  what not to try against mismatched geometry.
 
-  **Identical scene and policy defaults (2026-10-02).** Isaac now builds the
-  same workspace as MuJoCo (table, target pad, cube on the table, the same
-  front camera), has a wrist-camera calibration, restores the cube on
-  `reset()`, and runs the unmodified policy with new shared defaults
-  (`align_before_descend`, `grasp_offset_xy`). Camera resolution is one of
-  320 x 240 / 640 x 480 / 1280 x 720 for every simulator, script and test
-  (default 320 x 240, `--camera-res` or the manifest's
-  `simulation.camera_resolution`), with `fx = fy` in both simulators.
-  Measured: MuJoCo 20/20 at all three resolutions; Isaac delivers the cube
-  in 10/10, 8/8 and 6/6 episodes at 320 x 240, 640 x 480 and 1280 x 720 (one
-  fixed layout). Root causes and the sweep behind the defaults are in
-  `research/classical_control/FINDINGS.md`. `--sim isaac --serve` opens the
-  web viewer with a display mirror of the arm (ADR 15).
+  **Identical scene, seeds and perception (2026-10-02/03).** Isaac builds the
+  same workspace as MuJoCo from the shared scene config (table, target pad,
+  cube, front camera), draws the cube per seed with the same RNG order
+  (checked against `golden_layouts.json`), has a wrist-camera calibration,
+  restores the cube on `reset()`, and a `TaskRuntime` reports success. Camera
+  resolution is one of 320 x 240 / 640 x 480 / 1280 x 720 for every
+  simulator, script and test (default 320 x 240; `--camera-res` or the
+  manifest's `simulation.camera_resolution`), with `fx = fy` in both. The
+  policy has new shared defaults (`align_before_descend`, `grasp_offset_xy`).
+  The same manifest runs on both engines (`run_sim.py --manifest
+  configs/manifests/so101_pick_place.yaml --sim isaac`). Matched result on
+  seeds 0-99 at 320 x 240: **MuJoCo 100/100 and Isaac 100/100** (Wilson 95%
+  96-100% each, all 100 seeds agree); 640 x 480 and 1280 x 720 are 20/20 in
+  MuJoCo and 8/8 in Isaac. Getting there needed two perception fixes beyond
+  geometry (Isaac scored 79/100 before them): a lighting-independent
+  saturation/hue detector, and linear, gamma-free output so Isaac's cube is as
+  saturated as MuJoCo's; and two measurement fixes in the Isaac env itself
+  (rendering no longer advances physics, which had doubled simulated time per
+  control step, and `reset()` holds one step so the first image is not stale).
+  Arm motion now matches MuJoCo's to within a step per phase; Isaac's episodes
+  are shorter (117 against 200 steps) only because its gripper settles in
+  CLOSE sooner. Root causes, the glitch below and the measurements are in
+  `research/classical_control/FINDINGS.md`. Known limits: Isaac renders
+  without the robot in some processes (detected by
+  `SO101IsaacEnv.robot_is_rendered()`; run long evaluations in shards and
+  retry), PhysX is not deterministic run to run, and Isaac supports
+  single-cube scenes with a fixed target, no domain randomization and only
+  observation-based policies. `--sim isaac --serve` opens the web viewer with
+  a display mirror of the arm (ADR 15).
+- [ ] ACT on Isaac Sim. Blocked by a dependency conflict, not by the env:
+  `[tool.uv] conflicts` forbids installing extra `vla` (torch + lerobot,
+  `numpy<2.3`) together with `isaac` (`isaacsim` pins `numpy==2.3.1`), so ACT
+  cannot run in the same process as Isaac. Options: an out-of-process policy
+  server (Isaac sends observations, a `vla` venv returns actions), or two
+  environments with recorded rollouts; either is its own piece of work.
 - [x] `ArmKinematics` (`robots/so101/kinematics.py`) partially converted:
   `qpos_to_site_pose`/`pinch_center_from_qpos`, new additive methods aside
   `fk`/`tool_pose`/`pinch_center`'s existing `MjData`-taking ones, cover
