@@ -16,6 +16,33 @@ from __future__ import annotations
 from typing import Any
 
 
+def _bind_matte_color(stage: Any, prim: Any, path: str, rgb: tuple[float, ...]) -> None:
+    """Give `prim` a matte `UsdPreviewSurface` of this colour.
+
+    A prim with only `displayColor` renders with the viewer's default,
+    glossy-looking material, which washes a saturated red out to pink; MuJoCo's
+    objects are matte, so a camera policy sees a different cube without this.
+    """
+    from pxr import Gf, Sdf, UsdShade
+
+    material = UsdShade.Material.Define(stage, f"{path}_look")
+    shader = UsdShade.Shader.Define(stage, f"{path}_look/surface")
+    shader.CreateIdAttr("UsdPreviewSurface")
+    shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).Set(
+        Gf.Vec3f(*rgb[:3])
+    )
+    shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.9)
+    shader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
+    shader.CreateInput("specularColor", Sdf.ValueTypeNames.Color3f).Set(
+        Gf.Vec3f(0, 0, 0)
+    )
+    # ior 1 removes the dielectric Fresnel reflection; with it, the bright sky
+    # added a white sheen that washed the top of a red cube out to pale pink.
+    shader.CreateInput("ior", Sdf.ValueTypeNames.Float).Set(1.0)
+    material.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
+    UsdShade.MaterialBindingAPI.Apply(prim).Bind(material)
+
+
 def _bind_friction_material(stage: Any, prim: Any, path: str, friction: float) -> None:
     """Bind a PhysX material with this friction (combine mode "max") to `prim`."""
     from pxr import PhysxSchema, UsdPhysics, UsdShade
@@ -50,6 +77,7 @@ def add_static_box(
     box.AddScaleOp().Set(Gf.Vec3f(*(2.0 * h for h in half_extents)))
     box.CreateDisplayColorAttr([Gf.Vec3f(*rgba[:3])])
     UsdPhysics.CollisionAPI.Apply(box.GetPrim())
+    _bind_matte_color(stage, box.GetPrim(), path, rgba)
     _bind_friction_material(stage, box.GetPrim(), path, friction)
     return path
 
@@ -70,6 +98,7 @@ def add_target_pad(
     pad.CreateHeightAttr(0.002)
     pad.AddTranslateOp().Set(Gf.Vec3d(*position))
     pad.CreateDisplayColorAttr([Gf.Vec3f(*rgba[:3])])
+    _bind_matte_color(stage, pad.GetPrim(), path, rgba)
     return path
 
 
@@ -105,6 +134,7 @@ def add_cube(
     UsdPhysics.CollisionAPI.Apply(prim)
     UsdPhysics.RigidBodyAPI.Apply(prim)
     UsdPhysics.MassAPI.Apply(prim).CreateMassAttr(mass)
+    _bind_matte_color(stage, prim, path, rgba)
 
     _bind_friction_material(stage, prim, path, friction)
     return path

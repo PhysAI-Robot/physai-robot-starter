@@ -23,6 +23,24 @@ if TYPE_CHECKING:
 XY = tuple[float, float]
 _UPRIGHT = [1, 0, 0, 0]
 
+# Where a single cube may start, when its position is randomized per episode.
+# Shared so every simulator's env config defaults to the same layout.
+DEFAULT_CUBE_X_RANGE: tuple[float, float] = (0.20, 0.24)
+DEFAULT_CUBE_Y_RANGE: tuple[float, float] = (0.05, 0.13)
+
+
+def draw_cube_xy(
+    rng: np.random.Generator,
+    x_range: tuple[float, float],
+    y_range: tuple[float, float],
+) -> XY:
+    """The cube's xy for one episode: x first, then y.
+
+    The order of draws is what pins a seed to a layout, in every simulator
+    (`tests/core/acceptance/so101/golden_layouts.json`).
+    """
+    return float(rng.uniform(*x_range)), float(rng.uniform(*y_range))
+
 
 class ObjectLayout(ABC):
     """Places a scene's cubes and target pad, and reports the cubes' state."""
@@ -99,8 +117,7 @@ class SingleCubeLayout(ObjectLayout):
     def _place_cubes(self, data, rng, cfg) -> None:
         cube_pos = np.array(self._scene.cube_pos, dtype=np.float64)
         if cfg.randomize_cube:
-            cube_pos[0] = rng.uniform(*cfg.cube_x_range)
-            cube_pos[1] = rng.uniform(*cfg.cube_y_range)
+            cube_pos[:2] = draw_cube_xy(rng, cfg.cube_x_range, cfg.cube_y_range)
         data.qpos[self._qadr : self._qadr + 3] = cube_pos
         data.qpos[self._qadr + 3 : self._qadr + 7] = _UPRIGHT
 

@@ -75,12 +75,14 @@ def test_reset_teleports_to_the_same_home_pose_as_mujoco(env):
     """
     from physai.robots.so101.mujoco_env import HOME_QPOS
 
+    # The reset holds for one control step (so the first image is fresh), and
+    # gravity sags the arm by a fraction of a milliradian in that time.
     observation = env.reset(seed=0)
     np.testing.assert_allclose(
-        observation.joint_state.position[:5], HOME_QPOS, atol=1e-4
+        observation.joint_state.position[:5], HOME_QPOS, atol=1e-3
     )
     assert observation.joint_state.position[5] == pytest.approx(
-        env.gripper_to_joint(1.0), abs=1e-4
+        env.gripper_to_joint(1.0), abs=1e-3
     )
 
 
@@ -139,3 +141,17 @@ def test_wrist_calibration_follows_the_rendering_camera_prim(env):
         for _ in range(30):
             env.step(Action(joint_position=np.array([0.5, -0.5, 0.5, 0.5, 0.0])))
         env.observe()
+
+
+def test_the_health_check_notices_a_robot_that_is_not_drawn(env):
+    """Isaac sometimes renders without the robot; `robot_is_rendered` must say
+    so (it renders with the robot shown and hidden and compares)."""
+    from pxr import UsdGeom
+
+    assert env.robot_is_rendered() is True
+
+    # A hidden robot looks to the cameras like the glitch does.
+    UsdGeom.Imageable(env.stage.GetPrimAtPath(env.robot_prim_path)).MakeInvisible()
+    # The check restores the robot's visibility itself when it finishes.
+    assert env.robot_is_rendered() is False
+    assert env.robot_is_rendered() is True
