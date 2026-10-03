@@ -11,7 +11,9 @@ your action space, units, or control rate — check that before blaming training
 from __future__ import annotations
 
 import argparse
+import ast
 from pathlib import Path
+from typing import Any
 
 import _bootstrap  # noqa: F401
 from _common_args import (
@@ -26,6 +28,7 @@ from _common_args import (
 )
 
 from physai.contracts import DEFAULT_CAMERA_RESOLUTION
+from physai.control import SafetyViolation
 from physai.data import EvaluationReport, load_episode
 from physai.policy import available_policies, create_policy
 from physai.robots import create_robot
@@ -40,6 +43,31 @@ from physai.tasks import TaskRuntime, create_task
 import research.classical_control.so101_visual_servo  # noqa: E402,F401
 import research.imitation_learning.vla_adapter  # noqa: E402,F401
 import research.scripted_experts.so101_pick_place_expert  # noqa: E402,F401
+
+
+def _parse_policy_arg(text: str) -> tuple[str, Any]:
+    """Split `KEY=VALUE`, reading VALUE as a Python literal (a bare word stays a string)."""
+    key, separator, raw = text.partition("=")
+    if not separator or not key:
+        raise argparse.ArgumentTypeError(f"expected KEY=VALUE, got {text!r}")
+    try:
+        return key, ast.literal_eval(raw)
+    except (ValueError, SyntaxError):
+        return key, raw
+
+
+def _format_distance(distance: float | None) -> str:
+    return "n/a" if distance is None else f"{distance:.3f}"
+
+
+def _parse_seed_list(text: str) -> list[int]:
+    try:
+        seeds = [int(part) for part in text.split(",")]
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected integers, got {text!r}") from None
+    if len(set(seeds)) != len(seeds):
+        raise argparse.ArgumentTypeError("seeds must be distinct")
+    return seeds
 
 
 def main() -> int:
@@ -60,6 +88,30 @@ def main() -> int:
         default=0.0,
         help="enable seeded camera-position jitter in metres for robustness evaluation",
     )
+    ap.add_argument(
+        "--camera-shift-unknown",
+        action="store_true",
+        help="with --camera-jitter, the policy keeps the nominal camera calibration "
+        "while the camera has moved (default: it is told the shifted pose)",
+    )
+    ap.add_argument(
+        "--lighting-scale",
+        type=float,
+        default=1.0,
+        help="scale every MuJoCo light by this factor (difficulty sweep)",
+    )
+    ap.add_argument(
+        "--clutter-count",
+        type=int,
+        default=0,
+        help="place this many distractor boxes on the table, off the cube and target",
+    )
+    ap.add_argument(
+        "--nominal-physics",
+        action="store_true",
+        help="with randomization on, leave friction and mass nominal so only the "
+        "requested difficulty axis varies",
+    )
     ap.add_argument("--dataset", type=Path, help="required for --policy replay")
     add_checkpoint(ap, help="required for --policy lerobot")
     add_camera_resolution(ap)
@@ -67,6 +119,22 @@ def main() -> int:
         ap,
         help="simulator engine (default mujoco); isaac runs the same scene, seeds "
         "and task on Isaac Sim (visual_servo only, no randomization)",
+    )
+    ap.add_argument(
+        "--policy-arg",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        type=_parse_policy_arg,
+        help="override a policy constructor option, e.g. "
+        "--policy-arg final_camera=front "
+        "--policy-arg grasp_offset_xy='(0.0, 0.0)'; repeatable",
+    )
+    ap.add_argument(
+        "--seeds",
+        type=_parse_seed_list,
+        help="comma-separated episode seeds (for example 5,13,28) instead of "
+        "--seed .. --seed + --episodes",
     )
     ap.add_argument(
         "--render",
@@ -83,6 +151,9 @@ def main() -> int:
         "--json-out", type=Path, help="write full per-episode results as JSON"
     )
     args = ap.parse_args()
+    if args.seeds is not None:
+        args.episodes = len(args.seeds)
+    episode_seeds = args.seeds or [args.seed + ep for ep in range(args.episodes)]
 
     # An image-conditioned policy cannot run without rendered cameras: render
     # defaulted to --render alone (so `--policy lerobot` died on an empty
@@ -93,18 +164,35 @@ def main() -> int:
     )
     if args.camera_jitter < 0:
         ap.error("--camera-jitter must be non-negative")
+    if args.lighting_scale <= 0:
+        ap.error("--lighting-scale must be positive")
+    if args.clutter_count < 0:
+        ap.error("--clutter-count must be non-negative")
+    difficulty = (
+        args.camera_jitter > 0 or args.lighting_scale != 1.0 or args.clutter_count > 0
+    )
+    physics = {"friction_scale": (1.0, 1.0), "mass_scale": (1.0, 1.0)}
     randomization = DomainRandomizationConfig(
-        enabled=args.camera_jitter > 0,
+        enabled=difficulty,
         camera_position_jitter=args.camera_jitter,
+        camera_shift_calibrated=not args.camera_shift_unknown,
+        lighting_scale=(args.lighting_scale, args.lighting_scale),
+        **(physics if args.nominal_physics else {}),
     )
     scene = scene_type(
-        camera_resolution=args.camera_resolution or DEFAULT_CAMERA_RESOLUTION
+        camera_resolution=args.camera_resolution or DEFAULT_CAMERA_RESOLUTION,
+        clutter_count=args.clutter_count,
     )
     if args.simulator == "isaac":
         # The same scene config MuJoCo builds from, so both engines share the
         # table, cube, target, cameras and per-seed cube layout.
-        if args.sorting or args.camera_jitter > 0:
-            ap.error("--sim isaac supports neither --sorting nor --camera-jitter")
+        if args.sorting or args.clutter_count:
+            ap.error("--sim isaac supports neither --sorting nor --clutter-count")
+        if args.camera_jitter > 0 and not args.camera_shift_unknown:
+            ap.error(
+                "--sim isaac moves cameras without telling the policy: "
+                "add --camera-shift-unknown to --camera-jitter"
+            )
         if args.policy not in {"visual_servo", "constant"}:
             ap.error("--sim isaac supports --policy visual_servo or constant")
         from physai.robots.so101.isaac_env import IsaacEnvConfig
@@ -115,6 +203,8 @@ def main() -> int:
             config=IsaacEnvConfig(
                 scene=scene,
                 camera_resolution=scene.camera_resolution,
+                lighting_scale=args.lighting_scale,
+                camera_position_jitter=args.camera_jitter,
                 cameras=("front", "wrist"),
                 seed=args.seed,
                 max_steps=args.max_steps,
@@ -165,9 +255,7 @@ def main() -> int:
                 json.loads(meta_path.read_text(encoding="utf-8")).get("train_seeds")
                 or []
             )
-            overlap = sorted(
-                train_seeds & set(range(args.seed, args.seed + args.episodes))
-            )
+            overlap = sorted(train_seeds & set(episode_seeds))
             if overlap:
                 print(
                     f"WARNING: {len(overlap)}/{args.episodes} evaluation seeds were in "
@@ -181,7 +269,7 @@ def main() -> int:
     # from disk per episode would dominate wall-clock time for no reason.
     reusable_policy = None
     if args.policy != "replay":
-        policy_kwargs = {"env": env}
+        policy_kwargs = {"env": env, **dict(args.policy_arg)}
         if args.policy == "lerobot":
             policy_kwargs["checkpoint"] = args.checkpoint
         reusable_policy = create_policy(
@@ -204,10 +292,10 @@ def main() -> int:
         if args.policy == "replay":
             entry = episodes[ep % len(episodes)]
             data = load_episode(args.dataset / entry["file"])
-            seed = entry.get("seed", args.seed + ep)
+            seed = entry.get("seed", episode_seeds[ep])
             policy = create_policy("replay", env=env, actions=data["action"])
         else:
-            seed = args.seed + ep
+            seed = episode_seeds[ep]
             policy = reusable_policy
 
         obs = env.reset(seed=seed)
@@ -222,8 +310,15 @@ def main() -> int:
             )
         policy.reset(obs)
         total, info = 0.0, {}
+        violation = None
         for _ in range(args.max_steps):
-            obs, reward, terminated, truncated, info = env.step(policy.act(obs))
+            try:
+                obs, reward, terminated, truncated, info = env.step(policy.act(obs))
+            except SafetyViolation as exc:
+                # The gate refused the action: the episode ends as an unsafe
+                # action rather than taking the whole evaluation down.
+                violation = str(exc)
+                break
             total += reward
             if terminated or truncated:
                 break
@@ -231,24 +326,26 @@ def main() -> int:
         results.append(
             {
                 "seed": seed,
-                "success": bool(info.get("success")),
+                "success": violation is None and bool(info.get("success")),
                 "steps": env.step_count,
                 "reward": total,
                 "return": total,
-                "timeout": bool(truncated or info.get("timeout")),
+                "timeout": violation is None and bool(truncated or info.get("timeout")),
                 "collision": bool(
                     info.get("collision") or info.get("collision_detected")
                 ),
-                "unsafe_action": bool(info.get("unsafe_action")),
+                "unsafe_action": violation is not None
+                or bool(info.get("unsafe_action")),
                 "held_out": bool(train_seeds) and seed not in train_seeds,
-                "dist_cube_target": info["dist_cube_target"],
+                "dist_cube_target": info.get("dist_cube_target"),
                 **(
                     {
                         "visual_error_px": policy.metrics.visual_error_px,
                         "ee_error_m": policy.metrics.ee_error_m,
                         "phase": policy.metrics.phase,
                         "settling_time_s": policy.metrics.settling_time_s,
-                        "failure_reason": policy.metrics.failure_reason,
+                        "grasp_retries": policy.metrics.grasp_retries,
+                        "failure_reason": violation or policy.metrics.failure_reason,
                     }
                     if args.policy == "visual_servo"
                     else {}
@@ -261,7 +358,8 @@ def main() -> int:
         print(
             f"ep {ep:3d} seed={seed:<5d} success={results[-1]['success']!s:<5} "
             f"steps={env.step_count:<4d} return={total:7.2f} "
-            f"d={results[-1]['dist_cube_target']:.3f}"
+            f"d={_format_distance(results[-1]['dist_cube_target'])}"
+            + (f"  UNSAFE: {violation}" if violation else "")
         )
 
     env.close()
@@ -293,7 +391,8 @@ def main() -> int:
         args.json_out.parent.mkdir(parents=True, exist_ok=True)
         payload = report.to_dict()
         payload["checkpoint"] = str(args.checkpoint) if args.checkpoint else None
-        payload["seed_start"] = args.seed
+        payload["seed_start"] = episode_seeds[0]
+        payload["policy_args"] = {key: repr(value) for key, value in args.policy_arg}
         args.json_out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         print(f"json -> {args.json_out}")
     return 0

@@ -13,28 +13,11 @@ the seeds on which they differ, so a gap is traceable to specific layouts.
 from __future__ import annotations
 
 import argparse
-import math
 import sys
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
-from report_evaluation import load_evaluation
-
-Z_95 = 1.959963984540054
-
-
-def wilson_interval(successes: int, total: int, z: float = Z_95) -> tuple[float, float]:
-    """Wilson score interval for a binomial proportion (95% by default)."""
-    if total <= 0:
-        raise ValueError("total must be positive")
-    if not 0 <= successes <= total:
-        raise ValueError("successes must be between 0 and total")
-    p = successes / total
-    denominator = 1 + z * z / total
-    centre = (p + z * z / (2 * total)) / denominator
-    margin = z * math.sqrt(p * (1 - p) / total + z * z / (4 * total * total))
-    margin /= denominator
-    return max(0.0, centre - margin), min(1.0, centre + margin)
+from report_evaluation import load_evaluation, wilson_interval  # noqa: F401
 
 
 def seed_agreement(a: list[dict], b: list[dict]) -> dict:

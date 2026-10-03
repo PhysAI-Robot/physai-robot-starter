@@ -352,8 +352,16 @@ class SO101Env(MuJoCoSimulationCore):
         )
         quat = np.zeros(4)
         mujoco.mju_mat2Quat(quat, rotation.reshape(9))
+        position = self.data.cam_xpos[camera_id].copy()
+        if not self.cfg.domain_randomization.camera_shift_calibrated:
+            # The camera moved but the policy's calibration did not: report
+            # where the camera was mounted, not where it is.
+            body_rotation = self.data.xmat[self.model.cam_bodyid[camera_id]]
+            position -= body_rotation.reshape(3, 3) @ self.randomization.camera_shift(
+                camera_id
+            )
         extrinsics = Pose(
-            position=Vector3.from_array(self.data.cam_xpos[camera_id]),
+            position=Vector3.from_array(position),
             orientation=Quaternion.from_mujoco(quat),
         )
         return intrinsics, extrinsics
