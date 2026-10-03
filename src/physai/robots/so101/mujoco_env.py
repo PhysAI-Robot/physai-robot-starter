@@ -38,7 +38,7 @@ from .contracts import (
 )
 from .jog import resolve_jog
 from .kinematics import ArmKinematics
-from .layout import create_layout
+from .layout import DEFAULT_CUBE_X_RANGE, DEFAULT_CUBE_Y_RANGE, create_layout
 from .scene import scene_defaults
 
 HOME_QPOS = np.array([0.0, -1.05, 1.25, 0.75, 0.0], dtype=np.float64)
@@ -57,8 +57,8 @@ class EnvConfig:
     camera_stride: int = 1
     max_steps: int = 400
     randomize_cube: bool = True
-    cube_x_range: tuple[float, float] = (0.20, 0.24)
-    cube_y_range: tuple[float, float] = (0.05, 0.13)
+    cube_x_range: tuple[float, float] = DEFAULT_CUBE_X_RANGE
+    cube_y_range: tuple[float, float] = DEFAULT_CUBE_Y_RANGE
     randomize_target: bool = False
     target_x_range: tuple[float, float] = (0.16, 0.26)
     target_y_range: tuple[float, float] = (-0.13, -0.04)

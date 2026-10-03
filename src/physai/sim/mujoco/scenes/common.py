@@ -10,25 +10,9 @@ import mujoco
 
 from ....contracts import DEFAULT_CAMERA_RESOLUTION, parse_camera_resolution
 from ....robots.description import RobotDescription
+from ...studio import STUDIO_FLOOR_RGB1, STUDIO_FLOOR_RGB2, STUDIO_SKY_RGB, TABLE_RGBA
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
-
-# Matches the web viewer's Three.js scene background exactly
-# (`scene.background = new THREE.Color(0xdfe6e2)` in
-# src/physai/web/static/js/scene.js), so a MuJoCo render (the native viewer's
-# free camera, a captured camera frame, an exported video) and the browser
-# viewer show the same background color instead of MuJoCo's own default sky.
-STUDIO_SKY_RGB: tuple[float, float, float] = (0.8745, 0.9020, 0.8863)
-
-# Matches the web viewer's checker-textured floor exactly (`checkerTexture`
-# in scene.js uses the same two hex colors, #e3e9e4 / #9fb0a8). A
-# robot-mounted camera (e.g. so101's "front") often frames the floor rather
-# than open sky, so the floor's own texture — not just the skybox — needs to
-# be in the same palette for a MuJoCo render to look consistent with the
-# browser viewer. The gap between the two tiles is wider than the sky/floor
-# gap so the checker pattern stays legible without leaving the light palette.
-STUDIO_FLOOR_RGB1: tuple[float, float, float] = (0.8902, 0.9137, 0.8941)
-STUDIO_FLOOR_RGB2: tuple[float, float, float] = (0.6235, 0.6902, 0.6588)
 
 
 def add_studio_sky(spec: mujoco.MjSpec) -> None:
@@ -295,7 +279,7 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
         name="table_top",
         type=mujoco.mjtGeom.mjGEOM_BOX,
         size=list(cfg.table_size),
-        rgba=[0.75, 0.72, 0.66, 1.0],
+        rgba=list(TABLE_RGBA),
         friction=[1.0, 0.005, 0.0001],
     )
     world.add_geom(

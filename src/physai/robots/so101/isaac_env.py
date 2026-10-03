@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import mujoco
 import numpy as np
@@ -48,13 +49,18 @@ from ...sim.isaac.description import (
     apply_frames,
 )
 from ...sim.isaac.description import import_robot as isaac_import_robot
+from ...sim.studio import TABLE_RGBA
 from ...sim.isaac.objects import (
     add_cube,
     add_static_box,
     add_target_pad,
-    prim_world_position,
 )
-from ...sim.isaac.scene import add_ground_plane, add_studio_lighting, add_world_camera
+from ...sim.isaac.scene import (
+    add_ground_plane,
+    add_studio_lighting,
+    add_world_camera,
+    checker_texture,
+)
 from ..base import RobotSpec, RobotTrainingContract
 from ..description import RobotDescription, load_robot_description
 from .contracts import (
@@ -64,10 +70,16 @@ from .contracts import (
     so101_training_contract,
 )
 from .kinematics import ArmKinematics
+from .layout import DEFAULT_CUBE_X_RANGE, DEFAULT_CUBE_Y_RANGE, draw_cube_xy
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 _DESCRIPTION_PATH = Path(__file__).resolve().parent / "description.yaml"
 HOME_QPOS = np.array([0.0, -1.05, 1.25, 0.75, 0.0], dtype=np.float64)
+# Mean absolute pixel difference between a render with and without the robot
+# below which the robot is taken to be missing. Measured on the front camera:
+# a drawn robot gives ~10, two renders of the same state differ by ~1.3 (the
+# denoiser), and a scene without the robot by ~0.3.
+_ROBOT_RENDER_MIN_DIFF = 3.0
 
 
 @dataclass
@@ -99,7 +111,7 @@ class TableConfig:
     position: tuple[float, float, float] = (0.30, 0.0, 0.01)
     half_extents: tuple[float, float, float] = (0.20, 0.25, 0.01)
     friction: float = 1.0
-    rgba: tuple[float, float, float, float] = (0.75, 0.72, 0.66, 1.0)
+    rgba: tuple[float, float, float, float] = TABLE_RGBA
     target_radius: float = 0.035
 
 
@@ -120,16 +132,56 @@ class FrontCameraConfig:
     fovy_deg: float = 48.0
 
 
+def scene_objects(
+    scene: Any,
+) -> tuple[TableConfig, GraspCubeConfig, FrontCameraConfig, tuple[float, ...]]:
+    """The table, cube, front camera and target a shared scene config describes.
+
+    Takes the same `ManipulationSceneConfig` MuJoCo builds its scene from, so
+    both simulators read one set of numbers. Friction, colour and the front
+    camera's field of view are not scene fields (MuJoCo hardcodes them in
+    `build_manipulation_spec`/`add_cube`); the dataclass defaults mirror those.
+    """
+    cube_names = tuple(getattr(scene, "cube_names", ("cube",)))
+    if cube_names != ("cube",):
+        raise ValueError(
+            "SO101IsaacEnv supports single-cube scenes only; "
+            f"this scene has cubes {cube_names}"
+        )
+    xyaxes = tuple(scene.front_cam_xyaxes)
+    return (
+        TableConfig(
+            position=tuple(scene.table_pos),
+            half_extents=tuple(scene.table_size),
+            target_radius=scene.target_radius,
+        ),
+        GraspCubeConfig(
+            position=tuple(scene.cube_pos),
+            half_size=scene.cube_half,
+            mass=scene.cube_mass,
+        ),
+        FrontCameraConfig(
+            position=tuple(scene.front_cam_pos),
+            x_axis=xyaxes[:3],
+            y_axis=xyaxes[3:],
+        ),
+        tuple(scene.target_pos),
+    )
+
+
 @dataclass
 class IsaacEnvConfig:
     """SO-101-on-Isaac simulation and observation settings.
 
-    Deliberately narrower than `so101.mujoco_env.EnvConfig`: no `scene` (no
-    task objects beyond the optional `cube`/`front_camera`/`target_pos`
-    below) and no domain randomization (Isaac's own randomization tooling
-    is a separate integration).
+    Narrower than `so101.mujoco_env.EnvConfig`: single-cube scenes only, a
+    fixed target, and no domain randomization (Isaac's own randomization
+    tooling is a separate integration). Give it the same `scene` MuJoCo uses
+    and the table, cube, target, front camera and per-seed cube layout follow
+    from it; without one, the low-level `cube`/`table`/`front_camera`/
+    `target_pos` below describe a bare test scene.
     """
 
+    scene: Any = None  # a ManipulationSceneConfig (e.g. PickPlaceMinimalSceneConfig)
     description: RobotDescription | None = None
     assets_root: Path = field(default_factory=lambda: REPO_ROOT / "assets" / "so101")
     usd_out_dir: Path = field(
@@ -149,6 +201,13 @@ class IsaacEnvConfig:
     cube: GraspCubeConfig | None = None
     front_camera: FrontCameraConfig | None = None
     table: TableConfig | None = None
+    # Per-seed cube placement, as MuJoCo's `EnvConfig`: None means "randomize
+    # when a scene is given" (the MuJoCo default), otherwise the cube stays at
+    # its configured position.
+    randomize_cube: bool | None = None
+    cube_x_range: tuple[float, float] = DEFAULT_CUBE_X_RANGE
+    cube_y_range: tuple[float, float] = DEFAULT_CUBE_Y_RANGE
+    randomize_target: bool = False
     # (x, y) is what SO101VisualServoPolicy's TRANSFER/LOWER/RELEASE phases
     # actually read (see `_waypoint()`); z is recomputed from `rest_z`
     # separately, matching the MuJoCo side's own `target_pos` exactly.
@@ -156,6 +215,24 @@ class IsaacEnvConfig:
 
     def __post_init__(self) -> None:
         parse_camera_resolution(self.camera_resolution)
+        if self.randomize_target:
+            raise ValueError("SO101IsaacEnv does not support randomize_target yet")
+        if self.scene is not None:
+            if self.scene.camera_resolution != self.camera_resolution:
+                raise ValueError(
+                    f"scene camera_resolution {self.scene.camera_resolution!r} "
+                    f"differs from the env's {self.camera_resolution!r}"
+                )
+            table, cube, front, target = scene_objects(self.scene)
+            self.table = self.table or table
+            self.cube = self.cube or cube
+            self.front_camera = self.front_camera or front
+            if self.target_pos is None:
+                self.target_pos = target
+        if self.randomize_cube is None:
+            self.randomize_cube = self.scene is not None
+        self.cube_x_range = tuple(self.cube_x_range)
+        self.cube_y_range = tuple(self.cube_y_range)
         # A session manifest's YAML `config:` arrives as plain dicts/lists.
         if isinstance(self.cube, dict):
             self.cube = GraspCubeConfig(**self.cube)
@@ -198,7 +275,12 @@ class SO101IsaacEnv:
             UsdPhysics.Scene.Define(self.stage, "/physicsScene")
 
         add_studio_lighting(self.stage)
-        add_ground_plane(self.stage)
+        add_ground_plane(
+            self.stage,
+            texture_path=checker_texture(
+                self.cfg.usd_out_dir.parent / "studio" / "floor_checker.png"
+            ),
+        )
         apply_frames(self.stage, self.description)
         apply_contact_friction(self.stage, self.description)
         apply_contact_pad_colliders(self.stage, self.description)
@@ -273,6 +355,13 @@ class SO101IsaacEnv:
         )
         self.core.reset_simulation()
 
+        if self._cube_path is not None:
+            from isaacsim.core.experimental.prims import RigidPrim
+
+            # Built once physics is initialized (the tensor backend needs it);
+            # reads and teleports go through it so they never see a stale USD.
+            self._cube_body = RigidPrim(self._cube_path)
+
         self.articulation = Articulation(self.robot_prim_path)
         apply_actuators(self.articulation, self.description)
         self.dof_names = list(self.articulation.dof_names)
@@ -298,6 +387,8 @@ class SO101IsaacEnv:
         self.rng = np.random.default_rng(self.cfg.seed)
         self.step_count = 0
         self._last_action = Action(joint_position=HOME_QPOS.copy())
+        if self.core.render_enabled and self._camera_prims:
+            self._require_rendered_robot()
 
     def _build_kinematics_oracle(self) -> ArmKinematics:
         """A MuJoCo model used purely as an FK/IK math tool, never simulated.
@@ -315,7 +406,21 @@ class SO101IsaacEnv:
     def cube_pos(self) -> np.ndarray:
         if self._cube_path is None:
             raise AttributeError("this SO101IsaacEnv has no cube (cfg.cube is None)")
-        return prim_world_position(self.stage, self._cube_path)
+        positions, _ = self._cube_body.get_world_poses()
+        return np.asarray(positions, dtype=np.float64)[0]
+
+    @property
+    def table_top(self) -> float:
+        """Height of the surface objects rest on (the ground when no table)."""
+        if self.cfg.table is None:
+            return 0.0
+        return self.cfg.table.position[2] + self.cfg.table.half_extents[2]
+
+    @property
+    def cube_half(self) -> float:
+        if self.cfg.cube is None:
+            raise AttributeError("this SO101IsaacEnv has no cube (cfg.cube is None)")
+        return self.cfg.cube.half_size
 
     @property
     def rest_z(self) -> float:
@@ -446,9 +551,13 @@ class SO101IsaacEnv:
             else ("state",),
             capabilities=("joint_position", "arm_kinematics", "gripper")
             + (("images",) if self.cfg.cameras else ()),
+            # From the kinematics model (float64), like MuJoCo's spec and the
+            # IK solutions the safety gate validates; Isaac's own limits are
+            # float32 and a solution exactly at a limit would exceed them by
+            # rounding. `send_action` clips to Isaac's physical limits.
             joint_limits={
                 name: (float(lo), float(hi))
-                for name, (lo, hi) in zip(ARM_JOINT_NAMES, self.arm_limits)
+                for name, (lo, hi) in zip(ARM_JOINT_NAMES, self.kin.limits)
             },
             max_joint_delta={name: 0.75 for name in ARM_JOINT_NAMES},
             metadata={"control_hz": self.cfg.control_hz, "simulator": "isaac"},
@@ -493,24 +602,32 @@ class SO101IsaacEnv:
         self._last_action = Action(
             joint_position=HOME_QPOS.copy(), gripper=GripperCommand(position=1.0)
         )
+        # Poses written through the tensor API reach the renderer only after a
+        # physics step; without one, the first images show the previous episode
+        # (a cube still on the target pad), and a camera policy aims at that.
+        # Hold at HOME for one control step so the first observation is fresh.
+        self.core.step_simulation()
+        self.core.step_count = 0
         return self.observe()
 
     def _reset_cube(self) -> None:
-        """Put the cube back at its configured pose, at rest.
+        """Put the cube at this episode's starting pose, at rest.
 
         `reset_simulation()` re-initializes physics but leaves a rigid body
         wherever the previous episode flung it, so a second episode would
-        start with the cube off the table.
+        start with the cube off the table. The pose is the configured one, or
+        with `randomize_cube` the same per-seed draw MuJoCo makes
+        (`layout.draw_cube_xy` on `self.rng`) at the configured height.
         """
         if self._cube_path is None:
             return
-        if self._cube_body is None:
-            from isaacsim.core.experimental.prims import RigidPrim
-
-            self._cube_body = RigidPrim(self._cube_path)
+        position = list(self.cfg.cube.position)
+        if self.cfg.randomize_cube:
+            position[:2] = draw_cube_xy(
+                self.rng, self.cfg.cube_x_range, self.cfg.cube_y_range
+            )
         self._cube_body.set_world_poses(
-            positions=[list(self.cfg.cube.position)],
-            orientations=[[1.0, 0.0, 0.0, 0.0]],
+            positions=[position], orientations=[[1.0, 0.0, 0.0, 0.0]]
         )
         self._cube_body.set_velocities(
             linear_velocities=[[0.0, 0.0, 0.0]], angular_velocities=[[0.0, 0.0, 0.0]]
@@ -530,6 +647,47 @@ class SO101IsaacEnv:
                 stamp=self.step_count * self.core.control_dt, frame_id="base"
             ),
         )
+
+    def robot_is_rendered(self) -> bool:
+        """Whether the cameras actually draw the robot.
+
+        Now and then Isaac Sim starts with the robot missing from every render
+        (no arm, no shadow) while its physics works, so camera policies run
+        blind and fail. The test needs no knowledge of colours: render the
+        first camera with the robot shown and with it hidden; if the images
+        do not differ, the robot was never drawn.
+        """
+        from pxr import UsdGeom
+
+        app = ensure_simulation_app()
+        camera = next(iter(self._camera_prims))
+        root = UsdGeom.Imageable(self.stage.GetPrimAtPath(self.robot_prim_path))
+
+        def snapshot() -> np.ndarray:
+            for _ in range(3):
+                app.update()
+            for _ in range(4):  # the denoiser keeps ghosts of the previous state
+                self.render_camera(camera)
+            return self.render_camera(camera).astype(np.float64)
+
+        shown = snapshot()
+        root.MakeInvisible()
+        try:
+            hidden = snapshot()
+        finally:
+            root.MakeVisible()
+            snapshot()
+        return float(np.abs(shown - hidden).mean()) > _ROBOT_RENDER_MIN_DIFF
+
+    def _require_rendered_robot(self) -> None:
+        # No in-process recovery: toggling the visual geometry invalidates the
+        # articulation (its links are that geometry's parents), and nothing
+        # else was found to bring the robot back; a new process does.
+        if not self.robot_is_rendered():
+            raise RuntimeError(
+                "Isaac Sim is not drawing the robot (a startup glitch that "
+                "makes camera policies run blind); restart the process"
+            )
 
     def render_camera(self, name: str) -> np.ndarray:
         prim_path = self._camera_prims.get(name)
@@ -580,7 +738,9 @@ class SO101IsaacEnv:
         if action.joint_position is None:
             raise ValueError("SO101IsaacEnv requires joint-position actions")
         target = np.asarray(self.articulation.get_dof_position_targets()).copy()
-        target[0, self._arm_indices] = action.joint_position
+        target[0, self._arm_indices] = np.clip(
+            action.joint_position, self.arm_limits[:, 0], self.arm_limits[:, 1]
+        )
         gripper = action.gripper or GripperCommand()
         target[0, self._gripper_index] = self.gripper_to_joint(gripper.clipped())
         self.articulation.set_dof_position_targets(target)
@@ -592,13 +752,7 @@ class SO101IsaacEnv:
         self.step_count = self.core.step_count
         observation = self.observe()
         truncated = self.step_count >= self.cfg.max_steps
-        info: dict = {}
-        if self._cube_path is not None and self.cfg.target_pos is not None:
-            # A measurement only; whether it counts as success is a task rule.
-            info["dist_cube_target"] = float(
-                np.linalg.norm(self.cube_pos[:2] - self.target_pos[:2])
-            )
-        return observation, 0.0, False, truncated, info
+        return observation, 0.0, False, truncated, {}
 
     def close(self) -> None:
         self.core.close()

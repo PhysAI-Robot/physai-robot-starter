@@ -111,3 +111,86 @@ def test_wrist_calibration_follows_the_chosen_resolution():
         assert intrinsics.fx == intrinsics.fy  # square pixels at any aspect
     # Same field of view, so the focal length scales with the image height.
     assert results["640x480"].fy == 2 * results["320x240"].fy
+
+
+def test_isaac_config_takes_its_objects_from_the_shared_scene():
+    from physai.robots.so101.isaac_env import IsaacEnvConfig
+    from physai.sim.mujoco import PickPlaceMinimalSceneConfig
+
+    scene = PickPlaceMinimalSceneConfig(
+        table_pos=(0.31, 0.01, 0.012), cube_pos=(0.21, 0.07, 0.04)
+    )
+    cfg = IsaacEnvConfig(scene=scene)
+
+    assert cfg.table.position == (0.31, 0.01, 0.012)
+    assert cfg.table.half_extents == tuple(scene.table_size)
+    assert cfg.cube.position == (0.21, 0.07, 0.04)
+    assert cfg.cube.half_size == scene.cube_half
+    assert cfg.target_pos == tuple(scene.target_pos)
+    assert cfg.front_camera.position == tuple(scene.front_cam_pos)
+    assert cfg.front_camera.x_axis + cfg.front_camera.y_axis == tuple(
+        scene.front_cam_xyaxes
+    )
+    # MuJoCo's default: a scene randomizes the cube per seed; a bare config does not.
+    assert cfg.randomize_cube is True
+    assert IsaacEnvConfig().randomize_cube is False
+
+
+def test_isaac_layout_defaults_match_mujoco_env_config():
+    from dataclasses import fields
+
+    from physai.robots.so101.isaac_env import IsaacEnvConfig
+    from physai.robots.so101.mujoco_env import EnvConfig
+
+    mujoco_defaults = {f.name: f.default for f in fields(EnvConfig)}
+    isaac_defaults = {f.name: f.default for f in fields(IsaacEnvConfig)}
+    for name in ("cube_x_range", "cube_y_range", "randomize_target"):
+        assert isaac_defaults[name] == mujoco_defaults[name], name
+
+
+def test_isaac_config_rejects_what_it_cannot_build():
+    import pytest
+
+    from physai.robots.so101.isaac_env import IsaacEnvConfig
+    from physai.sim.mujoco import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
+
+    with pytest.raises(ValueError, match="single-cube"):
+        IsaacEnvConfig(scene=SortingMinimalSceneConfig())
+    with pytest.raises(ValueError, match="camera_resolution"):
+        IsaacEnvConfig(
+            scene=PickPlaceMinimalSceneConfig(camera_resolution="640x480"),
+        )
+    with pytest.raises(ValueError, match="randomize_target"):
+        IsaacEnvConfig(randomize_target=True)
+
+
+def test_the_pick_place_manifest_builds_a_config_for_either_simulator():
+    """One manifest describes the environment for both engines, so every robot
+    config key it sets must be a field of each env config."""
+    from dataclasses import fields
+
+    from physai.config import load_manifest
+    from physai.config.compat import with_overrides
+    from physai.robots import create_env_config
+
+    manifest = load_manifest("configs/manifests/so101_pick_place.yaml")
+    isaac = with_overrides(manifest, simulator="isaac")
+    assert isaac.simulator == "isaac"
+    accepted = {f.name for f in fields(create_env_config("so101", simulator="isaac"))}
+    assert set(isaac.robots[0].config) <= accepted
+
+
+def test_isaac_config_accepts_every_resolution_its_scene_can_have():
+    """The scene and the env must name one resolution; `eval_policy --sim isaac
+    --camera-res` builds both from the same value."""
+    from physai.contracts import CAMERA_RESOLUTIONS, parse_camera_resolution
+    from physai.robots.so101.isaac_env import IsaacEnvConfig
+    from physai.sim.mujoco import PickPlaceMinimalSceneConfig
+
+    for resolution in CAMERA_RESOLUTIONS:
+        scene = PickPlaceMinimalSceneConfig(camera_resolution=resolution)
+        cfg = IsaacEnvConfig(scene=scene, camera_resolution=scene.camera_resolution)
+        assert parse_camera_resolution(cfg.camera_resolution) == (
+            scene.camera_width,
+            scene.camera_height,
+        )

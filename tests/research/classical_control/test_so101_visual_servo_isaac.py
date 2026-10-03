@@ -4,14 +4,14 @@ running its full detect -> approach -> grasp -> transfer -> place loop
 sync --extra isaac` installs it into this project's own venv (see
 `docs/adr/0016-isaacsim-as-a-project-extra.md`).
 
-Does not attempt cross-simulator seed/layout parity (`ROADMAP.md`'s 2E
-still lists that as open): the cube and target are fixed, configured
-positions, not drawn from `robots/so101/layout.py`'s RNG-draw-order
-contract, which has no Isaac equivalent yet. This proves the control loop
-itself runs end to end against Isaac Sim and delivers the cube -- the same
-policy class, control logic, and parameters as MuJoCo, in the same table scene
-(`configs/manifests/so101_isaac_visual_servo.yaml` is the CLI twin of this
-module's config) -- not a matched success-rate comparison across simulators.
+The cube and target here are fixed, configured positions (the low-level
+`cube`/`table`/`target_pos` config), which makes this the quick check that the
+control loop runs end to end against Isaac Sim and delivers the cube with the
+same policy class, control logic, and parameters as MuJoCo, in the same table
+scene. The matched, per-seed comparison over the shared scene config is
+`scripts/eval_policy.py --sim isaac` with `scripts/compare_evaluations.py`
+(results in `research/classical_control/FINDINGS.md`); the per-seed cube
+layout itself is pinned by `tests/core/acceptance/so101/test_isaac_layout.py`.
 
 One `SimulationApp` per process is a hard Isaac Sim constraint, so this
 module builds its own `SO101IsaacEnv` (with a cube, a front camera, and a

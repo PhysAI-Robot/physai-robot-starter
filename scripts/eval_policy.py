@@ -22,6 +22,7 @@ from _common_args import (
     add_policy,
     add_robot,
     add_seed,
+    add_simulator,
 )
 
 from physai.contracts import DEFAULT_CAMERA_RESOLUTION
@@ -62,6 +63,11 @@ def main() -> int:
     ap.add_argument("--dataset", type=Path, help="required for --policy replay")
     add_checkpoint(ap, help="required for --policy lerobot")
     add_camera_resolution(ap)
+    add_simulator(
+        ap,
+        help="simulator engine (default mujoco); isaac runs the same scene, seeds "
+        "and task on Isaac Sim (visual_servo only, no randomization)",
+    )
     ap.add_argument(
         "--render",
         action="store_true",
@@ -91,18 +97,41 @@ def main() -> int:
         enabled=args.camera_jitter > 0,
         camera_position_jitter=args.camera_jitter,
     )
-    robot = create_robot(
-        args.robot,
-        config=EnvConfig(
-            scene=scene_type(
-                camera_resolution=args.camera_resolution or DEFAULT_CAMERA_RESOLUTION
-            ),
-            seed=args.seed,
-            max_steps=args.max_steps,
-            render=args.render or needs_images,
-            domain_randomization=randomization,
-        ),
+    scene = scene_type(
+        camera_resolution=args.camera_resolution or DEFAULT_CAMERA_RESOLUTION
     )
+    if args.simulator == "isaac":
+        # The same scene config MuJoCo builds from, so both engines share the
+        # table, cube, target, cameras and per-seed cube layout.
+        if args.sorting or args.camera_jitter > 0:
+            ap.error("--sim isaac supports neither --sorting nor --camera-jitter")
+        if args.policy not in {"visual_servo", "constant"}:
+            ap.error("--sim isaac supports --policy visual_servo or constant")
+        from physai.robots.so101.isaac_env import IsaacEnvConfig
+
+        robot = create_robot(
+            args.robot,
+            simulator="isaac",
+            config=IsaacEnvConfig(
+                scene=scene,
+                camera_resolution=scene.camera_resolution,
+                cameras=("front", "wrist"),
+                seed=args.seed,
+                max_steps=args.max_steps,
+                render=True,
+            ),
+        )
+    else:
+        robot = create_robot(
+            args.robot,
+            config=EnvConfig(
+                scene=scene,
+                seed=args.seed,
+                max_steps=args.max_steps,
+                render=args.render or needs_images,
+                domain_randomization=randomization,
+            ),
+        )
     env = TaskRuntime(
         robot,
         create_task("sorting" if args.sorting else "pick_place"),
@@ -182,6 +211,15 @@ def main() -> int:
             policy = reusable_policy
 
         obs = env.reset(seed=seed)
+        # Isaac Sim sometimes stops drawing the robot (a startup glitch);
+        # camera policies then fail for a reason unrelated to the policy, so
+        # stop instead of recording those episodes as failures.
+        rendered = getattr(robot, "robot_is_rendered", None)
+        if rendered is not None and not rendered():
+            raise SystemExit(
+                f"episode {ep} (seed {seed}): Isaac Sim is not drawing the robot; "
+                "restart the evaluation (results so far are valid)"
+            )
         policy.reset(obs)
         total, info = 0.0, {}
         for _ in range(args.max_steps):
