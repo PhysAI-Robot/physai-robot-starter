@@ -26,6 +26,7 @@ def add_studio_lighting(
     *,
     dome_intensity: float = ISAAC_DOME_INTENSITY,
     key_intensity: float = ISAAC_KEY_INTENSITY,
+    scale: float = 1.0,
 ) -> None:
     """Add a simple key/fill light pair so a camera render is not black.
 
@@ -33,16 +34,17 @@ def add_studio_lighting(
     without this, `IsaacSimulationCore.render_camera` returns all-zero
     frames. Not colour-matched to the MuJoCo web-viewer studio palette
     (`sim.mujoco.scenes.common.STUDIO_SKY_RGB`) yet — that match only matters once
-    a dataset image comparison needs it.
+    a dataset image comparison needs it. `scale` multiplies both intensities
+    (a lighting-difficulty level).
     """
     from pxr import UsdLux
 
     if stage.GetPrimAtPath("/World_lights").IsValid():
         return
     dome = UsdLux.DomeLight.Define(stage, "/World_lights/dome")
-    dome.CreateIntensityAttr(dome_intensity)
+    dome.CreateIntensityAttr(dome_intensity * scale)
     key = UsdLux.DistantLight.Define(stage, "/World_lights/key")
-    key.CreateIntensityAttr(key_intensity)
+    key.CreateIntensityAttr(key_intensity * scale)
     key.CreateAngleAttr(1.0)
 
 

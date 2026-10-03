@@ -50,6 +50,9 @@ _GRIP_STALL_EPS = 0.003
 # jaw that is genuinely, permanently blocked.
 _GRIP_STALL_SETTLE_STEPS = 30
 
+# Steps a retry still needs after its grasp, to lift, transfer, lower and release.
+_RETRY_TRANSFER_STEPS = 80
+
 
 @dataclass(frozen=True)
 class VisualFeature:
@@ -192,6 +195,20 @@ class CameraCalibration:
         object.__setattr__(self, "rotation_base_camera", rotation)
         object.__setattr__(self, "translation_base_camera", translation)
 
+    def project(self, point_base: np.ndarray) -> np.ndarray:
+        """The pixel a point given in the base frame appears at (the inverse of
+        `ray_base`); raises `ValueError` for a point behind the camera."""
+        point = np.asarray(point_base, dtype=np.float64).reshape(3)
+        in_camera = self.rotation_base_camera.T @ (point - self.translation_base_camera)
+        if in_camera[2] <= 1e-6:
+            raise ValueError("point is behind the camera")
+        return np.array(
+            [
+                self.fx * in_camera[0] / in_camera[2] + self.cx,
+                self.fy * in_camera[1] / in_camera[2] + self.cy,
+            ]
+        )
+
     def ray_base(self, pixel: np.ndarray) -> np.ndarray:
         pixel = np.asarray(pixel, dtype=np.float64).reshape(2)
         ray_camera = np.array(
@@ -219,6 +236,7 @@ class VisualServoMetrics:
     phase: str = "APPROACH"
     phase_steps: int = 0
     settling_time_s: float | None = None
+    grasp_retries: int = 0
 
 
 class VisualServoPhase(Enum):
@@ -256,8 +274,9 @@ class SO101VisualServoPolicy(Policy):
         dt: float | None = None,
         final_camera: str = "wrist",
         grasp_offset_xy: tuple[float, float] = (-0.006, -0.006),
-        align_before_descend: bool = True,
-        align_tolerance: float = 0.004,
+        grasp_check_fraction: float = 0.25,
+        lift_check_fraction: float = 0.04,
+        max_grasp_retries: int = 2,
     ) -> None:
         self.env = env
         self.camera = camera
@@ -280,14 +299,26 @@ class SO101VisualServoPolicy(Policy):
         # biasing the target 6 mm toward -x/-y keeps the jaws on the safe
         # side. Measured: 20/20 in MuJoCo at 320x240, 640x480 and 1280x720.
         self.grasp_offset_xy = np.asarray(grasp_offset_xy, dtype=np.float64)
-        # DESCEND lowers the pinch in a few control steps while the wrist
-        # refinement is still shifting xy, so a first estimate that is off by
-        # about a centimetre lands the static jaw on top of the object.
-        # DESCEND therefore hovers at the approach height until the pinch is
-        # within `align_tolerance` of the refined xy, then lowers.
-        self.align_before_descend = bool(align_before_descend)
-        self.align_tolerance = float(align_tolerance)
-        self._aligned = False
+        # At the end of CLOSE a cube held between the jaws appears in the wrist
+        # camera where the pinch point projects (the pinch point comes from the
+        # joint angles, not from the simulator). A blob farther from it than
+        # this fraction of the image height, or none at all, means the grasp
+        # missed: the policy opens the gripper and starts over, up to
+        # `max_grasp_retries` times, then stops with `failure_reason`
+        # "grasp_missed". Measured at 320x240 (MuJoCo): a held cube is 10 to 25
+        # px away, a missed one 138 to 174 px. 0 turns the check off.
+        self.grasp_check_fraction = float(grasp_check_fraction)
+        # A cube that is really held does not move in the wrist image while the
+        # arm lifts, because it moves with the camera. At the end of LIFT the
+        # blob must be within this fraction of the image height of where it was
+        # at the end of CLOSE, else the grasp let go (a cube left on the table
+        # moved 16 and 23 px, a held one 0.7 px at 240 px high). 0 turns it off.
+        self.lift_check_fraction = float(lift_check_fraction)
+        self._close_offset: np.ndarray | None = None
+        self._attempt_start_step = 0
+        self.max_grasp_retries = int(max_grasp_retries)
+        self._grasp_retries = 0
+        self._failure_reason: str | None = None
         self.kp = float(kp)
         self.max_speed = float(max_speed)
         self.pixel_tolerance = float(pixel_tolerance)
@@ -361,17 +392,22 @@ class SO101VisualServoPolicy(Policy):
         self._last_visual_error_px = None
         self._last_detections = {}
         self._prev_grip_now = None
-        self._aligned = False
+        self._grasp_retries = 0
+        self._failure_reason = None
+        self._close_offset = None
+        self._attempt_start_step = 0
 
-    def _refine_from_final_camera(self, observation: Observation) -> None:
+    def _refine_from_final_camera(self, observation: Observation) -> bool:
+        """Re-aim the target at where the wrist camera sees the cube; True when
+        it moved (the new estimate is accepted within 8 cm of the old one)."""
         if self._target_xy is None:
-            return
+            return False
         frame = observation.images.get(self.final_camera)
         if frame is None:
-            return
+            return False
         feature = self.detector.detect(frame)
         if feature is None:
-            return
+            return False
         self._last_detections[self.final_camera] = (
             np.asarray(frame.data, dtype=np.uint8).copy(),
             feature,
@@ -386,9 +422,11 @@ class SO101VisualServoPolicy(Policy):
                 observation, self.final_camera
             ).pixel_to_plane(feature.pixel, self.target_plane_z)[:2]
         except (KeyError, ValueError):
-            return
+            return False
         if np.linalg.norm(candidate - self._target_xy) <= 0.08:
             self._target_xy = candidate
+            return True
+        return False
 
     @property
     def done(self) -> bool:
@@ -417,23 +455,86 @@ class SO101VisualServoPolicy(Policy):
         self._settle_steps = 0
         self._stall_steps = 0
 
-    def _descend_ready(self) -> bool:
-        """Whether DESCEND may lower the pinch (latched once xy is aligned)."""
-        if not self.align_before_descend or self._aligned:
-            return True
-        pinch = self.env.pinch_center()
-        error = np.linalg.norm(pinch[:2] - (self._target_xy + self.grasp_offset_xy))
-        self._aligned = bool(error <= self.align_tolerance)
-        return self._aligned
+    def _blob_offset(self, observation: Observation) -> np.ndarray | None:
+        """Where the wrist camera sees the cube, in pixels from the projected
+        pinch point (the pinch point comes from the joint angles). `None`
+        when no blob is found; `LookupError` when there is no wrist frame or
+        calibration to check against."""
+        frame = observation.images.get(self.final_camera)
+        if frame is None:
+            raise LookupError("no wrist frame")
+        try:
+            calibration = self._calibration_from_observation(
+                observation, self.final_camera
+            )
+            expected = calibration.project(self.env.pinch_center())
+        except (KeyError, ValueError) as exc:
+            raise LookupError("no wrist calibration") from exc
+        feature = self.detector.detect(frame)
+        return None if feature is None else feature.pixel - expected
 
-    def _hovering_before_descent(self) -> bool:
-        """DESCEND is still holding at hover height, so `reached` means the
-        hover point, not the grasp point."""
-        return (
-            self.align_before_descend
-            and self._phase is VisualServoPhase.DESCEND
-            and not self._aligned
+    def _grasp_held(self, observation: Observation) -> bool:
+        """Whether the cube is between the jaws at the end of CLOSE.
+
+        Without a wrist frame or calibration there is nothing to check, so the
+        grasp is taken as held (the policy then behaves as without the check).
+        """
+        self._close_offset = None
+        if self.grasp_check_fraction <= 0:
+            return True
+        try:
+            offset = self._blob_offset(observation)
+        except LookupError:
+            return True
+        if offset is None:
+            return False
+        self._close_offset = offset
+        limit = self.grasp_check_fraction * observation.images[self.final_camera].height
+        return bool(np.linalg.norm(offset) <= limit)
+
+    def _still_held(self, observation: Observation) -> bool:
+        """Whether the cube rose with the gripper: at the end of LIFT it must
+        still sit where it did at the end of CLOSE in the wrist image."""
+        if self.lift_check_fraction <= 0 or self._close_offset is None:
+            return True
+        try:
+            offset = self._blob_offset(observation)
+        except LookupError:
+            return True
+        if offset is None:
+            return False
+        limit = self.lift_check_fraction * observation.images[self.final_camera].height
+        return bool(np.linalg.norm(offset - self._close_offset) <= limit)
+
+    def _miss_grasp(self, observation: Observation) -> None:
+        """Open and try again from APPROACH, or give up.
+
+        The retry aims at where the wrist camera sees the cube from the pose
+        that just missed (the pinch is then close to it, so the estimate is the
+        best the policy has), and only falls back to the front camera when the
+        wrist sees nothing usable. It gives up, with `failure_reason`
+        "grasp_missed", once the retries are used or when the steps left cannot
+        fit another attempt (about what the failed one took plus the
+        transfer).
+        """
+        attempt_steps = self._elapsed_steps - self._attempt_start_step
+        limit = getattr(getattr(self.env, "cfg", None), "max_steps", None)
+        fits = limit is None or (
+            self._elapsed_steps + attempt_steps + _RETRY_TRANSFER_STEPS <= limit
         )
+        if self._grasp_retries < self.max_grasp_retries and fits:
+            self._grasp_retries += 1
+            if not self._refine_from_final_camera(observation):
+                self._target_xy = None
+            self._phase = VisualServoPhase.APPROACH
+            self._phase_steps = 0
+            self._settle_steps = 0
+            self._stall_steps = 0
+            self._attempt_start_step = self._elapsed_steps
+        else:
+            self._failure_reason = "grasp_missed"
+            self._phase = VisualServoPhase.DONE
+            self._phase_steps = 0
 
     def _waypoint(self) -> tuple[np.ndarray, float]:
         if self._target_xy is None:
@@ -442,8 +543,6 @@ class SO101VisualServoPolicy(Policy):
         cube_z = self.target_plane_z
         pick_xy = self._target_xy + self.grasp_offset_xy
         if self._phase is VisualServoPhase.APPROACH:
-            return np.array([*pick_xy, cube_z + 0.045]), 1.0
-        if self._phase is VisualServoPhase.DESCEND and not self._descend_ready():
             return np.array([*pick_xy, cube_z + 0.045]), 1.0
         if self._phase in (VisualServoPhase.DESCEND, VisualServoPhase.CLOSE):
             return np.array(
@@ -562,11 +661,19 @@ class SO101VisualServoPolicy(Policy):
                 or self._stall_steps >= _GRIP_STALL_SETTLE_STEPS
                 or self._phase_steps >= 120
             ):
+                if self._phase is VisualServoPhase.CLOSE and not self._grasp_held(
+                    observation
+                ):
+                    self._miss_grasp(observation)
+                else:
+                    self._advance()
+        elif reached or self._phase_steps >= 120:
+            if self._phase is VisualServoPhase.LIFT and not self._still_held(
+                observation
+            ):
+                self._miss_grasp(observation)
+            else:
                 self._advance()
-        elif (
-            reached and not self._hovering_before_descent()
-        ) or self._phase_steps >= 120:
-            self._advance()
         self.metrics = VisualServoMetrics(
             visual_error_px=self._last_visual_error_px,
             ee_error_m=float(np.linalg.norm(pinch - target)),
@@ -574,6 +681,8 @@ class SO101VisualServoPolicy(Policy):
             phase=self._phase.name,
             phase_steps=self._phase_steps,
             settling_time_s=self._settling_time_s,
+            grasp_retries=self._grasp_retries,
+            failure_reason=self._failure_reason,
         )
         return Action(
             joint_position=self._q_cmd, gripper=GripperCommand(position=self._grip)

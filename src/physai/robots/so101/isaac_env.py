@@ -174,8 +174,9 @@ class IsaacEnvConfig:
     """SO-101-on-Isaac simulation and observation settings.
 
     Narrower than `so101.mujoco_env.EnvConfig`: single-cube scenes only, a
-    fixed target, and no domain randomization (Isaac's own randomization
-    tooling is a separate integration). Give it the same `scene` MuJoCo uses
+    fixed target, and only two difficulty knobs (`lighting_scale`,
+    `camera_position_jitter`); Isaac's own randomization tooling is a separate
+    integration. Give it the same `scene` MuJoCo uses
     and the table, cube, target, front camera and per-seed cube layout follow
     from it; without one, the low-level `cube`/`table`/`front_camera`/
     `target_pos` below describe a bare test scene.
@@ -210,6 +211,14 @@ class IsaacEnvConfig:
     cube_x_range: tuple[float, float] = DEFAULT_CUBE_X_RANGE
     cube_y_range: tuple[float, float] = DEFAULT_CUBE_Y_RANGE
     randomize_target: bool = False
+    # Difficulty knobs, named as in MuJoCo's `DomainRandomizationConfig`.
+    # `lighting_scale` multiplies the dome and key light. `camera_position_jitter`
+    # moves every camera by a uniform offset of up to this many metres per
+    # axis each episode (drawn from the env's seeded rng after the cube) while
+    # `camera_calibration` keeps reporting the nominal pose, the equivalent of
+    # MuJoCo's `camera_shift_calibrated=False`.
+    lighting_scale: float = 1.0
+    camera_position_jitter: float = 0.0
     # (x, y) is what SO101VisualServoPolicy's TRANSFER/LOWER/RELEASE phases
     # actually read (see `_waypoint()`); z is recomputed from `rest_z`
     # separately, matching the MuJoCo side's own `target_pos` exactly.
@@ -219,6 +228,10 @@ class IsaacEnvConfig:
         parse_camera_resolution(self.camera_resolution)
         if self.randomize_target:
             raise ValueError("SO101IsaacEnv does not support randomize_target yet")
+        if self.lighting_scale <= 0:
+            raise ValueError("lighting_scale must be positive")
+        if self.camera_position_jitter < 0:
+            raise ValueError("camera_position_jitter must be non-negative")
         if self.scene is not None:
             if self.scene.camera_resolution != self.camera_resolution:
                 raise ValueError(
@@ -276,7 +289,7 @@ class SO101IsaacEnv:
         if not any(p.IsA(UsdPhysics.Scene) for p in self.stage.Traverse()):
             UsdPhysics.Scene.Define(self.stage, "/physicsScene")
 
-        add_studio_lighting(self.stage)
+        add_studio_lighting(self.stage, scale=self.cfg.lighting_scale)
         add_ground_plane(
             self.stage,
             texture_path=checker_texture(
@@ -596,6 +609,7 @@ class SO101IsaacEnv:
             self.rng = np.random.default_rng(seed)
         self.core.reset_simulation()
         self._reset_cube()
+        self._shift_cameras()
         target = np.zeros((1, len(self.dof_names)), dtype=np.float32)
         target[0, self._arm_indices] = HOME_QPOS
         target[0, self._gripper_index] = self.gripper_to_joint(1.0)
@@ -611,6 +625,28 @@ class SO101IsaacEnv:
         self.core.step_simulation()
         self.core.step_count = 0
         return self.observe()
+
+    def _shift_cameras(self) -> None:
+        """Move every camera prim off its nominal mount by this episode's jitter.
+
+        The nominal translate is read once, the first time it is needed, so
+        episodes shift from the mount and not from each other's offsets.
+        """
+        jitter = self.cfg.camera_position_jitter
+        if jitter <= 0:
+            return
+        from pxr import Gf, UsdGeom
+
+        if not hasattr(self, "_camera_mounts"):
+            self._camera_mounts = {}
+            for name, path in self._camera_prims.items():
+                op = UsdGeom.Xformable(
+                    self.stage.GetPrimAtPath(path)
+                ).GetOrderedXformOps()[0]
+                self._camera_mounts[name] = (op, np.array(op.Get(), dtype=np.float64))
+        for name in sorted(self._camera_mounts):
+            op, nominal = self._camera_mounts[name]
+            op.Set(Gf.Vec3d(*(nominal + self.rng.uniform(-jitter, jitter, size=3))))
 
     def _reset_cube(self) -> None:
         """Put the cube at this episode's starting pose, at rest.

@@ -80,3 +80,42 @@ def test_domain_randomization_metadata_is_recorded_in_episode_info():
         assert info["randomization"]["seed"] == 21
     finally:
         env.close()
+
+
+@requires_assets
+@pytest.mark.parametrize("camera", ["front", "wrist"])
+def test_a_shifted_camera_is_reported_at_its_nominal_pose_unless_calibrated(camera):
+    from physai.robots.so101 import EnvConfig, SO101Env
+    from physai.sim.mujoco import DomainRandomizationConfig
+
+    def reported(
+        shift_calibrated: bool, jitter: float
+    ) -> tuple[np.ndarray, np.ndarray]:
+        env = SO101Env(
+            EnvConfig(
+                render=False,
+                domain_randomization=DomainRandomizationConfig(
+                    enabled=jitter > 0,
+                    camera_position_jitter=jitter,
+                    camera_shift_calibrated=shift_calibrated,
+                ),
+            )
+        )
+        try:
+            env.reset(seed=3)
+            _, extrinsics = env.camera_calibration(camera)
+            actual = env.data.cam_xpos[env.model.camera(camera).id].copy()
+            return extrinsics.position.as_array(), actual
+        finally:
+            env.close()
+
+    nominal, _ = reported(True, 0.0)
+    known, actual_known = reported(True, 0.02)
+    unknown, actual_unknown = reported(False, 0.02)
+
+    # The camera really moved in both shifted runs ...
+    assert np.linalg.norm(actual_known - nominal) > 1e-3
+    # ... a calibrated rig reports the move, an uncalibrated one does not.
+    np.testing.assert_allclose(known, actual_known)
+    np.testing.assert_allclose(unknown, nominal, atol=1e-9)
+    np.testing.assert_allclose(actual_unknown, actual_known)
