@@ -89,8 +89,9 @@ already has for transport adapters:
   `success`/`dist_cube_target`. One manifest therefore describes the
   environment for both engines: `run_sim.py --manifest
   configs/manifests/so101_single_cube_fixed_place.yaml --sim isaac`. Limits: single-cube
-  scenes, a fixed target, no domain randomization, and policies that read
-  only observations (`visual_servo`, `constant`).
+  scenes, a fixed target, no domain randomization beyond a lighting scale and
+  a camera position jitter, and policies that read only observations
+  (`visual_servo`, `constant`).
 - `scripts/eval_policy.py` gains `--sim isaac` on that basis (same scene,
   seeds, task and report schema; `scripts/compare_evaluations.py` tabulates
   the two). `scripts/collect_demos.py` still does not: its

@@ -169,7 +169,9 @@ fails `pytest tests/ -q` the same way a failing unit test would.
   finite values, timestamps, joint limits, and per-joint step limits
   immediately before a robot port receives a command. It lives inside the
   adapters (`DirectAdapter`, `MuJoCoROSBridge`, the Gymnasium adapter),
-  so no workflow reaches the robot unchecked. `RobotSpec.max_joint_delta`
+  so no workflow reaches the robot unchecked. A refused action raises
+  `SafetyViolation` (a `ValueError`), which an evaluation records as an
+  unsafe action instead of aborting. `RobotSpec.max_joint_delta`
   bounds a command against the *measured* position and must stay above
   `JointRateLimiter`'s command-to-command clamp, or normal servo lag trips the
   gate.
@@ -619,8 +621,8 @@ meant to be the frozen reference:
 - **Isaac Sim runs the single-cube pick-and-place scene, headless or with `--serve`.**
   `IsaacEnvConfig.scene` takes the same scene config as MuJoCo (table, cube,
   target, front camera, per-seed cube layout) and a `TaskRuntime` wraps the
-  env; no domain randomization, a fixed target, and only observation-based
-  policies.
+  env; no domain randomization beyond a lighting scale and a camera position
+  jitter, a fixed target, and only observation-based policies.
   `--serve` drives `physai.web.Host` on the main thread (`Host.run()`; Isaac
   must stay on the thread that created it) and shows a MuJoCo display mirror
   of the arm (`SO101IsaacEnv.model`/`data`, refreshed from Isaac's joint
