@@ -32,6 +32,6 @@ def env():
     from physai.tasks import TaskRuntime, create_task
 
     robot = SO101Env(EnvConfig(seed=0, render=False, max_steps=200))
-    e = TaskRuntime(robot, create_task("pick_place"))
+    e = TaskRuntime(robot, create_task("single_cube_fixed_place"))
     yield e
     e.close()

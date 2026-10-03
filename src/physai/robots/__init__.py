@@ -1,7 +1,7 @@
 """Robot embodiment contracts, adapters, and built-in factories."""
 
 from .adapters import (
-    DirectMuJoCoAdapter,
+    DirectAdapter,
     available_adapters,
     create_adapter,
     register_adapter,
@@ -32,7 +32,7 @@ from .registry import (
 )
 
 __all__ = [
-    "DirectMuJoCoAdapter",
+    "DirectAdapter",
     "KinematicsPort",
     "RobotDescriptor",
     "RobotPort",

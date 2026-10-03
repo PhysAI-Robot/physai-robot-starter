@@ -24,7 +24,7 @@ def evaluation(*, failed_seeds=(), collisions=0, timeouts=0, unsafe=0) -> dict:
         "schema_version": "physai.evaluation.v1",
         "policy": "visual_servo",
         "robot": "so101",
-        "task": "pick_place",
+        "task": "single_cube_fixed_place",
         "summary": {
             "episodes": 4,
             "success_count": successes,
@@ -103,7 +103,9 @@ def shard(
         }
         for seed in range(first_seed, first_seed + count)
     )
-    return EvaluationReport(policy, "so101", "pick_place", results).to_dict()
+    return EvaluationReport(
+        policy, "so101", "single_cube_fixed_place", results
+    ).to_dict()
 
 
 def run_merge(monkeypatch, capsys, tmp_path, shards: list[dict], *flags: str):

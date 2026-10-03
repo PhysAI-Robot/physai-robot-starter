@@ -58,7 +58,7 @@ detection failure apart from a control failure (see the
 [Web Viewer Runbook](../../docs/WEB_VIEWER_RUNBOOK.md#camera-panels)):
 
 ```bash
-uv run python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml --policy visual_servo --serve --seed 0
+uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --policy visual_servo --serve --seed 0
 ```
 
 The default detector targets the red pick cube. The fixed front camera
@@ -76,3 +76,25 @@ calibration each control tick before it can be used for metric servoing.
 
 The policy exposes `metrics.visual_error_px`, `metrics.ee_error_m`,
 `metrics.settled`, and `metrics.failure_reason` separately from task reward.
+
+Isaac Sim closed-loop status (parity ladder tier 4) is tracked in
+[ROADMAP.md](../../ROADMAP.md)'s 2E section; the trace evidence behind it is
+in [FINDINGS.md](FINDINGS.md).
+
+### Isaac Sim
+
+The same manifest runs on both simulators. Record a video, watch live in the
+web viewer (the arm is mirrored; the cube shows in the camera feeds), or
+evaluate over seeds and compare with MuJoCo:
+
+```bash
+uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --sim isaac --policy visual_servo --video --camera front
+uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --sim isaac --policy visual_servo --serve
+uv run python scripts/eval_policy.py --policy visual_servo --episodes 100 --json-out outputs/mujoco.json
+uv run python scripts/eval_policy.py --sim isaac --policy visual_servo --episodes 100 --json-out outputs/isaac.json
+uv run python scripts/compare_evaluations.py outputs/mujoco.json outputs/isaac.json
+```
+
+`scripts/compare_cameras.py` renders both simulators at one arm pose and
+reports colour statistics and what `ColorBlobDetector` finds in each.
+Measurements and the causes of the gap are in [FINDINGS.md](FINDINGS.md).

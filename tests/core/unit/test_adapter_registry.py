@@ -6,11 +6,11 @@ def test_backends_are_discoverable_and_new_ones_are_additive():
     from physai.robots.adapters import _ADAPTERS, register_adapter
 
     assert set(available_adapters()) == {
-        "direct_mujoco",
-        "ros2_mujoco",
-        "ros2_hardware",
+        "direct",
+        "ros2_sim",
+        "ros2_real",
     }
-    with pytest.raises(ValueError, match="direct_mujoco"):
+    with pytest.raises(ValueError, match="direct"):
         create_adapter("does-not-exist", None)  # the error lists what is available
 
     sentinel = object()
@@ -21,12 +21,12 @@ def test_backends_are_discoverable_and_new_ones_are_additive():
         del _ADAPTERS["_fake_test_backend"]
 
 
-def test_direct_mujoco_adapter_wraps_the_port():
-    from physai.robots import DirectMuJoCoAdapter, create_adapter, create_robot
+def test_direct_adapter_wraps_the_port():
+    from physai.robots import DirectAdapter, create_adapter, create_robot
 
     robot = create_robot("so101", render=False)
     try:
-        adapter = create_adapter("direct_mujoco", robot._environment)
-        assert isinstance(adapter, DirectMuJoCoAdapter)
+        adapter = create_adapter("direct", robot._environment)
+        assert isinstance(adapter, DirectAdapter)
     finally:
         robot.close()

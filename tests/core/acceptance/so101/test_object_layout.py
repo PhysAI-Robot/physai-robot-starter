@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from conftest import requires_assets
+from tests.conftest import requires_assets
 
 GOLDEN = json.loads(
     (Path(__file__).with_name("golden_layouts.json")).read_text(encoding="utf-8")
@@ -23,14 +23,16 @@ pytestmark = [pytest.mark.acceptance, requires_assets]
 def _build(case: str):
     from physai.robots import create_env_config, create_robot
     from physai.robots.registry import scene_defaults
-    from physai.sim import (
+    from physai.sim.mujoco import (
         DomainRandomizationConfig,
-        PickPlaceMinimalSceneConfig,
+        SingleCubeFixedPlaceSceneConfig,
         SortingMinimalSceneConfig,
     )
 
     sorting = case.startswith("sorting")
-    scene_type = SortingMinimalSceneConfig if sorting else PickPlaceMinimalSceneConfig
+    scene_type = (
+        SortingMinimalSceneConfig if sorting else SingleCubeFixedPlaceSceneConfig
+    )
     fields = {}
     if case.endswith("fixed_cube_random_target"):
         fields = {"randomize_cube": False, "randomize_target": True}

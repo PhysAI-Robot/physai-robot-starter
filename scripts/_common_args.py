@@ -60,3 +60,28 @@ def add_policy(
     help: str | None = None,
 ) -> None:
     parser.add_argument("--policy", default=default, choices=choices, help=help)
+
+
+def add_camera_resolution(parser: argparse.ArgumentParser) -> None:
+    """`--camera-res`: one of the supported resolutions (default 320x240)."""
+    from physai.contracts import CAMERA_RESOLUTIONS, DEFAULT_CAMERA_RESOLUTION
+
+    parser.add_argument(
+        "--camera-res",
+        dest="camera_resolution",
+        choices=CAMERA_RESOLUTIONS,
+        default=None,
+        help=f"camera render resolution (default: {DEFAULT_CAMERA_RESOLUTION}, "
+        "or the manifest's simulation.camera_resolution)",
+    )
+
+
+def add_simulator(parser: argparse.ArgumentParser, *, help: str | None = None) -> None:
+    """`--sim`: overrides the manifest's `simulator` field (default: mujoco)."""
+    parser.add_argument(
+        "--sim",
+        dest="simulator",
+        choices=("mujoco", "isaac"),
+        default=None,
+        help=help or "override the manifest's simulator engine",
+    )

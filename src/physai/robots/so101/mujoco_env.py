@@ -10,22 +10,29 @@ import numpy as np
 
 from ...contracts import (
     Action,
+    CameraIntrinsics,
     GripperCommand,
     Header,
     ImageFrame,
     JointState,
     Observation,
+    Pose,
+    Quaternion,
     Twist,
+    Vector3,
 )
 from ...control.resolver import TwistToJointResolver
 from ...robots.base import RobotSpec, RobotTrainingContract
-from ...sim.core import MuJoCoSimulationCore
-from ...sim.domain_randomization import (
+from ...sim.mujoco.core import MuJoCoSimulationCore
+from ...sim.mujoco.domain_randomization import (
     DomainRandomizationConfig,
     DomainRandomizationEngine,
     RandomizationMetadata,
 )
-from ...sim.scenes import ManipulationSceneConfig, PickPlaceMinimalSceneConfig
+from ...sim.mujoco.scenes import (
+    ManipulationSceneConfig,
+    SingleCubeFixedPlaceSceneConfig,
+)
 from .contracts import (
     ALL_JOINT_NAMES,
     ARM_JOINT_NAMES,
@@ -34,7 +41,7 @@ from .contracts import (
 )
 from .jog import resolve_jog
 from .kinematics import ArmKinematics
-from .layout import create_layout
+from .layout import DEFAULT_CUBE_X_RANGE, DEFAULT_CUBE_Y_RANGE, create_layout
 from .scene import scene_defaults
 
 HOME_QPOS = np.array([0.0, -1.05, 1.25, 0.75, 0.0], dtype=np.float64)
@@ -45,7 +52,7 @@ class EnvConfig:
     """SO-101-specific simulation and observation settings."""
 
     scene: ManipulationSceneConfig = field(
-        default_factory=lambda: PickPlaceMinimalSceneConfig(**scene_defaults())
+        default_factory=lambda: SingleCubeFixedPlaceSceneConfig(**scene_defaults())
     )
     control_hz: float = 30.0
     render: bool = True
@@ -53,8 +60,8 @@ class EnvConfig:
     camera_stride: int = 1
     max_steps: int = 400
     randomize_cube: bool = True
-    cube_x_range: tuple[float, float] = (0.20, 0.24)
-    cube_y_range: tuple[float, float] = (0.05, 0.13)
+    cube_x_range: tuple[float, float] = DEFAULT_CUBE_X_RANGE
+    cube_y_range: tuple[float, float] = DEFAULT_CUBE_Y_RANGE
     randomize_target: bool = False
     target_x_range: tuple[float, float] = (0.16, 0.26)
     target_y_range: tuple[float, float] = (-0.13, -0.04)
@@ -130,7 +137,7 @@ class SO101Env(MuJoCoSimulationCore):
         self.target_sid = mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_SITE, "target_site"
         )
-        self.kin = ArmKinematics(self.model, ee_site=self.cfg.scene.ee_site)
+        self.kin = ArmKinematics(self.model, ee_site=self.cfg.scene.description.ee_site)
         self.jog_kin = ArmKinematics(
             self.model, ee_site="wristframe", joint_names=ARM_JOINT_NAMES[1:3]
         )
@@ -184,6 +191,7 @@ class SO101Env(MuJoCoSimulationCore):
             metadata={
                 "control_hz": self.cfg.control_hz,
                 "action_schema": "so101.joint_position.v1",
+                "simulator": "mujoco",
             },
             joint_state_frame="base",
             camera_frames={"front": "camera_front", "wrist": "camera_wrist"},
@@ -319,6 +327,37 @@ class SO101Env(MuJoCoSimulationCore):
             raise RuntimeError("env constructed with render=False")
         return super().render_camera(name)
 
+    def camera_calibration(self, name: str) -> tuple[CameraIntrinsics, Pose]:
+        """This camera's pinhole intrinsics and its pose in the base frame.
+
+        The pose is converted from MuJoCo's camera-axis convention (x right,
+        y up, z backward) to the ROS optical-frame convention `ImageFrame
+        .extrinsics` documents (x right, y down, z forward), so a policy
+        (`research/classical_control/so101_visual_servo.py`) never has to
+        know a simulator's own axis convention.
+        """
+        camera_id = self.model.camera(name).id
+        width, height = self.cfg.scene.camera_width, self.cfg.scene.camera_height
+        fy = height / (
+            2.0 * np.tan(np.deg2rad(float(self.model.cam_fovy[camera_id])) / 2.0)
+        )
+        # `fovy` is the vertical field of view and pixels are square, so the
+        # focal length in pixels is the same on both axes at every aspect
+        # ratio (the horizontal field of view already carries it).
+        intrinsics = CameraIntrinsics(
+            fx=fy, fy=fy, cx=(width - 1) / 2.0, cy=(height - 1) / 2.0
+        )
+        rotation = self.data.cam_xmat[camera_id].reshape(3, 3) @ np.diag(
+            [1.0, -1.0, -1.0]
+        )
+        quat = np.zeros(4)
+        mujoco.mju_mat2Quat(quat, rotation.reshape(9))
+        extrinsics = Pose(
+            position=Vector3.from_array(self.data.cam_xpos[camera_id]),
+            orientation=Quaternion.from_mujoco(quat),
+        )
+        return intrinsics, extrinsics
+
     def observe(self) -> Observation:
         images: dict[str, ImageFrame] = {}
         if (
@@ -327,6 +366,7 @@ class SO101Env(MuJoCoSimulationCore):
             and self.step_count % self.cfg.camera_stride == 0
         ):
             for camera in self.cfg.cameras:
+                intrinsics, extrinsics = self.camera_calibration(camera)
                 images[camera] = ImageFrame(
                     data=self.render_camera(camera),
                     camera_name=camera,
@@ -334,6 +374,8 @@ class SO101Env(MuJoCoSimulationCore):
                         stamp=float(self.data.time),
                         frame_id=f"camera_{camera}",
                     ),
+                    intrinsics=intrinsics,
+                    extrinsics=extrinsics,
                 )
         return Observation(
             joint_state=self.joint_state(),
@@ -376,3 +418,23 @@ class SO101Env(MuJoCoSimulationCore):
     @property
     def cube_half(self) -> float:
         return self.cfg.scene.cube_half
+
+    @property
+    def rest_z(self) -> float:
+        """Height a cube resting on the table sits at.
+
+        `SO101VisualServoPolicy._waypoint()` reads this instead of
+        `table_top + cube_half` inline, so the same call works against
+        `SO101IsaacEnv` (which has no table or `cfg.scene` at all).
+        """
+        return self.table_top + self.cube_half
+
+    def pinch_center(self) -> np.ndarray:
+        """Where the gripper's pinch point currently is.
+
+        A no-arg wrapper of `self.kin.pinch_center(self.data)`, so callers
+        (`SO101PickPlaceExpert`, `SO101VisualServoPolicy`) can read it
+        without holding a MuJoCo `data` reference — `SO101IsaacEnv` has the
+        same method, backed by observed joint state instead.
+        """
+        return self.kin.pinch_center(self.data)

@@ -1,7 +1,7 @@
 import time
 
 import pytest
-from conftest import requires_turtlebot_assets
+from tests.conftest import requires_turtlebot_assets
 
 pytestmark = [
     pytest.mark.acceptance,

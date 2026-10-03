@@ -1,6 +1,6 @@
 """Open the browser viewer for an existing simulation host.
 
-Usage: uv run --extra web python scripts/run_web.py --connect http://127.0.0.1:8000
+Usage: uv run python scripts/run_web.py --connect http://127.0.0.1:8000
 """
 
 from __future__ import annotations

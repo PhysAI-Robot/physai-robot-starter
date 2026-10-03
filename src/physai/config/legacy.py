@@ -16,11 +16,12 @@ from typing import Any
 
 import yaml
 
+from ..contracts import DEFAULT_CAMERA_RESOLUTION, parse_camera_resolution
 from ..robots import create_env_config
-from ..sim.domain_randomization import DomainRandomizationConfig
-from ..sim.scenes import create_scene, get_scene_definition
-from ..sim.world import RobotInstanceConfig
-from ..tasks.pick_place_minimal import DEFAULT_SUCCESS_XY_TOL
+from ..sim.mujoco.domain_randomization import DomainRandomizationConfig
+from ..sim.mujoco.scenes import create_scene, get_scene_definition
+from ..sim.mujoco.world import RobotInstanceConfig
+from ..tasks.single_cube_fixed_place import DEFAULT_SUCCESS_XY_TOL
 from ..tasks.runtime import DEFAULT_SUCCESS_HOLD_STEPS
 
 
@@ -32,6 +33,7 @@ class SimulationConfig:
     domain_randomization: DomainRandomizationConfig = field(
         default_factory=DomainRandomizationConfig
     )
+    camera_resolution: str = DEFAULT_CAMERA_RESOLUTION
 
 
 @dataclass(frozen=True)
@@ -114,9 +116,15 @@ def _parse_simulation_config(
         )
     if "clutter_clearance" in randomization_data:
         kwargs["clutter_clearance"] = float(randomization_data["clutter_clearance"])
+    resolution = data.get("camera_resolution", DEFAULT_CAMERA_RESOLUTION)
+    try:
+        parse_camera_resolution(resolution)
+    except (ValueError, AttributeError) as exc:
+        raise ValueError(f"{source}: simulation {exc}") from exc
     return SimulationConfig(
         seed=seed,
         domain_randomization=DomainRandomizationConfig(**kwargs),
+        camera_resolution=resolution,
     )
 
 

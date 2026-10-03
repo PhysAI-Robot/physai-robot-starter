@@ -138,8 +138,12 @@ def resolve_jog(
 
 
 def so101_jog_resolver(robot):
-    """The SO-101's jog resolver: its env's `resolve_twist_jog`, through any port."""
-    return robot.resolve_twist_jog
+    """The SO-101's jog resolver: its env's `resolve_twist_jog`, through any port.
+
+    None for an env without one (`SO101IsaacEnv` has no Cartesian jog), so a UI
+    hides the jog controls instead of failing at construction.
+    """
+    return getattr(robot, "resolve_twist_jog", None)
 
 
 __all__ = ["resolve_jog", "so101_jog_resolver"]
