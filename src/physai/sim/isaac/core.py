@@ -33,6 +33,23 @@ def ensure_simulation_app(*, headless: bool = True) -> Any:
     return _APP
 
 
+def configure_render_output() -> None:
+    """Make Isaac's pixel values follow the same simple model as MuJoCo's.
+
+    Isaac's defaults tone-map (ACES) and sRGB-encode the image, which lifts the
+    dark channels and washes a saturated red cube out to pale pink (top face
+    saturation 0.2 against MuJoCo's 0.7), so a colour-based detector sees a
+    different object. Linear output without the gamma step gives
+    pixel = albedo x light, as MuJoCo's renderer does, and the cube's faces
+    then match MuJoCo's to a few levels.
+    """
+    import carb.settings
+
+    settings = carb.settings.get_settings()
+    settings.set("/rtx/post/tonemap/op", 1)  # linear
+    settings.set("/rtx/post/tonemap/enableSrgbToGamma", False)
+
+
 def close_simulation_app() -> None:
     """Shut down the process-wide `SimulationApp`, if one was created.
 
@@ -75,6 +92,10 @@ class IsaacSimulationCore:
         self.step_count = 0
         self._camera_size = (camera_width, camera_height) if render else None
         self._render_products: dict[str, Any] = {}
+        if render:
+            # After the stage exists: set right after the app starts, the
+            # renderer replaced these with its defaults when the stage loaded.
+            configure_render_output()
 
     @property
     def render_enabled(self) -> bool:
@@ -117,7 +138,7 @@ class IsaacSimulationCore:
             annotator = rep.AnnotatorRegistry.get_annotator("rgb")
             annotator.attach(render_product)
             self._render_products[prim_path] = annotator
-        rep.orchestrator.step(rt_subframes=1)
+        rep.orchestrator.step(rt_subframes=1, delta_time=0.0)
         frame = np.asarray(annotator.get_data())
         # A render product's first frame, right after attach(), can come
         # back empty (1-D) when this process's Replicator orchestrator is
@@ -127,7 +148,7 @@ class IsaacSimulationCore:
         # render call as reliable as its own second one.
         retries = 5 if is_new else 0
         while frame.ndim != 3 and retries > 0:
-            rep.orchestrator.step(rt_subframes=1)
+            rep.orchestrator.step(rt_subframes=1, delta_time=0.0)
             frame = np.asarray(annotator.get_data())
             retries -= 1
         return frame[:, :, :3].copy()

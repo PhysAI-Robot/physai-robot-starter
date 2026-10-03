@@ -69,35 +69,78 @@ class VisualFeature:
 
 
 class ColorBlobDetector:
-    """Detect the dominant blob nearest a target RGB colour without OpenCV."""
+    """Detect the dominant red blob by saturation and hue, so lighting does not move it.
+
+    A pixel belongs to the blob when it is red-dominant, saturated
+    (`(r - max(g, b)) / r >= min_saturation`) and red rather than orange or
+    yellow (`(g - b) / (r - b) <= max_hue_ratio`: ~0 for red and pink, ~0.8
+    for the yellow arm). Saturation is unchanged by how brightly a face is
+    lit, so the lit, washed-out and shadowed faces of an object are one blob.
+    Thresholding on distance to one bright red (or on absolute chroma)
+    dropped the shadowed or the washed-out part, and how much that is differs
+    between renderers, so the centroid, and the position triangulated from
+    it, shifted by centimetres between MuJoCo and Isaac Sim. The hue test is
+    what lets the saturation threshold be low enough to keep a pale-pink
+    top face without admitting the arm; the table and floor have none.
+    The centroid is the plain mean of the blob's pixels (weighting by
+    brightness would pull it toward the lit side again); `target_rgb` only
+    sets the saturation that counts as full confidence.
+    """
 
     def __init__(
         self,
         target_rgb: tuple[int, int, int] = (220, 60, 45),
-        tolerance: float = 90.0,
+        min_saturation: float = 0.25,
+        max_hue_ratio: float = 0.35,
+        min_chroma: float = 15.0,
+        min_value: float = 30.0,
         min_area: int = 8,
     ) -> None:
         self.target_rgb = np.asarray(target_rgb, dtype=np.float64)
-        self.tolerance = float(tolerance)
+        self.min_saturation = float(min_saturation)
+        self.max_hue_ratio = float(max_hue_ratio)
+        self.min_chroma = float(min_chroma)
+        self.min_value = float(min_value)
         self.min_area = int(min_area)
-        if self.target_rgb.shape != (3,) or self.tolerance <= 0 or self.min_area < 1:
+        if (
+            self.target_rgb.shape != (3,)
+            or not 0 < self.min_saturation < 1
+            or not 0 <= self.max_hue_ratio < 1
+            or self.min_chroma < 0
+            or self.min_value < 1
+            or self.min_area < 1
+        ):
             raise ValueError("invalid colour detector configuration")
+        red = self.target_rgb[0]
+        self.target_saturation = float(
+            (red - max(self.target_rgb[1], self.target_rgb[2])) / max(red, 1.0)
+        )
+        if self.target_saturation < self.min_saturation:
+            raise ValueError("target_rgb is not saturated enough for min_saturation")
 
     def detect(self, image: ImageFrame | np.ndarray) -> VisualFeature | None:
         pixels = image.data if isinstance(image, ImageFrame) else np.asarray(image)
         if pixels.dtype != np.uint8 or pixels.ndim != 3 or pixels.shape[2] != 3:
             raise ValueError("visual detector expects an RGB uint8 image")
-        distance = np.linalg.norm(pixels.astype(np.float64) - self.target_rgb, axis=2)
-        mask = distance <= self.tolerance
+        rgb = pixels.astype(np.float64)
+        chroma = rgb[..., 0] - np.maximum(rgb[..., 1], rgb[..., 2])
+        saturation = chroma / np.maximum(rgb[..., 0], 1.0)
+        # 0 for red and pink, towards 1 for orange and yellow.
+        hue_ratio = (rgb[..., 1] - rgb[..., 2]) / np.maximum(
+            rgb[..., 0] - rgb[..., 2], 1.0
+        )
+        mask = (
+            (saturation >= self.min_saturation)
+            & (hue_ratio <= self.max_hue_ratio)
+            & (chroma >= self.min_chroma)
+            & (rgb[..., 0] >= self.min_value)
+        )
         ys, xs = np.nonzero(mask)
         if len(xs) < self.min_area:
             return None
-        weights = np.maximum(self.tolerance - distance[ys, xs], 1.0)
-        pixel = np.array(
-            [np.average(xs, weights=weights), np.average(ys, weights=weights)]
-        )
+        pixel = np.array([xs.mean(), ys.mean()])
         confidence = float(
-            np.clip(1.0 - np.average(distance[ys, xs]) / self.tolerance, 0.0, 1.0)
+            np.clip(saturation[ys, xs].mean() / self.target_saturation, 0.0, 1.0)
         )
         return VisualFeature(pixel=pixel, area=len(xs), confidence=confidence)
 

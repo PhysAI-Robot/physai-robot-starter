@@ -11,7 +11,7 @@ from research.classical_control.so101_visual_servo import (
 )
 
 
-def test_color_blob_detector_returns_weighted_centroid():
+def test_color_blob_detector_returns_the_blob_centroid():
     image = np.zeros((20, 30, 3), dtype=np.uint8)
     image[7:12, 10:16] = [220, 60, 45]
 
@@ -82,3 +82,40 @@ def test_debug_frames_are_empty_until_a_detection_then_one_overlay_per_camera():
 
     assert set(frames) == {"front:detections"}
     assert frames["front:detections"].shape == frame.shape
+
+
+def test_color_blob_detector_counts_the_shadowed_part_of_an_object():
+    """A lit face and a shadowed face of the same cube are one blob: lighting
+    must not move the centroid (it is what differs between simulators)."""
+    image = np.full((40, 60, 3), 200, dtype=np.uint8)
+    image[10:20, 10:30] = [210, 60, 50]  # lit top face
+    image[20:30, 10:30] = [95, 28, 22]  # the same cube, in shadow
+
+    feature = ColorBlobDetector().detect(image)
+
+    assert feature is not None
+    assert feature.area == 20 * 20
+    assert feature.pixel[1] == pytest.approx(19.5, abs=0.7)  # middle of both faces
+
+
+def test_color_blob_detector_ignores_the_yellow_arm_and_the_table():
+    image = np.full((30, 30, 3), (208, 208, 193), dtype=np.uint8)  # table
+    image[5:15, 5:15] = [225, 190, 40]  # yellow arm paint
+    image[18:26, 18:26] = [100, 80, 10]  # the arm in shadow
+
+    assert ColorBlobDetector().detect(image) is None
+
+
+def test_color_blob_detector_keeps_a_washed_out_face_but_not_orange():
+    """An over-lit face is washed out (saturation ~0.33) yet still red; orange
+    paint stays out by hue even at a similar saturation (~0.29)."""
+    image = np.full((40, 60, 3), 200, dtype=np.uint8)
+    image[5:15, 5:25] = [240, 160, 150]  # washed-out top face: saturation 0.33
+    image[15:25, 5:25] = [198, 118, 100]  # the same cube's front face
+    image[28:38, 30:50] = [225, 160, 40]  # orange paint: sat ~0.29, hue-ratio ~0.65
+
+    feature = ColorBlobDetector().detect(image)
+
+    assert feature is not None
+    assert feature.area == 20 * 20  # pale face and front face, nothing orange
+    assert feature.pixel[1] == pytest.approx(14.5, abs=0.2)
