@@ -29,7 +29,7 @@ dependencies = [
     # ability to run its own test suite.
     "pytest>=9.1.1",
     "lark>=1.2",
-    "ruff>=0.16.8",
+    "ruff>=0.16.9",
     "import-linter>=2.1",
 ]
 
@@ -48,7 +48,7 @@ vla = ["torch>=2.7,<2.12", "lerobot>=0.6.1"]
 # real conflict with no loosenable floor on physai's side, unlike the
 # uvicorn case. `[tool.uv] conflicts` below marks it against `isaac` so a
 # combined sync fails fast instead of `uv lock` refusing everything.
-webtest = ["httpx2>=2.13"]
+webtest = ["httpx2>=2.13.1"]
 # isaacsim as a real extra of this project (`uv sync --extra isaac`),
 # replacing the separate-venv recipe docs/adr/0013 used to document.
 # Verified end to end: `uv lock` resolves it (index-strategy =
