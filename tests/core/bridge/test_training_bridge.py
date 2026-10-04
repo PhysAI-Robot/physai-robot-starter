@@ -7,6 +7,8 @@ import pytest
 pytestmark = pytest.mark.integration
 
 from physai.contracts import (
+    CAMERA_HEIGHT,
+    CAMERA_WIDTH,
     Action,
     Header,
     JointState,
@@ -75,9 +77,9 @@ def test_recorder_writes_versioned_training_metadata(tmp_path):
     recorder = EpisodeRecorder(
         tmp_path,
         store_images=False,
-        task_name="pick_place",
+        task_name="single_cube_fixed_place",
         simulator_config={"seed": 4},
-        camera_config={"front": {"width": 224, "height": 224}},
+        camera_config={"front": {"width": CAMERA_WIDTH, "height": CAMERA_HEIGHT}},
         split={"train": [0]},
         action_encoder=lambda action, gripper_joint: (
             so101_action_values(action, gripper_joint=gripper_joint or 0.0),
@@ -85,7 +87,7 @@ def test_recorder_writes_versioned_training_metadata(tmp_path):
         ),
         action_schema=so101_action_schema(),
         observation_schema=so101_observation_schema(
-            camera_config={"front": {"width": 224, "height": 224}}
+            camera_config={"front": {"width": CAMERA_WIDTH, "height": CAMERA_HEIGHT}}
         ),
     )
     recorder.start_episode()
@@ -99,8 +101,8 @@ def test_recorder_writes_versioned_training_metadata(tmp_path):
     assert meta["schema_version"] == "physai.dataset.v1"
     assert meta["action_schema"]["names"] == list(ALL_JOINT_NAMES)
     assert meta["seeds"] == [4]
-    assert meta["task_name"] == "pick_place"
-    assert meta["camera_config"]["front"]["width"] == 224
+    assert meta["task_name"] == "single_cube_fixed_place"
+    assert meta["camera_config"]["front"]["width"] == CAMERA_WIDTH
 
 
 def test_recorder_records_the_scene_identity_and_serializes_paths(tmp_path):
@@ -108,7 +110,7 @@ def test_recorder_records_the_scene_identity_and_serializes_paths(tmp_path):
     recorder = EpisodeRecorder(
         tmp_path,
         store_images=False,
-        scene_name="pick_place_minimal",
+        scene_name="single_cube_fixed_place",
         scene_config={
             "cube_pos": [0.2, 0.0, 0.034],
             "robot_xml": Path("assets") / "so101" / "robot.xml",
@@ -117,7 +119,7 @@ def test_recorder_records_the_scene_identity_and_serializes_paths(tmp_path):
 
     meta = json.loads(recorder.write_meta().read_text())
 
-    assert meta["scene_name"] == "pick_place_minimal"
+    assert meta["scene_name"] == "single_cube_fixed_place"
     assert meta["scene_config"]["cube_pos"] == [0.2, 0.0, 0.034]
     assert meta["scene_config"]["robot_xml"] == "assets/so101/robot.xml"
 
@@ -192,7 +194,7 @@ def test_recorder_rejects_mismatched_environment_state(tmp_path):
 def test_checkpoint_compatibility_checks_nested_fields_and_the_schema_version():
     checkpoint = CheckpointMetadata(
         robot="so101",
-        task="pick_place",
+        task="single_cube_fixed_place",
         observation_schema={"state": {"shape": [6]}},
         action_schema={
             "schema": "so101.joint_position.v1",
@@ -210,7 +212,7 @@ def test_checkpoint_compatibility_checks_nested_fields_and_the_schema_version():
 
     old = CheckpointMetadata(
         robot="so101",
-        task="pick_place",
+        task="single_cube_fixed_place",
         observation_schema={"observation.state": {"shape": [6]}},
         action_schema={"schema": "so101.joint_position.v1"},
         normalization={},
@@ -225,7 +227,7 @@ def test_evaluation_report_separates_failure_modes():
     report = EvaluationReport(
         policy="scripted",
         robot="so101",
-        task="pick_place",
+        task="single_cube_fixed_place",
         results=(
             {"success": True, "reward": 2.0, "steps": 4, "held_out": True},
             {

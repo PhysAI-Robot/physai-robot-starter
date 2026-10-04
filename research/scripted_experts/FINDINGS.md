@@ -99,7 +99,7 @@ were reverted:
   showed every tested cap value (0.3-2.0 N) doing 2-5 points *worse* than no
   cap at all (96.0% uncapped vs 92.7-94.7% capped). But `visual_servo` uses
   its own, shallower, hardcoded 0.19 aperture, and disabling the cap broke
-  `test_visual_servo_pick_place_settles_from_multiple_seeds` outright: at
+  `test_visual_servo_single_cube_fixed_place_settles_from_multiple_seeds` outright: at
   that shallow aperture, uncapped force can reach the actuator's full ~2.94 N
   rating against a rigid cube and destabilize the contact, which is exactly
   what the cap exists to prevent. The shared default was kept at `0.3` to

@@ -10,7 +10,10 @@ ACT/LeRobot training pipeline and checkpoint-backed inference policies.
 
 `vla_adapter.py` registers the `"lerobot"` policy with `physai.policy.registry`
 on import; core never imports this package. Requires the `training`/`vla`
-extras (`uv sync --extra training --extra vla`).
+extras (`uv sync --extra training --extra vla`). `vla` cannot combine with
+`isaac` in the same sync — `lerobot==0.6.1` pins `numpy<2.3.0`, incompatible
+with isaacsim's `numpy==2.3.1` — so `[tool.uv] conflicts` rejects that
+combination instead of `uv lock` failing on the whole project.
 
 ## SO-101 collect -> train -> evaluate workflow
 
@@ -21,17 +24,18 @@ demonstrations and fine-tune an ACT policy:
 ```bash
 uv run python scripts/collect_demos.py --episodes 50 --out data/pickplace_v1
 uv run python research/imitation_learning/train_act.py --dataset data/pickplace_v1 --steps 4000
-uv run python scripts/eval_policy.py --policy lerobot --checkpoint outputs/act_ckpt --camera-size 128
+uv run python scripts/eval_policy.py --policy lerobot --checkpoint outputs/act_ckpt
 ```
 
 `collect_demos.py` drives the scripted expert
 (`research/scripted_experts/`) and discards failed episodes by default —
 behavior cloning on failures teaches failure. `train_act.py` stores the
-checkpoint and metadata under `outputs/act_ckpt` by default. Use the same
-square image size during training and evaluation (`--camera-size` /
-`--image-size`); a mismatch silently feeds the policy a distorted,
-off-distribution image since `LeRobotPolicy._resize()` center-crops before
-resizing rather than stretching.
+checkpoint and metadata under `outputs/act_ckpt` by default. The camera
+resolution is fixed (`physai.contracts.CAMERA_SIZE`, 320 x 240), so data
+collection and evaluation always match; `--image-size` is only the policy's
+square input size. Both `act_dataset` and `LeRobotPolicy._resize()`
+center-crop the camera image to a square before resizing, so keep them
+consistent.
 
 The current prototype supports ACT-shaped data and scripted, replay, and ACT
 policy evaluation. It does not yet export the standard `LeRobotDataset`

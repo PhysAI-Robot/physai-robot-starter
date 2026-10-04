@@ -6,8 +6,6 @@
 # so101-only (fixed_base_manipulator).
 schema_version: 1
 
-backend: direct
-
 world:
   timestep: 0.002
   control_hz: 30.0

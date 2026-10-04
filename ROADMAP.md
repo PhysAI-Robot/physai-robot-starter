@@ -1,6 +1,6 @@
 # Project Roadmap: physai-robot-starter
 
-`physai-robot-starter` is an open-source starter kit for embodied AI and robotics research. It provides stable robot, task, observation, and action contracts so the same policy can be evaluated across backends: direct MuJoCo, ROS2 + MuJoCo, and (in the future) real robots.
+`physai-robot-starter` is an open-source starter kit for embodied AI and robotics research. It provides stable robot, task, observation, and action contracts so the same policy can be evaluated across transports (direct, ROS2, and in the future real robots) and simulator engines (MuJoCo, Isaac Sim).
 
 ## Supported robots
 
@@ -113,11 +113,13 @@ Definition of done:
 A camera-only state-machine pipeline (color segmentation or fiducials, pose estimate, approach, grasp, place), all actions passing through the safety layer. This is the "before learning" reference.
 
 - [x] Perception module without simulator ground truth (`ColorBlobDetector` in `research/classical_control/so101_visual_servo.py`; reads camera calibration only, never object pose).
-- [x] State machine covering approach, grasp, lift, place, and recovery on failure (`SO101VisualServoPolicy`, registered as the `visual_servo` policy).
-- [x] All actions pass the safety layer: `SafetyController` now gates the direct-MuJoCo path inside `DirectMuJoCoAdapter`, not only the ROS2 and Gymnasium paths.
-- [ ] Diagnose the `visual_servo` timeouts (95/100 on seeds 0-99: seeds 13, 15, 28, 64, 76) that appeared after the fingertip pad refit; the visual-servo CI check (20 seeds, all must succeed) is expected to fail until this is fixed.
-- [ ] Report position error, settling time, and categorized failure reasons.
-- [ ] Give it a fair tuning effort; it must not be a strawman.
+- [x] State machine covering approach, grasp, lift, place, and release (`SO101VisualServoPolicy`, registered as the `visual_servo` policy). It advances on timers and does not check that the grasp took hold; see the open recovery item below.
+- [x] All actions pass the safety layer: `SafetyController` now gates the direct path inside `DirectAdapter`, not only the ROS2 and Gymnasium paths.
+- [x] Diagnose the `visual_servo` timeouts (95/100 on seeds 0-99 after the fingertip pad refit). They were seeds where the static jaw landed on the cube; a 6 mm safe-side pick offset (a hover-until-aligned step was tried too and removed again, no benefit) and `fx = fy` in the camera calibration fix them: 100/100 on seeds 0-99 and the 20-seed CI check passes at every resolution (research/classical_control/FINDINGS.md).
+- [x] Report position error, settling time, and categorized failure reasons: `scripts/report_evaluation.py` (Wilson interval, place error and settling time as median / p90, failure categories) and `scripts/sweep_difficulty.py` (lighting, camera shift, clutter; MuJoCo 50 held-out seeds per cell, Isaac 20). Results and failure analysis in `research/classical_control/FINDINGS.md`. Lighting does not matter; an unmodelled camera shift does (20 mm: 23/50 MuJoCo, 3/20 Isaac), and the cause is the wrist camera mount; clutter costs 3 to 6 episodes in 50.
+- [ ] Give it a fair tuning effort; it must not be a strawman. One time-boxed pass is done (policy defaults re-ablated on both simulators; `grasp_offset_xy` and `final_camera` tried against a shifted wrist camera, only `final_camera='front'` helps and it costs 5 points nominal). Still open: the clutter failures, which need a grasp check rather than a threshold.
+- [x] Detect a missed grasp from the wrist camera and joint angles only (blob near the projected pinch point after CLOSE, blob still after LIFT), retry twice, then stop with `grasp_missed`. Nominal stays 100/100 with no false retries; 2 of 41 retried episodes recovered (FINDINGS).
+- [ ] Recover from a missed grasp. Retrying from the front-camera estimate, and from the wrist-camera estimate of the missed pose, recovered 2 of 41 and 3 of 28 retried episodes, because the cause is a box under the jaw or a shifted wrist camera, not a position error the wrist can read. Not tried: approach from the other side, change the pick offset after a miss, move the box. A retry is skipped when the step budget cannot fit it (done).
 
 Definition of done: evaluated on T0-T4 and the difficulty sweep with the shared protocol, with its failure modes documented.
 
@@ -143,6 +145,146 @@ Run the same checkpoint through direct MuJoCo and through the ROS2 bridge to mea
 
 Definition of done: identical seeds on both backends, a results table, and the main causes of any gap identified.
 
+### 2E MuJoCo-Isaac Sim sim-to-sim comparison
+
+Evaluate a policy tuned in MuJoCo (`visual_servo`, ACT) against Isaac Sim to
+measure the gap between simulators, not simulation-vs-ROS2 integration
+overhead (that is 2C). Local RTX GPU only; never installed by CI (see
+`docs/adr/0016-isaacsim-as-a-project-extra.md` for the `--extra isaac`
+install, `docs/adr/0013-isaac-sim-optional-backend.md` for the backend
+itself).
+
+- [x] `physai.sim.isaac` (SimulationApp lifecycle, `RobotDescription` -> USD) and
+  `robots.so101.isaac_env.SO101IsaacEnv`, verified end to end against real
+  Isaac Sim 6.1 on an RTX 3060 (URDF import, actuator gain transfer with no
+  unit conversion, closed-loop joint tracking, camera rendering).
+- [x] Parity ladder tiers 1-2 (static FK/joint-order match, actuator step
+  response) as `pytest.mark.isaac` tests.
+- [x] Parity ladder tier 3 (contact): a cube grasp-hold test
+  (`tests/research/scripted_experts/test_so101_grasp_hold_isaac.py`),
+  passing against real Isaac Sim on an RTX 3060 (<1 mm drift over 12 s,
+  matching MuJoCo's own tolerance). `SO101IsaacEnv` grew a minimal,
+  opt-in `cube` (`GraspCubeConfig`, `sim.isaac.objects.add_cube`) — not a
+  `ManipulationSceneConfig` port (no table, target, layout, or
+  randomization), scoped to exactly this test. `apply_contact_friction`
+  was wired in (previously defined but never called) and both it and the
+  cube's material force PhysX's friction-combine mode to "max", matching
+  MuJoCo's own combine policy instead of PhysX's default (average).
+- [x] Parity ladder tier 4 (closed-loop) for `visual_servo`: identical seeds
+  and scene in both simulators, success rate and failure causes via
+  `scripts/eval_policy.py --sim isaac` and `scripts/compare_evaluations.py`
+  (ACT on Isaac is the next item). History of how it got there, starting
+  with a first pass verified against real
+  Isaac Sim (`tests/research/classical_control/test_so101_visual_servo_isaac.py`):
+  the unmodified `SO101VisualServoPolicy` runs its full detect -> approach ->
+  descend -> close -> lift -> transfer -> lower -> release -> retreat phase
+  sequence end to end, and the front-camera vision/triangulation pipeline is
+  accurate to ~1-2mm (fixed two real bugs along the way: USD's default
+  camera `clippingRange` of `(1, 1e6)` stage units was clipping the entire
+  workspace at this project's meter scale, in both `apply_cameras` and
+  `add_world_camera`; and `camera_calibration()`'s `fx = fy * width /
+  height` was wrong for a pinhole camera whose horizontal aperture is
+  itself scaled by that same ratio — should just be `fx = fy`, since fixed
+  in `mujoco_env.py` too, see below). The shared
+  `SO101VisualServoPolicy` also takes an optional `squeeze_grip` override; it
+  was needed on Isaac only while the pad geometry mismatched (see below) and
+  the shared default `0.15` now works unmodified.
+
+  **CLOSE-exit timing bug: fixed and verified (2026-09-29).** The original
+  cause (see `research/classical_control/FINDINGS.md` for the full trace
+  evidence): `act()`'s CLOSE/RELEASE settle check compared the actual
+  gripper position against the *ramping* (fixed `0.9 rad/s`) commanded
+  position, not the final target. MuJoCo's own gripper lags that ramp
+  enough that this accidentally worked; Isaac's PhysX position drive tracks
+  it with ~no lag, so CLOSE always exited after a fixed ~8 steps at
+  whatever fraction of the ramp had elapsed by then — as little as ~21%
+  closed against a `squeeze_grip=0.06` target, well before the squeeze
+  reached the cube's actual jam point, with the arm already moving into
+  LIFT while the grip was still mid-ramp. Fixed by requiring the ramp to
+  finish (`ramp_done`) before accepting either `tracking` (actual position
+  close to the now-fixed command) or a long-enough `stalled` (jaw stopped
+  moving before reaching the command — the normal case once a squeeze is
+  deep enough to jam) as settled; `_GRIP_STALL_SETTLE_STEPS` gives a
+  transient stick-slip pause time to resolve into further closing on its
+  own before it's accepted, which is what kept an earlier, shorter-patience
+  version of this fix from also fixing a secondary symptom (the delayed
+  slip-through landing mid-LIFT instead of mid-CLOSE, letting momentum
+  fling the cube). Verified: 100/100 MuJoCo seeds unaffected (identical
+  95/100 success, identical 5 timeout seeds, before and after), full test
+  suite unaffected, and against real Isaac Sim CLOSE now reaches close to
+  the genuine squeeze depth and the cube rises smoothly (1-4cm) instead of
+  ~0 or a multi-cm single-step launch.
+
+  **TRANSFER hold: fixed by matching contact geometry (2026-09-29).** The
+  cube slipping out during TRANSFER was not a friction, force-cap, or solver
+  problem: MuJoCo grips with two fitted 12 x 12 x 6 mm pad boxes, while Isaac
+  had only ever received the pads' friction material on the raw jaw mesh.
+  `sim.isaac.description.apply_contact_pad_colliders` now builds the same pads
+  from the shared `contact_pads` spec (pad-centre distance at the alignment
+  angle checked: 33.9 mm vs the expected 34 mm). With that, `visual_servo` on
+  Isaac delivers the cube 9 mm from the target with the *shared default*
+  `squeeze_grip=0.15` (no per-simulator override; only `target_plane_z`, which
+  is scene geometry), passing 3 of 3 consecutive runs of
+  `test_visual_servo_runs_the_full_pick_and_place_loop`, which now asserts
+  delivery within 4 cm; tier 3 and the Isaac env tests still pass. Five
+  parameter experiments run *before* this (a deeper `squeeze_grip`, raising
+  `gripper_force_limit`, per-body and scene-wide PhysX solver iterations,
+  doubling pad friction, compliant pad contact) each failed or regressed
+  tier 3 — kept in `research/classical_control/FINDINGS.md` as the record of
+  what not to try against mismatched geometry.
+
+  **Identical scene, seeds and perception (2026-10-02/03).** Isaac builds the
+  same workspace as MuJoCo from the shared scene config (table, target pad,
+  cube, front camera), draws the cube per seed with the same RNG order
+  (checked against `golden_layouts.json`), has a wrist-camera calibration,
+  restores the cube on `reset()`, and a `TaskRuntime` reports success. Camera
+  resolution is one of 320 x 240 / 640 x 480 / 1280 x 720 for every
+  simulator, script and test (default 320 x 240; `--camera-res` or the
+  manifest's `simulation.camera_resolution`), with `fx = fy` in both. The
+  policy has a new shared default (`grasp_offset_xy`).
+  The same manifest runs on both engines (`run_sim.py --manifest
+  configs/manifests/so101_single_cube_fixed_place.yaml --sim isaac`). Matched result on
+  seeds 0-99 at 320 x 240: **MuJoCo 100/100 and Isaac 100/100** (Wilson 95%
+  96-100% each, all 100 seeds agree); 640 x 480 and 1280 x 720 are 20/20 in
+  MuJoCo and 8/8 in Isaac. Getting there needed two perception fixes beyond
+  geometry (Isaac scored 79/100 before them): a lighting-independent
+  saturation/hue detector, and linear, gamma-free output so Isaac's cube is as
+  saturated as MuJoCo's; and two measurement fixes in the Isaac env itself
+  (rendering no longer advances physics, which had doubled simulated time per
+  control step, and `reset()` holds one step so the first image is not stale).
+  Arm motion now matches MuJoCo's to within a step per phase; Isaac's episodes
+  are shorter (117 against 200 steps) only because its gripper settles in
+  CLOSE sooner. Root causes, the glitch below and the measurements are in
+  `research/classical_control/FINDINGS.md`. Known limits: Isaac renders
+  without the robot in some processes (detected by
+  `SO101IsaacEnv.robot_is_rendered()`; run long evaluations in shards and
+  retry), PhysX is not deterministic run to run, and Isaac supports
+  single-cube scenes with a fixed target, no domain randomization beyond a
+  lighting scale and a camera position jitter, and only observation-based
+  policies. A second 100-seed Isaac run gave 100/100 again with steps within 5
+  per seed of the first; the policy defaults were re-ablated on both
+  simulators, and the Isaac difficulty subset (lighting, camera shift) is in
+  `research/classical_control/FINDINGS.md`. `--sim isaac --serve` opens the web viewer with
+  a display mirror of the arm (ADR 15).
+- [ ] ACT on Isaac Sim. Blocked by a dependency conflict, not by the env:
+  `[tool.uv] conflicts` forbids installing extra `vla` (torch + lerobot,
+  `numpy<2.3`) together with `isaac` (`isaacsim` pins `numpy==2.3.1`), so ACT
+  cannot run in the same process as Isaac. Options: an out-of-process policy
+  server (Isaac sends observations, a `vla` venv returns actions), or two
+  environments with recorded rollouts; either is its own piece of work.
+- [x] `ArmKinematics` (`robots/so101/kinematics.py`) partially converted:
+  `qpos_to_site_pose`/`pinch_center_from_qpos`, new additive methods aside
+  `fk`/`tool_pose`/`pinch_center`'s existing `MjData`-taking ones, cover
+  what tier 3 needed. `ik`/`ik_pinch` already took only joint positions
+  and needed no change. `forbidden_contact_body_pairs` (full-scene
+  collision detection, not just this arm's FK) remains MuJoCo-only — no
+  Isaac contact-query API is wired up yet; deferred until something
+  besides `so101_pick_place_expert.py`'s own MuJoCo-only `_cube_grasped`
+  needs it.
+
+Definition of done: identical seeds/layouts across both simulators, a
+results table per tier, and the main causes of any gap identified.
+
 ### 2D Report and release (v0.2)
 
 - [ ] 2-4 page report in `docs/`: setup, task ladder, three-method comparison, difficulty sweep, ablations, backend comparison, failure analysis, limitations.
@@ -166,4 +308,4 @@ Definition of done: identical seeds on both backends, a results table, and the m
 **Not in focus yet.** Listed only so the architecture keeps room for them.
 
 - **Phase 3, language and planning:** only the planner *contract* and its scripted backend remain (`physai.planner`, `scripts/plan_task.py`). The SmolVLM and Claude backends were removed in the 2026-09-20 cleanup — they were untested, unrunnable without absent dependencies, and out of focus; git history has them. Speech input, plan schemas, error-recovery loops, and a ROS2 VLM node are not planned.
-- **Phase 4, scale and generalization:** VLA fine-tuning, parallel data generation, cross-simulator portability (for example Isaac Lab), a real SO-101 backend, and additional embodiments. These need compute and hardware beyond the current setup.
+- **Phase 4, scale and generalization:** VLA fine-tuning, parallel data generation, a real SO-101 backend, and additional embodiments. Cross-simulator portability moved to 2E (Isaac Sim) once a GPU became available; these remaining items still need compute and hardware beyond the current setup.

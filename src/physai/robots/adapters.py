@@ -10,12 +10,13 @@ from ..control.safety import SafetyController
 from .base import RobotPort, RobotSpec
 
 
-class DirectMuJoCoAdapter:
-    """Expose a MuJoCo-backed robot through the generic robot port.
+class DirectAdapter:
+    """Expose a simulator- or hardware-backed robot through the generic robot port.
 
     Every action passes the safety gate here, immediately before the robot
-    receives it, so direct-MuJoCo workflows get the same checks as the ROS2
-    and Gymnasium paths.
+    receives it, so a direct in-process run gets the same checks as the ROS2
+    paths. This adapter has no simulator-specific behavior itself — it wraps
+    any `RobotPort`, MuJoCo- or Isaac-backed alike.
     """
 
     def __init__(
@@ -113,33 +114,33 @@ def select_adapter(
     )
 
 
-def _build_direct_mujoco(
+def _build_direct(
     direct: RobotPort | None, *, transport: Any, hardware: RobotPort | None, codec: Any
 ) -> RobotPort:
     if direct is None:
-        raise ValueError("adapter='direct_mujoco' requires a MuJoCo port")
-    return DirectMuJoCoAdapter(direct)
+        raise ValueError("adapter='direct' requires a simulator port")
+    return DirectAdapter(direct)
 
 
-def _build_ros2_mujoco(
+def _build_ros2_sim(
     direct: RobotPort | None, *, transport: Any, hardware: RobotPort | None, codec: Any
 ) -> RobotPort:
     if transport is None:
-        raise ValueError("adapter='ros2_mujoco' requires a ROS2 transport")
+        raise ValueError("adapter='ros2_sim' requires a ROS2 transport")
     if direct is None:
-        raise ValueError("adapter='ros2_mujoco' requires a MuJoCo port")
-    from ..bridge.adapters import ROS2MuJoCoAdapter
+        raise ValueError("adapter='ros2_sim' requires a simulator port")
+    from ..bridge.adapters import ROS2SimAdapter
 
-    return ROS2MuJoCoAdapter(direct, transport, codec=codec)
+    return ROS2SimAdapter(direct, transport, codec=codec)
 
 
-def _build_ros2_hardware(
+def _build_ros2_real(
     direct: RobotPort | None, *, transport: Any, hardware: RobotPort | None, codec: Any
 ) -> RobotPort:
     if transport is None:
-        raise ValueError("adapter='ros2_hardware' requires a ROS2 transport")
+        raise ValueError("adapter='ros2_real' requires a ROS2 transport")
     if hardware is None:
-        raise ValueError("adapter='ros2_hardware' requires a hardware port")
+        raise ValueError("adapter='ros2_real' requires a hardware port")
     from ..bridge.adapters import ROS2HardwareAdapter
 
     return ROS2HardwareAdapter(hardware, transport, codec=codec)
@@ -151,7 +152,7 @@ def _load_builtins() -> None:
     global _BUILTINS_LOADED
     if _BUILTINS_LOADED:
         return
-    register_adapter("direct_mujoco", _build_direct_mujoco)
-    register_adapter("ros2_mujoco", _build_ros2_mujoco)
-    register_adapter("ros2_hardware", _build_ros2_hardware)
+    register_adapter("direct", _build_direct)
+    register_adapter("ros2_sim", _build_ros2_sim)
+    register_adapter("ros2_real", _build_ros2_real)
     _BUILTINS_LOADED = True

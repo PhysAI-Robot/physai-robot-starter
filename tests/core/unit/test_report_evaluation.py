@@ -24,7 +24,7 @@ def evaluation(*, failed_seeds=(), collisions=0, timeouts=0, unsafe=0) -> dict:
         "schema_version": "physai.evaluation.v1",
         "policy": "visual_servo",
         "robot": "so101",
-        "task": "pick_place",
+        "task": "single_cube_fixed_place",
         "summary": {
             "episodes": 4,
             "success_count": successes,
@@ -103,7 +103,9 @@ def shard(
         }
         for seed in range(first_seed, first_seed + count)
     )
-    return EvaluationReport(policy, "so101", "pick_place", results).to_dict()
+    return EvaluationReport(
+        policy, "so101", "single_cube_fixed_place", results
+    ).to_dict()
 
 
 def run_merge(monkeypatch, capsys, tmp_path, shards: list[dict], *flags: str):
@@ -196,3 +198,63 @@ def test_shards_that_overlap_or_disagree_are_rejected(monkeypatch, capsys, tmp_p
         )
     assert exit_info.value.code == 2
     assert "cannot merge" in capsys.readouterr().err
+
+
+@pytest.fixture
+def report_module(monkeypatch):
+    monkeypatch.syspath_prepend(str(SCRIPTS))
+    import report_evaluation
+
+    return report_evaluation
+
+
+@pytest.mark.parametrize(
+    ("result", "expected"),
+    [
+        ({"success": True, "timeout": False}, None),
+        ({"success": False, "unsafe_action": True, "collision": True}, "unsafe_action"),
+        ({"success": False, "collision": True}, "collision"),
+        (
+            {"success": False, "failure_reason": "feature_not_found"},
+            "feature_not_found",
+        ),
+        (
+            {"success": False, "failure_reason": "missing_camera:front"},
+            "missing_camera",
+        ),
+        ({"success": False, "failure_reason": "boom"}, "policy_error"),
+        ({"success": False, "timeout": True, "phase": "CLOSE"}, "timeout_in_close"),
+        ({"success": False, "timeout": True, "phase": "DONE"}, "finished_not_placed"),
+        ({"success": False, "timeout": True}, "timeout"),
+        ({"success": False}, "unknown"),
+    ],
+)
+def test_failure_category(report_module, result, expected):
+    assert report_module.failure_category(result) == expected
+
+
+def test_metric_rows_use_successes_for_place_error_and_skip_missing_fields(
+    report_module,
+):
+    results = [
+        {"success": True, "dist_cube_target": 0.002, "settling_time_s": 1.0},
+        {"success": True, "dist_cube_target": 0.004, "settling_time_s": 2.0},
+        {"success": False, "dist_cube_target": 0.2},
+    ]
+    rows = dict(report_module.metric_rows(results))
+    assert rows["Place error, successes (mm)"] == "3.0 / 3.8"
+    assert rows["Settling time (s)"] == "1.50 / 1.90"
+    assert report_module.metric_rows([{"success": False}]) == []
+
+
+def test_failure_histogram_orders_by_count_then_name(report_module):
+    results = [
+        {"success": False, "timeout": True, "phase": "CLOSE"},
+        {"success": False, "timeout": True, "phase": "APPROACH"},
+        {"success": False, "timeout": True, "phase": "CLOSE"},
+        {"success": True},
+    ]
+    assert report_module.failure_histogram(results) == {
+        "timeout_in_close": 2,
+        "timeout_in_approach": 1,
+    }
