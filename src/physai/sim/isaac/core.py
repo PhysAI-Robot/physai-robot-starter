@@ -12,6 +12,7 @@ place besides `robots.so101.isaac_env` that may import `isaacsim`/`omni`/
 
 from __future__ import annotations
 
+import atexit
 from typing import Any
 
 from ...contracts import CAMERA_HEIGHT, CAMERA_WIDTH
@@ -30,6 +31,10 @@ def ensure_simulation_app(*, headless: bool = True) -> Any:
         from isaacsim import SimulationApp
 
         _APP = SimulationApp({"headless": headless})
+        # Left alone, Kit warns that the app was never closed and shuts down
+        # by itself at exit; close it explicitly so the GPU context is
+        # released the documented way before the next process starts.
+        atexit.register(close_simulation_app)
     return _APP
 
 
