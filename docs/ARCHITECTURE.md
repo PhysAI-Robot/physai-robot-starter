@@ -625,9 +625,9 @@ meant to be the frozen reference:
   jitter, a fixed target, and only observation-based policies.
   `--serve` drives `physai.web.Host` on the main thread (`Host.run()`; Isaac
   must stay on the thread that created it) and shows a MuJoCo display mirror
-  of the arm (`SO101IsaacEnv.model`/`data`, refreshed from Isaac's joint
-  state, never simulated); the cube appears only in the Isaac-rendered
-  camera feeds, and `--record-dir` stays unavailable. `scripts/run_sim.py
+  of the scene (`SO101IsaacEnv.model`/`data`: the arm, table, target and cube,
+  refreshed from Isaac's joint state and cube pose, never simulated), and
+  `--record-dir` stays unavailable. `scripts/run_sim.py
   --viewer`, shared worlds (`physai.sim.mujoco.world.SharedWorld`), the
   ROS2 bridge, and `robots/so101/kinematics.py`'s `ArmKinematics` are
   MuJoCo-only; a manifest combining `simulator: isaac` with any of them is

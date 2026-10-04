@@ -265,7 +265,7 @@ itself).
   per seed of the first; the policy defaults were re-ablated on both
   simulators, and the Isaac difficulty subset (lighting, camera shift) is in
   `research/classical_control/FINDINGS.md`. `--sim isaac --serve` opens the web viewer with
-  a display mirror of the arm (ADR 15).
+  a display mirror of the arm, table, target and cube (ADR 15).
 - [ ] ACT on Isaac Sim. Blocked by a dependency conflict, not by the env:
   `[tool.uv] conflicts` forbids installing extra `vla` (torch + lerobot,
   `numpy<2.3`) together with `isaac` (`isaacsim` pins `numpy==2.3.1`), so ACT

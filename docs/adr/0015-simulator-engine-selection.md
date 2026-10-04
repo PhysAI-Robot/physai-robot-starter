@@ -72,8 +72,9 @@ already has for transport adapters:
   `loop_factory`). `Host` and the browser read a MuJoCo `model`/`data`, so
   `SO101IsaacEnv` exposes a display/telemetry mirror: the kinematics-oracle
   model plus an `MjData` that `observe()` refreshes from Isaac's joint state
-  and never simulates. The 3D view therefore shows the arm only (no task
-  objects, no contacts); the cube appears in the Isaac-rendered camera feeds.
+  and the cube's pose, and never simulates. With a scene the oracle is built
+  from the scene's MuJoCo model, as `SO101Env` does, so the 3D view shows the
+  table, the target and the cube as well as the arm (no contacts).
   Cartesian jog is absent (`so101_jog_resolver` returns `None` for an env
   without `resolve_twist_jog`) and recording/playback stay MuJoCo-only.
 - `SO101Env.robot_spec.metadata` gains `"simulator": "mujoco"`, matching
