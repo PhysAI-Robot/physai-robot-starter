@@ -42,6 +42,18 @@ header select {
   font: 12px var(--font-mono);
   color: var(--color-text-muted);
 }
+.sim-badge {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface-alt);
+  font: 600 12px var(--font-mono);
+  color: var(--color-text);
+}
+.sim-badge[data-simulator="isaac"] {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
 .status-dot {
   width: 9px;
   height: 9px;

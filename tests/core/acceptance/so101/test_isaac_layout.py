@@ -111,3 +111,26 @@ def test_the_task_layer_reads_isaacs_state(env):
     assert info["dist_cube_target"] == pytest.approx(expected, abs=1e-6)
     assert info["success"] is False and terminated is False
     assert env.table_top == pytest.approx(0.02) and env.cube_half == 0.014
+
+
+def test_the_viewer_mirror_holds_the_table_the_target_and_the_cube(env):
+    """`--serve` draws `env.model`/`env.data`: it must contain the scene, not
+    only the arm, and the mirrored cube must follow Isaac's."""
+    import mujoco
+
+    def geom_names(model):
+        return {
+            mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, index)
+            for index in range(model.ngeom)
+        }
+
+    names = geom_names(env.model)
+    assert "target_pad" in names
+    assert any(name and "table" in name for name in names)
+    assert mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_BODY, "cube") >= 0
+
+    for seed in (0, 7):
+        env.reset(seed=seed)
+        env.observe()
+        body = mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_BODY, "cube")
+        np.testing.assert_allclose(env.data.xpos[body], env.cube_pos, atol=1e-6)
