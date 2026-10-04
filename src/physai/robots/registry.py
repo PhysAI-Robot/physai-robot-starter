@@ -1,18 +1,16 @@
 """Runtime registry for robot embodiment factories.
 
 Adding a robot is one call: build a `RobotDescriptor` bundling its factories
-and pass it to `register_embodiment()`, which stores that one descriptor. The
-individual `register_*` functions below fill in one optional field of an
-already registered robot; a robot-owned policy (e.g. a research module
-self-registering "scripted" for so101) still calls `register_robot_policy()`
-directly, since it registers independently of — and often after — the
-embodiment itself.
+and pass it to `register_embodiment()`, which stores that one descriptor. A
+robot-owned policy (e.g. a research module self-registering "scripted" for
+so101) calls `register_robot_policy()` directly, since it registers
+independently of — and often after — the embodiment itself.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Any
 
 from .base import RobotPort
@@ -59,61 +57,6 @@ def register_embodiment(name: str, descriptor: RobotDescriptor) -> RobotDescript
         raise ValueError(f"robot {name!r} is already registered")
     _ROBOTS[name] = descriptor
     return descriptor
-
-
-def register_robot(
-    name: str, factory: RobotFactory, *, kind: str | None = None
-) -> RobotFactory:
-    """Register a robot factory under a stable configuration name."""
-    register_embodiment(name, RobotDescriptor(factory=factory, kind=kind))
-    return factory
-
-
-def _extend(name: str, field: str, label: str, value: Any) -> Any:
-    """Set one still-empty optional field of an already registered robot."""
-    try:
-        descriptor = _ROBOTS[name]
-    except KeyError:
-        raise ValueError(f"robot {name!r} is not registered") from None
-    if getattr(descriptor, field) is not None:
-        raise ValueError(f"{label} for robot {name!r} is already registered")
-    _ROBOTS[name] = replace(descriptor, **{field: value})
-    return value
-
-
-def register_ros2_node(name: str, factory: ROS2NodeFactory) -> ROS2NodeFactory:
-    """Register an embodiment-specific ROS2 node factory."""
-    return _extend(name, "ros2_node", "ROS2 node", factory)
-
-
-def register_env_config(name: str, factory: EnvConfigFactory) -> EnvConfigFactory:
-    """Register a robot-owned environment configuration factory."""
-    return _extend(name, "env_config", "environment config", factory)
-
-
-def register_navigation(name: str, factory: NavigationFactory) -> NavigationFactory:
-    """Register a robot-owned deterministic navigation baseline."""
-    return _extend(name, "navigation", "navigation", factory)
-
-
-def register_scene_defaults(
-    name: str, factory: SceneDefaultsFactory
-) -> SceneDefaultsFactory:
-    """Register embodiment-owned defaults for generic scene attachment fields."""
-    return _extend(name, "scene_defaults", "scene defaults", factory)
-
-
-def register_shared_attach(name: str, hook: SharedAttachHook) -> SharedAttachHook:
-    """Register a hook letting a robot inject shared-world-only MJCF (e.g.
-    extra cameras) into its spec at attach time."""
-    return _extend(name, "shared_attach", "shared-world attach hook", hook)
-
-
-def register_shared_instance(
-    name: str, factory: SharedInstanceFactory
-) -> SharedInstanceFactory:
-    """Register a robot-owned adapter for one binding in a shared world."""
-    return _extend(name, "shared_instance", "shared-world instance", factory)
 
 
 def register_robot_policy(
