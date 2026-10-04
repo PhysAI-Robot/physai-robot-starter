@@ -268,6 +268,11 @@ The browser viewer follows the OS `prefers-color-scheme` by default (light or
 dark) and can be overridden per browser with the header's theme button; the
 choice persists in that browser's `localStorage`.
 
+The header shows which simulator runs the session (`MuJoCo` or `Isaac Sim`) in a
+badge next to the robot selector and in the page title; it comes from the
+`simulator` field of `GET /api/robots`, and nothing is shown when a robot does
+not report one.
+
 ## Control Ownership, Rendering, And The API Surface
 
 Covered in [docs/ARCHITECTURE.md](ARCHITECTURE.md#host--client-api): the

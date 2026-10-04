@@ -218,7 +218,7 @@ uv run python scripts/compare_evaluations.py outputs/mujoco.json outputs/isaac.j
 Isaac supports single-cube scenes with a fixed target, no domain
 randomization beyond a lighting scale and a camera position jitter, and only observation-based policies (`visual_servo`,
 `constant`); `--viewer` stays MuJoCo-only (`--serve` opens the web viewer
-with a mirrored arm; see [ADR 15](docs/adr/0015-simulator-engine-selection.md)).
+with a mirrored arm, table, target and cube; see [ADR 15](docs/adr/0015-simulator-engine-selection.md)).
 Each Isaac run must be a separate process, and `pytest -m isaac` is run one
 test file at a time. Isaac sometimes starts without drawing the robot, which
 blinds camera policies; the env detects it (`robot_is_rendered()`) and stops
