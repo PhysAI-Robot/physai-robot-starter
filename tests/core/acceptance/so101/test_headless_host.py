@@ -10,7 +10,9 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("fastapi", reason="install the web extra: uv sync --extra web")
+pytest.importorskip(
+    "fastapi", reason="fastapi is a base dependency; reinstall with uv sync"
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 CAMERA_VARIANT = REPO_ROOT / "assets" / "so101" / "so101_new_calib_camera.xml"
@@ -61,7 +63,7 @@ def test_headless_host_serves_the_web_viewer_without_a_desktop_window():
         sys.executable,
         str(REPO_ROOT / "scripts" / "run_sim.py"),
         "--manifest",
-        "configs/manifests/so101_pick_place.yaml",
+        "configs/manifests/so101_single_cube_fixed_place.yaml",
         "--policy",
         "visual_servo",
         "--serve",

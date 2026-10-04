@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted
+Accepted. The registered names below were renamed by
+[ADR 14](0014-simulator-package-layout.md): `direct_mujoco`/`ros2_mujoco`/
+`ros2_hardware` are now `direct`/`ros2_sim`/`ros2_real`. The registry
+mechanism itself (`register_adapter`/`create_adapter`/`select_adapter`) is
+unchanged.
 
 ## Context
 

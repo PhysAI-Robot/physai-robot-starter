@@ -10,17 +10,56 @@ requires-python = ">=3.12,<3.13"
 license = { file = "LICENSE" }
 dependencies = [
     "mujoco>=3.2",
-    "numpy>=2.0,<2.3",
+    "numpy>=2.0",
     "imageio>=2.34",
     "imageio-ffmpeg>=0.6.0",
     "PyYAML>=6.0",
+    # The browser viewer (physai.web, --serve). Base, not a "web" extra:
+    # --viewer needs neither this nor an extra (mujoco.viewer ships with
+    # mujoco above), and folding it in here means it is never a choice
+    # someone has to make against `isaac` below (isaacsim-kernel pins
+    # uvicorn==0.29.0 exactly; the >=0.29 floor here is deliberately loose
+    # so that pin is a valid resolution, not a conflict, when isaac is
+    # selected -- see docs/adr/0016).
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.29",
+    # Dev/test tooling. Base, not a "dev" extra: this is a starter repo you
+    # clone and work in directly, not a library installed as someone else's
+    # dependency, so there is no audience that wants physai without the
+    # ability to run its own test suite.
+    "pytest>=9.1.1",
+    "lark>=1.2",
+    "ruff>=0.16.8",
+    "import-linter>=2.1",
 ]
 
 [project.optional-dependencies]
 training = ["gymnasium>=1.3.0,<2.0"]
+# lerobot==0.6.1 pins numpy<2.3.0, incompatible with isaacsim's fork
+# (numpy==2.3.1) -- a real conflict, not a ceiling physai drew too tight
+# (same shape as webtest/httpx2 below). `[tool.uv] conflicts` marks vla
+# against isaac so a combined sync fails fast instead of `uv lock`
+# refusing everything or someone having to install lerobot by hand.
 vla = ["torch>=2.7,<2.12", "lerobot>=0.6.1"]
-web = ["fastapi>=0.115", "uvicorn[standard]>=0.54.0", "httpx2>=2.13"]
-dev = ["pytest>=9.1.1", "lark>=1.2", "ruff>=0.16.8", "import-linter>=2.1"]
+# httpx2 is only used by tests/core/unit/test_web_app_streaming.py (guarded
+# by pytest.importorskip("httpx2"), so it skips cleanly without this extra).
+# Kept out of base, unlike fastapi/uvicorn/pytest above: httpx2 itself
+# requires idna>=3.18, and isaacsim-kernel pins idna==3.10 exactly -- a
+# real conflict with no loosenable floor on physai's side, unlike the
+# uvicorn case. `[tool.uv] conflicts` below marks it against `isaac` so a
+# combined sync fails fast instead of `uv lock` refusing everything.
+webtest = ["httpx2>=2.13"]
+# isaacsim as a real extra of this project (`uv sync --extra isaac`),
+# replacing the separate-venv recipe docs/adr/0013 used to document.
+# Verified end to end: `uv lock` resolves it (index-strategy =
+# "unsafe-best-match" below, no prerelease allowance needed) and a real
+# headless episode ran against actual Isaac Sim 6.1.0.0 on an RTX 3060.
+# See docs/adr/0016.
+isaac = ["isaacsim[all,extscache]==6.1.0.0"]
+
+[[tool.uv.index]]
+name = "nvidia"
+url = "https://pypi.nvidia.com"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -29,17 +68,26 @@ where = ["src"]
 testpaths = ["tests"]
 # A model-attach conflict in the shared world means a robot's options silently
 # lost to the world's; fail instead of scrolling past it.
-filterwarnings = ["error::UserWarning:physai.sim.world"]
+filterwarnings = ["error::UserWarning:physai.sim.mujoco.world"]
 markers = [
     "assets: requires downloaded SO-101 simulation assets",
     "ros2: requires ROS 2 and message packages",
     "integration: crosses multiple PhysAI module boundaries",
     "acceptance: validates a complete robot workflow",
     "slow: takes longer than a normal unit test",
+    "isaac: requires isaacsim (uv sync --extra isaac); GPU-bound",
 ]
 
 [tool.uv]
 override-dependencies = ["datasets>=5.0.1", "setuptools>=83"]
+conflicts = [
+    [{ extra = "isaac" }, { extra = "webtest" }],
+    [{ extra = "isaac" }, { extra = "vla" }],
+]
+index-strategy = "unsafe-best-match"
+
+[tool.ty.rules]
+unresolved-attribute = "ignore"
 
 [tool.importlinter]
 root_packages = ["physai", "research"]
@@ -69,3 +117,55 @@ name = "core never imports research"
 type = "forbidden"
 source_modules = ["physai"]
 forbidden_modules = ["research"]
+
+[[tool.importlinter.contracts]]
+name = "the robot description schema stays simulator-agnostic"
+type = "forbidden"
+source_modules = ["physai.robots.description"]
+forbidden_modules = ["mujoco"]
+# RobotDescription (frames, cameras, contact pads, actuators, per-simulator
+# overrides) is the seam a future non-MuJoCo backend (e.g. Isaac Sim) reads
+# too; a MuJoCo import here would mean the schema secretly assumes one
+# simulator. Each simulator's own builder (e.g.
+# `sim.mujoco.scenes.common.apply_description`) imports mujoco, not this
+# module.
+
+[[tool.importlinter.contracts]]
+name = "isaacsim/omni/pxr stay confined to the isaac backend"
+type = "forbidden"
+source_modules = ["physai"]
+forbidden_modules = ["isaacsim", "omni", "pxr"]
+# Only physai.sim.isaac (SimulationApp lifecycle, RobotDescription -> USD)
+# and robots.so101.isaac_env (the SO-101 RobotPort built on top of it) may
+# depend on Isaac Sim; every other module reaches it only through the
+# RobotPort/RobotSpec ports, the way it reaches MuJoCo only through
+# physai.sim.mujoco. Every import below is function-local (Isaac Sim's own
+# modules are not import-safe before a SimulationApp exists), but grimp's
+# static graph tracks those too, collapsed to each external package's
+# top-level name.
+ignore_imports = [
+    "physai.sim.isaac.core -> isaacsim",
+    "physai.sim.isaac.core -> omni",
+    "physai.sim.isaac.description -> isaacsim",
+    "physai.sim.isaac.description -> omni",
+    "physai.sim.isaac.description -> pxr",
+    "physai.sim.isaac.scene -> pxr",
+    "physai.sim.isaac.objects -> pxr",
+    "physai.robots.so101.isaac_env -> isaacsim",
+    "physai.robots.so101.isaac_env -> omni",
+    "physai.robots.so101.isaac_env -> pxr",
+]
+
+[[tool.importlinter.contracts]]
+name = "mujoco and isaac backends stay independent"
+type = "independence"
+modules = ["physai.sim.mujoco", "physai.sim.isaac"]
+# Two peer engine backends under physai.sim; neither is the other's
+# implementation detail, so neither may import the other directly (a robot
+# that needs both, e.g. so101, depends on each separately).
+
+[[tool.importlinter.contracts]]
+name = "the isaac backend does not depend on mujoco"
+type = "forbidden"
+source_modules = ["physai.sim.isaac"]
+forbidden_modules = ["mujoco"]

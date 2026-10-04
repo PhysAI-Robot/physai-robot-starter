@@ -25,13 +25,13 @@ uv run python scripts/run_sim.py --robot so101 --serve --seed 0
 Open the checked-in pick-and-place scene the same way:
 
 ```bash
-uv run python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml --serve --seed 0
+uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --serve --seed 0
 ```
 
 For headless execution:
 
 ```bash
-uv run python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml --seed 0 --max-steps 500
+uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --seed 0 --max-steps 500
 ```
 
 Video recording is opt-in. Add `--video` when you want frames written under
@@ -45,7 +45,7 @@ scroll to zoom); combine it with `--serve` and use the browser viewer's
 camera grid for per-camera views or debug overlays:
 
 ```bash
-uv run python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml --viewer --seed 0
+uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --viewer --seed 0
 ```
 
 This mode requires a desktop display.
@@ -66,7 +66,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/core/acceptance/s
 The transport-level ROS2 check does not require a ROS2 installation:
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/core/integration/test_ros2_adapters.py::test_ros2_mujoco_teleop_command_moves_so101 -q
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/core/integration/test_ros2_adapters.py::test_ros2_sim_teleop_command_moves_so101 -q
 ```
 
 ## 4. Run the Real ROS2 Node
@@ -82,7 +82,7 @@ Run a bounded ROS2 MuJoCo smoke test:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-MUJOCO_GL=egl uv run python scripts/run_ros2_sim.py --robot so101 --config configs/tasks/so101/pick_place.yaml --seed 0 --max-ticks 500
+MUJOCO_GL=egl uv run python scripts/run_ros2_sim.py --robot so101 --config configs/tasks/so101/single_cube_fixed_place.yaml --seed 0 --max-ticks 500
 ```
 
 The node accepts joint trajectory and gripper commands and publishes joint
@@ -126,9 +126,9 @@ for the full workflow, calibration notes, and CI evaluation reference.
 
 ## 8. Parameters and Open Work
 
-Main files are `configs/manifests/so101_pick_place.yaml`,
-`src/physai/robots/so101/env.py`, `src/physai/sim/scenes/common.py`, and
-`research/scripted_experts/so101_pick_place_expert.py`.
+Main files are `configs/manifests/so101_single_cube_fixed_place.yaml`,
+`src/physai/robots/so101/mujoco_env.py`, `src/physai/sim/mujoco/scenes/common.py`,
+and `research/scripted_experts/so101_pick_place_expert.py`.
 
 Run the reproducible FK, Jacobian, and IK benchmark with:
 

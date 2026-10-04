@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from conftest import requires_assets
+from tests.conftest import requires_assets
 
 pytestmark = pytest.mark.assets
 

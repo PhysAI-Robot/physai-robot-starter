@@ -13,7 +13,7 @@ import pytest
 from physai.contracts import Action, Header, Pose, PoseStamped, Vector3
 from physai.data import load_episode
 from physai.robots import RobotSpec, shared_attach
-from physai.sim import RobotInstanceConfig, SharedWorld
+from physai.sim.mujoco import RobotInstanceConfig, SharedWorld
 from physai.web.actions import action_from_payload
 from physai.web.host import Host
 from tests.core.support.fakes import FakeRobotPort
@@ -483,3 +483,18 @@ def test_a_twist_jog_needs_a_resolver_the_robot_registered():
 
     assert calls == [0.25]
     assert host._latest_command("_fake_jog_robot").joint_position[0] == 0.5
+
+
+def test_run_steps_and_closes_on_the_calling_thread_until_stopped():
+    """Isaac Sim must be driven from the thread that created it, so `run()`
+    takes the caller's thread where `start()` spawns a worker."""
+    spec = RobotSpec(
+        name="test", kind="test", joint_names=("joint",), action_joint_names=("joint",)
+    )
+    robot = ThreadRecordingRobot(spec)
+    host = NoPublishHost.for_robot(robot, robot_name="test", reset_seed=0)
+    threading.Timer(0.2, host.stop).start()
+
+    host.run()
+
+    assert robot.close_thread == threading.get_ident()
