@@ -66,7 +66,12 @@ A single cell can be run by hand with `eval_policy.py --lighting-scale 0.5`,
 `--nominal-physics` (friction and mass stay nominal so only that axis varies).
 `--camera-shift-unknown` leaves the policy's calibration at the nominal camera
 pose while the camera has moved; without it the policy is told the new pose.
-`--policy-arg KEY=VALUE` overrides a policy option (for example
+`--video` writes one video per episode to `--video-dir` (default
+`outputs/eval_videos`, named `<simulator>_<robot>_<policy>_seed<seed>.mp4`, with `_02`, `_03`, ...
+added when a repeat run would overwrite an earlier one; `--video-name` replaces
+the `<simulator>_<robot>_<policy>` part; `run_sim.py` uses the same names), `--video failures` only for
+the episodes that fail, and `--camera` picks the camera (default `front`); it
+works with `--sim isaac` too. `--policy-arg KEY=VALUE` overrides a policy option (for example
 `--policy-arg final_camera=front`) and `--seeds 5,13,28` runs an
 explicit seed list.
 

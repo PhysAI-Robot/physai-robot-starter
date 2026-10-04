@@ -741,3 +741,34 @@ default) but is not shown to work. Lighting does not cause it: at x0.5 the
 health-check difference is 19.5 on the wrist camera and 4.1 on the front,
 against a threshold of 3.0, and three glitches in a row at that setting were
 followed by a clean start. The cause is still unknown.
+
+The glitch was then probed with the build-and-check step alone (a process that
+builds the env and runs the health check, 60 s between starts, laptop kept
+awake, the GPU state read right after the app starts). Over 148 starts, 11
+glitched (7%):
+
+| test | starts | glitches |
+|---|---:|---:|
+| default, RTX Interactive (`/rtx/rendermode=PathTracing`, verified active at the check), `rt_subframes=8`, 60 extra `app.update()` calls (12 each) | 48 | 6 |
+| the 60-frame warm-up added to the env | 24 | 2 |
+| NVIDIA power mode "prefer maximum performance" set globally | 24 | 2 |
+| `useFabricSceneDelegate=false` (stopped after 4 starts) | 4 | 1 (on the control) |
+| explicit `SimulationApp.close()` at exit, 24 starts, against the old exit, 24 | 48 | 0 |
+
+None of the advice tried (render mode, sub-frames, warm-up frames, the power
+mode, the Fabric delegate, closing the app explicitly) has a measurable effect:
+the warm-up's 0/12 became 2/36 against 6/36 without it in the end (p = 0.26),
+and the last 48 starts had no glitch with either way of exiting, so that test
+cannot tell the two apart. The rate did fall after the power mode was set
+(3/76 against 8/72 before, p = 0.12), which is suggestive and could also be
+chance. Two of the suggested settings do nothing here: `/rtx/materialDb/syncLoads`
+is already `True`, and `/physics/fabricEnabled` does not exist.
+
+What does separate the runs is the GPU memory read right after the app starts,
+before the env is built: all 11 glitches began with 464 to 587 MiB in use, 136 of
+the 137 clean starts with 1123 to 1146 MiB (one clean start had 496). The GPU
+clock does not explain it: after the power mode was set the glitches still began
+at 1425 MHz. So a start where the renderer has not yet allocated its memory draws
+no robot, and 60 frames after the robot is built do not fix it. Not tried: waiting
+for that memory to appear before building the env, or clearing the shader cache
+(a cold cache would more likely slow the renderer's start).
