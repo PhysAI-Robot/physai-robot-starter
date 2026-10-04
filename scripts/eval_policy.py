@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import _bootstrap  # noqa: F401
+import numpy as np
 from _common_args import (
     add_camera_resolution,
     add_checkpoint,
@@ -25,8 +26,16 @@ from _common_args import (
     add_robot,
     add_seed,
     add_simulator,
+    add_video_name,
 )
 
+from _video import (
+    VIDEO_MODES,
+    default_video_name,
+    keep_video,
+    next_video_stem,
+    write_video,
+)
 from physai.contracts import DEFAULT_CAMERA_RESOLUTION
 from physai.control import SafetyViolation
 from physai.data import EvaluationReport, load_episode
@@ -137,6 +146,27 @@ def main() -> int:
         "--seed .. --seed + --episodes",
     )
     ap.add_argument(
+        "--video",
+        nargs="?",
+        const="all",
+        choices=VIDEO_MODES,
+        help="write a video per episode (`--video` or `--video all`), or only "
+        "for the episodes that fail (`--video failures`)",
+    )
+    ap.add_argument(
+        "--video-dir",
+        type=Path,
+        default=Path("outputs/eval_videos"),
+        help="where --video writes (one file per episode, named "
+        "<simulator>_<robot>_<policy>_seed<seed>.mp4, with _02, _03, ... on repeats)",
+    )
+    add_video_name(ap)
+    ap.add_argument(
+        "--camera",
+        default="front",
+        help="camera that --video records (default: front)",
+    )
+    ap.add_argument(
         "--render",
         action="store_true",
         help="render cameras (slower; needed for image-conditioned policies)",
@@ -218,7 +248,7 @@ def main() -> int:
                 scene=scene,
                 seed=args.seed,
                 max_steps=args.max_steps,
-                render=args.render or needs_images,
+                render=args.render or needs_images or args.video is not None,
                 domain_randomization=randomization,
             ),
         )
@@ -311,6 +341,14 @@ def main() -> int:
         policy.reset(obs)
         total, info = 0.0, {}
         violation = None
+        frames = []
+
+        def grab(observation) -> None:
+            frame = observation.images.get(args.camera)
+            if args.video is not None and frame is not None:
+                frames.append(np.asarray(frame.data))
+
+        grab(obs)
         for _ in range(args.max_steps):
             try:
                 obs, reward, terminated, truncated, info = env.step(policy.act(obs))
@@ -319,6 +357,7 @@ def main() -> int:
                 # action rather than taking the whole evaluation down.
                 violation = str(exc)
                 break
+            grab(obs)
             total += reward
             if terminated or truncated:
                 break
@@ -361,6 +400,20 @@ def main() -> int:
             f"d={_format_distance(results[-1]['dist_cube_target'])}"
             + (f"  UNSAFE: {violation}" if violation else "")
         )
+        if frames and keep_video(args.video, results[-1]["success"]):
+            path = write_video(
+                np.stack(frames),
+                next_video_stem(
+                    args.video_dir,
+                    args.video_name
+                    or default_video_name(
+                        args.simulator or "mujoco", args.robot, args.policy
+                    ),
+                    seed,
+                ),
+                fps=int(getattr(env.cfg, "control_hz", 30)),
+            )
+            print(f"  video -> {path}")
 
     env.close()
     report = EvaluationReport(
