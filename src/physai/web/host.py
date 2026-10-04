@@ -203,6 +203,9 @@ class Host:
                     "name": instance_id,
                     "kind": spec.kind,
                     "robot": spec.name,
+                    # Shown in the page header; a shared world is MuJoCo-only.
+                    "simulator": spec.metadata.get("simulator")
+                    or ("mujoco" if self._shared else None),
                     "action_modes": list(spec.action_modes),
                     "capabilities": list(spec.capabilities),
                     "cameras": cameras,

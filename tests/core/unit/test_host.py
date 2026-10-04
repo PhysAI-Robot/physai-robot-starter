@@ -213,6 +213,23 @@ def _heterogeneous_configs() -> tuple[RobotInstanceConfig, ...]:
     )
 
 
+def test_the_robot_list_names_the_simulator_for_the_page_header():
+    def listed(metadata):
+        spec = RobotSpec(
+            name="test",
+            kind="test",
+            joint_names=("joint",),
+            action_joint_names=("joint",),
+            metadata=metadata,
+        )
+        host = Host.for_robot(FakeRobotPort(spec), robot_name="test")
+        return host.list_robots()[0]["simulator"]
+
+    assert listed({"simulator": "isaac"}) == "isaac"
+    assert listed({"simulator": "mujoco"}) == "mujoco"
+    assert listed({}) is None  # unknown: the page shows no badge
+
+
 @pytestmark_shared
 def test_a_shared_host_lists_instances_routes_actions_and_stops_safely():
     configs = _heterogeneous_configs()

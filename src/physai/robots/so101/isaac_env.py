@@ -19,7 +19,7 @@ module and `physai.sim.isaac`, and `mujoco` is a base dependency regardless).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -70,6 +70,7 @@ from .contracts import (
     so101_training_contract,
 )
 from .kinematics import ArmKinematics
+from .scene import scene_defaults
 from .layout import DEFAULT_CUBE_X_RANGE, DEFAULT_CUBE_Y_RANGE, draw_cube_xy
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -357,9 +358,17 @@ class SO101IsaacEnv:
 
         self.kin = self._build_kinematics_oracle()
         # Display/telemetry mirror for `physai.web.Host` (`--serve`): never
-        # simulated, only refreshed from Isaac's joint state by `observe()`.
+        # simulated, only refreshed from Isaac's joint state (and the cube's
+        # pose) by `observe()`. With a scene it holds the table, the cube and
+        # the target too, as the MuJoCo backend's model does.
         self.model = self.kin.model
         self.data = mujoco.MjData(self.model)
+        cube_joint = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_JOINT, "cube_free"
+        )
+        self._mirror_cube_qadr = (
+            int(self.model.jnt_qposadr[cube_joint]) if cube_joint >= 0 else None
+        )
 
         self.core = IsaacSimulationCore(
             control_hz=self.cfg.control_hz,
@@ -412,7 +421,19 @@ class SO101IsaacEnv:
         names match), only to reuse `ArmKinematics`'s existing FK/IK math
         instead of reimplementing it against USD/PhysX. Isaac's own physics
         (`self.articulation`, `self.core`) is what actually runs the robot.
+        With a scene the model is that scene's, built as `SO101Env` builds it,
+        so the viewer mirror shows the table, the cube and the target.
         """
+        if self.cfg.scene is not None:
+            defaults = scene_defaults()
+            missing = {
+                key: value
+                for key, value in defaults.items()
+                if getattr(self.cfg.scene, key) is None
+            }
+            scene = replace(self.cfg.scene, **missing) if missing else self.cfg.scene
+            model, _ = scene.build_model()
+            return ArmKinematics(model)
         mjcf_path = self.cfg.assets_root / self.description.mjcf
         model = mujoco.MjModel.from_xml_path(str(mjcf_path))
         return ArmKinematics(model)
@@ -740,6 +761,11 @@ class SO101IsaacEnv:
             joint_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, name)
             if joint_id >= 0:
                 self.data.qpos[self.model.jnt_qposadr[joint_id]] = value
+        if self._mirror_cube_qadr is not None and self._cube_body is not None:
+            positions, orientations = self._cube_body.get_world_poses()
+            start = self._mirror_cube_qadr
+            self.data.qpos[start : start + 3] = np.asarray(positions)[0]
+            self.data.qpos[start + 3 : start + 7] = np.asarray(orientations)[0]
         self.data.time = self.step_count * self.core.control_dt
         mujoco.mj_kinematics(self.model, self.data)
 
