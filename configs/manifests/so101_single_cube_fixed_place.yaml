@@ -1,12 +1,10 @@
 # The minimal single-cube pick-and-place session for the SO-101.
-# Run it with: python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml
-# (this replaces configs/tasks/so101/pick_place.yaml).
+# Run it with: python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml
+# (this replaces configs/tasks/so101/single_cube_fixed_place.yaml).
 schema_version: 1
 
-backend: direct
-
 scene:
-  name: pick_place_minimal
+  name: single_cube_fixed_place
   overrides:
     robot_xml: assets/so101/so101_new_calib_camera.xml
     timestep: 0.002
@@ -20,7 +18,7 @@ scene:
     cube_mass: 0.03
     cube_rgba: [0.85, 0.25, 0.2, 1.0]
 
-task: pick_place
+task: single_cube_fixed_place
 task_kwargs:
   success_xy_tol: 0.04
 success_hold_steps: 10

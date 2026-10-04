@@ -113,8 +113,8 @@ class _ROS2RobotAdapter:
         self._transport.close()
 
 
-class ROS2MuJoCoAdapter(_ROS2RobotAdapter):
-    """Expose a synchronous MuJoCo port through an injected ROS2 transport."""
+class ROS2SimAdapter(_ROS2RobotAdapter):
+    """Expose a synchronous simulator port through an injected ROS2 transport."""
 
 
 class ROS2HardwareAdapter(_ROS2RobotAdapter):

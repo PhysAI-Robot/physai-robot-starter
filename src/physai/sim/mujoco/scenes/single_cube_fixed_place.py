@@ -11,7 +11,7 @@ from .common import ManipulationSceneConfig, add_cube, build_manipulation_spec
 
 
 @dataclass
-class PickPlaceMinimalSceneConfig(ManipulationSceneConfig):
+class SingleCubeFixedPlaceSceneConfig(ManipulationSceneConfig):
     layout_kind: ClassVar[str] = "single_cube"
     cube_names: tuple[str, ...] = ("cube",)
     cube_half: float = 0.014

@@ -16,7 +16,7 @@ from physai.config import DomainRandomizationConfig
 from physai.policy import create_policy
 from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
-from physai.sim import PickPlaceMinimalSceneConfig
+from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
 from physai.tasks import TaskRuntime, create_task
 
 # Registers so101's "scripted" policy with the robot registry.
@@ -33,17 +33,13 @@ def evaluate_mode(args: argparse.Namespace, randomized: bool) -> dict:
     robot = create_robot(
         "so101",
         config=EnvConfig(
-            scene=PickPlaceMinimalSceneConfig(
-                camera_width=128,
-                camera_height=128,
-                clutter_count=args.clutter_count,
-            ),
+            scene=SingleCubeFixedPlaceSceneConfig(clutter_count=args.clutter_count),
             max_steps=args.max_steps,
             render=False,
             domain_randomization=config,
         ),
     )
-    env = TaskRuntime(robot, create_task("pick_place"))
+    env = TaskRuntime(robot, create_task("single_cube_fixed_place"))
     policy = create_policy("scripted", env=env)
     results = []
     try:

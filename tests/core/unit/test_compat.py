@@ -2,7 +2,7 @@ from dataclasses import fields, replace
 
 import pytest
 import yaml
-from conftest import requires_assets
+from tests.conftest import requires_assets
 
 from physai.config import SimulationConfig
 from physai.config.compat import (
@@ -13,7 +13,7 @@ from physai.config.compat import (
 )
 
 SIMULATION = SimulationConfig(seed=3)
-TASK_FILE = "configs/tasks/so101/pick_place.yaml"
+TASK_FILE = "configs/tasks/so101/single_cube_fixed_place.yaml"
 WORLD_FILE = "configs/worlds/heterogeneous.yaml"
 
 
@@ -31,8 +31,8 @@ def test_a_task_file_becomes_a_one_robot_manifest(tmp_path):
 
     (robot,) = manifest.robots
     assert (robot.id, robot.robot) == ("so101", "so101")
-    assert manifest.task == "pick_place"
-    assert manifest.scene.name == "pick_place_minimal"
+    assert manifest.task == "single_cube_fixed_place"
+    assert manifest.scene.name == "single_cube_fixed_place"
     assert manifest.success_hold_steps == 10
     assert manifest.task_kwargs == {"success_xy_tol": 0.04}
     assert robot.config["cameras"] == ("front", "wrist")
@@ -70,22 +70,39 @@ def test_a_world_file_becomes_a_shared_world_manifest():
 
 def test_a_bare_robot_gets_its_defaults_and_command_line_overrides():
     arm = manifest_for_robot("so101", simulation=SIMULATION)
-    assert arm.task == "pick_place"
-    assert arm.scene.overrides == {"camera_width": 640, "camera_height": 480}
+    assert arm.task == "single_cube_fixed_place"
+    assert arm.scene.overrides == {}
     assert arm.robots[0].config == {"max_steps": 600}
 
     base = manifest_for_robot("turtlebot4", simulation=SIMULATION)
     assert base.task is None
     assert base.scene.overrides == {}
 
-    changed = with_overrides(
-        arm, seed=9, max_steps=50, camera_size=128, policy="constant"
-    )
+    changed = with_overrides(arm, seed=9, max_steps=50, policy="constant")
     assert changed.simulation.seed == 9
     assert changed.robots[0].config["max_steps"] == 50
     assert changed.robots[0].policy == "constant"
-    assert changed.scene.overrides == {"camera_width": 128, "camera_height": 128}
     assert with_overrides(arm) == arm
+
+    assert arm.simulation.camera_resolution == "320x240"
+    hd = with_overrides(arm, camera_resolution="1280x720")
+    assert hd.simulation.camera_resolution == "1280x720"
+    with pytest.raises(ValueError, match="unsupported camera resolution"):
+        with_overrides(arm, camera_resolution="64x64")
+
+    assert with_overrides(arm, simulator="isaac").simulator == "isaac"
+    with pytest.raises(ValueError, match="does not support simulator"):
+        with_overrides(base, simulator="isaac")  # turtlebot4: mujoco only
+
+
+def test_with_overrides_revalidates_a_simulator_override(tmp_path):
+    """A bare `dataclasses.replace()` would not re-check `--sim` against a
+    shared world; `with_overrides` must, the same way `parse_manifest` does
+    at load time (see `physai.config.manifest.validate_manifest`).
+    """
+    world = manifest_from_world_file(WORLD_FILE, simulation=SIMULATION)
+    with pytest.raises(ValueError, match="does not support a"):
+        with_overrides(world, simulator="isaac")
 
 
 @requires_assets
@@ -125,9 +142,9 @@ def test_the_shipped_manifests_match_the_legacy_files_they_replace():
     # The run decides rendering (--video, --serve), so the manifest omits it.
     (robot,) = task.robots
     config = {k: v for k, v in robot.config.items() if k != "render"}
-    assert load_manifest("configs/manifests/so101_pick_place.yaml") == replace(
-        task, robots=(replace(robot, config=config),)
-    )
+    assert load_manifest(
+        "configs/manifests/so101_single_cube_fixed_place.yaml"
+    ) == replace(task, robots=(replace(robot, config=config),))
 
     world = manifest_from_world_file(WORLD_FILE, simulation=SimulationConfig())
     shipped = load_manifest("configs/manifests/heterogeneous_world.yaml")

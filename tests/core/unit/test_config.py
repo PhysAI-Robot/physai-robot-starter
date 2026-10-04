@@ -6,14 +6,16 @@ ROOT = Path(__file__).resolve().parents[3]
 def test_the_legacy_loaders_still_read_the_shipped_files():
     from physai.config import load_sim_config, load_task_config, load_world_config
     from physai.robots.so101 import EnvConfig
-    from physai.sim import PickPlaceMinimalSceneConfig
+    from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
 
-    task = load_task_config(ROOT / "configs" / "tasks" / "so101" / "pick_place.yaml")
+    task = load_task_config(
+        ROOT / "configs" / "tasks" / "so101" / "single_cube_fixed_place.yaml"
+    )
     assert task.robot == "so101"
-    assert task.task == "pick_place"
-    assert task.scene_name == "pick_place_minimal"
+    assert task.task == "single_cube_fixed_place"
+    assert task.scene_name == "single_cube_fixed_place"
     assert isinstance(task.env, EnvConfig)
-    assert isinstance(task.env.scene, PickPlaceMinimalSceneConfig)
+    assert isinstance(task.env.scene, SingleCubeFixedPlaceSceneConfig)
     assert task.env.scene.cube_names == ("cube",)
     assert task.env.max_steps == 400
 

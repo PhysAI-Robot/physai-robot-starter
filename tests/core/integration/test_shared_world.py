@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from physai.robots import shared_attach
-from physai.sim import RobotInstanceConfig, SharedWorld
+from physai.sim.mujoco import RobotInstanceConfig, SharedWorld
 from physai.web.telemetry import build_scene_manifest
 
 ROOT = Path(__file__).resolve().parents[3]

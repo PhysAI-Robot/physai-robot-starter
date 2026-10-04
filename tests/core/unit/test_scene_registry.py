@@ -5,16 +5,18 @@ from tests.core.support.fakes import FakeRobotPort
 
 
 def test_builtin_scene_registry_returns_typed_configs():
-    from physai.sim import (
-        PickPlaceMinimalSceneConfig,
+    from physai.sim.mujoco import (
+        SingleCubeFixedPlaceSceneConfig,
         SortingMinimalSceneConfig,
         WorldSceneConfig,
         create_scene,
     )
-    from physai.sim.scenes import available_scenes
+    from physai.sim.mujoco.scenes import available_scenes
 
-    assert {"pick_place_minimal", "sorting_minimal"} <= set(available_scenes())
-    assert isinstance(create_scene("pick_place_minimal"), PickPlaceMinimalSceneConfig)
+    assert {"single_cube_fixed_place", "sorting_minimal"} <= set(available_scenes())
+    assert isinstance(
+        create_scene("single_cube_fixed_place"), SingleCubeFixedPlaceSceneConfig
+    )
     assert isinstance(create_scene("sorting_minimal"), SortingMinimalSceneConfig)
     assert not hasattr(WorldSceneConfig(), "static_pad_body")
 
@@ -39,7 +41,7 @@ def test_runtime_rejects_task_scene_mismatch(monkeypatch):
         composition.create_runtime(
             "so101",
             scene_name="sorting_minimal",
-            task_name="pick_place",
+            task_name="single_cube_fixed_place",
         )
     assert fake.closed
 
@@ -77,12 +79,15 @@ def test_scenes_name_their_layout_and_reject_an_unknown_one():
     import pytest
 
     from physai.robots.so101.layout import create_layout
-    from physai.sim import PickPlaceMinimalSceneConfig, SortingMinimalSceneConfig
+    from physai.sim.mujoco import (
+        SingleCubeFixedPlaceSceneConfig,
+        SortingMinimalSceneConfig,
+    )
 
-    assert PickPlaceMinimalSceneConfig.layout_kind == "single_cube"
+    assert SingleCubeFixedPlaceSceneConfig.layout_kind == "single_cube"
     assert SortingMinimalSceneConfig.layout_kind == "sorting"
     # a class-level hint, not a field, so dataset metadata is unchanged
-    assert "layout_kind" not in PickPlaceMinimalSceneConfig().to_metadata()
+    assert "layout_kind" not in SingleCubeFixedPlaceSceneConfig().to_metadata()
     with pytest.raises(ValueError, match="supports: single_cube, sorting"):
         create_layout(None, SimpleNamespace(layout_kind="stacking"))
 
@@ -91,10 +96,14 @@ def test_the_robot_supplies_the_grasp_pad_fit_a_generic_scene_lacks():
     import pytest
 
     from physai.robots.registry import scene_defaults
-    from physai.sim import PickPlaceMinimalSceneConfig
+    from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
 
-    with pytest.raises(ValueError, match="pad_size.*wrist_cam_pos"):
-        PickPlaceMinimalSceneConfig().build_spec()
+    with pytest.raises(ValueError, match="description"):
+        SingleCubeFixedPlaceSceneConfig().build_spec()
     defaults = scene_defaults("so101")
-    assert defaults["pad_align_gripper_q"] == 0.16
-    assert len(defaults["wrist_cam_xyaxes"]) == 6
+    description = defaults["description"]
+    assert description.derivation["pad_align_gripper_q"] == 0.16
+    assert {pad.name for pad in description.contact_pads} == {
+        "pad_static",
+        "pad_moving",
+    }

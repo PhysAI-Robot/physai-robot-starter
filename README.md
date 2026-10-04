@@ -38,16 +38,20 @@ root:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync --extra web --extra training
+uv sync --extra training
 ```
 
-The base install contains MuJoCo, NumPy, image/video support, and YAML
-configuration; `web` adds the browser viewer and `training` the Gymnasium
-bridge. ROS2, VLM, and VLA dependencies are separate (`--extra vla` for
-ACT/LeRobot). To run the test suite:
+The base install contains MuJoCo, NumPy, image/video support, YAML
+configuration, the browser viewer (FastAPI/uvicorn, `--serve`), and the
+dev/test tooling (pytest, ruff, import-linter) — this is a starter repo you
+work in directly, not a library, so there is no reason to make any of that
+optional. `training` (Gymnasium) and `isaac` (see
+[Isaac Sim](#isaac-sim-optional-local-gpu-only) below) are this project's
+two real extras, and combine with each other freely. ROS2 and VLA
+dependencies are separate too (`--extra vla` for ACT/LeRobot). To run the
+test suite:
 
 ```bash
-uv sync --extra dev --extra web --extra training
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 ```
 
@@ -62,11 +66,12 @@ uv run python scripts/run_sim.py
 
 It runs headlessly and writes evaluation output to `outputs/`; add `--video`
 to record the episode. A run is described by a session manifest
-(`--manifest configs/manifests/so101_pick_place.yaml` is the checked-in task;
+(`--manifest configs/manifests/so101_single_cube_fixed_place.yaml` is the checked-in task;
 its `simulation` block holds the seed and the domain-randomization switch,
-which stays off for the deterministic baseline), and `--seed`, `--max-steps`,
-and `--camera-size` override it. Image-conditioned policies need a square
-`--camera-size` matching their training resolution, such as `128` or `224`.
+which stays off for the deterministic baseline), and `--seed` and
+`--max-steps` override it. Camera resolution is not a setting: every
+simulator, script, and test renders at `physai.contracts.CAMERA_SIZE`
+(320 x 240), so results stay comparable.
 
 ### Interactive viewer
 
@@ -149,7 +154,7 @@ Inspection helpers:
 uv run python scripts/workspace_map.py
 uv run python scripts/show_ros2_contract.py
 uv run python scripts/teleop_keyboard.py
-uv run python scripts/export_scene.py --out outputs/scene_pick_place.xml
+uv run python scripts/export_scene.py --out outputs/scene_single_cube_fixed_place.xml
 uv run python scripts/render_docs_media.py --only so101
 ```
 
@@ -183,6 +188,44 @@ commands in, shared safety gate). The real `rclpy` nodes add TF and CameraInfo
 for SO-101 and odometry, scans, and TF for TurtleBot4; the acceptance paths are
 in the robot runbooks.
 
+## Isaac Sim (optional, local GPU only)
+
+A second backend for measuring a MuJoCo-tuned policy's sim-to-sim gap.
+Verified end to end against real Isaac Sim 6.1.0.0 on an RTX 3060, and
+installs straight into this project's own `.venv` — no separate
+environment (see [ADR 16](docs/adr/0016-isaacsim-as-a-project-extra.md)):
+
+```bash
+uv sync --extra isaac --extra training
+OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/run_sim.py --sim isaac --manifest configs/manifests/so101_isaac.yaml
+```
+
+`OMNI_KIT_ACCEPT_EULA=YES` accepts the NVIDIA Omniverse EULA
+non-interactively — set it yourself; nothing here does it for you. Select
+Isaac the same way from a manifest's `simulator: isaac` field (see
+`configs/manifests/so101_isaac.yaml`) or `create_robot(..., simulator=
+"isaac")` in Python.
+
+The Isaac env builds the same scene as MuJoCo from the shared scene
+config, so one manifest runs on both engines:
+
+```bash
+OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --sim isaac --policy visual_servo --video
+OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/eval_policy.py --sim isaac --policy visual_servo --episodes 100 --json-out outputs/isaac.json
+uv run python scripts/compare_evaluations.py outputs/mujoco.json outputs/isaac.json
+```
+
+Isaac supports single-cube scenes with a fixed target, no domain
+randomization beyond a lighting scale and a camera position jitter, and only observation-based policies (`visual_servo`,
+`constant`); `--viewer` stays MuJoCo-only (`--serve` opens the web viewer
+with a mirrored arm; see [ADR 15](docs/adr/0015-simulator-engine-selection.md)).
+Each Isaac run must be a separate process, and `pytest -m isaac` is run one
+test file at a time. Isaac sometimes starts without drawing the robot, which
+blinds camera policies; the env detects it (`robot_is_rendered()`) and stops
+with a clear error, so run long evaluations in shards of ten seeds and repeat
+one that aborts (`scripts/report_evaluation.py` merges the shard JSONs).
+`scripts/compare_cameras.py` compares what the two simulators' cameras see.
+
 ## Python API
 
 `physai.runtime.create_runtime` composes a registered robot, task, policy, and
@@ -191,7 +234,7 @@ safety boundary:
 ```python
 from physai.runtime import create_runtime
 
-runtime = create_runtime("so101", task_name="pick_place")
+runtime = create_runtime("so101", task_name="single_cube_fixed_place")
 observation = runtime.reset(seed=0)
 try:
     ...  # pass actions from a policy or resolver here

@@ -28,7 +28,7 @@ jobs:
           enable-cache: true
 
       - name: Install formatting dependencies
-        run: uv sync --locked --extra dev
+        run: uv sync --locked
 
       - name: Check Python formatting
         run: uv run ruff format --check --exclude .venv --exclude venv
@@ -73,7 +73,7 @@ jobs:
           uv run python scripts/fetch_assets.py --robot turtlebot4
 
       - name: Install project and test dependencies
-        run: uv sync --locked --extra dev --extra web --extra training
+        run: uv sync --locked --extra training
 
       - name: Run core test suite
         run: |
@@ -127,7 +127,7 @@ jobs:
         run: uv run python scripts/fetch_assets.py --robot so101
 
       - name: Install project and test dependencies
-        run: uv sync --locked --extra dev --extra web --extra training
+        run: uv sync --locked --extra training
 
       - name: Run research test suite
         run: |

@@ -12,16 +12,23 @@ from .env import TurtleBot4Config, TurtleBot4Env
 def make_turtlebot4(
     config: TurtleBot4Config | None = None,
     *,
-    adapter: str = "direct_mujoco",
+    adapter: str = "direct",
+    simulator: str = "mujoco",
     transport: Any = None,
     hardware: RobotPort | None = None,
     codec: Any = None,
     **kwargs: Any,
 ) -> RobotPort:
-    """Build TurtleBot4 through the selected robot port adapter."""
-    if adapter == "ros2_hardware":
+    """Build TurtleBot4 through the selected robot port adapter.
+
+    `simulator` is accepted (not just ignored) because the registry always
+    passes it; `RobotDescriptor.simulators` defaults to `("mujoco",)` for
+    TurtleBot4, so it is already validated to be `"mujoco"` by the time it
+    gets here — there is no second engine for it to pick between yet.
+    """
+    if adapter == "ros2_real":
         raise ValueError(
-            "adapter='ros2_hardware' is not supported for turtlebot4; "
+            "adapter='ros2_real' is not supported for turtlebot4; "
             "the hardware-specific mobile-base adapter is not implemented"
         )
     if config is not None and kwargs:

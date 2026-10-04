@@ -45,7 +45,7 @@ backends, and three paths use them:
 
 ```text
 Fast development:        Planner/Policy -> direct RobotPort -> MuJoCo
-Integration validation:  Planner/Policy node -> ROS2 topics -> ROS2MuJoCoAdapter -> MuJoCo
+Integration validation:  Planner/Policy node -> ROS2 topics -> ROS2SimAdapter -> MuJoCo
 Real deployment:         Planner/Policy node -> ROS2 topics -> ROS2HardwareAdapter -> hardware
 ```
 
@@ -54,15 +54,20 @@ joint-order, and rate contracts so a policy node moves from simulation to
 hardware unchanged. Direct MuJoCo is the fast path for unit tests, training,
 and regression; it does not replace ROS2 integration validation.
 
-`RobotPort` has three adapters: `DirectMuJoCoAdapter` and `ROS2MuJoCoAdapter`
-are implemented, and `ROS2HardwareAdapter` is a contract-only placeholder
-(simulation only for now, per [ROADMAP.md](../ROADMAP.md)). Adapters are
-generic at the port level and receive an embodiment-specific mapping.
-Backends are registry-driven (`robots.registry.register_adapter()`/
-`create_adapter()`; `select_adapter()` is the thin wrapper robot factories
-call), so a new backend is additive. The direct adapter keeps a synchronous
-`reset`/`step`; the ROS2 adapters may use callbacks and queues internally but
-translate to the same `Observation` and `Action` at the boundary.
+`RobotPort` has three transport adapters, named after the manifest's own
+`backend` field: `DirectAdapter` (`direct`) and `ROS2SimAdapter` (`ros2_sim`)
+are implemented, and `ROS2HardwareAdapter` (`ros2_real`) is a contract-only
+placeholder (simulation only for now, per [ROADMAP.md](../ROADMAP.md)).
+None of the three is simulator-specific — `DirectAdapter` and `ROS2SimAdapter`
+wrap whichever `RobotPort` a robot factory built (MuJoCo- or Isaac-backed);
+the transport (direct vs. ROS2) and the simulator engine (MuJoCo vs. Isaac)
+are independent axes, not one choice. Adapters are generic at the port level
+and receive an embodiment-specific mapping. Transports are registry-driven
+(`robots.registry.register_adapter()`/`create_adapter()`; `select_adapter()`
+is the thin wrapper robot factories call), so a new transport is additive.
+The direct adapter keeps a synchronous `reset`/`step`; the ROS2 adapters may
+use callbacks and queues internally but translate to the same `Observation`
+and `Action` at the boundary.
 
 | Mode | Primary value | Residual risk |
 | --- | --- | --- |
@@ -78,7 +83,9 @@ translate to the same `Observation` and `Action` at the boundary.
 | `physai.config` | Typed YAML configuration parsing (`legacy`: per-robot/per-world loaders; `manifest`: the session manifest), delegated to robot-owned config factories and the registries | Simulation behavior, robot construction, or task evaluation |
 | `physai.robots` | Embodiment discovery, `RobotSpec`, robot ports, factories, environments, robot-specific adapters, backend registry (`adapters.py`), and shared-world instance/attach factories | Task reward, planner decisions, or model SDKs |
 | `physai.tasks` | Task state, reset rules, reward, metrics, and termination | Robot internals or action generation |
-| `physai.sim` | MuJoCo simulation core, generic scene primitives, task-specific scene builders, the shared multi-robot world, rendering, and simulation time | Robot-specific environment logic, ROS2 transport, QoS, callbacks, or any robot-name branch (`SharedWorld` takes an optional `shared_attach` hook instead) |
+| `physai.sim` | Nothing itself — a namespace over one subpackage per simulator engine | Any code; importing `physai.sim` alone must never require an engine SDK |
+| `physai.sim.mujoco` | MuJoCo simulation core, generic scene primitives, task-specific scene builders, the shared multi-robot world, rendering, and simulation time | Robot-specific environment logic, ROS2 transport, QoS, callbacks, or any robot-name branch (`SharedWorld` takes an optional `shared_attach` hook instead) |
+| `physai.sim.isaac` | Isaac Sim's `SimulationApp` lifecycle, applying a `RobotDescription` to a USD stage (frames, cameras, contact-pad friction, actuator gains), and generic world extras (lighting, ground plane) — the Isaac analogue of `physai.sim.mujoco` | Robot-specific environment logic or task/scene composition (see `robots.so101.isaac_env`, the only other module allowed to import Isaac Sim); importing `physai.sim.mujoco` |
 | `physai.planner` | Instruction and image grounding, `Plan`, `SubGoal` production, and the planner registry | Control-rate motor commands; research planners |
 | `physai.policy` | Control-rate `Action` production, core baseline policies (`constant`, `constant_twist`, `replay`), and the policy registry | Task scoring, robot discovery, or checkpoint-backed inference |
 | `physai.control` | Action resolution, capability checks, and rate limiting | High-level planning or task semantics |
@@ -98,11 +105,14 @@ src/physai/
 ├── contracts.py       shared message-shaped values
 ├── config/            typed YAML runtime configuration (legacy.py, manifest.py)
 ├── robots/            embodiment ports, adapters, registries, and factories
-│   ├── so101/         SO-101 environment, object layouts, kinematics, and shared-world adapter
+│   ├── description.py sim-neutral RobotDescription schema + YAML loader
+│   ├── so101/         SO-101 environment (mujoco_env.py, isaac_env.py), object layouts, kinematics, shared-world adapter
 │   └── turtlebot/     TurtleBot4 environment and shared-world adapter
 ├── tasks/             task rules and registry
-├── sim/               MuJoCo simulation core, shared world, and scene orchestration
-│   └── scenes/        shared world builder and task-specific scene variants
+├── sim/               simulator backends, one subpackage per engine (no code of its own)
+│   ├── mujoco/        MuJoCo simulation core, shared world, and scene orchestration
+│   │   └── scenes/    shared world builder and task-specific scene variants
+│   └── isaac/         Isaac Sim core, RobotDescription -> USD, generic world extras (optional backend)
 ├── planner/           Planner contract, ScriptedPlanner baseline, and registry
 ├── policy/            Policy contract, core baselines, and registry
 ├── control/           action resolution and rate limiting
@@ -122,16 +132,19 @@ research/
 
 ## Dependency direction
 
-These four rules are enforced by `uv run lint-imports`
+These rules are enforced by `uv run lint-imports`
 (`pyproject.toml`'s `[tool.importlinter]`) and run inside the normal test
 suite via `tests/core/boundaries/test_import_boundaries.py`, so a violation
 fails `pytest tests/ -q` the same way a failing unit test would.
 
 | Rule | Rationale |
 | --- | --- |
-| `physai.sim` must not import `physai.bridge` or `rclpy` | Keeps ROS2 optional for fast, deterministic MuJoCo-only workflows |
+| `physai.sim` (and its `mujoco`/`isaac` subpackages) must not import `physai.bridge` or `rclpy` | Keeps ROS2 optional for fast, deterministic simulator-only workflows |
 | `physai.policy`, `physai.tasks`, `physai.planner` must not import `mujoco` | Policy/task/planner code depends on ports (`RobotPort`, `RobotSpec`), never on MuJoCo types. One accepted, documented indirect path exists: `policy.registry` calls `robots.registry.create_robot_policy()` to build a robot-owned policy without importing the robot itself; `robots.registry`'s own lazily loaded robot implementations are what actually touch MuJoCo, and policy never inspects the returned object's type. |
 | `physai` (core) must not import `research` | Research plugs in by registering itself into a core registry on import; core never reaches back into it. See [Research boundary](#research-boundary). |
+| `physai.robots.description` must not import `mujoco` | The sim-neutral `RobotDescription` schema is read by every simulator's builder; a MuJoCo import here would mean it secretly assumed one simulator. |
+| Only `physai.sim.isaac` and `physai.robots.so101.isaac_env` may import `isaacsim`, `omni`, or `pxr` | Isaac Sim is an optional, GPU-only backend (`uv sync --extra isaac`, see `docs/adr/0016-isaacsim-as-a-project-extra.md`); every other module reaches it only through the `RobotPort`/`RobotSpec` ports, the way it reaches MuJoCo only through `physai.sim.mujoco`. |
+| `physai.sim.mujoco` and `physai.sim.isaac` must not import each other, and `physai.sim.isaac` must not import `mujoco` | Peer engine backends under `physai.sim`; a robot that needs both (e.g. so101) depends on each separately rather than one backend leaking into the other. |
 | A robot-name branch in generic code is a bug | `SharedWorld`, `web.host.Host`, and the web static client must resolve behavior through `RobotSpec` capabilities or a registry lookup, never `if robot_name == "..."`. Not import-linter-checked (it is a code-shape rule, not an import-graph rule); enforced by review. |
 
 ## Design patterns in use
@@ -155,8 +168,10 @@ fails `pytest tests/ -q` the same way a failing unit test would.
 - **Safety Gate:** `SafetyController` validates action mode, joint order,
   finite values, timestamps, joint limits, and per-joint step limits
   immediately before a robot port receives a command. It lives inside the
-  adapters (`DirectMuJoCoAdapter`, `MuJoCoROSBridge`, the Gymnasium adapter),
-  so no workflow reaches the robot unchecked. `RobotSpec.max_joint_delta`
+  adapters (`DirectAdapter`, `MuJoCoROSBridge`, the Gymnasium adapter),
+  so no workflow reaches the robot unchecked. A refused action raises
+  `SafetyViolation` (a `ValueError`), which an evaluation records as an
+  unsafe action instead of aborting. `RobotSpec.max_joint_delta`
   bounds a command against the *measured* position and must stay above
   `JointRateLimiter`'s command-to-command clamp, or normal servo lag trips the
   gate.
@@ -171,14 +186,15 @@ Every seam is one new file plus one registration call, except where noted.
 | Seam | New file | Registration |
 | --- | --- | --- |
 | Robot | `robots/<name>/` package | One `RobotDescriptor` + `register_embodiment(name, descriptor)` in `robots/registry.py:_load_builtins()` |
-| Scene | `sim/scenes/<name>.py` | `register_scene(name, SceneDefinition(...))` in `sim/scenes/registry.py:_load_builtins()` |
+| Scene | `sim/mujoco/scenes/<name>.py` | `register_scene(name, SceneDefinition(...))` in `sim/mujoco/scenes/registry.py:_load_builtins()` |
 | Task | `tasks/<name>.py` | `register_task(name, factory)` in `tasks/registry.py:_load_builtins()` |
 | Policy (core baseline) | `policy/<name>.py` | `register_policy(name, factory)` in `policy/registry.py:_load_builtins()` |
 | Policy (robot-owned) | `robots/<robot>/<name>.py` or `research/<topic>/<name>.py` | `register_robot_policy(robot_name, policy_name, factory)`, called by the module itself if it lives in `research/` |
 | Policy (research, global) | `research/<topic>/<name>.py` | `register_policy(name, factory)`, called by the module itself on import |
 | Planner (core baseline) | `planner/base.py` | `register_planner(name, factory)` in `planner/registry.py:_load_builtins()` |
 | Planner (research) | `research/<topic>/<name>.py` | `register_planner(name, factory)`, called by the module itself on import |
-| Backend | `robots/adapters.py` (a new builder function) | `register_adapter(name, builder)` in `robots/adapters.py:_load_builtins()` |
+| Transport adapter | `robots/adapters.py` (a new builder function) | `register_adapter(name, builder)` in `robots/adapters.py:_load_builtins()` |
+| Simulator engine | `sim/<engine>/` package (mirrors `sim/mujoco/`) | Add the engine to a `RobotDescriptor.simulators` tuple in `robots/registry.py:_load_builtins()`; the robot's own factory branches on `simulator=` to build the right port (see `robots/so101/factory.py`), and its `env_config` factory branches the same way if it needs a second config type. See [ADR 15](adr/0015-simulator-engine-selection.md). |
 | Client capability control | `web/static/js/controls.js` / `ui.js` | None — capabilities are declarative data (`RobotSpec.action_modes`/`capabilities`), rendered conditionally; this is a UI branch on data, not a registry |
 
 Robot registration touches one function in one file (`_load_builtins()`),
@@ -194,7 +210,7 @@ navigation, shared-world attach/instance) supplies up to six fields on one
 | Ports | `robots/base.py` (`RobotPort`, `RobotSpec`, `RobotTrainingContract`, `KinematicsPort`); `policy/base.py` (`Policy`); `tasks/base.py` (`Task`); `planner/base.py` (`Planner`, `Plan`/`SubGoal`) | Concrete implementations of each ABC |
 | Manifest schema | `SessionManifest`'s field names/types/validation rules (see [Session manifest](#session-manifest)) once a session depends on them | Which YAML files exist under `configs/` |
 | Host API | The method surface in [Host + client API](#host--client-api) | `Host`'s internal threading model, camera cadence, lease timeout |
-| Folder tree | Top-level package boundaries (`robots/`, `policy/`, `tasks/`, `planner/`, `sim/`, `web/`, `runtime/`, `research/`) and the rule that core never imports `research/` | Internal file layout inside one robot's package or one research topic |
+| Folder tree | Top-level package boundaries (`robots/`, `policy/`, `tasks/`, `planner/`, `sim/`, `web/`, `runtime/`, `research/`), `sim/`'s one-subpackage-per-engine shape (`sim/mujoco/`, `sim/isaac/`; see [ADR 14](adr/0014-simulator-package-layout.md)), and the rule that core never imports `research/` | Internal file layout inside one robot's package, one research topic, or one simulator backend |
 | Registries | The register/create pattern itself | Which specific factories are registered, and in what order |
 
 Evolution rule: a frozen item changes only via (1) an ADR under `docs/adr/`,
@@ -209,6 +225,13 @@ end-effector pose, step count, and simulation time. `Action` carries either
 joint targets or a Cartesian/base `Twist`, plus a normalized gripper command;
 the robot's capabilities decide which is valid, and an action never carries
 both modes.
+
+The SO-101's camera resolution is one contract constant,
+`physai.contracts.CAMERA_SIZE` (320 x 240, 4:3). Both simulators' scene
+configs, the Isaac env, the web host, the training contract, scripts, and
+tests all read it; none takes a size argument or flag, so results from
+different simulators or runs always see the same image. The robot
+description's camera entries are data and a test keeps them equal to it.
 
 `RobotSpec` describes an embodiment without exposing simulator or hardware
 API: joint names, action modes, observation modalities, named capabilities,
@@ -255,15 +278,15 @@ composition, and a scene's embodiment defaults come from the robot's
 Scene geometry is split by task while robot and workspace components are shared:
 
 ```text
-sim/scenes/common.py
+sim/mujoco/scenes/common.py
      +-- WorldSceneConfig: generic model, workspace, and camera settings
      +-- ManipulationSceneConfig: configurable end-effector and pad attachments
      +-- shared manipulation-world builder
 
-sim/scenes/pick_place_minimal.py
+sim/mujoco/scenes/single_cube_fixed_place.py
      +-- one cube and one target layout
 
-sim/scenes/sorting_minimal.py
+sim/mujoco/scenes/sorting_minimal.py
      +-- colored cube layout and sorting positions
 ```
 
@@ -290,10 +313,11 @@ list and validation rules are in that module's docstring) and
 schema_version: 1
 simulation: {seed: 0}            # the one source of seed and randomization
 scene:
-  name: pick_place_minimal
-  overrides: {camera_width: 640}  # scene fields, including robot_xml
+  name: single_cube_fixed_place
+  overrides: {target_radius: 0.04}  # scene fields, including robot_xml
+simulator: mujoco                # optional; default mujoco. See below.
 backend: direct                  # direct | ros2_sim | ros2_real
-task: pick_place                 # optional session-wide default
+task: single_cube_fixed_place                 # optional session-wide default
 success_hold_steps: 10
 robots:
   - id: arm_1
@@ -312,6 +336,19 @@ a `create_runtime()` composition, a `world` becomes a `SharedWorld` (whose
 robots run no task or policy yet). It injects the `simulation` seed and
 randomization into any robot config that declares those fields and rejects a
 robot config that repeats them.
+
+`simulator` (default `"mujoco"`) picks the physics engine every robot in the
+session is built with (`robots.registry.available_simulators()` per robot;
+`RobotDescriptor.simulators` is where a robot declares which ones it
+supports — so101 is the only one with more than one today). A robot's own
+`config` must not repeat it, the same way it must not repeat `simulation`'s
+fields. A non-`"mujoco"` engine rejects a `world` block (or more than one
+robot, which implies one), `backend: ros2_sim`, and any `viewer.mode` other
+than `none` — see [ADR 15](adr/0015-simulator-engine-selection.md) and
+`configs/manifests/so101_isaac.yaml` for a working example.
+`scripts/run_sim.py --sim {mujoco,isaac}` overrides it from the command line
+(`physai.config.compat.with_overrides`, which re-runs this same validation
+since a bare field replace would skip it).
 
 `scripts/run_sim.py` builds every run this way. Its older `--config` (task
 file), `--world` (world file), and bare `--robot` inputs are converted by
@@ -394,10 +431,10 @@ Both clients depend only on this API plus `RobotSpec` capabilities:
   for keyboard mapping, cloud-workspace setup, and troubleshooting.
 
 Shared-world instances are built through the robot registry
-(`robots.registry.create_shared_instance()`); `web/host.py` and `sim/world.py`
-never branch on a robot name, and `SharedWorld` takes an optional
-`shared_attach` hook so a robot can inject shared-world-only MJCF (for example
-SO-101's extra cameras).
+(`robots.registry.create_shared_instance()`); `web/host.py` and
+`sim/mujoco/world.py` never branch on a robot name, and `SharedWorld` takes an
+optional `shared_attach` hook so a robot can inject shared-world-only MJCF
+(for example SO-101's extra cameras).
 
 ## Capabilities and kinematics
 
@@ -454,18 +491,18 @@ isolated there instead of affecting core's job.
 ## Runtime compositions
 
 ```text
-so101 + pick_place + scripted, visual-servo, or Planner + PlanRunner + MuJoCo
+so101 + single_cube_fixed_place + scripted, visual-servo, or Planner + PlanRunner + MuJoCo
 turtlebot4 + generic smoke test + constant twist policy + MuJoCo
 ```
 
 `so101` and `turtlebot4` are registered embodiments, not names that belong in
-generic contracts. `pick_place` needs arm and gripper capabilities, so the
+generic contracts. `single_cube_fixed_place` needs arm and gripper capabilities, so the
 policy, demo, and planner workflows are SO-101-specific today. TurtleBot4
 (native model, differential drive, RPP navigation, ROS2/Nav2 acceptance path)
 shows the capability abstraction generalizes and is not a development focus
 ([ADR 5](adr/0005-turtlebot4-kept-as-second-embodiment.md)). The pick-place
-and sorting tasks are minimal baselines (`physai.tasks.pick_place_minimal`,
-`sorting_minimal`; registry keys `pick_place` and `sorting`).
+and sorting tasks are minimal baselines (`physai.tasks.single_cube_fixed_place`,
+`sorting_minimal`; registry keys `single_cube_fixed_place` and `sorting`).
 
 ## Model roles
 
@@ -516,7 +553,7 @@ message types, rates, and frames (it is not itself an adapter). The
 synchronous bridge core and the real `rclpy` nodes target ROS2 Jazzy on
 Ubuntu 24.04.
 
-Two interchangeable adapter roles sit behind it: `ROS2MuJoCoAdapter` (ROS2
+Two interchangeable adapter roles sit behind it: `ROS2SimAdapter` (ROS2
 topics -> MuJoCo control, publishing simulated state and camera frames) and
 `ROS2HardwareAdapter` (the same topics -> the embodiment's motor and camera
 interfaces). Each subscribes to the joint trajectory and gripper endpoints,
@@ -529,8 +566,9 @@ names, command freshness, and rate explicit; joint order and shape are
 validated at decode time against `RobotSpec`.
 
 `rclpy` is imported lazily inside each robot's `ros2_node.py`, which is how
-`physai.sim` stays free of it (enforced by import-linter) even though
-`robots.registry` imports those modules.
+`physai.sim` (and its `mujoco`/`isaac` subpackages) stays free of it
+(enforced by import-linter) even though `robots.registry` imports those
+modules.
 
 Before hardware deployment, pass in order: (1) direct-MuJoCo contract tests;
 (2) ROS2 MuJoCo integration tests on the hardware driver's topics and types;
@@ -558,8 +596,9 @@ meant to be the frozen reference:
   `RobotDescriptor.jog` and the Host asks the registry
   (`robots.registry.create_jog_resolver()`), so the Host no longer probes the
   robot. The jog math is shared (`robots/so101/jog.py`), but
-  `TwistToJointResolver` is still built separately in `robots/so101/env.py`,
-  `robots/so101/shared.py`, and `scripts/teleop_keyboard.py`.
+  `TwistToJointResolver` is still built separately in
+  `robots/so101/mujoco_env.py`, `robots/so101/shared.py`, and
+  `scripts/teleop_keyboard.py`.
 - **Host mode branching.** `Host` still branches on single-robot vs shared
   world in about a dozen places, because only a single robot runs a policy,
   records, or plays back. The branches go away when shared-world sessions gain
@@ -579,3 +618,24 @@ meant to be the frozen reference:
 - **Registry granularity.** Adding a robot is "one `RobotDescriptor` + one
   `register_embodiment()` call," not literally one line — a robot supplying
   every optional factory sets up to six fields on that one descriptor.
+- **Isaac Sim runs the single-cube pick-and-place scene, headless or with `--serve`.**
+  `IsaacEnvConfig.scene` takes the same scene config as MuJoCo (table, cube,
+  target, front camera, per-seed cube layout) and a `TaskRuntime` wraps the
+  env; no domain randomization beyond a lighting scale and a camera position
+  jitter, a fixed target, and only observation-based policies.
+  `--serve` drives `physai.web.Host` on the main thread (`Host.run()`; Isaac
+  must stay on the thread that created it) and shows a MuJoCo display mirror
+  of the arm (`SO101IsaacEnv.model`/`data`, refreshed from Isaac's joint
+  state, never simulated); the cube appears only in the Isaac-rendered
+  camera feeds, and `--record-dir` stays unavailable. `scripts/run_sim.py
+  --viewer`, shared worlds (`physai.sim.mujoco.world.SharedWorld`), the
+  ROS2 bridge, and `robots/so101/kinematics.py`'s `ArmKinematics` are
+  MuJoCo-only; a manifest combining `simulator: isaac` with any of them is
+  rejected at load time (see [ADR 15](adr/0015-simulator-engine-selection.md))
+  rather than silently failing deep, but none of the limitations are
+  resolved by that rejection. `scripts/collect_demos.py` and
+  `scripts/eval_policy.py` do not accept `--sim` either, since neither calls
+  `create_runtime()`/`create_session()` (see the composition-root gap
+  above) and both depend on MuJoCo-only privileged state
+  (`research/scripted_experts/so101_pick_place_expert.py`'s `ArmKinematics`
+  and `robot.data.qpos` access).

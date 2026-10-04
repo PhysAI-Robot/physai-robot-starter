@@ -18,6 +18,11 @@ class DomainRandomizationConfig:
     mass_scale: tuple[float, float] = (0.95, 1.05)
     lighting_scale: tuple[float, float] = (0.9, 1.1)
     camera_position_jitter: float = 0.0
+    # True: `camera_calibration` reports the shifted pose, so a policy knows
+    # where its camera is (a re-calibrated rig). False: it keeps reporting the
+    # nominal pose while the camera has moved (a bumped or mis-mounted camera),
+    # which is what a robustness-to-camera-shift measurement needs.
+    camera_shift_calibrated: bool = True
     clutter_x_range: tuple[float, float] = (0.14, 0.28)
     clutter_y_range: tuple[float, float] = (-0.16, 0.16)
     clutter_clearance: float = 0.05
@@ -26,6 +31,10 @@ class DomainRandomizationConfig:
         if not isinstance(self.enabled, bool):
             raise ValueError(  # noqa: TRY004
                 "domain_randomization.enabled must be a boolean"
+            )
+        if not isinstance(self.camera_shift_calibrated, bool):
+            raise ValueError(  # noqa: TRY004
+                "domain_randomization.camera_shift_calibrated must be a boolean"
             )
         for name in ("friction_scale", "mass_scale", "lighting_scale"):
             bounds = getattr(self, name)
@@ -92,6 +101,10 @@ class DomainRandomizationEngine:
         self._base_light_diffuse = model.light_diffuse.copy()
         self._base_cam_pos = model.cam_pos.copy()
         self._base_geom_pos = model.geom_pos.copy()
+
+    def camera_shift(self, camera_id: int) -> np.ndarray:
+        """How far this episode moved a camera from its nominal mount (parent frame)."""
+        return self.model.cam_pos[camera_id] - self._base_cam_pos[camera_id]
 
     def _restore(self) -> None:
         self.model.geom_friction[:] = self._base_geom_friction

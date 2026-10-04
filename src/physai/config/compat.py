@@ -16,13 +16,13 @@ from typing import Any
 
 import yaml
 
+from ..contracts import parse_camera_resolution
 from ..robots.registry import default_task
 from .legacy import SimulationConfig, _required_mapping, _required_string
-from .manifest import SCHEMA_VERSION, SessionManifest, parse_manifest
+from .manifest import SCHEMA_VERSION, SessionManifest, parse_manifest, validate_manifest
 
 # The camera resolution a bare `--robot` run has always rendered at; scene
 # files that name a task without one use the scene's own (smaller) default.
-BARE_ROBOT_CAMERA_SIZE = (640, 480)
 # Episode length of a run that names neither a config nor --max-steps.
 BARE_ROBOT_MAX_STEPS = 600
 
@@ -114,11 +114,7 @@ def manifest_for_robot(robot: str, *, simulation: SimulationConfig) -> SessionMa
         ],
     }
     if task is not None:
-        width, height = BARE_ROBOT_CAMERA_SIZE
         manifest_data["task"] = task
-        manifest_data["scene"] = {
-            "overrides": {"camera_width": width, "camera_height": height}
-        }
     return _with_simulation(
         parse_manifest(manifest_data, Path(f"<--robot {robot}>")), simulation, None
     )
@@ -129,22 +125,20 @@ def with_overrides(
     *,
     seed: int | None = None,
     max_steps: int | None = None,
-    camera_size: int | None = None,
+    camera_resolution: str | None = None,
     policy: str | None = None,
+    simulator: str | None = None,
 ) -> SessionManifest:
     """The manifest with command-line overrides applied; ``None`` keeps a value."""
     changes: dict[str, Any] = {}
+    simulation = manifest.simulation
     if seed is not None:
-        changes["simulation"] = replace(manifest.simulation, seed=seed)
-    if camera_size is not None:
-        changes["scene"] = replace(
-            manifest.scene,
-            overrides={
-                **manifest.scene.overrides,
-                "camera_width": camera_size,
-                "camera_height": camera_size,
-            },
-        )
+        simulation = replace(simulation, seed=seed)
+    if camera_resolution is not None:
+        parse_camera_resolution(camera_resolution)
+        simulation = replace(simulation, camera_resolution=camera_resolution)
+    if simulation is not manifest.simulation:
+        changes["simulation"] = simulation
     if manifest.world is None and (max_steps is not None or policy is not None):
         changes["robots"] = tuple(
             replace(
@@ -158,7 +152,16 @@ def with_overrides(
             )
             for robot in manifest.robots
         )
-    return replace(manifest, **changes)
+    if simulator is not None:
+        changes["simulator"] = simulator
+    updated = replace(manifest, **changes)
+    if simulator is not None:
+        # A bare `replace()` skips registry/cross-field checks; --sim can
+        # select a simulator a robot does not support or that conflicts with
+        # world/backend/viewer, so the override is re-validated the same way
+        # the manifest itself was at load time.
+        validate_manifest(updated, Path("<--sim override>"))
+    return updated
 
 
 def _with_simulation(
@@ -181,7 +184,6 @@ def _read_mapping(path: Path) -> dict[str, Any]:
 
 
 __all__ = [
-    "BARE_ROBOT_CAMERA_SIZE",
     "BARE_ROBOT_MAX_STEPS",
     "manifest_for_robot",
     "manifest_from_task_file",

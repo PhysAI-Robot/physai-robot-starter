@@ -111,7 +111,7 @@ jobs:
         if: matrix.shard == 0
         run: |
           uv run python scripts/run_sim.py \
-            --manifest configs/manifests/so101_pick_place.yaml \
+            --manifest configs/manifests/so101_single_cube_fixed_place.yaml \
             --policy visual_servo \
             --video \
             --episodes 1 \

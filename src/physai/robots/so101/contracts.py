@@ -8,6 +8,8 @@ from typing import Any
 import numpy as np
 
 from ...contracts import (
+    CAMERA_HEIGHT,
+    CAMERA_WIDTH,
     Action,
     ActionSpec,
     CameraSpec,
@@ -100,8 +102,8 @@ def so101_observation_spec(
             CameraSpec(
                 name=name,
                 shape=(
-                    int(config.get("height", 224)),
-                    int(config.get("width", 224)),
+                    int(config.get("height", CAMERA_HEIGHT)),
+                    int(config.get("width", CAMERA_WIDTH)),
                     3,
                 ),
                 dtype=str(config.get("dtype", "uint8")),

@@ -2,6 +2,10 @@
 assets/
 models/
 
+# Isaac Sim's own USD output (physai.sim.isaac.description.import_robot()'s
+# usd_out_dir default); regenerated on demand, never committed
+.isaac_cache/
+
 # recorded data / rollouts
 data/
 !src/physai/data/

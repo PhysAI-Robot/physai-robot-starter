@@ -1,37 +1,6 @@
-"""MuJoCo simulation core, scene builders, and simulation utilities."""
+"""Simulator backends: `physai.sim.mujoco` and `physai.sim.isaac`.
 
-from .core import MuJoCoSimulationCore
-from .domain_randomization import (
-    DomainRandomizationConfig,
-    DomainRandomizationEngine,
-    RandomizationMetadata,
-)
-from .scenes import (
-    ManipulationSceneConfig,
-    PickPlaceMinimalSceneConfig,
-    SortingMinimalSceneConfig,
-    WorldSceneConfig,
-    available_scenes,
-    build_manipulation_spec,
-    create_scene,
-    export_xml,
-)
-from .world import RobotBinding, RobotInstanceConfig, SharedWorld
-
-__all__ = [
-    "DomainRandomizationConfig",
-    "DomainRandomizationEngine",
-    "ManipulationSceneConfig",
-    "MuJoCoSimulationCore",
-    "PickPlaceMinimalSceneConfig",
-    "RandomizationMetadata",
-    "RobotBinding",
-    "RobotInstanceConfig",
-    "SharedWorld",
-    "SortingMinimalSceneConfig",
-    "WorldSceneConfig",
-    "available_scenes",
-    "build_manipulation_spec",
-    "create_scene",
-    "export_xml",
-]
+This package holds no code of its own — importing `physai.sim` must not
+require either engine's SDK to be installed. Import the concrete backend
+package directly (`physai.sim.mujoco`, `physai.sim.isaac`).
+"""

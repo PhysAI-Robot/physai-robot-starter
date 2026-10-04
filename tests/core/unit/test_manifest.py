@@ -15,7 +15,9 @@ def _base_manifest(**overrides) -> dict:
     data = {
         "schema_version": 1,
         "backend": "direct",
-        "robots": [{"id": "arm_1", "robot": "so101", "task": "pick_place"}],
+        "robots": [
+            {"id": "arm_1", "robot": "so101", "task": "single_cube_fixed_place"}
+        ],
     }
     data.update(overrides)
     return data
@@ -26,7 +28,7 @@ def test_example_manifests_load_and_validate():
 
     manifest = load_manifest("configs/manifests/example_single_so101.yaml")
     assert manifest.robots[0].id == "arm_1"
-    assert manifest.task_for(manifest.robots[0]) == "pick_place"
+    assert manifest.task_for(manifest.robots[0]) == "single_cube_fixed_place"
     assert manifest.policy_for(manifest.robots[0]) == "scripted"
 
     heterogeneous = load_manifest("configs/manifests/example_heterogeneous.yaml")
@@ -58,11 +60,11 @@ def test_global_task_and_policy_apply_when_instance_omits_them(tmp_path):
 
     data = _base_manifest(
         robots=[{"id": "a", "robot": "so101"}],
-        task="pick_place",
+        task="single_cube_fixed_place",
         policy="scripted",
     )
     manifest = load_manifest(_write(tmp_path, data))
-    assert manifest.task_for(manifest.robots[0]) == "pick_place"
+    assert manifest.task_for(manifest.robots[0]) == "single_cube_fixed_place"
     assert manifest.policy_for(manifest.robots[0]) == "scripted"
 
 
@@ -71,7 +73,7 @@ def test_robot_config_and_scene_overrides_become_typed_values(tmp_path):
 
     data = _base_manifest(
         scene={
-            "name": "pick_place_minimal",
+            "name": "single_cube_fixed_place",
             "overrides": {
                 "robot_xml": "assets/so101/so101_new_calib_camera.xml",
                 "table_pos": [0.3, 0.0, 0.01],
@@ -142,7 +144,7 @@ INVALID = [
     (
         "scene incompatible with the robot kind",
         _base_manifest(
-            scene={"name": "pick_place_minimal"},
+            scene={"name": "single_cube_fixed_place"},
             robots=[{"id": "base_1", "robot": "turtlebot4"}],
         ),
         "incompatible",
