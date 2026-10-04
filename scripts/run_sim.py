@@ -45,6 +45,7 @@ from _common_args import (
     add_robot,
     add_seed,
     add_simulator,
+    add_video_name,
 )
 
 # Registers so101's "scripted"/"visual_servo" policies and the checkpoint-
@@ -53,6 +54,7 @@ from _common_args import (
 import research.classical_control.so101_visual_servo
 import research.imitation_learning.vla_adapter
 import research.scripted_experts.so101_pick_place_expert  # noqa: F401
+from _video import default_video_name, next_video_stem, write_video
 from physai.config import SessionManifest, load_manifest, load_sim_config
 from physai.config.compat import (
     manifest_for_robot,
@@ -68,32 +70,6 @@ from physai.web.host import Host
 DEFAULT_SIM_CONFIG = Path("configs/sim_config.yaml")
 # What a headless episode runs when neither --policy nor the manifest names one.
 DEFAULT_HEADLESS_POLICY = "scripted"
-
-
-def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
-    """Write mp4 if an H.264 encoder is available, otherwise fall back to GIF.
-
-    imageio's default pyav path raises an unhelpful `expected bytes, NoneType`
-    when no codec is registered, so the codec is named explicitly and the
-    fallback is silent-but-reported rather than a stack trace.
-    """
-    import imageio.v3 as iio
-
-    mp4 = stem.with_suffix(".mp4")
-    for plugin, kwargs in (
-        ("FFMPEG", {"codec": "libx264"}),
-        ("pyav", {"codec": "libx264"}),
-    ):
-        try:
-            iio.imwrite(mp4, frames, fps=fps, plugin=plugin, **kwargs)
-            return mp4
-        except (ImportError, OSError, RuntimeError, TypeError, ValueError):
-            continue
-
-    gif = stem.with_suffix(".gif")
-    iio.imwrite(gif, frames[::2], duration=2000 / fps, loop=0)
-    print("  (no H.264 encoder found — wrote a GIF; run `uv sync` for mp4 support)")
-    return gif
 
 
 def parse_args(
@@ -142,6 +118,7 @@ def parse_args(
     )
     add_checkpoint(ap)
     add_camera_resolution(ap)
+    add_video_name(ap)
     add_out(ap, default=Path("outputs"))
     ap.add_argument(
         "--video", action="store_true", help="render frames and write an episode video"
@@ -305,7 +282,14 @@ def run_episodes(args: argparse.Namespace, manifest: SessionManifest) -> int:
         if frames and args.video:
             path = write_video(
                 np.stack(frames),
-                args.out / f"{policy_name}_ep{ep:03d}",
+                next_video_stem(
+                    args.out,
+                    args.video_name
+                    or default_video_name(
+                        manifest.simulator, manifest.robots[0].robot, policy_name
+                    ),
+                    seed + ep,
+                ),
                 fps=int(env.cfg.control_hz),
             )
             print(f"  video -> {path}")

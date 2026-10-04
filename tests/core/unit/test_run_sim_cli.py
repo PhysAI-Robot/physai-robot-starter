@@ -160,9 +160,12 @@ def test_headless_episodes_run_from_a_manifest_and_name_their_video(
     assert run_sim.main() == 0
     assert "0/2 successful" in capsys.readouterr().out
 
-    # with no policy named, the video is named after the one actually run
+    # with no policy named, the video is named after the simulator, the robot, the
+    # policy actually run and the seed
     videos = tmp_path / "videos"
     video_run = ["run_sim.py", "--video", "--max-steps", "3"]
     monkeypatch.setattr(sys, "argv", [*video_run, "--out", str(videos)])
     assert run_sim.main() == 0
-    assert [path.stem for path in videos.iterdir()] == ["scripted_ep000"]
+    assert [path.stem for path in videos.iterdir()] == [
+        "mujoco_so101_scripted_seed0000"
+    ]
