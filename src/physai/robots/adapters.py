@@ -100,20 +100,6 @@ def create_adapter(
     return builder(direct, transport=transport, hardware=hardware, codec=codec)
 
 
-def select_adapter(
-    name: str,
-    direct: RobotPort | None,
-    *,
-    transport: Any = None,
-    hardware: RobotPort | None = None,
-    codec: Any = None,
-) -> RobotPort:
-    """Select a robot adapter without changing policy or task code."""
-    return create_adapter(
-        name, direct, transport=transport, hardware=hardware, codec=codec
-    )
-
-
 def _build_direct(
     direct: RobotPort | None, *, transport: Any, hardware: RobotPort | None, codec: Any
 ) -> RobotPort:

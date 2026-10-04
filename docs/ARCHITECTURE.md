@@ -63,8 +63,8 @@ wrap whichever `RobotPort` a robot factory built (MuJoCo- or Isaac-backed);
 the transport (direct vs. ROS2) and the simulator engine (MuJoCo vs. Isaac)
 are independent axes, not one choice. Adapters are generic at the port level
 and receive an embodiment-specific mapping. Transports are registry-driven
-(`robots.registry.register_adapter()`/`create_adapter()`; `select_adapter()`
-is the thin wrapper robot factories call), so a new transport is additive.
+(`robots.adapters.register_adapter()`/`create_adapter()`), so a new
+transport is additive.
 The direct adapter keeps a synchronous `reset`/`step`; the ROS2 adapters may
 use callbacks and queues internally but translate to the same `Observation`
 and `Action` at the boundary.
