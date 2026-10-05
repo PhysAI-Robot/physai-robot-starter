@@ -272,8 +272,8 @@ downloaded artifacts.
 
 - [Architecture](docs/ARCHITECTURE.md): runtime composition, module ownership,
   contracts, and extension boundaries.
-- Runbooks: [SO-101](docs/SO101_RUNBOOK.md),
-  [TurtleBot4](docs/TURTLEBOT4_RUNBOOK.md), and the
+- Runbooks: [SO-101](docs/ROBOT_RUNBOOKS.md#so-101),
+  [TurtleBot4](docs/ROBOT_RUNBOOKS.md#turtlebot4), and the
   [web viewer](docs/WEB_VIEWER_RUNBOOK.md). Session manifests live in
   `configs/manifests/`, Nav2 profiles at `configs/nav2/<robot>/`, and maps at
   `configs/maps/<environment>/`.
