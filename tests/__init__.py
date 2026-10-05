@@ -7,5 +7,5 @@ a namespace-package portion regardless of path order, so without this
 file, `import tests` (and every `from tests.core... import ...` absolute
 import in this suite) silently resolves to draccus's installed tests
 instead of this directory whenever the `vla` extra is installed. See
-docs/adr/0016-isaacsim-as-a-project-extra.md.
+docs/adr/simulators.md, ADR 16.
 """

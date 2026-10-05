@@ -12,14 +12,20 @@ Keep each document focused on one audience:
 - `README.md` is the user-facing setup and workflow guide.
 - `docs/ARCHITECTURE.md` is the internal design reference and the source of
   truth for module boundaries and contracts.
-- `docs/adr/` records the decisions behind the frozen design, one file per
-  decision.
+- `docs/adr/` records the decisions behind the frozen design, grouped by topic
+  in one file each, with one numbered `## ADR N` section per decision and an
+  index in `docs/adr/README.md`. Add a decision to its topic's file with the
+  next free number and a row in the index; do not rewrite an accepted
+  decision, supersede it.
+- `docs/ROBOT_RUNBOOKS.md` and `docs/WEB_VIEWER_RUNBOOK.md` are the operational
+  runbooks for the robots and the browser viewer.
 - `research/<topic>/README.md` is that research topic's own runbook (setup,
-  commands, workflow). Detailed research workflows belong there, not in a
-  `docs/*_RUNBOOK.md` file — a robot runbook links to the relevant
+  commands, workflow). Detailed research workflows belong there, not in
+  `docs/ROBOT_RUNBOOKS.md`, which links to the relevant
   `research/<topic>/README.md` instead of embedding its commands.
-  Measurement history behind a research result (investigations, reverted
-  experiments) goes in that topic's `FINDINGS.md`, not the README.
+  What was measured and tried behind a research result goes in that topic's
+  `FINDINGS.md` as causes, final numbers and one line per failed experiment,
+  not as trace logs; git history keeps the trace.
 - `CONTRIBUTING.md` is the contributor-facing source of truth for workflow and
   commit message conventions.
 - `AGENTS.md` is the agent-facing workflow, validation, and repository hygiene
@@ -28,7 +34,9 @@ Keep each document focused on one audience:
   behavior.
 
 Do not copy detailed architecture, setup commands, or agent instructions into
-the other documents. Link to the owning document instead.
+the other documents. Link to the owning document instead, and when a fact
+changes, update it in its owning document and fix the others by link, not by
+a second copy.
 
 ## Before changing code
 

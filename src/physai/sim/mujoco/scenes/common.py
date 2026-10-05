@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import ClassVar
 
 import mujoco
 
-from ....contracts import DEFAULT_CAMERA_RESOLUTION, parse_camera_resolution
 from ....robots.description import RobotDescription
 from ...studio import STUDIO_FLOOR_RGB1, STUDIO_FLOOR_RGB2, STUDIO_SKY_RGB, TABLE_RGBA
+from ...workspace import (
+    CUBE_FRICTION,
+    FRONT_CAMERA_FOVY_DEG,
+    TABLE_FRICTION,
+    TARGET_RGBA,
+    CubeSpec,
+    WorkspaceConfig,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
 
@@ -43,27 +50,11 @@ def add_studio_sky(spec: mujoco.MjSpec) -> None:
 
 
 @dataclass
-class WorldSceneConfig:
-    """Robot-independent world settings shared by scene implementations."""
+class WorldSceneConfig(WorkspaceConfig):
+    """The workspace plus the MuJoCo-only settings of one scene."""
 
     robot_xml: Path | None = None
     timestep: float = 0.002
-    table_size: tuple[float, float, float] = (0.20, 0.25, 0.01)
-    table_pos: tuple[float, float, float] = (0.30, 0.0, 0.01)
-    target_pos: tuple[float, float, float] = (0.20, -0.10, 0.021)
-    target_radius: float = 0.035
-    # One of `physai.contracts.CAMERA_RESOLUTIONS`; the pixel size below is
-    # derived from it (so it stays in dataset metadata) and not an argument.
-    camera_resolution: str = DEFAULT_CAMERA_RESOLUTION
-    camera_width: int = field(default=0, init=False)
-    camera_height: int = field(default=0, init=False)
-    front_cam_pos: tuple[float, float, float] = (0.62, 0.0, 0.38)
-    front_cam_xyaxes: tuple[float, ...] = (0.0, 1.0, 0.0, -0.45, 0.0, 0.9)
-
-    def __post_init__(self) -> None:
-        self.camera_width, self.camera_height = parse_camera_resolution(
-            self.camera_resolution
-        )
 
     def to_metadata(self) -> dict:
         """This config as JSON-safe data for dataset metadata.
@@ -280,14 +271,14 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
         type=mujoco.mjtGeom.mjGEOM_BOX,
         size=list(cfg.table_size),
         rgba=list(TABLE_RGBA),
-        friction=[1.0, 0.005, 0.0001],
+        friction=list(TABLE_FRICTION),
     )
     world.add_geom(
         name="target_pad",
         type=mujoco.mjtGeom.mjGEOM_CYLINDER,
         size=[cfg.target_radius, 0.001, 0.0],
         pos=list(cfg.target_pos),
-        rgba=[0.2, 0.7, 0.35, 0.55],
+        rgba=list(TARGET_RGBA),
         contype=0,
         conaffinity=0,
     )
@@ -313,34 +304,28 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
         name="front",
         pos=list(cfg.front_cam_pos),
         xyaxes=list(cfg.front_cam_xyaxes),
-        fovy=48,
+        fovy=FRONT_CAMERA_FOVY_DEG,
     )
+    for cube in cfg.cubes():
+        add_cube(spec, cube)
     apply_description(spec, cfg.description)
     return spec
 
 
-def add_cube(
-    spec: mujoco.MjSpec,
-    cfg: WorldSceneConfig,
-    name: str,
-    position,
-    rgba,
-    cube_half: float,
-    cube_mass: float,
-) -> None:
-    cube = spec.worldbody.add_body(name=name, pos=list(position))
-    cube.add_freejoint(name=f"{name}_free")
-    cube.add_geom(
-        name=f"{name}_geom",
+def add_cube(spec: mujoco.MjSpec, cube: CubeSpec) -> None:
+    body = spec.worldbody.add_body(name=cube.name, pos=list(cube.position))
+    body.add_freejoint(name=f"{cube.name}_free")
+    body.add_geom(
+        name=f"{cube.name}_geom",
         type=mujoco.mjtGeom.mjGEOM_BOX,
-        size=[cube_half] * 3,
-        rgba=list(rgba),
-        mass=cube_mass,
-        friction=[1.2, 0.01, 0.0005],
+        size=[cube.half_size] * 3,
+        rgba=list(cube.rgba),
+        mass=cube.mass,
+        friction=list(CUBE_FRICTION),
         condim=4,
     )
-    cube.add_site(
-        name=f"{name}_site",
+    body.add_site(
+        name=f"{cube.name}_site",
         pos=[0, 0, 0],
         size=[0.004] * 3,
         rgba=[1, 1, 0, 0.0],

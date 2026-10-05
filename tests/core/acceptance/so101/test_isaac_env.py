@@ -1,7 +1,7 @@
 """Phase 3 parity-ladder tiers 1-2 against real Isaac Sim: URDF import and
 actuator step response. Skipped wherever `isaacsim` is not installed —
 `uv sync --extra isaac` installs it into this project's own venv (see
-`docs/adr/0016-isaacsim-as-a-project-extra.md`).
+`docs/adr/simulators.md, ADR 16`).
 
 One `SimulationApp` per process is a hard Isaac Sim constraint (see
 `physai.sim.isaac.core`), so every test in this module shares one

@@ -3,7 +3,7 @@
 `SessionRecorder` owns no episode format: it feeds the same recorder,
 `.npz` layout and `meta.json` that `scripts/collect_demos.py` uses, plus the
 optional `observation.environment_state` key (full simulator qpos) that lets
-the viewer restore a recorded frame exactly. See docs/adr/0009.
+the viewer restore a recorded frame exactly. See docs/adr/web-host.md, ADR 9.
 
 The physics thread calls `record_tick()` while a browser-facing thread calls
 `start()` / `stop()`. `_lock` guards the state `record_tick()` touches;

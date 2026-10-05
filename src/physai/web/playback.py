@@ -1,7 +1,7 @@
 """State of one recorded episode being replayed through the paused host.
 
 `Playback` is plain state; `Host` owns the physics lock and applies it. See
-docs/adr/0009: playback restores recorded simulator state on the paused world
+docs/adr/web-host.md, ADR 9: playback restores recorded simulator state on the paused world
 rather than re-simulating, and exiting restores the world it entered from.
 """
 

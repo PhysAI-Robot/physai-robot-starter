@@ -21,12 +21,13 @@ from .description import (
     import_robot,
     urdf_link_name,
 )
-from .scene import add_ground_plane, add_studio_lighting
+from .scene import add_ground_plane, add_studio_lighting, add_workspace
 
 __all__ = [
     "IsaacSimulationCore",
     "add_ground_plane",
     "add_studio_lighting",
+    "add_workspace",
     "apply_actuators",
     "apply_cameras",
     "apply_contact_friction",
