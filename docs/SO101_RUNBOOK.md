@@ -39,7 +39,7 @@ Video recording is opt-in. Add `--video` when you want frames written under
 local runs.
 
 MuJoCo's own desktop viewer is also available as a fallback when a browser
-isn't convenient — see [ADR 4](adr/0004-tk-viewer-frozen.md). It
+isn't convenient — see [ADR 4](adr/web-host.md#adr-4---viewer-is-mujocos-own-viewer-frozen-in-scope). It
 opens a native window with MuJoCo's built-in scene navigation (drag to orbit,
 scroll to zoom); combine it with `--serve` and use the browser viewer's
 camera grid for per-camera views or debug overlays:

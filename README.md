@@ -86,7 +86,7 @@ MUJOCO_GL=egl uv run python scripts/run_web.py --connect http://127.0.0.1:8000
 Serve mode holds the current pose until you pass `--policy` (for example
 `--policy scripted`). Add `--record-dir data/web_session` to record episodes
 from the browser. `--viewer` opens MuJoCo's own desktop window instead of, or
-alongside, `--serve` ([ADR 4](docs/adr/0004-tk-viewer-frozen.md)).
+alongside, `--serve` ([ADR 4](docs/adr/web-host.md#adr-4---viewer-is-mujocos-own-viewer-frozen-in-scope)).
 
 To run several robots in one MuJoCo scene, one model, physics data object, and
 clock:
@@ -193,7 +193,7 @@ in the robot runbooks.
 A second backend for measuring a MuJoCo-tuned policy's sim-to-sim gap.
 Verified end to end against real Isaac Sim 6.1.0.0 on an RTX 3060, and
 installs straight into this project's own `.venv` — no separate
-environment (see [ADR 16](docs/adr/0016-isaacsim-as-a-project-extra.md)):
+environment (see [ADR 16](docs/adr/simulators.md#adr-16-isaacsim-as-a-project-extra-not-a-separate-venv)):
 
 ```bash
 uv sync --extra isaac --extra training
@@ -218,7 +218,7 @@ uv run python scripts/compare_evaluations.py outputs/mujoco.json outputs/isaac.j
 Isaac supports single-cube scenes with a fixed target, no domain
 randomization beyond a lighting scale and a camera position jitter, and only observation-based policies (`visual_servo`,
 `constant`); `--viewer` stays MuJoCo-only (`--serve` opens the web viewer
-with a mirrored arm, table, target and cube; see [ADR 15](docs/adr/0015-simulator-engine-selection.md)).
+with a mirrored arm, table, target and cube; see [ADR 15](docs/adr/simulators.md#adr-15-simulator-engine-selection)).
 Each Isaac run must be a separate process, and `pytest -m isaac` is run one
 test file at a time. Isaac sometimes starts without drawing the robot, which
 blinds camera policies; the env detects it (`robot_is_rendered()`) and stops

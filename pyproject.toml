@@ -20,7 +20,7 @@ dependencies = [
     # someone has to make against `isaac` below (isaacsim-kernel pins
     # uvicorn==0.29.0 exactly; the >=0.29 floor here is deliberately loose
     # so that pin is a valid resolution, not a conflict, when isaac is
-    # selected -- see docs/adr/0016).
+    # selected -- see docs/adr/simulators.md, ADR 16).
     "fastapi>=0.115",
     "uvicorn[standard]>=0.29",
     # Dev/test tooling. Base, not a "dev" extra: this is a starter repo you
@@ -50,11 +50,11 @@ vla = ["torch>=2.7,<2.12", "lerobot>=0.6.1"]
 # combined sync fails fast instead of `uv lock` refusing everything.
 webtest = ["httpx2>=2.13.1"]
 # isaacsim as a real extra of this project (`uv sync --extra isaac`),
-# replacing the separate-venv recipe docs/adr/0013 used to document.
+# replacing the separate-venv recipe docs/adr/simulators.md, ADR 13 used to document.
 # Verified end to end: `uv lock` resolves it (index-strategy =
 # "unsafe-best-match" below, no prerelease allowance needed) and a real
 # headless episode ran against actual Isaac Sim 6.1.0.0 on an RTX 3060.
-# See docs/adr/0016.
+# See docs/adr/simulators.md, ADR 16.
 isaac = ["isaacsim[all,extscache]==6.1.0.0"]
 
 [[tool.uv.index]]

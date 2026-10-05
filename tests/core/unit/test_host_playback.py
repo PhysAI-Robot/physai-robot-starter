@@ -1,4 +1,4 @@
-"""Episode playback on the paused Host (docs/adr/0009): restore recorded qpos,
+"""Episode playback on the paused Host (docs/adr/web-host.md, ADR 9): restore recorded qpos,
 step/scrub/play, and hand the live world back on exit."""
 
 import mujoco
