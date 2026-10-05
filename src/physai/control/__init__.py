@@ -1,6 +1,6 @@
 """Low-level action resolution, rate limiting, and safety gates."""
 
-from .resolver import JointRateLimiter, TwistToJointResolver, WaypointResolver
+from .resolver import JointRateLimiter, TwistToJointResolver
 from .safety import SafetyController, SafetyViolation
 
 __all__ = [
@@ -8,5 +8,4 @@ __all__ = [
     "SafetyController",
     "SafetyViolation",
     "TwistToJointResolver",
-    "WaypointResolver",
 ]
