@@ -5,9 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
-import mujoco
-
-from .common import ManipulationSceneConfig, add_cube, build_manipulation_spec
+from ...workspace import CubeSpec
+from .common import ManipulationSceneConfig
 
 
 @dataclass
@@ -23,15 +22,20 @@ class SortingMinimalSceneConfig(ManipulationSceneConfig):
         (0.9, 0.8, 0.15, 1.0),
     )
 
-    def build_spec(self) -> mujoco.MjSpec:
+    def cubes(self) -> tuple[CubeSpec, ...]:
         if len(self.cube_names) != len(self.cube_rgba):
             raise ValueError("sorting cube names and colors must have the same length")
-        spec = build_manipulation_spec(self)
-        for index, (name, rgba) in enumerate(zip(self.cube_names, self.cube_rgba)):
-            position = (
-                self.cube_pos[0],
-                self.cube_pos[1] + 0.06 * index,
-                self.cube_pos[2],
+        return tuple(
+            CubeSpec(
+                name,
+                (
+                    self.cube_pos[0],
+                    self.cube_pos[1] + 0.06 * index,
+                    self.cube_pos[2],
+                ),
+                self.cube_half,
+                self.cube_mass,
+                rgba,
             )
-            add_cube(spec, self, name, position, rgba, self.cube_half, self.cube_mass)
-        return spec
+            for index, (name, rgba) in enumerate(zip(self.cube_names, self.cube_rgba))
+        )

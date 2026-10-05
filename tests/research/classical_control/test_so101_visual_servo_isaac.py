@@ -2,7 +2,7 @@
 running its full detect -> approach -> grasp -> transfer -> place loop
 (`ROADMAP.md`'s 2E). Skipped wherever `isaacsim` is not installed — `uv
 sync --extra isaac` installs it into this project's own venv (see
-`docs/adr/0016-isaacsim-as-a-project-extra.md`).
+`docs/adr/simulators.md, ADR 16`).
 
 The cube and target here are fixed, configured positions (the low-level
 `cube`/`table`/`target_pos` config), which makes this the quick check that the
@@ -48,13 +48,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 @pytest.fixture(scope="module")
 def env():
-    from physai.robots.so101.isaac_env import (
-        FrontCameraConfig,
-        GraspCubeConfig,
-        IsaacEnvConfig,
-        SO101IsaacEnv,
-        TableConfig,
-    )
+    from physai.robots.so101.isaac_env import IsaacEnvConfig, SO101IsaacEnv
+    from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
 
     cfg = IsaacEnvConfig(
         usd_out_dir=REPO_ROOT / ".isaac_cache" / "so101_visual_servo_test",
@@ -62,10 +57,8 @@ def env():
         render=True,
         cameras=("front", "wrist"),
         max_steps=2000,
-        table=TableConfig(),
-        cube=GraspCubeConfig(position=(0.20, 0.08, 0.036)),
-        front_camera=FrontCameraConfig(),
-        target_pos=(0.20, -0.10, 0.021),  # matches WorldSceneConfig's own default
+        scene=SingleCubeFixedPlaceSceneConfig(),
+        randomize_cube=False,
     )
     instance = SO101IsaacEnv(cfg)
     try:

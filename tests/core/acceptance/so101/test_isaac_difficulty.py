@@ -81,12 +81,12 @@ def test_a_camera_moves_within_the_jitter_but_its_calibration_stays_nominal(env)
         for name in ("front", "wrist"):
             shifts.setdefault(name, []).append(camera_translation(env, name))
     # The calibration is the policy's belief: it must not follow the move.
-    front = env.cfg.front_camera
+    front_position = env.cfg.scene.front_cam_pos
     _, extrinsics = env.camera_calibration("front")
     np.testing.assert_allclose(
-        extrinsics.position.as_array(), front.position, atol=1e-9
+        extrinsics.position.as_array(), front_position, atol=1e-9
     )
-    nominal_calibration["front"] = np.asarray(front.position)
+    nominal_calibration["front"] = np.asarray(front_position)
 
     for name, (first, second) in shifts.items():
         # Different seeds draw different offsets ...

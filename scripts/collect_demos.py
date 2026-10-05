@@ -91,7 +91,7 @@ def main() -> int:
         robot_spec=robot.robot_spec,
         training_contract=training_contract,
         # Full simulator qpos per step, so the web viewer can replay an
-        # episode (see docs/adr/0009). Extra key; training code ignores it.
+        # episode (see docs/adr/web-host.md, ADR 9). Extra key; training code ignores it.
         environment_state_dim=robot.data.qpos.size,
         simulator_config={
             "control_hz": env.cfg.control_hz,

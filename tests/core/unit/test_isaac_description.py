@@ -47,27 +47,12 @@ def test_fovy_to_focal_length_rejects_a_degenerate_fov():
         fovy_to_focal_length(180.0)
 
 
-def test_isaac_env_config_coerces_manifest_dicts():
-    from physai.robots.so101.isaac_env import (
-        FrontCameraConfig,
-        GraspCubeConfig,
-        IsaacEnvConfig,
-        TableConfig,
-    )
+def test_isaac_env_config_coerces_manifest_lists():
+    from physai.robots.so101.isaac_env import IsaacEnvConfig
 
-    cfg = IsaacEnvConfig(
-        cameras=["front", "wrist"],
-        cube={"mass": 0.05},
-        front_camera={},
-        table={"friction": 0.9},
-        target_pos=[0.2, -0.1, 0.021],
-    )
+    cfg = IsaacEnvConfig(cameras=["front", "wrist"])
 
     assert cfg.cameras == ("front", "wrist")
-    assert cfg.cube == GraspCubeConfig(mass=0.05)
-    assert cfg.front_camera == FrontCameraConfig()
-    assert cfg.table == TableConfig(friction=0.9)
-    assert cfg.target_pos == (0.2, -0.1, 0.021)
 
 
 @requires_assets
@@ -122,18 +107,30 @@ def test_isaac_config_takes_its_objects_from_the_shared_scene():
     )
     cfg = IsaacEnvConfig(scene=scene)
 
-    assert cfg.table.position == (0.31, 0.01, 0.012)
-    assert cfg.table.half_extents == tuple(scene.table_size)
-    assert cfg.cube.position == (0.21, 0.07, 0.04)
-    assert cfg.cube.half_size == scene.cube_half
-    assert cfg.target_pos == tuple(scene.target_pos)
-    assert cfg.front_camera.position == tuple(scene.front_cam_pos)
-    assert cfg.front_camera.x_axis + cfg.front_camera.y_axis == tuple(
-        scene.front_cam_xyaxes
-    )
+    assert cfg.scene is scene
     # MuJoCo's default: a scene randomizes the cube per seed; a bare config does not.
     assert cfg.randomize_cube is True
     assert IsaacEnvConfig().randomize_cube is False
+
+
+def test_the_isaac_camera_orientation_matches_mujoco_for_the_front_camera():
+    import mujoco
+    import numpy as np
+
+    from physai.sim.isaac.scene import xyaxes_to_quat_wxyz
+    from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
+
+    xyaxes = SingleCubeFixedPlaceSceneConfig().front_cam_xyaxes
+    x_axis, y_axis = np.asarray(xyaxes[:3]), np.asarray(xyaxes[3:])
+    x_axis, y_axis = x_axis / np.linalg.norm(x_axis), y_axis / np.linalg.norm(y_axis)
+    rotation = np.stack([x_axis, y_axis, np.cross(x_axis, y_axis)], axis=1)
+    expected = np.zeros(4)
+    mujoco.mju_mat2Quat(expected, rotation.reshape(9))
+
+    got = np.asarray(xyaxes_to_quat_wxyz(xyaxes))
+
+    # q and -q are the same rotation
+    assert min(np.abs(got - expected).max(), np.abs(got + expected).max()) < 1e-9
 
 
 def test_isaac_layout_defaults_match_mujoco_env_config():
