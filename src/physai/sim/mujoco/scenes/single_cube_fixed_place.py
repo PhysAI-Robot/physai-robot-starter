@@ -5,9 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
-import mujoco
-
-from .common import ManipulationSceneConfig, add_cube, build_manipulation_spec
+from ...workspace import CubeSpec
+from .common import ManipulationSceneConfig
 
 
 @dataclass
@@ -19,15 +18,9 @@ class SingleCubeFixedPlaceSceneConfig(ManipulationSceneConfig):
     cube_mass: float = 0.03
     cube_rgba: tuple[float, float, float, float] = (0.85, 0.25, 0.2, 1.0)
 
-    def build_spec(self) -> mujoco.MjSpec:
-        spec = build_manipulation_spec(self)
-        add_cube(
-            spec,
-            self,
-            "cube",
-            self.cube_pos,
-            self.cube_rgba,
-            self.cube_half,
-            self.cube_mass,
+    def cubes(self) -> tuple[CubeSpec, ...]:
+        return (
+            CubeSpec(
+                "cube", self.cube_pos, self.cube_half, self.cube_mass, self.cube_rgba
+            ),
         )
-        return spec

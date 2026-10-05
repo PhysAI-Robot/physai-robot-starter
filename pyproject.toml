@@ -169,3 +169,12 @@ name = "the isaac backend does not depend on mujoco"
 type = "forbidden"
 source_modules = ["physai.sim.isaac"]
 forbidden_modules = ["mujoco"]
+
+[[tool.importlinter.contracts]]
+name = "the workspace description stays simulator-agnostic"
+type = "forbidden"
+source_modules = ["physai.sim.workspace"]
+forbidden_modules = ["mujoco", "isaacsim", "omni", "pxr"]
+# The table, target, cubes and front camera both simulators build. Each
+# backend's own builder (`sim.mujoco.scenes.common.build_manipulation_spec`,
+# `sim.isaac.scene.add_workspace`) imports its engine, not this module.
