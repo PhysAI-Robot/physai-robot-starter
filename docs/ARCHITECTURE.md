@@ -125,8 +125,6 @@ research/
 ├── scripted_experts/      privileged-ground-truth demo-collection policies
 ├── classical_control/     visual servo and other model-free baselines
 ├── imitation_learning/    ACT/LeRobot dataset tooling, training, checkpoints
-├── reinforcement_learning/  deep RL on the Gymnasium adapter (placeholder)
-├── vla/                   VLA research beyond the checkpoint adapter (placeholder)
 └── vlm_planners/          model- or heuristic-grounded Planner implementations
 ```
 
@@ -475,7 +473,6 @@ ships the contracts plus minimal baselines only; per-module placement:
 | `research/classical_control/so101_visual_servo.py` | Research | One calibrated-camera visual-servo baseline, not infrastructure |
 | `research/imitation_learning/{act_dataset,vla_adapter,train_act}.py` | Research | ACT/LeRobot training pipeline and the checkpoint-backed `LeRobotPolicy` |
 | `research/vlm_planners/sorting_planner.py` | Research | Task-coupled (reads privileged `env.cube_positions`), not a generic baseline |
-| `research/reinforcement_learning/`, `research/vla/` | Research (placeholders) | No concrete module yet; topics reserved per [ROADMAP.md](../ROADMAP.md) |
 
 See [ADR 3](adr/0003-research-outside-core.md) for the decision and
 `research/README.md` for the one rule research code follows.
