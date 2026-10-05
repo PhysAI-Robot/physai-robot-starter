@@ -22,8 +22,6 @@ learning, reinforcement learning, VLA, and VLM planners.
 | `scripted_experts/` | Privileged-ground-truth expert policies used to generate demonstrations |
 | `classical_control/` | Visual servo and other classical closed-loop control baselines |
 | `imitation_learning/` | ACT/LeRobot dataset tooling, training, and checkpoint-backed policies |
-| `reinforcement_learning/` | Deep RL training on top of the Gymnasium adapter (no module yet) |
-| `vla/` | Vision-language-action research beyond the adapter contract (no module yet) |
 | `vlm_planners/` | Model- or heuristic-grounded `Planner` implementations beyond the scripted baseline |
 
 Each topic owns its own README with setup notes and, where relevant, a

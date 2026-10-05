@@ -140,19 +140,4 @@ def add_cube(
     return path
 
 
-def prim_world_position(stage: Any, path: str) -> Any:
-    """A prim's world-space translation, as a plain 3-element array."""
-    import numpy as np
-    from pxr import Usd, UsdGeom
-
-    prim = stage.GetPrimAtPath(path)
-    if not prim.IsValid():
-        raise KeyError(f"prim {path!r} not found on stage")
-    matrix = UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(
-        Usd.TimeCode.Default()
-    )
-    translation = matrix.ExtractTranslation()
-    return np.array([translation[0], translation[1], translation[2]])
-
-
-__all__ = ["add_cube", "add_static_box", "add_target_pad", "prim_world_position"]
+__all__ = ["add_cube", "add_static_box", "add_target_pad"]
