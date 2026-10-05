@@ -6,10 +6,9 @@ module and `physai.sim.isaac` may import `isaacsim`/`omni`/`pxr`
 (`pyproject.toml`'s import-linter contracts enforce this), so nothing above
 the `RobotPort` boundary needs Isaac installed to import `physai.robots`.
 
-Deliberately smaller than `SO101Env`: no Cartesian jog, task/scene objects
-beyond an optional grasp cube (`cfg.cube`, ROADMAP.md's 2E tier-3 parity
-test only — not a `ManipulationSceneConfig` port; no table, target, layout,
-or randomization). `self.kin` is a real `ArmKinematics`, backed by a MuJoCo
+Deliberately smaller than `SO101Env`: no Cartesian jog, and a scene of one
+cube only (`cfg.scene`, built by `sim.isaac.scene.add_workspace` from the same
+`WorkspaceConfig` MuJoCo reads). `self.kin` is a real `ArmKinematics`, backed by a MuJoCo
 model loaded purely as an FK/IK math tool and never simulated — Isaac's own
 physics runs everything; this only reuses already-verified kinematics math
 instead of reimplementing it against USD/PhysX (importing `mujoco` here is
@@ -21,7 +20,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
 
 import mujoco
 import numpy as np
@@ -49,18 +47,14 @@ from ...sim.isaac.description import (
     apply_frames,
 )
 from ...sim.isaac.description import import_robot as isaac_import_robot
-from ...sim.studio import TABLE_RGBA
-from ...sim.isaac.objects import (
-    add_cube,
-    add_static_box,
-    add_target_pad,
-)
 from ...sim.isaac.scene import (
     add_ground_plane,
     add_studio_lighting,
-    add_world_camera,
+    add_workspace,
     checker_texture,
 )
+from ...sim.mujoco.scenes import ManipulationSceneConfig
+from ...sim.workspace import FRONT_CAMERA_FOVY_DEG, CubeSpec
 from ..base import RobotSpec, RobotTrainingContract
 from ..description import RobotDescription, load_robot_description
 from .contracts import (
@@ -84,108 +78,18 @@ _ROBOT_RENDER_MIN_DIFF = 3.0
 
 
 @dataclass
-class GraspCubeConfig:
-    """A minimal graspable cube for the tier-3 grasp-hold parity test
-    (`ROADMAP.md`'s 2E) — not a `ManipulationSceneConfig` port: no table,
-    target, layout, or randomization, just enough to grasp-and-hold. `position`
-    and `friction` default to `SingleCubeFixedPlaceSceneConfig`'s own values
-    (`cube_pos`, the sliding-friction component of `add_cube`'s
-    `friction=[1.2, ...]`), placed directly on Isaac's ground plane rather
-    than on a modeled table.
-    """
-
-    position: tuple[float, float, float] = (0.20, 0.08, 0.014)
-    half_size: float = 0.014
-    mass: float = 0.03
-    friction: float = 1.2
-
-
-@dataclass
-class TableConfig:
-    """The manipulation scene's table, a static collider. Defaults mirror
-    `WorldSceneConfig.table_size`/`table_pos` and `build_manipulation_spec`'s
-    table geom (colour, friction) exactly, so both simulators share one
-    workspace. With a table, `target_pos` also gets MuJoCo's visual-only
-    green `target_pad` disc.
-    """
-
-    position: tuple[float, float, float] = (0.30, 0.0, 0.01)
-    half_extents: tuple[float, float, float] = (0.20, 0.25, 0.01)
-    friction: float = 1.0
-    rgba: tuple[float, float, float, float] = TABLE_RGBA
-    target_radius: float = 0.035
-
-
-@dataclass
-class FrontCameraConfig:
-    """A world-fixed camera, for `SO101VisualServoPolicy`'s default
-    `camera="front"` (tier-4 parity, `ROADMAP.md`'s 2E) — not attached to
-    the robot's articulation, unlike `IsaacEnvConfig.cameras`' other
-    entries (link-mounted, via `RobotDescription.cameras`). Defaults mirror
-    `WorldSceneConfig.front_cam_pos`/`front_cam_xyaxes` and
-    `build_manipulation_spec`'s hardcoded `fovy=48` exactly, so both
-    simulators frame the scene the same way.
-    """
-
-    position: tuple[float, float, float] = (0.62, 0.0, 0.38)
-    x_axis: tuple[float, float, float] = (0.0, 1.0, 0.0)
-    y_axis: tuple[float, float, float] = (-0.45, 0.0, 0.9)
-    fovy_deg: float = 48.0
-
-
-def scene_objects(
-    scene: Any,
-) -> tuple[TableConfig, GraspCubeConfig, FrontCameraConfig, tuple[float, ...]]:
-    """The table, cube, front camera and target a shared scene config describes.
-
-    Takes the same `ManipulationSceneConfig` MuJoCo builds its scene from, so
-    both simulators read one set of numbers. Friction, colour and the front
-    camera's field of view are not scene fields (MuJoCo hardcodes them in
-    `build_manipulation_spec`/`add_cube`); the dataclass defaults mirror those.
-    """
-    cube_names = tuple(getattr(scene, "cube_names", ("cube",)))
-    if cube_names != ("cube",):
-        raise ValueError(
-            "SO101IsaacEnv supports single-cube scenes only; "
-            f"this scene has cubes {cube_names}"
-        )
-    xyaxes = tuple(scene.front_cam_xyaxes)
-    return (
-        TableConfig(
-            position=tuple(scene.table_pos),
-            half_extents=tuple(scene.table_size),
-            target_radius=scene.target_radius,
-        ),
-        GraspCubeConfig(
-            position=tuple(scene.cube_pos),
-            half_size=scene.cube_half,
-            mass=scene.cube_mass,
-        ),
-        FrontCameraConfig(
-            position=tuple(scene.front_cam_pos),
-            x_axis=xyaxes[:3],
-            y_axis=xyaxes[3:],
-        ),
-        tuple(scene.target_pos),
-    )
-
-
-@dataclass
 class IsaacEnvConfig:
     """SO-101-on-Isaac simulation and observation settings.
 
     Narrower than `so101.mujoco_env.EnvConfig`: single-cube scenes only, a
     fixed target, and only two difficulty knobs (`lighting_scale`,
     `camera_position_jitter`); Isaac's own randomization tooling is a separate
-    integration. Give it the same `scene` MuJoCo uses
-    and the table, cube, target, front camera and per-seed cube layout follow
-    from it; without one, the low-level `cube`/`table`/`front_camera`/
-    `target_pos` below describe a bare test scene.
+    integration. Give it the same `scene` MuJoCo uses and the table, cube,
+    target, front camera and per-seed cube layout follow from it; without one
+    the env holds the robot alone.
     """
 
-    scene: Any = (
-        None  # a ManipulationSceneConfig (e.g. SingleCubeFixedPlaceSceneConfig)
-    )
+    scene: ManipulationSceneConfig | None = None
     description: RobotDescription | None = None
     assets_root: Path = field(default_factory=lambda: REPO_ROOT / "assets" / "so101")
     usd_out_dir: Path = field(
@@ -202,9 +106,6 @@ class IsaacEnvConfig:
     max_steps: int = 400
     seed: int | None = None
     gripper_force_limit: float = 0.3
-    cube: GraspCubeConfig | None = None
-    front_camera: FrontCameraConfig | None = None
-    table: TableConfig | None = None
     # Per-seed cube placement, as MuJoCo's `EnvConfig`: None means "randomize
     # when a scene is given" (the MuJoCo default), otherwise the cube stays at
     # its configured position.
@@ -220,10 +121,6 @@ class IsaacEnvConfig:
     # MuJoCo's `camera_shift_calibrated=False`.
     lighting_scale: float = 1.0
     camera_position_jitter: float = 0.0
-    # (x, y) is what SO101VisualServoPolicy's TRANSFER/LOWER/RELEASE phases
-    # actually read (see `_waypoint()`); z is recomputed from `rest_z`
-    # separately, matching the MuJoCo side's own `target_pos` exactly.
-    target_pos: tuple[float, float, float] | None = None
 
     def __post_init__(self) -> None:
         parse_camera_resolution(self.camera_resolution)
@@ -239,26 +136,17 @@ class IsaacEnvConfig:
                     f"scene camera_resolution {self.scene.camera_resolution!r} "
                     f"differs from the env's {self.camera_resolution!r}"
                 )
-            table, cube, front, target = scene_objects(self.scene)
-            self.table = self.table or table
-            self.cube = self.cube or cube
-            self.front_camera = self.front_camera or front
-            if self.target_pos is None:
-                self.target_pos = target
+            cube_names = [cube.name for cube in self.scene.cubes()]
+            if len(cube_names) > 1:
+                raise ValueError(
+                    "SO101IsaacEnv supports single-cube scenes only; "
+                    f"this scene has cubes {tuple(cube_names)}"
+                )
         if self.randomize_cube is None:
             self.randomize_cube = self.scene is not None
         self.cube_x_range = tuple(self.cube_x_range)
         self.cube_y_range = tuple(self.cube_y_range)
-        # A session manifest's YAML `config:` arrives as plain dicts/lists.
-        if isinstance(self.cube, dict):
-            self.cube = GraspCubeConfig(**self.cube)
-        if isinstance(self.table, dict):
-            self.table = TableConfig(**self.table)
-        if isinstance(self.front_camera, dict):
-            self.front_camera = FrontCameraConfig(**self.front_camera)
         self.cameras = tuple(self.cameras)
-        if self.target_pos is not None:
-            self.target_pos = tuple(self.target_pos)
 
 
 class SO101IsaacEnv:
@@ -305,56 +193,17 @@ class SO101IsaacEnv:
             self.stage, self.description, size=self._render_size
         )
 
-        if self.cfg.front_camera is not None:
-            front = self.cfg.front_camera
-            x_axis = np.asarray(front.x_axis, dtype=np.float64)
-            y_axis = np.asarray(front.y_axis, dtype=np.float64)
-            x_axis /= np.linalg.norm(x_axis)
-            y_axis /= np.linalg.norm(y_axis)
-            z_axis = np.cross(x_axis, y_axis)
-            quat = np.zeros(4)
-            mujoco.mju_mat2Quat(
-                quat, np.stack([x_axis, y_axis, z_axis], axis=1).reshape(9)
-            )
-            self._camera_prims["front"] = add_world_camera(
+        self._cube_path: str | None = None
+        self._cube_body = None
+        if self.cfg.scene is not None:
+            prims = add_workspace(
                 self.stage,
-                "/World_front_camera",
-                position=front.position,
-                quat_wxyz=tuple(quat),
-                fovy_deg=front.fovy_deg,
+                self.cfg.scene,
                 width=self._render_size[0],
                 height=self._render_size[1],
             )
-
-        if self.cfg.table is not None:
-            table = self.cfg.table
-            add_static_box(
-                self.stage,
-                "/World_table",
-                position=table.position,
-                half_extents=table.half_extents,
-                friction=table.friction,
-                rgba=table.rgba,
-            )
-            if self.cfg.target_pos is not None:
-                add_target_pad(
-                    self.stage,
-                    "/World_target_pad",
-                    position=self.cfg.target_pos,
-                    radius=table.target_radius,
-                )
-
-        self._cube_path: str | None = None
-        self._cube_body = None
-        if self.cfg.cube is not None:
-            self._cube_path = add_cube(
-                self.stage,
-                "/World_cube",
-                position=self.cfg.cube.position,
-                half_size=self.cfg.cube.half_size,
-                mass=self.cfg.cube.mass,
-                friction=self.cfg.cube.friction,
-            )
+            self._camera_prims["front"] = prims.front_camera
+            self._cube_path = prims.cubes[0] if prims.cubes else None
 
         self.kin = self._build_kinematics_oracle()
         # Display/telemetry mirror for `physai.web.Host` (`--serve`): never
@@ -438,51 +287,51 @@ class SO101IsaacEnv:
         model = mujoco.MjModel.from_xml_path(str(mjcf_path))
         return ArmKinematics(model)
 
+    def _cube_spec(self) -> CubeSpec:
+        cubes = () if self.cfg.scene is None else self.cfg.scene.cubes()
+        if not cubes:
+            raise AttributeError(
+                "this SO101IsaacEnv has no cube (its scene places none)"
+            )
+        return cubes[0]
+
     @property
     def cube_pos(self) -> np.ndarray:
         if self._cube_path is None:
-            raise AttributeError("this SO101IsaacEnv has no cube (cfg.cube is None)")
+            raise AttributeError(
+                "this SO101IsaacEnv has no cube (its scene places none)"
+            )
         positions, _ = self._cube_body.get_world_poses()
         return np.asarray(positions, dtype=np.float64)[0]
 
     @property
     def table_top(self) -> float:
-        """Height of the surface objects rest on (the ground when no table)."""
-        if self.cfg.table is None:
+        """Height of the surface objects rest on (the ground when no scene)."""
+        if self.cfg.scene is None:
             return 0.0
-        return self.cfg.table.position[2] + self.cfg.table.half_extents[2]
+        return self.cfg.scene.table_pos[2] + self.cfg.scene.table_size[2]
 
     @property
     def cube_half(self) -> float:
-        if self.cfg.cube is None:
-            raise AttributeError("this SO101IsaacEnv has no cube (cfg.cube is None)")
-        return self.cfg.cube.half_size
+        return self._cube_spec().half_size
 
     @property
     def rest_z(self) -> float:
-        """Height a cube rests at — `SO101VisualServoPolicy`'s `_waypoint()`
-        reads this instead of MuJoCo's `cfg.scene.table_pos`/`table_size`/
-        `cube_half`: the table top plus the cube's half size when `cfg.table`
-        is set, else wherever `cfg.cube` was placed (the ground plane)."""
-        if self.cfg.cube is None:
-            raise AttributeError("this SO101IsaacEnv has no cube (cfg.cube is None)")
-        if self.cfg.table is not None:
-            top = self.cfg.table.position[2] + self.cfg.table.half_extents[2]
-            return top + self.cfg.cube.half_size
-        return self.cfg.cube.position[2]
+        """Height a cube rests at: the table top plus the cube's half size.
+        `SO101VisualServoPolicy`'s `_waypoint()` reads this where MuJoCo's
+        `cfg.scene.table_pos`/`table_size`/`cube_half` would be."""
+        return self.table_top + self.cube_half
 
     @property
     def target_pos(self) -> np.ndarray:
-        if self.cfg.target_pos is None:
-            raise AttributeError(
-                "this SO101IsaacEnv has no target (cfg.target_pos is None)"
-            )
-        return np.asarray(self.cfg.target_pos, dtype=np.float64)
+        if self.cfg.scene is None:
+            raise AttributeError("this SO101IsaacEnv has no target (it has no scene)")
+        return np.asarray(self.cfg.scene.target_pos, dtype=np.float64)
 
     def camera_calibration(self, name: str) -> tuple[CameraIntrinsics, Pose]:
         """This camera's pinhole intrinsics and its pose in the base frame.
 
-        `"front"` is world-fixed (`FrontCameraConfig`). `"wrist"` (any
+        `"front"` is world-fixed (the scene's `front_cam_*`). `"wrist"` (any
         description camera) is link-mounted, so its pose is the parent
         link's current pose from the display mirror (`self.data`, refreshed
         by `observe()` before it asks) composed with the description's
@@ -491,18 +340,18 @@ class SO101IsaacEnv:
         the grasp from the wrist view during DESCEND; without it the grasp
         keeps the front camera's centimetre-level triangulation error.
         """
-        if name == "front" and self.cfg.front_camera is not None:
-            front = self.cfg.front_camera
+        if name == "front" and self.cfg.scene is not None:
+            scene = self.cfg.scene
             width, height = self.core.camera_size
-            fovy_deg = front.fovy_deg
-            x_axis = np.asarray(front.x_axis, dtype=np.float64)
-            y_axis = np.asarray(front.y_axis, dtype=np.float64)
+            fovy_deg = FRONT_CAMERA_FOVY_DEG
+            x_axis = np.asarray(scene.front_cam_xyaxes[:3], dtype=np.float64)
+            y_axis = np.asarray(scene.front_cam_xyaxes[3:], dtype=np.float64)
             x_axis /= np.linalg.norm(x_axis)
             y_axis /= np.linalg.norm(y_axis)
             z_axis = np.cross(x_axis, y_axis)
             # MuJoCo's own camera axes: x right, y up, z backward.
             rotation = np.stack([x_axis, y_axis, z_axis], axis=1)
-            position = np.asarray(front.position, dtype=np.float64)
+            position = np.asarray(scene.front_cam_pos, dtype=np.float64)
         else:
             mount = self._mounted_camera(name)
             if mount is None:
@@ -680,7 +529,7 @@ class SO101IsaacEnv:
         """
         if self._cube_path is None:
             return
-        position = list(self.cfg.cube.position)
+        position = list(self._cube_spec().position)
         if self.cfg.randomize_cube:
             position[:2] = draw_cube_xy(
                 self.rng, self.cfg.cube_x_range, self.cfg.cube_y_range
@@ -823,9 +672,6 @@ class SO101IsaacEnv:
 
 
 __all__ = [
-    "FrontCameraConfig",
-    "GraspCubeConfig",
     "IsaacEnvConfig",
     "SO101IsaacEnv",
-    "TableConfig",
 ]

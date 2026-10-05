@@ -9,6 +9,7 @@ data) or `physai.sim.isaac.core` (stepping/rendering machinery).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +19,16 @@ from ..studio import (
     ISAAC_KEY_INTENSITY,
     STUDIO_FLOOR_RGB1,
     STUDIO_FLOOR_RGB2,
+    TABLE_RGBA,
 )
+from ..workspace import (
+    CUBE_FRICTION,
+    FRONT_CAMERA_FOVY_DEG,
+    TABLE_FRICTION,
+    TARGET_RGBA,
+    WorkspaceConfig,
+)
+from .objects import add_cube, add_static_box, add_target_pad
 
 
 def add_studio_lighting(
@@ -166,9 +176,8 @@ def add_world_camera(
     (which move with the arm). The Isaac analogue of MuJoCo's own
     world-body camera (`sim.mujoco.scenes.common.build_manipulation_spec`'s
     "front" camera). `quat_wxyz` is already in USD's own convention
-    (callers needing MuJoCo's `xyaxes` convention -- x/y axis vectors, not
-    a quaternion -- convert with `mujoco.mju_mat2Quat` first, since
-    `physai.sim.isaac` itself must not import `mujoco`).
+    (callers holding MuJoCo's `xyaxes` convention -- x/y axis vectors, not a
+    quaternion -- convert with `xyaxes_to_quat_wxyz` first).
     """
     from pxr import Gf, UsdGeom
 
@@ -190,3 +199,110 @@ def add_world_camera(
     cam.CreateHorizontalApertureAttr(vertical_aperture_mm * width / height)
     cam.CreateClippingRangeAttr(Gf.Vec2f(*DEFAULT_CLIPPING_RANGE_M))
     return path
+
+
+def xyaxes_to_quat_wxyz(xyaxes: tuple[float, ...]) -> tuple[float, float, float, float]:
+    """MuJoCo's camera `xyaxes` (x right, y up; z backward is x cross y) as a
+    (w, x, y, z) orientation quaternion, the form `add_world_camera` takes.
+
+    `physai.sim.isaac` must not import `mujoco`, so this is MuJoCo's
+    `mju_mat2Quat` redone here; a test compares the two.
+    """
+    import numpy as np
+
+    x_axis = np.asarray(xyaxes[:3], dtype=np.float64)
+    y_axis = np.asarray(xyaxes[3:], dtype=np.float64)
+    x_axis /= np.linalg.norm(x_axis)
+    y_axis /= np.linalg.norm(y_axis)
+    r = np.stack([x_axis, y_axis, np.cross(x_axis, y_axis)], axis=1)
+    trace = r[0, 0] + r[1, 1] + r[2, 2]
+    if trace > 0:
+        s = 0.5 / np.sqrt(trace + 1.0)
+        quat = (
+            0.25 / s,
+            (r[2, 1] - r[1, 2]) * s,
+            (r[0, 2] - r[2, 0]) * s,
+            (r[1, 0] - r[0, 1]) * s,
+        )
+    elif r[0, 0] > r[1, 1] and r[0, 0] > r[2, 2]:
+        s = 2.0 * np.sqrt(1.0 + r[0, 0] - r[1, 1] - r[2, 2])
+        quat = (
+            (r[2, 1] - r[1, 2]) / s,
+            0.25 * s,
+            (r[0, 1] + r[1, 0]) / s,
+            (r[0, 2] + r[2, 0]) / s,
+        )
+    elif r[1, 1] > r[2, 2]:
+        s = 2.0 * np.sqrt(1.0 + r[1, 1] - r[0, 0] - r[2, 2])
+        quat = (
+            (r[0, 2] - r[2, 0]) / s,
+            (r[0, 1] + r[1, 0]) / s,
+            0.25 * s,
+            (r[1, 2] + r[2, 1]) / s,
+        )
+    else:
+        s = 2.0 * np.sqrt(1.0 + r[2, 2] - r[0, 0] - r[1, 1])
+        quat = (
+            (r[1, 0] - r[0, 1]) / s,
+            (r[0, 2] + r[2, 0]) / s,
+            (r[1, 2] + r[2, 1]) / s,
+            0.25 * s,
+        )
+    return tuple(float(v) for v in quat)
+
+
+@dataclass(frozen=True)
+class WorkspacePrims:
+    """The prim paths `add_workspace` created that an env goes on to use."""
+
+    front_camera: str
+    cubes: tuple[str, ...]
+
+
+def add_workspace(
+    stage: Any, cfg: WorkspaceConfig, *, width: int, height: int
+) -> WorkspacePrims:
+    """Build the table, target pad, cubes and front camera `cfg` describes.
+
+    The Isaac analogue of `sim.mujoco.scenes.common.build_manipulation_spec`'s
+    workspace half: both read the same `WorkspaceConfig` and the same shared
+    constants, so the two engines frame and populate one scene. PhysX has a
+    single friction coefficient, so the sliding component (first) is used.
+    """
+    front_camera = add_world_camera(
+        stage,
+        "/World_front_camera",
+        position=cfg.front_cam_pos,
+        quat_wxyz=xyaxes_to_quat_wxyz(cfg.front_cam_xyaxes),
+        fovy_deg=FRONT_CAMERA_FOVY_DEG,
+        width=width,
+        height=height,
+    )
+    add_static_box(
+        stage,
+        "/World_table",
+        position=cfg.table_pos,
+        half_extents=cfg.table_size,
+        friction=TABLE_FRICTION[0],
+        rgba=TABLE_RGBA,
+    )
+    add_target_pad(
+        stage,
+        "/World_target_pad",
+        position=cfg.target_pos,
+        radius=cfg.target_radius,
+        rgba=TARGET_RGBA,
+    )
+    cubes = tuple(
+        add_cube(
+            stage,
+            f"/World_{cube.name}",
+            position=cube.position,
+            half_size=cube.half_size,
+            mass=cube.mass,
+            friction=CUBE_FRICTION[0],
+            rgba=cube.rgba,
+        )
+        for cube in cfg.cubes()
+    )
+    return WorkspacePrims(front_camera=front_camera, cubes=cubes)
