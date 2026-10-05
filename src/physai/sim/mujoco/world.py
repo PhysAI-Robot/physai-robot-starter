@@ -215,14 +215,6 @@ class SharedWorld:
                 raise ValueError(f"control for actuator {name!r} is not finite")
             self.data.ctrl[actuator_id] = float(value)
 
-    def joint_positions(self, instance_id: str) -> dict[str, float]:
-        """Read local joint positions without exposing the composite vector."""
-        binding = self.binding(instance_id)
-        return {
-            name: float(self.data.qpos[address])
-            for name, address in binding.qpos_addresses.items()
-        }
-
     def step(self) -> None:
         """Advance the composite world exactly once per control tick."""
         for _ in range(self.n_substeps):
