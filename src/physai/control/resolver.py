@@ -1,14 +1,9 @@
 """Low-level control: turn Cartesian commands into joint targets.
 
-Two resolvers, matching the two arrows in the architecture diagram:
-
-* ``WaypointResolver``  — PoseStamped (from the VLM planner) -> joint targets,
-  via IK. This is the "Nav2-style" open-loop goal path.
-* ``TwistToJointResolver`` — Twist (/cmd_vel, from a VLA policy) -> joint
-  targets, via the damped-pseudoinverse Jacobian. This is the closed-loop path.
-
-Both emit ``Action`` so the env, and later the ROS2 joint controller, take the
-same type regardless of which layer produced the command.
+``TwistToJointResolver`` turns a Twist (/cmd_vel, from a VLA policy) into joint
+targets via the damped-pseudoinverse Jacobian. It emits ``Action`` so the env,
+and later the ROS2 joint controller, take the same type regardless of which
+layer produced the command.
 """
 
 from __future__ import annotations
@@ -17,7 +12,7 @@ from collections.abc import Callable
 
 import numpy as np
 
-from ..contracts import Action, GripperCommand, JointState, PoseStamped, Twist
+from ..contracts import Action, GripperCommand, JointState, Twist
 from ..robots.base import KinematicsPort
 
 
@@ -44,39 +39,6 @@ class JointRateLimiter:
         delta = np.clip(q_target - self._last, -self.max_delta, self.max_delta)
         self._last = self._last + delta
         return self._last.copy()
-
-
-class WaypointResolver:
-    """PoseStamped -> Action (joint positions), via approach-constrained IK."""
-
-    def __init__(
-        self,
-        kin: KinematicsPort,
-        rate_limiter: JointRateLimiter | None = None,
-        approach_dir=None,
-    ) -> None:
-        self.kin = kin
-        self.limiter = rate_limiter
-        self.approach_dir = approach_dir
-
-    def __call__(
-        self,
-        waypoint: PoseStamped,
-        joint_state: JointState,
-        gripper: GripperCommand | None = None,
-    ) -> tuple[Action, float]:
-        """Returns (action, position_error_metres)."""
-        joint_count = len(getattr(self.kin, "joint_names", joint_state.name))
-        q_now = joint_state.position[:joint_count]
-        res = self.kin.ik(
-            waypoint.pose.position.as_array(),
-            self.approach_dir,
-            q_init=q_now,
-        )
-        q = self.limiter(res.qpos) if self.limiter else res.qpos
-        return Action(
-            joint_position=q, gripper=gripper or GripperCommand()
-        ), res.position_error
 
 
 class TwistToJointResolver:

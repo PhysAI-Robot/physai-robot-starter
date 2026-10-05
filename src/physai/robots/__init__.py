@@ -5,7 +5,6 @@ from .adapters import (
     available_adapters,
     create_adapter,
     register_adapter,
-    select_adapter,
 )
 from .base import KinematicsPort, RobotPort, RobotSpec, RobotTrainingContract
 from .registry import (
@@ -21,13 +20,7 @@ from .registry import (
     default_task,
     navigate,
     register_embodiment,
-    register_env_config,
-    register_navigation,
-    register_robot,
     register_robot_policy,
-    register_ros2_node,
-    register_shared_attach,
-    register_shared_instance,
     shared_attach,
 )
 
@@ -52,13 +45,6 @@ __all__ = [
     "navigate",
     "register_adapter",
     "register_embodiment",
-    "register_env_config",
-    "register_navigation",
-    "register_robot",
     "register_robot_policy",
-    "register_ros2_node",
-    "register_shared_attach",
-    "register_shared_instance",
-    "select_adapter",
     "shared_attach",
 ]
