@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..adapters import select_adapter
+from ..adapters import create_adapter
 from ..base import RobotPort
 from .mujoco_env import EnvConfig, SO101Env
 
@@ -48,7 +48,7 @@ def make_so101(
                 "robot config is not used by adapter='ros2_real'; "
                 "configure the hardware port instead"
             )
-        return select_adapter(
+        return create_adapter(
             adapter, None, transport=transport, hardware=hardware, codec=codec
         )
     if simulator == "isaac":
@@ -61,6 +61,6 @@ def make_so101(
         direct = SO101Env(config or so101_env_config(simulator="mujoco", **kwargs))
     else:
         raise ValueError(f"unknown simulator {simulator!r}; available: isaac, mujoco")
-    return select_adapter(
+    return create_adapter(
         adapter, direct, transport=transport, hardware=hardware, codec=codec
     )

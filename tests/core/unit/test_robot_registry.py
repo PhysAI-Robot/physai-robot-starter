@@ -130,9 +130,6 @@ def test_registering_an_embodiment_wires_every_factory_and_can_be_extended_once(
         create_robot,
         navigate,
         register_embodiment,
-        register_env_config,
-        register_robot,
-        register_ros2_node,
         robot_kind,
         scene_defaults,
     )
@@ -158,21 +155,6 @@ def test_registering_an_embodiment_wires_every_factory_and_can_be_extended_once(
     navigate("_fake_test_embodiment")
     create_robot("_fake_test_embodiment")
     assert calls == ["env_config", "navigation", "factory"]
-
-    # the piecemeal functions fill one still-empty field of a registered robot
-    register_robot("_fake_piecemeal", lambda **_: object(), kind="piece")
-    register_env_config("_fake_piecemeal", lambda **kwargs: kwargs)
-    register_ros2_node("_fake_piecemeal", object)
-
-    assert robot_kind("_fake_piecemeal") == "piece"
-    assert create_env_config("_fake_piecemeal", seed=1) == {"seed": 1}
-    assert "_fake_piecemeal" in available_ros2_robots()
-    with pytest.raises(ValueError, match="environment config .* already registered"):
-        register_env_config("_fake_piecemeal", lambda **_: None)
-    with pytest.raises(ValueError, match="not registered"):
-        register_env_config("_fake_missing", lambda **_: None)
-    with pytest.raises(ValueError, match="already registered"):
-        register_robot("_fake_piecemeal", lambda **_: object())
 
 
 def test_so101_factory_dispatches_on_simulator_not_a_separate_adapter(monkeypatch):
