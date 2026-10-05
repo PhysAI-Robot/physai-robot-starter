@@ -61,12 +61,8 @@ _STEPS_PER_PHASE = (
 
 @pytest.fixture(scope="module")
 def env():
-    from physai.robots.so101.isaac_env import (
-        GraspCubeConfig,
-        IsaacEnvConfig,
-        SO101IsaacEnv,
-        TableConfig,
-    )
+    from physai.robots.so101.isaac_env import IsaacEnvConfig, SO101IsaacEnv
+    from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
 
     cfg = IsaacEnvConfig(
         usd_out_dir=REPO_ROOT / ".isaac_cache" / "so101_grasp_hold_test",
@@ -75,8 +71,8 @@ def env():
         cameras=(),
         max_steps=1000,
         # The same table scene the MuJoCo grasp-hold test grasps in.
-        table=TableConfig(),
-        cube=GraspCubeConfig(position=(0.20, 0.08, 0.036)),
+        scene=SingleCubeFixedPlaceSceneConfig(),
+        randomize_cube=False,
     )
     instance = SO101IsaacEnv(cfg)
     try:
