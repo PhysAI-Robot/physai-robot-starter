@@ -192,7 +192,7 @@ Every seam is one new file plus one registration call, except where noted.
 | Planner (core baseline) | `planner/base.py` | `register_planner(name, factory)` in `planner/registry.py:_load_builtins()` |
 | Planner (research) | `research/<topic>/<name>.py` | `register_planner(name, factory)`, called by the module itself on import |
 | Transport adapter | `robots/adapters.py` (a new builder function) | `register_adapter(name, builder)` in `robots/adapters.py:_load_builtins()` |
-| Simulator engine | `sim/<engine>/` package (mirrors `sim/mujoco/`) | Add the engine to a `RobotDescriptor.simulators` tuple in `robots/registry.py:_load_builtins()`; the robot's own factory branches on `simulator=` to build the right port (see `robots/so101/factory.py`), and its `env_config` factory branches the same way if it needs a second config type. See [ADR 15](adr/0015-simulator-engine-selection.md). |
+| Simulator engine | `sim/<engine>/` package (mirrors `sim/mujoco/`) | Add the engine to a `RobotDescriptor.simulators` tuple in `robots/registry.py:_load_builtins()`; the robot's own factory branches on `simulator=` to build the right port (see `robots/so101/factory.py`), and its `env_config` factory branches the same way if it needs a second config type. See [ADR 15](adr/simulators.md#adr-15-simulator-engine-selection). |
 | Client capability control | `web/static/js/controls.js` / `ui.js` | None — capabilities are declarative data (`RobotSpec.action_modes`/`capabilities`), rendered conditionally; this is a UI branch on data, not a registry |
 
 Robot registration touches one function in one file (`_load_builtins()`),
@@ -208,7 +208,7 @@ navigation, shared-world attach/instance) supplies up to six fields on one
 | Ports | `robots/base.py` (`RobotPort`, `RobotSpec`, `RobotTrainingContract`, `KinematicsPort`); `policy/base.py` (`Policy`); `tasks/base.py` (`Task`); `planner/base.py` (`Planner`, `Plan`/`SubGoal`) | Concrete implementations of each ABC |
 | Manifest schema | `SessionManifest`'s field names/types/validation rules (see [Session manifest](#session-manifest)) once a session depends on them | Which YAML files exist under `configs/` |
 | Host API | The method surface in [Host + client API](#host--client-api) | `Host`'s internal threading model, camera cadence, lease timeout |
-| Folder tree | Top-level package boundaries (`robots/`, `policy/`, `tasks/`, `planner/`, `sim/`, `web/`, `runtime/`, `research/`), `sim/`'s one-subpackage-per-engine shape (`sim/mujoco/`, `sim/isaac/`; see [ADR 14](adr/0014-simulator-package-layout.md)), and the rule that core never imports `research/` | Internal file layout inside one robot's package, one research topic, or one simulator backend |
+| Folder tree | Top-level package boundaries (`robots/`, `policy/`, `tasks/`, `planner/`, `sim/`, `web/`, `runtime/`, `research/`), `sim/`'s one-subpackage-per-engine shape (`sim/mujoco/`, `sim/isaac/`; see [ADR 14](adr/simulators.md#adr-14-simulator-package-layout-and-adapter-names)), and the rule that core never imports `research/` | Internal file layout inside one robot's package, one research topic, or one simulator backend |
 | Registries | The register/create pattern itself | Which specific factories are registered, and in what order |
 
 Evolution rule: a frozen item changes only via (1) an ADR under `docs/adr/`,
@@ -304,7 +304,7 @@ gripper-specific pad and wrist-camera fit are configuration the robot supplies
 through `scene_defaults()`, not generic defaults. Each scene config describes
 its cubes through `cubes()` and builds MuJoCo through `build_spec()`/
 `build_model()`, so selecting a scene is selecting a class rather than
-decoding an object-count flag. See [ADR 17](adr/0017-sim-neutral-workspace.md).
+decoding an object-count flag. See [ADR 17](adr/contracts-and-descriptions.md#adr-17-sim-neutral-workspace-description).
 
 ## Session manifest
 
@@ -350,7 +350,7 @@ supports — so101 is the only one with more than one today). A robot's own
 `config` must not repeat it, the same way it must not repeat `simulation`'s
 fields. A non-`"mujoco"` engine rejects a `world` block (or more than one
 robot, which implies one), `backend: ros2_sim`, and any `viewer.mode` other
-than `none` — see [ADR 15](adr/0015-simulator-engine-selection.md) and
+than `none` — see [ADR 15](adr/simulators.md#adr-15-simulator-engine-selection) and
 `configs/manifests/so101_isaac.yaml` for a working example.
 `scripts/run_sim.py --sim {mujoco,isaac}` overrides it from the command line
 (`physai.config.compat.with_overrides`, which re-runs this same validation
@@ -362,7 +362,7 @@ file), `--world` (world file), and bare `--robot` inputs are converted by
 `physai.config.legacy` and the files under `configs/tasks/` and
 `configs/worlds/` remain for that window and for `scripts/run_ros2_sim.py`.
 Worked examples live in `configs/manifests/`. The decision is recorded in
-[ADR 10](adr/0010-manifest-adoption.md).
+[ADR 10](adr/config-and-sessions.md#adr-10-the-manifest-becomes-the-run-description).
 
 ## Host + client API
 
@@ -424,13 +424,13 @@ robot kinematics' optional `tool_pose(data)`, the pinch centre for SO-101); and
 the `paused`, `recording`, and `playback` status blocks, merged in at read
 time by `Host.latest_state()` so a paused world still reports changes.
 Recording and playback are specified in
-[ADR 9](adr/0009-web-session-recording-and-playback.md).
+[ADR 9](adr/web-host.md#adr-9-record-and-replay-web-sessions-through-the-existing-data-path).
 
 Both clients depend only on this API plus `RobotSpec` capabilities:
 
 - **`--viewer` (native MuJoCo):** `mujoco.viewer.launch_passive` renders a
   private `MjData` copy refreshed under `Host.physics_lock` (see
-  [ADR 4](adr/0004-tk-viewer-frozen.md)). It has no camera panel of its own;
+  [ADR 4](adr/web-host.md#adr-4---viewer-is-mujocos-own-viewer-frozen-in-scope)). It has no camera panel of its own;
   combine it with `--serve`.
 - **`--serve` (FastAPI + Three.js):** the sophisticated client; all new UI
   features go here. See [docs/WEB_VIEWER_RUNBOOK.md](WEB_VIEWER_RUNBOOK.md)
@@ -482,7 +482,7 @@ ships the contracts plus minimal baselines only; per-module placement:
 | `research/imitation_learning/{act_dataset,vla_adapter,train_act}.py` | Research | ACT/LeRobot training pipeline and the checkpoint-backed `LeRobotPolicy` |
 | `research/vlm_planners/sorting_planner.py` | Research | Task-coupled (reads privileged `env.cube_positions`), not a generic baseline |
 
-See [ADR 3](adr/0003-research-outside-core.md) for the decision and
+See [ADR 3](adr/repo-scope.md#adr-3-research-code-lives-outside-the-core-package) for the decision and
 `research/README.md` for the one rule research code follows.
 
 The boundary also holds at test time: `tests/core/` (mirroring `physai`'s
@@ -505,7 +505,7 @@ generic contracts. `single_cube_fixed_place` needs arm and gripper capabilities,
 policy, demo, and planner workflows are SO-101-specific today. TurtleBot4
 (native model, differential drive, RPP navigation, ROS2/Nav2 acceptance path)
 shows the capability abstraction generalizes and is not a development focus
-([ADR 5](adr/0005-turtlebot4-kept-as-second-embodiment.md)). The pick-place
+([ADR 5](adr/repo-scope.md#adr-5-turtlebot4-stays-as-the-second-embodiment)). The pick-place
 and sorting tasks are minimal baselines (`physai.tasks.single_cube_fixed_place`,
 `sorting_minimal`; registry keys `single_cube_fixed_place` and `sorting`).
 
@@ -545,7 +545,7 @@ same metadata.
 A recording may add `observation.environment_state` (`(T, nq)` float64, the
 full simulator qpos), declared in `meta.json`'s `features`; the web recorder
 and `scripts/collect_demos.py` write it (see
-[ADR 9](adr/0009-web-session-recording-and-playback.md)). Metadata also
+[ADR 9](adr/web-host.md#adr-9-record-and-replay-web-sessions-through-the-existing-data-path)). Metadata also
 records the scene name and configuration snapshot, so runs stay reproducible
 as the scene registry grows.
 
@@ -636,7 +636,7 @@ meant to be the frozen reference:
   --viewer`, shared worlds (`physai.sim.mujoco.world.SharedWorld`), the
   ROS2 bridge, and `robots/so101/kinematics.py`'s `ArmKinematics` are
   MuJoCo-only; a manifest combining `simulator: isaac` with any of them is
-  rejected at load time (see [ADR 15](adr/0015-simulator-engine-selection.md))
+  rejected at load time (see [ADR 15](adr/simulators.md#adr-15-simulator-engine-selection))
   rather than silently failing deep, but none of the limitations are
   resolved by that rejection. `scripts/collect_demos.py` and
   `scripts/eval_policy.py` do not accept `--sim` either, since neither calls

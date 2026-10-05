@@ -2,7 +2,7 @@
 test, comparing slip against the MuJoCo no-slip baseline in
 `test_so101_grasp_hold.py` (`ROADMAP.md`'s 2E). Skipped wherever `isaacsim`
 is not installed — `uv sync --extra isaac` installs it into this project's
-own venv (see `docs/adr/0016-isaacsim-as-a-project-extra.md`).
+own venv (see `docs/adr/simulators.md, ADR 16`).
 
 Deliberately not a port of `SO101PickPlaceExpert`: that class is tuned
 against MuJoCo-specific behavior (raw `MjData` contact iteration in

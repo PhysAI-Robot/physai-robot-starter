@@ -27,7 +27,7 @@ At yaw zero, positive linear velocity drives along the model's world `-Y`
 direction. The navigation controller and tests use this model convention.
 
 MuJoCo's own desktop viewer is also available as a fallback when a browser
-isn't convenient (see [ADR 4](adr/0004-tk-viewer-frozen.md)); add
+isn't convenient (see [ADR 4](adr/web-host.md#adr-4---viewer-is-mujocos-own-viewer-frozen-in-scope)); add
 `--viewer` in place of `--serve` above.
 
 ## 2. Validate Basic Differential-Drive Control

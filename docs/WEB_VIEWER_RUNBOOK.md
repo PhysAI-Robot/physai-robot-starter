@@ -240,7 +240,7 @@ It replays recorded simulator state (`observation.environment_state`, so the
 cube and other objects are exact) on the same paused world and never
 re-simulates. While an episode is loaded, jog input, Reset, Resume and Record
 are refused, and each contact-force readout shows `n/a` (see
-[ADR 9](adr/0009-web-session-recording-and-playback.md)). The tip pose is
+[ADR 9](adr/web-host.md#adr-9-record-and-replay-web-sessions-through-the-existing-data-path)). The tip pose is
 recomputed from the restored state. Episodes without
 `observation.environment_state` (datasets collected before `collect_demos.py`
 began saving it) are listed but not playable.

@@ -2,7 +2,7 @@
 running its full detect -> approach -> grasp -> transfer -> place loop
 (`ROADMAP.md`'s 2E). Skipped wherever `isaacsim` is not installed — `uv
 sync --extra isaac` installs it into this project's own venv (see
-`docs/adr/0016-isaacsim-as-a-project-extra.md`).
+`docs/adr/simulators.md, ADR 16`).
 
 The cube and target here are fixed, configured positions (the low-level
 `cube`/`table`/`target_pos` config), which makes this the quick check that the
