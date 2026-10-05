@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..adapters import select_adapter
+from ..adapters import create_adapter
 from ..base import RobotPort
 from .env import TurtleBot4Config, TurtleBot4Env
 
@@ -36,6 +36,6 @@ def make_turtlebot4(
             "pass either config or TurtleBot4Config keyword fields, not both"
         )
     direct = TurtleBot4Env(config or TurtleBot4Config(**kwargs))
-    return select_adapter(
+    return create_adapter(
         adapter, direct, transport=transport, hardware=hardware, codec=codec
     )
