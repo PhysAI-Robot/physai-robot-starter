@@ -83,9 +83,9 @@ and `Action` at the boundary.
 | `physai.config` | Typed YAML configuration parsing (`legacy`: per-robot/per-world loaders; `manifest`: the session manifest), delegated to robot-owned config factories and the registries | Simulation behavior, robot construction, or task evaluation |
 | `physai.robots` | Embodiment discovery, `RobotSpec`, robot ports, factories, environments, robot-specific adapters, backend registry (`adapters.py`), and shared-world instance/attach factories | Task reward, planner decisions, or model SDKs |
 | `physai.tasks` | Task state, reset rules, reward, metrics, and termination | Robot internals or action generation |
-| `physai.sim` | Nothing itself — a namespace over one subpackage per simulator engine | Any code; importing `physai.sim` alone must never require an engine SDK |
+| `physai.sim` | One subpackage per simulator engine, plus the neutral modules both share (`studio`: the common look; `workspace`: the table, target, cubes and front camera both build) | Engine code; importing `physai.sim` alone must never require an engine SDK, and the neutral modules never import one |
 | `physai.sim.mujoco` | MuJoCo simulation core, generic scene primitives, task-specific scene builders, the shared multi-robot world, rendering, and simulation time | Robot-specific environment logic, ROS2 transport, QoS, callbacks, or any robot-name branch (`SharedWorld` takes an optional `shared_attach` hook instead) |
-| `physai.sim.isaac` | Isaac Sim's `SimulationApp` lifecycle, applying a `RobotDescription` to a USD stage (frames, cameras, contact-pad friction, actuator gains), and generic world extras (lighting, ground plane) — the Isaac analogue of `physai.sim.mujoco` | Robot-specific environment logic or task/scene composition (see `robots.so101.isaac_env`, the only other module allowed to import Isaac Sim); importing `physai.sim.mujoco` |
+| `physai.sim.isaac` | Isaac Sim's `SimulationApp` lifecycle, applying a `RobotDescription` to a USD stage (frames, cameras, contact-pad friction, actuator gains), generic world extras (lighting, ground plane), and the workspace builder (`add_workspace`) — the Isaac analogue of `physai.sim.mujoco` | Robot-specific environment logic or task/scene composition (see `robots.so101.isaac_env`, the only other module allowed to import Isaac Sim); importing `physai.sim.mujoco` |
 | `physai.planner` | Instruction and image grounding, `Plan`, `SubGoal` production, and the planner registry | Control-rate motor commands; research planners |
 | `physai.policy` | Control-rate `Action` production, core baseline policies (`constant`, `constant_twist`, `replay`), and the policy registry | Task scoring, robot discovery, or checkpoint-backed inference |
 | `physai.control` | Action resolution, capability checks, and rate limiting | High-level planning or task semantics |
@@ -109,7 +109,7 @@ src/physai/
 │   ├── so101/         SO-101 environment (mujoco_env.py, isaac_env.py), object layouts, kinematics, shared-world adapter
 │   └── turtlebot/     TurtleBot4 environment and shared-world adapter
 ├── tasks/             task rules and registry
-├── sim/               simulator backends, one subpackage per engine (no code of its own)
+├── sim/               simulator backends, one subpackage per engine, plus neutral `studio` and `workspace`
 │   ├── mujoco/        MuJoCo simulation core, shared world, and scene orchestration
 │   │   └── scenes/    shared world builder and task-specific scene variants
 │   └── isaac/         Isaac Sim core, RobotDescription -> USD, generic world extras (optional backend)
@@ -278,10 +278,17 @@ composition, and a scene's embodiment defaults come from the robot's
 Scene geometry is split by task while robot and workspace components are shared:
 
 ```text
+sim/workspace.py (neutral: imports neither engine)
+     +-- WorkspaceConfig: table, target, front camera, cubes()
+     +-- shared friction, target colour, and camera field-of-view constants
+
 sim/mujoco/scenes/common.py
-     +-- WorldSceneConfig: generic model, workspace, and camera settings
+     +-- WorldSceneConfig: WorkspaceConfig plus the MuJoCo-only model settings
      +-- ManipulationSceneConfig: configurable end-effector and pad attachments
-     +-- shared manipulation-world builder
+     +-- shared manipulation-world builder (reads WorkspaceConfig)
+
+sim/isaac/scene.py
+     +-- add_workspace: the same WorkspaceConfig as USD prims
 
 sim/mujoco/scenes/single_cube_fixed_place.py
      +-- one cube and one target layout
@@ -296,9 +303,10 @@ strategy (`robots/so101/layout.py`) that places the objects each episode and
 reads them back, so a scene with a new arrangement adds a layout rather than
 editing the environment. Robot model paths, end-effector anchors, and the
 gripper-specific pad and wrist-camera fit are configuration the robot supplies
-through `scene_defaults()`, not generic defaults. Each scene config builds
-itself through `build_spec()`/`build_model()`, so selecting a scene is
-selecting a class rather than decoding an object-count flag.
+through `scene_defaults()`, not generic defaults. Each scene config describes
+its cubes through `cubes()` and builds MuJoCo through `build_spec()`/
+`build_model()`, so selecting a scene is selecting a class rather than
+decoding an object-count flag. See [ADR 17](adr/0017-sim-neutral-workspace.md).
 
 ## Session manifest
 
