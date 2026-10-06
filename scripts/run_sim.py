@@ -16,7 +16,7 @@ python scripts/run_sim.py --serve              # web host only, no desktop windo
 python scripts/run_sim.py --sim isaac --manifest configs/manifests/so101_single_cube_fixed_place.yaml --policy visual_servo
                                                 # the same manifest on Isaac Sim; --video, --record
                                                 # and --serve (web viewer) work as on MuJoCo
-                                                # (no --viewer/--record-dir with --serve; needs
+                                                # (no --viewer/--dataset-dir with --serve; needs
                                                 # isaacsim installed, see README.md; not exercised
                                                 # by this repo's own CI)
 
@@ -144,21 +144,21 @@ def build_manifest(
 def main(argv: list[str] | None = None) -> int:
     ap, args = parse_args(argv)
     if args.record and args.serve:
-        ap.error("--record writes per-episode files; with --serve use --record-dir")
+        ap.error("--record writes per-episode files; with --serve use --dataset-dir")
 
     manifest = build_manifest(ap, args)
     if manifest.world is not None and not (args.viewer or args.serve):
         ap.error("a shared-world session requires --viewer or --serve")
-    if args.record_dir and manifest.world is not None:
-        ap.error("--record-dir is not available with a shared world")
+    if args.dataset_dir and manifest.world is not None:
+        ap.error("--dataset-dir is not available with a shared world")
     if manifest.simulator != "mujoco":
         if args.viewer:
             ap.error(
                 f"--viewer is MuJoCo-only; simulator {manifest.simulator!r} "
                 "supports --serve (web viewer) or headless episodes"
             )
-        if args.serve and args.record_dir:
-            ap.error("--record-dir is MuJoCo-only")
+        if args.serve and args.dataset_dir:
+            ap.error("--dataset-dir is MuJoCo-only")
 
     if args.viewer or args.serve:
         return run_viewer(args, manifest)
@@ -264,7 +264,7 @@ def build_host(
         policy=session.runtime.policy,
         reset_seed=manifest.simulation.seed,
         async_cameras=session.host_renders_cameras,
-        record_dir=args.record_dir,
+        dataset_dir=args.dataset_dir,
     )
     return host, session
 

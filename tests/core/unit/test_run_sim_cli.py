@@ -104,14 +104,14 @@ def test_a_manifest_selects_the_run_and_the_old_flags_work_with_a_notice(
 def test_incompatible_flags_are_rejected(run_sim, monkeypatch, capsys):
     cases = [
         (["--manifest", "m.yaml", "--robot", "so101"], "cannot be combined"),
-        (["--record", "--serve"], "use --record-dir"),
+        (["--record", "--serve"], "use --dataset-dir"),
         (["--manifest", WORLD], "requires --viewer or --serve"),
         (
             ["--manifest", WORLD, "--serve", "--policy", "constant"],
             "cannot be used with a shared world",
         ),
         (
-            ["--manifest", WORLD, "--serve", "--record-dir", "d"],
+            ["--manifest", WORLD, "--serve", "--dataset-dir", "d"],
             "not available with a shared world",
         ),
         (
@@ -119,8 +119,8 @@ def test_incompatible_flags_are_rejected(run_sim, monkeypatch, capsys):
             "--viewer is MuJoCo-only",
         ),
         (
-            ["--sim", "isaac", "--manifest", ISAAC, "--serve", "--record-dir", "d"],
-            "--record-dir is MuJoCo-only",
+            ["--sim", "isaac", "--manifest", ISAAC, "--serve", "--dataset-dir", "d"],
+            "--dataset-dir is MuJoCo-only",
         ),
     ]
 

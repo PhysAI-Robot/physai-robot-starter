@@ -81,7 +81,7 @@ default camera and video folder.
    `EpisodeObserver`s.
 3. `max_steps` has no script default: it is the manifest's, and `--max-steps`
    overrides it. The output flags are defined once (`--video`, `--camera`, `--record`,
-   `--record-dir`, `--out-dir`, `--name`) and `scripts/_outputs.py` writes them.
+   `--dataset-dir`, `--out-dir`, `--name`) and `scripts/_outputs.py` writes them.
 4. `collect_demos.py` and `eval_randomization.py` build their session from the same
    manifests and run episodes through `run_episode`, so they no longer assemble
    environments by hand. `run_sim.py` drops its deprecated `--config` and `--world`
@@ -96,5 +96,6 @@ failures run the full length. The research READMEs and `sweep_difficulty.py` sti
 `eval_policy.py` lost `--robot` and `--render` (the manifest names the robot; cameras
 render whenever a video, recording or image policy needs them), and `--video-dir` and
 `--video-name` became `--out-dir` (videos under `videos/`, recordings under
-`recordings/`) and `--name`. `collect_demos.py` also loses `--robot`, and its dataset now
+`recordings/`) and `--name`. `--record-dir` is now `--dataset-dir` (the layout it writes, and the one
+`--dataset` reads for `--policy replay`). `collect_demos.py` also loses `--robot`, and its dataset now
 carries the `extras.*` arrays; its states, actions and rewards are unchanged.

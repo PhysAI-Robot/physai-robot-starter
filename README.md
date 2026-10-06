@@ -78,7 +78,7 @@ MUJOCO_GL=egl uv run python scripts/run_sim.py --manifest configs/manifests/hete
 ```
 
 Serve mode holds the current pose until you pass `--policy` (for example `--policy scripted`);
-add `--record-dir data/web_session` to record episodes from the browser. Headless `run_sim.py` and `eval_policy.py` take `--record` (like `--video`: `outputs/recordings/<sim>_<robot>_<policy>_seed<seed>.npz` + `.json`; `--out-dir` moves `videos/` and `recordings/`, `--name` replaces the prefix) or `--record-dir` (a dataset directory); either saves every input per step (cameras, joints, `extras.*` such as grip force and visual-servo detections) for later analysis. `--viewer` opens
+add `--dataset-dir data/web_session` to record episodes from the browser. Headless `run_sim.py` and `eval_policy.py` take `--record` (like `--video`: `outputs/recordings/<sim>_<robot>_<policy>_seed<seed>.npz` + `.json`; `--out-dir` moves `videos/` and `recordings/`, `--name` replaces the prefix) or `--dataset-dir` (a dataset directory); either saves every input per step (cameras, joints, `extras.*` such as grip force and visual-servo detections) for later analysis. `--viewer` opens
 MuJoCo's own desktop window instead of, or alongside, `--serve`
 ([ADR 4](docs/adr/web-host.md#adr-4---viewer-is-mujocos-own-viewer-frozen-in-scope)). The third
 command puts several robots in one scene, model and clock. The

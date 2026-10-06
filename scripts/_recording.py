@@ -1,6 +1,6 @@
-"""`--record` / `--record-dir` for headless runs (`run_sim.py`, `eval_policy.py`).
+"""`--record` / `--dataset-dir` for headless runs (`run_sim.py`, `eval_policy.py`).
 
-Dataset mode (`--record-dir`) feeds one `EpisodeRecorder` in the layout
+Dataset mode (`--dataset-dir`) feeds one `EpisodeRecorder` in the layout
 training, replay and the web viewer read. Flat mode (`--record`) writes one
 `<name>_seed<seed>.npz` + `.json` per episode, next to each other like videos.
 """
@@ -24,22 +24,22 @@ class RunRecorder(EpisodeObserver):
         fps: float,
         name: str,
         task: str,
-        record_dir: Path | None = None,
+        dataset_dir: Path | None = None,
         out_dir: Path = Path("outputs"),
         metadata: dict | None = None,
         fresh: bool = False,
     ) -> None:
         """`metadata` is extra `EpisodeRecorder` arguments (scene, cameras, ...);
-        `fresh` starts a dataset in `record_dir` instead of continuing one."""
+        `fresh` starts a dataset in `dataset_dir` instead of continuing one."""
         self._runtime, self._robot = runtime, runtime.robot
         self._fps, self._name, self._task = fps, name, task
-        self._record_dir = record_dir
+        self._dataset_dir = dataset_dir
         self._metadata = metadata or {}
         self._flat_dir = out_dir / "recordings"
         self._rec: EpisodeRecorder | None = None
         self._pending: tuple | None = None
-        if record_dir is not None:
-            self._rec = self._new_recorder(record_dir)
+        if dataset_dir is not None:
+            self._rec = self._new_recorder(dataset_dir)
             if not fresh:
                 self._load_existing()
 
@@ -59,14 +59,14 @@ class RunRecorder(EpisodeObserver):
     def _load_existing(self) -> None:
         import json
 
-        meta = self._record_dir / "meta.json"
+        meta = self._dataset_dir / "meta.json"
         if meta.exists():
             self._rec.episodes = json.loads(meta.read_text(encoding="utf-8"))[
                 "episodes"
             ]
 
     def on_reset(self, observation) -> None:
-        if self._record_dir is None:
+        if self._dataset_dir is None:
             self._rec = self._new_recorder(self._flat_dir)
         self._rec.start_episode()
 
@@ -109,7 +109,7 @@ class RunRecorder(EpisodeObserver):
 
     def end(self, success: bool, seed: int, **extra) -> Path | None:
         extra = {"seed": seed, **extra}
-        if self._record_dir is not None:
+        if self._dataset_dir is not None:
             return self._rec.end_episode(success, extra=extra)
         stem = next_video_stem(self._flat_dir, self._name, seed, (".npz",))
         path = self._rec.end_episode(
@@ -120,5 +120,5 @@ class RunRecorder(EpisodeObserver):
         return path
 
     def close(self) -> None:
-        if self._record_dir is not None:
+        if self._dataset_dir is not None:
             self._rec.write_meta()

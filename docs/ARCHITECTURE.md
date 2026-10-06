@@ -325,7 +325,7 @@ purposes, and each owns only what that purpose needs:
 | --- | --- | --- | --- |
 | Purpose | Run and look at one session: quick check, debugging, demo, recording | Measure a policy over N seeds with numbers that can be compared | Make a dataset with the scripted expert, which reads privileged state |
 | Output | Viewer or web host, video, `.npz` recording | `EvaluationReport`, `--json-out`, a summary | `episode_*.npz` and `meta.json` |
-| Only here | `--viewer`, `--serve`, shared worlds, web `--record-dir` | `--seeds`, `--json-out`, `--policy replay`, the difficulty flags (`--camera-jitter`, `--lighting-scale`, `--clutter-count`, `--nominal-physics`), `--sorting`, the training-seed overlap warning | the expert, `environment_state` |
+| Only here | `--viewer`, `--serve`, shared worlds, web `--dataset-dir` | `--seeds`, `--json-out`, `--policy replay`, the difficulty flags (`--camera-jitter`, `--lighting-scale`, `--clutter-count`, `--nominal-physics`), `--sorting`, the training-seed overlap warning | the expert, `environment_state` |
 | Safety refusal | printed, the episode ends | counted as `unsafe_action` | not applicable |
 
 Who owns what, so the scripts do not drift apart:
@@ -342,7 +342,7 @@ Who owns what, so the scripts do not drift apart:
   uses them.
 - **A script** parses flags, builds a manifest with overrides, calls the rollout and
   prints or saves the result. The output flags (`--video`, `--camera`, `--record`,
-  `--record-dir`, `--out-dir`, `--name`) are defined once in `scripts/_common_args.py`, and
+  `--dataset-dir`, `--out-dir`, `--name`) are defined once in `scripts/_common_args.py`, and
   `scripts/_outputs.py` writes what they ask for after each episode.
 
 The decision is [ADR 20](adr/config-and-sessions.md#adr-20-run_sim-and-eval_policy-share-one-session-and-one-rollout).

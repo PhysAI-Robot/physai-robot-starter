@@ -1,6 +1,6 @@
 """What `run_sim.py` and `eval_policy.py` save per episode, from one set of flags.
 
-`--video` (a camera's frames) and `--record` / `--record-dir` (every input as
+`--video` (a camera's frames) and `--record` / `--dataset-dir` (every input as
 data) both watch the episode through `EpisodeObserver`s; this owns creating
 them, the file names, and writing them once the episode has run.
 """
@@ -22,7 +22,7 @@ from _video import (
 
 def wants_cameras(args: argparse.Namespace) -> bool:
     """Whether the flags need camera frames rendered."""
-    return args.video is not None or args.record or args.record_dir is not None
+    return args.video is not None or args.record or args.dataset_dir is not None
 
 
 class RunOutputs:
@@ -46,10 +46,10 @@ class RunOutputs:
                 fps=fps,
                 name=self._name,
                 task=task,
-                record_dir=args.record_dir,
+                dataset_dir=args.dataset_dir,
                 out_dir=args.out_dir,
             )
-            if args.record or args.record_dir is not None
+            if args.record or args.dataset_dir is not None
             else None
         )
 
