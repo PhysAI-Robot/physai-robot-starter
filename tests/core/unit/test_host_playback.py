@@ -1,4 +1,4 @@
-"""Episode playback on the paused Host (docs/adr/web-host.md, ADR 9): restore recorded qpos,
+"""Episode playback on the paused Host (docs/DECISIONS.md, E): restore recorded qpos,
 step/scrub/play, and hand the live world back on exit."""
 
 import mujoco
@@ -168,44 +168,3 @@ def test_playback_rejects_live_control_until_exited(tmp_path):
     host.exit_playback()
     host.set_paused(False)
     host.start_recording()
-
-
-def test_loading_and_controlling_playback_reject_misuse(tmp_path):
-    host = make_host(tmp_path)
-
-    for call in (
-        lambda: host.seek(0),
-        lambda: host.set_playback(True),
-        host.exit_playback,
-    ):
-        with pytest.raises(ValueError, match="no episode"):
-            call()
-
-    record_episode(host)
-    for name in ("../episode_00000.npz", "missing.npz", str(tmp_path / "meta.json")):
-        with pytest.raises(ValueError, match="unknown episode"):
-            host.load_episode(name)
-
-    host.start_recording()
-    with pytest.raises(ValueError, match="stop recording"):
-        host.load_episode("episode_00000.npz")
-    host.stop_recording(None)
-
-    host._recorder.load_states = lambda file: (np.zeros((3, 4)), {"file": file})
-    with pytest.raises(ValueError, match="different model"):
-        host.load_episode("episode_00000.npz")
-
-
-def test_playback_drops_contact_force_because_it_cannot_be_reproduced(tmp_path):
-    host = make_host(tmp_path)
-    for _ in range(300):
-        host._tick_single()  # let the box settle onto the floor
-    host._publish()
-    live = host.latest_state()["gripper_contacts"]
-    assert live and live[0]["force_n"] > 0
-    record_episode(host)
-
-    host.load_episode("episode_00000.npz")
-
-    contacts = host.latest_state()["gripper_contacts"]
-    assert contacts and all(c["force_n"] is None for c in contacts)

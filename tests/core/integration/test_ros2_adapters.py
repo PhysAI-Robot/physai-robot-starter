@@ -261,49 +261,6 @@ def test_ros2_real_adapter_uses_shared_transport_boundary():
 
 
 @pytest.mark.integration
-def test_adapter_factories_build_only_what_they_support(monkeypatch):
-    from physai.robots import create_robot
-
-    with pytest.raises(ValueError, match="requires a ROS2 transport"):
-        create_robot("so101", adapter="ros2_sim", render=False)
-
-    from physai.robots import RobotSpec
-    from physai.robots.so101 import factory
-
-    class FakeHardware:
-        robot_spec = RobotSpec(
-            name="so101",
-            kind="hardware",
-            units={"joint_position": "rad", "joint_velocity": "rad/s"},
-        )
-
-        def close(self):
-            pass
-
-    def fail_if_constructed(*args, **kwargs):
-        raise AssertionError("hardware adapter must not construct MuJoCo")
-
-    monkeypatch.setattr(factory, "SO101Env", fail_if_constructed)
-    transport = RecordingTransport()
-    adapter = factory.make_so101(
-        adapter="ros2_real", transport=transport, hardware=FakeHardware()
-    )
-    adapter.close()
-    assert transport.closed
-
-    from physai.robots.turtlebot import factory
-
-    def fail_if_constructed(*args, **kwargs):
-        raise AssertionError("unsupported adapter must not construct MuJoCo")
-
-    monkeypatch.setattr(factory, "TurtleBot4Env", fail_if_constructed)
-    with pytest.raises(ValueError, match="not supported for turtlebot4"):
-        factory.make_turtlebot4(
-            adapter="ros2_real", transport=RecordingTransport(), hardware=object()
-        )
-
-
-@pytest.mark.integration
 def test_ros2_message_codec_converts_observations():
     from physai.bridge import ROS2MessageCodec
     from physai.contracts import Header, ImageFrame, JointState

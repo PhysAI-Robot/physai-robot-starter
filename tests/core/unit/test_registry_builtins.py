@@ -7,7 +7,6 @@ module is imported, and a new backend is meant to be additive).
 
 import importlib
 
-import pytest
 
 REGISTRIES = [
     (

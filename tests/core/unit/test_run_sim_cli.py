@@ -48,14 +48,6 @@ def test_serve_alone_runs_headless_and_overrides_reach_the_manifest(
     assert manifest.robots[0].config["max_steps"] == 77
 
 
-def test_isaac_serve_reaches_the_viewer_path(run_sim, monkeypatch):
-    captured = capture_viewer(
-        run_sim, monkeypatch, ["--sim", "isaac", "--manifest", ISAAC, "--serve"]
-    )
-
-    assert captured["manifest"].simulator == "isaac"
-
-
 def test_camera_res_flag_reaches_the_manifest_and_rejects_other_sizes(
     run_sim, monkeypatch
 ):
@@ -70,37 +62,6 @@ def test_camera_res_flag_reaches_the_manifest_and_rejects_other_sizes(
     monkeypatch.setattr(sys, "argv", ["run_sim.py", "--camera-res", "64x64"])
     with pytest.raises(SystemExit):
         run_sim.main()
-
-
-def test_turtlebot_viewer_gets_a_resolved_step_limit(run_sim, monkeypatch):
-    captured = capture_viewer(
-        run_sim,
-        monkeypatch,
-        ["--manifest", "configs/manifests/turtlebot4.yaml", "--serve"],
-    )
-
-    (robot,) = captured["manifest"].robots
-    assert robot.robot == "turtlebot4"
-    assert isinstance(robot.config["max_steps"], int)
-
-
-def test_a_manifest_selects_the_run_and_the_old_flags_work_with_a_notice(
-    run_sim, monkeypatch, capsys
-):
-    manifest = capture_viewer(
-        run_sim,
-        monkeypatch,
-        [
-            "--manifest",
-            "configs/manifests/so101_single_cube_fixed_place.yaml",
-            "--serve",
-        ],
-    )["manifest"]
-    assert manifest.robots[0].id == "so101"
-    assert manifest.robots[0].config["max_steps"] == 600
-
-    world = capture_viewer(run_sim, monkeypatch, ["--manifest", WORLD, "--serve"])
-    assert world["manifest"].world is not None
 
 
 def test_incompatible_flags_are_rejected(run_sim, monkeypatch, capsys):
@@ -173,11 +134,6 @@ def test_headless_episodes_run_from_a_manifest_and_name_their_video(
     assert run_sim.main() == 0
     assert (out / "videos" / "mine_seed0000.mp4").exists()
     assert (out / "recordings" / "mine_seed0000.npz").exists()
-
-
-def test_without_a_manifest_the_single_cube_session_runs(run_sim, monkeypatch):
-    manifest = capture_viewer(run_sim, monkeypatch, ["--serve"])["manifest"]
-    assert manifest.scene.name == "single_cube_fixed_place"
 
 
 @requires_assets

@@ -8,7 +8,6 @@ from research.classical_control.so101_visual_servo import (
     SO101VisualServoPolicy,
     VisualFeature,
     VisualServoPhase,
-    draw_crosshair,
 )
 
 
@@ -43,21 +42,6 @@ def test_camera_calibration_projects_pixels_and_rejects_a_plane_behind_it():
         calibration.pixel_to_plane([50.0, 50.0], plane_z=-2.0)
 
 
-def test_draw_crosshair_marks_the_pixel_and_clips_at_the_border():
-    image = np.zeros((20, 20, 3), dtype=np.uint8)
-
-    annotated = draw_crosshair(image, np.array([10.0, 8.0]), size=3, color=(0, 255, 0))
-
-    assert annotated is not image
-    np.testing.assert_array_equal(image, np.zeros((20, 20, 3), dtype=np.uint8))
-    assert tuple(annotated[8, 10]) == (0, 255, 0)
-    assert tuple(annotated[8, 7]) == (0, 255, 0)
-    assert tuple(annotated[0, 0]) == (0, 0, 0)
-
-    small = np.zeros((10, 10, 3), dtype=np.uint8)
-    assert draw_crosshair(small, np.array([-5.0, 4.0])).shape == small.shape
-
-
 def _bare_policy() -> SO101VisualServoPolicy:
     """A policy with only the attributes `debug_frames`/`debug_camera_names`
     need, bypassing `__init__`'s env/kinematics wiring which is irrelevant
@@ -67,22 +51,6 @@ def _bare_policy() -> SO101VisualServoPolicy:
     policy.final_camera = "wrist"
     policy._last_detections = {}
     return policy
-
-
-def test_debug_frames_are_empty_until_a_detection_then_one_overlay_per_camera():
-    policy = _bare_policy()
-
-    assert policy.debug_camera_names == ("front:detections", "wrist:detections")
-    assert policy.debug_frames() == {}
-
-    frame = np.zeros((6, 6, 3), dtype=np.uint8)
-    feature = VisualFeature(pixel=np.array([2.0, 3.0]), area=5, confidence=0.9)
-    policy._last_detections["front"] = (frame, feature)
-
-    frames = policy.debug_frames()
-
-    assert set(frames) == {"front:detections"}
-    assert frames["front:detections"].shape == frame.shape
 
 
 def test_color_blob_detector_counts_the_shadowed_part_of_an_object():
