@@ -337,7 +337,7 @@ def run_viewer(args: argparse.Namespace, manifest: SessionManifest) -> int:
             # against Host's physics/camera threads (both guarded by
             # host.physics_lock, which the native viewer knows nothing
             # about). Mirror Host._camera_loop's pattern instead: render a
-            # private copy, refreshed each tick under the same lock (ADR 4).
+            # private copy, refreshed each tick under the same lock (docs/DECISIONS.md, E).
             viewer_data = mujoco.MjData(host.model)
             with mujoco.viewer.launch_passive(host.model, viewer_data) as viewer:
                 period = 1.0 / host.control_hz

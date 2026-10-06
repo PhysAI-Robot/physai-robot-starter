@@ -6,6 +6,6 @@ its part). Per PEP 420, a regular package anywhere on `sys.path` wins over
 a namespace-package portion regardless of path order, so without this
 file, `import tests` (and every `from tests.core... import ...` absolute
 import in this suite) silently resolves to draccus's installed tests
-instead of this directory whenever the `vla` extra is installed. See
-docs/adr/simulators.md, ADR 16.
+instead of this directory whenever the `training` extra is installed. See
+docs/DECISIONS.md, D.
 """

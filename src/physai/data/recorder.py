@@ -90,7 +90,7 @@ class EpisodeRecorder:
         self.scene_config = scene_config or {}
         self.training_contract = training_contract
         # When set, every step must carry the full simulator qpos (see
-        # docs/adr/web-host.md, ADR 9); it lets a viewer restore the exact scene, including
+        # docs/DECISIONS.md, E); it lets a viewer restore the exact scene, including
         # objects that `observation.state` (robot joints only) cannot describe.
         self.environment_state_dim = environment_state_dim
         self.action_encoder = (
