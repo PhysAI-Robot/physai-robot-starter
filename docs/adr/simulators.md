@@ -1,6 +1,6 @@
 # Simulator engine decisions
 
-ADRs 13 to 16: how Isaac Sim joined MuJoCo as a second engine. Read in order;
+ADRs 13 to 16 and 18: how Isaac Sim joined MuJoCo as a second engine. Read in order;
 each later ADR supersedes part of the earlier one.
 
 ## ADR 13: Isaac Sim as an optional backend
@@ -146,3 +146,41 @@ MuJoCo-only `ArmKinematics`, so `run_episodes()` now raises a clear error and
 for `SimulationApp`; and `lerobot`'s `draccus` installs a top-level `tests`
 package that shadowed this suite's absolute imports, fixed by adding
 `tests/__init__.py` and writing `from tests.conftest import ...`.
+
+## ADR 18: One environment for Isaac Sim and LeRobot
+
+Status: accepted. Supersedes item 6 of ADR 16 (the `vla` extra marked in conflict
+with `isaac`).
+
+**Context.** `lerobot==0.6.1` requires `numpy<2.3.0` and `packaging<26.0`, while
+`isaacsim-kernel` pins `numpy==2.3.1` and `isaacsim-core` pins `packaging==26.0`,
+so ADR 16 kept the two in separate environments and an ACT checkpoint could not
+run inside the Isaac process. That blocked the sim-to-sim comparison of a learned
+policy. The Isaac environment in use had already drifted to `numpy` 2.2.6 and
+`packaging` 25.0, and its Isaac tests still passed.
+
+**Decision.**
+1. `vla` is folded into `training` (`gymnasium`, `torch`, `torchvision`,
+   `lerobot`), so LeRobot is a training dependency and the extra is no longer
+   named after a model family ACT does not belong to.
+2. `[tool.uv] override-dependencies` forces `numpy>=2.0,<2.3` and
+   `packaging>=24.2,<26.0`, and the `isaac`/`vla` conflict is removed
+   (`isaac`/`webtest` stays).
+3. On Windows, `torch` and `torchvision` come from the explicit PyTorch `cu128`
+   index, because PyPI's Windows wheels are CPU-only.
+4. `eval_policy.py --sim isaac` accepts `--policy lerobot`.
+
+**Consequences.** `uv sync --extra isaac --extra training` gives one environment, and
+the same checkpoint runs on both engines. Verified in it: the non-Isaac suite
+(245 passed, 3 skipped), `lint-imports` (8 contracts kept), each Isaac test file in
+its own process (17 tests), and 100 closed-loop ACT episodes on Isaac
+([FINDINGS](../../research/imitation_learning/FINDINGS.md)). Not verified: ACT
+*training* in this environment, and `uv sync --locked --extra training` on Linux
+(CI and Docker, which now also download torch and LeRobot).
+
+The overrides break pins the upstream packages declare, and `uv pip check` lists
+them (`numpy`, `packaging`, `setuptools`, and also `pywin32` and `onnxruntime-gpu`,
+which no check here exercises). A later `isaacsim` or `lerobot` release may need
+`numpy` 2.3, at which point the overrides go and this ADR is superseded. LeRobot's
+`opencv-python-headless` and Isaac's OpenCV both write a `cv2` package; the import
+works, but only the calls this repository makes were exercised.

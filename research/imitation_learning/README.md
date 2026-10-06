@@ -8,12 +8,14 @@ ACT/LeRobot training pipeline and checkpoint-backed inference policies.
   (`physai.policy.replay`).
 - `train_act.py`: ACT training entrypoint.
 
+Measured results: [FINDINGS](FINDINGS.md).
+
 `vla_adapter.py` registers the `"lerobot"` policy with `physai.policy.registry` on
-import; core never imports this package. It needs the `training` and `vla` extras
-(`uv sync --extra training --extra vla`). `vla` cannot combine with `isaac` in one sync
-(`lerobot==0.6.1` pins `numpy<2.3.0`, isaacsim pins `numpy==2.3.1`), so
-`[tool.uv] conflicts` rejects that combination up front
-([ADR 16](../../docs/adr/simulators.md#adr-16-isaacsim-as-a-project-extra-not-a-separate-venv)).
+import; core never imports this package. It needs the `training` extra
+(`uv sync --extra training`), which combines with `isaac` in one environment, so the same
+checkpoint runs on Isaac Sim (`eval_policy.py --sim isaac --policy lerobot`); the
+`numpy` and `packaging` overrides that make this possible are in
+[ADR 18](../../docs/adr/simulators.md#adr-18-one-environment-for-isaac-sim-and-lerobot).
 
 ## SO-101 collect, train, evaluate
 

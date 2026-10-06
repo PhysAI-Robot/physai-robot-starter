@@ -20,6 +20,7 @@ later ADR may supersede part of an earlier one; the entry says so.
 | 14 | Simulator package layout and adapter names | [simulators.md](simulators.md) |
 | 15 | Simulator engine selection | [simulators.md](simulators.md) |
 | 16 | `isaacsim` as a project extra (replaces 13's install recipe) | [simulators.md](simulators.md) |
+| 18 | One environment for Isaac Sim and LeRobot (supersedes 16's `vla` conflict) | [simulators.md](simulators.md) |
 | 3 | Research code lives outside the core package | [repo-scope.md](repo-scope.md) |
 | 5 | TurtleBot4 stays as the second embodiment | [repo-scope.md](repo-scope.md) |
 | 8 | Enforce dependency direction with import-linter | [repo-scope.md](repo-scope.md) |

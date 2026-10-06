@@ -40,8 +40,9 @@ uv sync --extra training
 
 The base install holds MuJoCo, NumPy, image and video support, YAML configuration, the browser
 viewer (FastAPI/uvicorn, `--serve`) and the dev tooling (pytest, ruff, import-linter): this is a
-repository you work in directly, not a library. Extras: `training` (Gymnasium), `isaac` ([Isaac
-Sim](#isaac-sim-optional-local-gpu-only)) and `vla` (ACT/LeRobot; cannot combine with `isaac`).
+repository you work in directly, not a library. Extras: `training` (Gymnasium, PyTorch and
+LeRobot for ACT) and `isaac` ([Isaac Sim](#isaac-sim-optional-local-gpu-only)); they combine in one
+environment ([ADR 18](docs/adr/simulators.md#adr-18-one-environment-for-isaac-sim-and-lerobot)).
 Run the tests with:
 
 ```bash
@@ -163,7 +164,7 @@ uv run python scripts/compare_evaluations.py outputs/mujoco.json outputs/isaac.j
 The same manifest runs on both engines (a manifest's `simulator: isaac` field or
 `create_robot(..., simulator="isaac")` selects Isaac). Isaac supports single-cube scenes with a
 fixed target, a lighting scale and camera jitter, and observation-only policies (`visual_servo`,
-`constant`); `--viewer` is MuJoCo-only and `--serve` shows a mirrored scene
+`constant`, `lerobot`); `--viewer` is MuJoCo-only and `--serve` shows a mirrored scene
 ([ADR 15](docs/adr/simulators.md#adr-15-simulator-engine-selection)). Each Isaac run must be its
 own process, and `pytest -m isaac` runs one test file at a time. Isaac sometimes starts without
 drawing the robot; the env detects it (`robot_is_rendered()`) and stops, so run long evaluations
