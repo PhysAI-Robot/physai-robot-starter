@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
+from .. import __version__
 from .actions import action_from_payload
 from .host import Host
 from .telemetry import build_mesh_payload
@@ -16,7 +17,7 @@ _CAMERA_STREAM_PERIOD = 1.0 / 30  # matches CameraFeed.PERIOD's capture cadence
 def create_app(*, host: Host):
     try:
         from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-        from fastapi.responses import FileResponse, Response, StreamingResponse
+        from fastapi.responses import Response, StreamingResponse
         from fastapi.staticfiles import StaticFiles
     except ImportError as exc:
         raise RuntimeError(
@@ -100,7 +101,10 @@ def create_app(*, host: Host):
 
     @app.get("/")
     async def index():
-        return FileResponse(static_dir / "index.html")
+        page = (static_dir / "index.html").read_text(encoding="utf-8")
+        return Response(
+            page.replace("{{version}}", __version__), media_type="text/html"
+        )
 
     @app.websocket("/ws")
     async def websocket(websocket: WebSocket) -> None:
