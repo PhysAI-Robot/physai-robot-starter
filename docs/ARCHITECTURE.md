@@ -84,7 +84,7 @@ translate to the same `Observation` and `Action` at the boundary.
 | `physai.control` | Action resolution, capability checks, rate limiting | High-level planning or task semantics |
 | `physai.data` | Episode recording, dataset and checkpoint metadata, evaluation, the Gymnasium adapter | Simulation decisions or model inference |
 | `physai.bridge` | ROS2 transport, topic and message mapping, timing, ROS2-backed adapters | Physics, task semantics or model inference |
-| `physai.runtime` | Runtime composition, compatibility checks, safety orchestration | Robot-specific physics, task reward or model inference |
+| `physai.runtime` | Runtime composition, compatibility checks, safety orchestration, the episode rollout (`run_episode`) | Robot-specific physics, task reward or model inference |
 | `physai.web` | The one `Host`, the FastAPI client surface, telemetry, the static browser client | Simulator selection or robot construction |
 | `research/<topic>/` | Approach-specific implementations that self-register on import | Anything a core module imports ([Research boundary](#research-boundary)) |
 | `scripts/` | CLI argument parsing and runtime composition | IK, reward calculation or SDK-specific code |
@@ -140,7 +140,7 @@ violation fails `pytest tests/ -q`.
   of model-free workflows; a research module registers itself on import instead.
 - **Composition Root:** `physai.runtime.create_runtime()` (and `create_session()` for a
   manifest) is the intended composition root; scripts should only parse arguments and call
-  it. `run_sim.py` does; the others do not yet ([Known remaining gaps](#known-remaining-gaps)).
+  it. `run_sim.py` and `eval_policy.py` do; the others do not yet ([Known remaining gaps](#known-remaining-gaps)).
 - **Safety Gate:** `SafetyController` validates action mode, joint order, finite values,
   timestamps, joint limits and per-joint step limits immediately before a robot port
   receives a command. It lives inside the adapters (`DirectAdapter`, `MuJoCoROSBridge`, the
@@ -317,6 +317,36 @@ window and for `scripts/run_ros2_sim.py --config`. Worked examples are in
 `configs/manifests/`; the decision is
 [ADR 10](adr/config-and-sessions.md#adr-10-the-manifest-becomes-the-run-description).
 
+### Script roles
+
+`run_sim.py`, `eval_policy.py` and `collect_demos.py` all run episodes, for different
+purposes, and each owns only what that purpose needs:
+
+| | `run_sim.py` | `eval_policy.py` | `collect_demos.py` |
+| --- | --- | --- | --- |
+| Purpose | Run and look at one session: quick check, debugging, demo, recording | Measure a policy over N seeds with numbers that can be compared | Make a dataset with the scripted expert, which reads privileged state |
+| Output | Viewer or web host, video, `.npz` recording | `EvaluationReport`, `--json-out`, a summary | `episode_*.npz` and `meta.json` |
+| Only here | `--viewer`, `--serve`, shared worlds, web `--record-dir`, the legacy `--config`/`--world` inputs | `--seeds`, `--json-out`, `--policy replay`, the difficulty flags (`--camera-jitter`, `--lighting-scale`, `--clutter-count`, `--nominal-physics`), `--sorting`, the training-seed overlap warning | the expert, `environment_state` |
+| Safety refusal | printed, the episode ends | counted as `unsafe_action` | not applicable |
+
+Who owns what, so the scripts do not drift apart:
+
+- **The session** (robot, scene, task, cameras, `max_steps`, seed) belongs to the
+  manifest. A script never holds a scene or task of its own; `eval_policy.py`'s
+  difficulty flags become overrides of the manifest (`with_overrides`), and `--sorting`
+  selects `configs/manifests/so101_sorting.yaml`.
+- **How one episode runs** (reset, act, step, when it ends on termination, truncation,
+  `policy.done` or a refused action, the Isaac render check) belongs to
+  `physai.runtime.run_episode`. Video and recording watch it through an
+  `EpisodeObserver` (`scripts/_video.py`, `scripts/_recording.py`).
+- **Metrics and reports** belong to `physai.data.EvaluationReport`; only the evaluation
+  uses them.
+- **A script** parses flags, builds a manifest with overrides, calls the rollout and
+  prints or saves the result. The video flags (`--video`, `--video-dir`, `--camera`)
+  and `--record` are defined once in `scripts/_common_args.py`.
+
+The decision is [ADR 20](adr/config-and-sessions.md#adr-20-run_sim-and-eval_policy-share-one-session-and-one-rollout).
+
 ## Host + client API
 
 `physai.web.host.Host` is the one host class. `Host.for_robot(...)` builds a direct-MuJoCo
@@ -475,8 +505,9 @@ contact behavior and reachable area.
   a dozen places, because only a single robot runs a policy, records or plays back. The
   branches go away when shared-world sessions gain tasks and policies, not by splitting `Host`
   (its lease, `web/lease.py`, and camera worker, `web/cameras.py`, are already separate).
-- **`scripts/` composition-root adoption.** Scripts other than `run_sim.py` (`workspace_map`,
-  `benchmark_ik`, `render_docs_media`, `teleop_keyboard`, `collect_demos`, `eval_policy`,
+- **`scripts/` composition-root adoption.** Scripts other than `run_sim.py` and
+  `eval_policy.py` (`workspace_map`,
+  `benchmark_ik`, `render_docs_media`, `teleop_keyboard`, `collect_demos`,
   `eval_randomization`, `plan_task`) still hand-assemble `EnvConfig` and environments instead
   of calling `create_runtime()` or `create_session()`. They are safety-gated either way, since
   the gate lives in the adapter.

@@ -14,19 +14,21 @@ from _video import next_video_stem
 
 from physai.data import EpisodeRecorder
 from physai.data.extras import collect_extras
+from physai.runtime import EpisodeObserver
 
 
-class RunRecorder:
+class RunRecorder(EpisodeObserver):
     def __init__(
         self,
-        robot,
+        runtime,
         *,
         fps: float,
         name: str,
         task: str,
         record_dir: Path | None = None,
     ) -> None:
-        self._robot, self._fps, self._name, self._task = robot, fps, name, task
+        self._runtime, self._robot = runtime, runtime.robot
+        self._fps, self._name, self._task = fps, name, task
         self._record_dir = record_dir
         self._rec: EpisodeRecorder | None = None
         self._pending: tuple | None = None
@@ -56,14 +58,15 @@ class RunRecorder:
                 "episodes"
             ]
 
-    def start(self) -> None:
+    def on_reset(self, observation) -> None:
         if self._record_dir is None:
             self._rec = self._new_recorder(DEFAULT_RECORD_DIR)
         self._rec.start_episode()
 
-    def capture(self, policy, observation, info: dict | None) -> None:
-        """Call before `env.step`: the state, grip force and policy metrics the
-        step's observation and action belong to."""
+    def before_step(self, observation, action, info: dict) -> None:
+        """The state, grip force and policy metrics this step's observation and
+        action belong to (the world before the step runs)."""
+        policy = self._runtime.policy
         data = getattr(self._robot, "data", None)
         self._pending = (
             None if data is None else data.qpos.copy(),
@@ -72,8 +75,7 @@ class RunRecorder:
             or getattr(getattr(policy, "phase", None), "name", ""),
         )
 
-    def record(self, observation, action, reward: float, done: bool) -> None:
-        """Call after `env.step` with the observation `capture` saw."""
+    def after_step(self, observation, action, next_observation, reward, done, info):
         state, extras, phase = self._pending
         gripper_to_joint = getattr(self._robot, "gripper_to_joint", None)
         grip = None

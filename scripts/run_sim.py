@@ -37,12 +37,12 @@ from _common_args import (
     add_checkpoint,
     add_episodes,
     add_max_steps,
-    add_out,
     add_policy,
     add_record,
     add_robot,
     add_seed,
     add_simulator,
+    add_video,
     add_video_name,
 )
 
@@ -53,7 +53,13 @@ import research.classical_control.so101_visual_servo
 import research.imitation_learning.vla_adapter
 import research.scripted_experts.so101_pick_place_expert  # noqa: F401
 from _recording import RunRecorder
-from _video import default_video_name, next_video_stem, write_video
+from _video import (
+    VideoObserver,
+    default_video_name,
+    keep_video,
+    next_video_stem,
+    write_video,
+)
 from physai.config import SessionManifest, load_manifest, load_sim_config
 from physai.config.compat import (
     manifest_for_robot,
@@ -63,7 +69,7 @@ from physai.config.compat import (
 )
 from physai.policy import available_policies
 from physai.robots import available_robots
-from physai.runtime import Session, create_session
+from physai.runtime import RenderGlitch, Session, create_session, run_episode
 from physai.web.host import Host
 
 DEFAULT_SIM_CONFIG = Path("configs/sim_config.yaml")
@@ -111,17 +117,10 @@ def parse_args(
     add_episodes(ap, default=1)
     add_seed(ap, default=None, help="override the seed (default: the manifest's, or 0)")
     add_max_steps(ap, help="override the episode length")
-    ap.add_argument(
-        "--camera",
-        help="camera to record with --video (default: the robot's first camera)",
-    )
     add_checkpoint(ap)
     add_camera_resolution(ap)
     add_video_name(ap)
-    add_out(ap, default=Path("outputs"))
-    ap.add_argument(
-        "--video", action="store_true", help="render frames and write an episode video"
-    )
+    add_video(ap)
     ap.add_argument(
         "--viewer",
         action="store_true",
@@ -240,24 +239,21 @@ def run_episodes(args: argparse.Namespace, manifest: SessionManifest) -> int:
     # Built once — a lerobot checkpoint is expensive to reload per episode.
     session = create_session(
         manifest,
-        render=args.video or recording,
+        render=args.video is not None or recording,
         policy_kwargs=policy_inputs(args, manifest),
     )
     runtime = session.runtime
-    env, policy = runtime.robot, runtime.policy
+    env = runtime.robot
     seed = manifest.simulation.seed
-    max_steps = env.cfg.max_steps
-    camera_name = args.camera or next(iter(env.robot_spec.camera_frames))
     policy_name = manifest.policy_for(manifest.robots[0])
-    args.out.mkdir(parents=True, exist_ok=True)
+    video_name = args.video_name or default_video_name(
+        manifest.simulator, manifest.robots[0].robot, policy_name
+    )
     recorder = (
         RunRecorder(
-            env,
+            runtime,
             fps=env.cfg.control_hz,
-            name=args.video_name
-            or default_video_name(
-                manifest.simulator, manifest.robots[0].robot, policy_name
-            ),
+            name=video_name,
             task=policy_name,
             record_dir=args.record_dir,
         )
@@ -267,52 +263,34 @@ def run_episodes(args: argparse.Namespace, manifest: SessionManifest) -> int:
     successes = 0
 
     for ep in range(args.episodes):
-        obs = runtime.reset(seed=seed + ep)
+        video = VideoObserver(runtime, args.camera) if args.video is not None else None
+        observers = tuple(item for item in (video, recorder) if item is not None)
+        try:
+            outcome = run_episode(runtime, seed + ep, observers)
+        except RenderGlitch as exc:
+            session.close()
+            raise SystemExit(f"episode {ep}: {exc}; restart the run") from exc
         randomization = getattr(env, "randomization_metadata", None)
         if randomization is not None:
             print(f"  randomization={randomization.as_dict()}")
-        frames, total_reward, info = [], 0.0, {}
 
-        if recorder:
-            recorder.start()
-        for _ in range(max_steps):
-            if args.video:
-                frames.append(env.render_camera(camera_name))
-            action = policy.act(obs)
-            if recorder:
-                recorder.capture(policy, obs, info)
-            seen = obs
-            obs, reward, terminated, truncated, info = runtime.step(action)
-            if recorder:
-                recorder.record(seen, action, reward, terminated or truncated)
-            total_reward += reward
-            if terminated or truncated or policy.done:
-                break
-
-        ok = bool(info.get("success"))
-        successes += ok
-        distance = info.get("dist_cube_target")
+        successes += outcome.success
+        distance = outcome.info.get("dist_cube_target")
         suffix = f" dist_cube_target={distance:.3f}" if distance is not None else ""
+        refused = f" UNSAFE: {outcome.violation}" if outcome.violation else ""
         print(
-            f"episode {ep}: success={ok} steps={env.step_count} "
-            f"return={total_reward:.2f}{suffix}"
+            f"episode {ep}: success={outcome.success} steps={outcome.steps} "
+            f"return={outcome.reward:.2f}{suffix}{refused}"
         )
 
         if recorder:
-            saved = recorder.end(ok, seed + ep)
+            saved = recorder.end(outcome.success, seed + ep)
             if saved:
                 print(f"  record -> {saved}")
-        if frames and args.video:
+        if video and video.frames and keep_video(args.video, outcome.success):
             path = write_video(
-                np.stack(frames),
-                next_video_stem(
-                    args.out,
-                    args.video_name
-                    or default_video_name(
-                        manifest.simulator, manifest.robots[0].robot, policy_name
-                    ),
-                    seed + ep,
-                ),
+                np.stack(video.frames),
+                next_video_stem(args.video_dir, video_name, seed + ep),
                 fps=int(env.cfg.control_hz),
             )
             print(f"  video -> {path}")

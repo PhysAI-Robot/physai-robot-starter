@@ -196,3 +196,11 @@ def test_invalid_manifests_fail_loudly(tmp_path):
             assert re.search(message, str(error)), (label, str(error))
         else:
             pytest.fail(f"{label}: the manifest was accepted")
+
+
+def test_the_sorting_manifest_names_the_sorting_scene_and_task():
+    from physai.config import load_manifest
+
+    manifest = load_manifest("configs/manifests/so101_sorting.yaml")
+    assert manifest.scene.name == "sorting_minimal"
+    assert manifest.task_for(manifest.robots[0]) == "sorting"

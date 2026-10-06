@@ -149,3 +149,23 @@ def test_the_shipped_manifests_match_the_legacy_files_they_replace():
     world = manifest_from_world_file(WORLD_FILE, simulation=SimulationConfig())
     shipped = load_manifest("configs/manifests/heterogeneous_world.yaml")
     assert shipped == replace(world, viewer=shipped.viewer)
+
+
+def test_with_overrides_merges_scene_robot_and_randomization_settings():
+    from physai.config import DomainRandomizationConfig, load_manifest
+
+    base = load_manifest("configs/manifests/so101_single_cube_fixed_place.yaml")
+    randomization = DomainRandomizationConfig(enabled=True, camera_position_jitter=0.01)
+    changed = with_overrides(
+        base,
+        max_steps=50,
+        domain_randomization=randomization,
+        scene_overrides={"clutter_count": 2},
+        robot_config={"lighting_scale": 0.7},
+    )
+    assert changed.simulation.domain_randomization is randomization
+    assert changed.scene.overrides["clutter_count"] == 2
+    assert changed.scene.overrides["cube_half"] == base.scene.overrides["cube_half"]
+    config = changed.robots[0].config
+    assert (config["max_steps"], config["lighting_scale"]) == (50, 0.7)
+    assert config["cameras"] == base.robots[0].config["cameras"]

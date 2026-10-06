@@ -7,6 +7,8 @@ from pathlib import Path
 
 import numpy as np
 
+from physai.runtime import EpisodeObserver
+
 VIDEO_MODES = ("all", "failures")
 
 
@@ -71,3 +73,23 @@ def next_video_stem(
     if not runs:
         return stem
     return directory / f"{stem.name}_{max(runs) + 1:02d}"
+
+
+class VideoObserver(EpisodeObserver):
+    """Collects one camera's frames over an episode, for `write_video`."""
+
+    def __init__(self, runtime, camera: str | None = None) -> None:
+        self.camera = camera or next(iter(runtime.robot_spec.camera_frames))
+        self.frames: list[np.ndarray] = []
+
+    def _grab(self, observation) -> None:
+        frame = observation.images.get(self.camera)
+        if frame is not None:
+            self.frames.append(np.asarray(frame.data))
+
+    def on_reset(self, observation) -> None:
+        self.frames.clear()
+        self._grab(observation)
+
+    def after_step(self, observation, action, next_observation, reward, done, info):
+        self._grab(next_observation)

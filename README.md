@@ -112,6 +112,17 @@ uv run python scripts/collect_demos.py --episodes 50 --out data/pickplace_v1
 uv run python scripts/eval_policy.py --policy replay --dataset data/pickplace_v1
 ```
 
+| Script | Use it to |
+| --- | --- |
+| `run_sim.py` | run and look at one session: quick check, viewer or web host, video, recording |
+| `eval_policy.py` | measure a policy over N seeds and compare the numbers (`--json-out`) |
+| `collect_demos.py` | make a dataset with the scripted expert |
+
+Both `run_sim.py` and `eval_policy.py` run the session in a manifest and stop an episode the
+same way; `eval_policy.py` takes difficulty flags and reports a success rate
+([script roles](docs/ARCHITECTURE.md#script-roles)). Episode length comes from the manifest
+(`--max-steps` overrides it).
+
 Add `--sorting` to `eval_policy.py` and `collect_demos.py` for the three-cube sorting task, and
 `--keep-failures` to keep failed demonstrations (discarded by default). Use at least 100 seeds:
 20 cannot resolve a policy's reliability. Measured success rates are in the
