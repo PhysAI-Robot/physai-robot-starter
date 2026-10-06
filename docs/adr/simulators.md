@@ -184,3 +184,24 @@ which no check here exercises). A later `isaacsim` or `lerobot` release may need
 `numpy` 2.3, at which point the overrides go and this ADR is superseded. LeRobot's
 `opencv-python-headless` and Isaac's OpenCV both write a `cv2` package; the import
 works, but only the calls this repository makes were exercised.
+
+## ADR 19: One manifest runs on both simulators
+
+Status: accepted. Supersedes the last sentence of ADR 15 (the robot-only smoke
+manifest) and the `policy: constant` fix in ADR 16.
+
+**Context.** `configs/manifests/so101_isaac.yaml` was written when `SO101IsaacEnv`
+had no scene or task, so `run_sim.py --sim isaac` ran a different session from
+MuJoCo (no table or cube, wrist camera only, no task, `success` meaningless) while
+`eval_policy.py --sim isaac` ran the real one. The same-scene work had already made
+`build_composition` accept a scene and task for Isaac, so the manifest was the only
+thing left behind.
+
+**Decision.** Delete it. `--sim isaac` overrides `simulator` on any manifest, so
+`so101_single_cube_fixed_place.yaml` is the one session both engines run, through
+both `run_sim.py` and `eval_policy.py`.
+
+**Consequences.** Isaac needs `--policy` (the headless default needs MuJoCo-only
+kinematics). Verified on Isaac Sim: `run_sim.py --sim isaac --manifest
+configs/manifests/so101_single_cube_fixed_place.yaml --policy visual_servo
+--record --video` succeeded on seeds 0 and 1.

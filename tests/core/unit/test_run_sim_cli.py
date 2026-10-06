@@ -7,7 +7,7 @@ from tests.conftest import requires_assets
 SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"
 WORLD = "configs/worlds/heterogeneous.yaml"
 TASK = "configs/tasks/so101/single_cube_fixed_place.yaml"
-ISAAC = "configs/manifests/so101_isaac.yaml"
+ISAAC = "configs/manifests/so101_single_cube_fixed_place.yaml"
 
 
 @pytest.fixture

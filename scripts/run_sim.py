@@ -9,15 +9,12 @@ python scripts/run_sim.py --policy lerobot --checkpoint outputs/act_ckpt
 python scripts/run_sim.py --viewer             # native MuJoCo viewer
 python scripts/run_sim.py --viewer --serve     # native viewer plus shared web host
 python scripts/run_sim.py --serve              # web host only, no desktop window
-python scripts/run_sim.py --sim isaac --manifest configs/manifests/so101_isaac.yaml
-                                                # headless episodes on Isaac Sim instead;
-                                                # --video records a camera, --serve opens
-                                                # the web viewer (no --viewer/--record-dir)
-                                                # (needs isaacsim installed separately,
-                                                # see README.md; the manifest must set no
-                                                # `task` — SO101IsaacEnv has no scene/task
-                                                # objects yet; not exercised by this
-                                                # repo's own CI)
+python scripts/run_sim.py --sim isaac --manifest configs/manifests/so101_single_cube_fixed_place.yaml --policy visual_servo
+                                                # the same manifest on Isaac Sim; --video, --record
+                                                # and --serve (web viewer) work as on MuJoCo
+                                                # (no --viewer/--record-dir with --serve; needs
+                                                # isaacsim installed, see README.md; not exercised
+                                                # by this repo's own CI)
 
 A run is described by a session manifest (`--manifest`). The older `--config`
 (task file), `--world` (world file), and bare `--robot` inputs are converted
