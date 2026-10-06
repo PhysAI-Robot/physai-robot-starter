@@ -307,7 +307,7 @@ fields and rejects a robot config that repeats them.
 one). A non-MuJoCo engine rejects a `world` block, several robots, `backend: ros2_sim` and
 any `viewer.mode` other than `none`
 ([ADR 15](adr/simulators.md#adr-15-simulator-engine-selection);
-`configs/manifests/so101_isaac.yaml` is a working example). `run_sim.py --sim {mujoco,isaac}`
+`configs/manifests/so101_single_cube_fixed_place.yaml` runs on both engines). `run_sim.py --sim {mujoco,isaac}`
 overrides it through `physai.config.compat.with_overrides`, which re-runs the validation.
 
 `run_sim.py` builds every run this way. Its older `--config` (task file), `--world` and bare

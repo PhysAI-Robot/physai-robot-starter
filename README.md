@@ -155,7 +155,6 @@ nothing here does it for you.
 
 ```bash
 uv sync --extra isaac --extra training
-OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/run_sim.py --sim isaac --manifest configs/manifests/so101_isaac.yaml
 OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --sim isaac --policy visual_servo --video
 OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/eval_policy.py --sim isaac --policy visual_servo --episodes 100 --json-out outputs/isaac.json
 uv run python scripts/compare_evaluations.py outputs/mujoco.json outputs/isaac.json
