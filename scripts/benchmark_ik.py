@@ -1,6 +1,6 @@
 """Benchmark SO-101 FK/IK metrics over a deterministic reachable target set.
 
-uv run python scripts/benchmark_ik.py --targets 20 --json-out outputs/ik_benchmark.json
+uv run python scripts/benchmark_ik.py --targets 20 --json outputs/ik_benchmark.json
 """
 
 from __future__ import annotations
@@ -123,7 +123,7 @@ def main() -> int:
     )
     add_seed(parser)
     parser.add_argument(
-        "--json-out", type=Path, help="write the metrics as JSON to this file"
+        "--json", type=Path, help="write the metrics as JSON to this file"
     )
     args = parser.parse_args()
     if args.targets < 1:
@@ -138,10 +138,10 @@ def main() -> int:
         f"mean_iterations={report['mean_iterations']:.1f}, "
         f"mean_runtime={report['mean_runtime_ms']:.3f} ms"
     )
-    if args.json_out:
-        args.json_out.parent.mkdir(parents=True, exist_ok=True)
-        args.json_out.write_text(json.dumps(report, indent=2), encoding="utf-8")
-        print(f"json -> {args.json_out}")
+    if args.json:
+        args.json.parent.mkdir(parents=True, exist_ok=True)
+        args.json.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        print(f"json -> {args.json}")
     return 0
 
 

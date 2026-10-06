@@ -213,7 +213,9 @@ def main() -> int:
         metavar=("A.npz", "B.npz"),
         help="report the differences between two dumps",
     )
-    parser.add_argument("--out", type=Path, help="with --dump: the .npz to write")
+    parser.add_argument(
+        "--out", type=Path, metavar="FILE", help="with --dump: the .npz file to write"
+    )
     parser.add_argument("--montage", type=Path, help="with --compare: write an image")
     parser.add_argument(
         "--label-a", default="MuJoCo", help="name of the first dump in the report"

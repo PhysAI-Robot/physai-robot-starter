@@ -1,10 +1,10 @@
 """Run `visual_servo` over difficulty levels in MuJoCo and tabulate each cell.
 
-    uv run python scripts/sweep_difficulty.py --out-dir outputs/difficulty
+    uv run python scripts/sweep_difficulty.py --out outputs/difficulty
     uv run python scripts/sweep_difficulty.py --axis lighting --seed 100 --episodes 50
-    uv run python scripts/sweep_difficulty.py --table-only --out-dir outputs/difficulty
+    uv run python scripts/sweep_difficulty.py --table-only --out outputs/difficulty
 
-Each cell is one `eval_policy.py` run (own process, own JSON in `--out-dir`)
+Each cell is one `eval_policy.py` run (own process, own JSON in `--out`)
 with only that axis changed and friction and mass left nominal. The default
 seeds (100 to 149) do not overlap the 0 to 99 seeds the policy was tuned on, so
 the baseline is held out. Camera shift moves every camera and, except for the
@@ -69,6 +69,19 @@ CELLS: tuple[Cell, ...] = (
 )
 
 
+def supported_cells(cells: list[Cell], sim: str | None) -> list[Cell]:
+    """The cells `eval_policy.py` can run on `sim`: Isaac has no clutter and no
+    camera shift the policy is told about."""
+    if sim != "isaac":
+        return cells
+    return [
+        cell
+        for cell in cells
+        if cell.axis in {"baseline", "lighting"}
+        or (cell.axis == "camera" and "--camera-shift-unknown" in cell.flags)
+    ]
+
+
 def select_cells(axis: str | None) -> list[Cell]:
     """The baseline plus every cell of `axis` (all cells when `axis` is None)."""
     if axis is None:
@@ -80,7 +93,12 @@ def select_cells(axis: str | None) -> list[Cell]:
 
 
 def run_cell(
-    cell: Cell, out_dir: Path, seed: int, episodes: int, max_steps: int | None
+    cell: Cell,
+    out_dir: Path,
+    seed: int,
+    episodes: int,
+    max_steps: int | None,
+    sim: str | None = None,
 ):
     out = out_dir / f"{cell.name}.json"
     command = [
@@ -93,8 +111,9 @@ def run_cell(
         "--episodes",
         str(episodes),
         *(["--max-steps", str(max_steps)] if max_steps is not None else []),
+        *(["--sim", sim] if sim else []),
         "--nominal-physics",
-        "--json-out",
+        "--json",
         str(out),
         *cell.flags,
     ]
@@ -139,10 +158,17 @@ def render_table(cells: list[Cell], out_dir: Path) -> str:
 def main() -> int:
     ap = new_parser(__doc__)
     ap.add_argument(
-        "--out-dir",
+        "--out",
         type=Path,
         default=Path("outputs/difficulty"),
         help="directory for one JSON and log per cell, and table.md",
+    )
+    ap.add_argument(
+        "--sim",
+        choices=("mujoco", "isaac"),
+        help="simulator engine (default: the manifest's); isaac runs only the "
+        "baseline, the lighting levels and the uncalibrated camera shifts, the "
+        "cells eval_policy.py supports there",
     )
     ap.add_argument(
         "--axis",
@@ -165,17 +191,18 @@ def main() -> int:
     ap.add_argument(
         "--table-only",
         action="store_true",
-        help="skip running and tabulate the JSON already in --out-dir",
+        help="skip running and tabulate the JSON already in --out",
     )
     args = ap.parse_args()
     cells = select_cells(args.axis)
-    args.out_dir.mkdir(parents=True, exist_ok=True)
+    cells = supported_cells(cells, args.sim)
+    args.out.mkdir(parents=True, exist_ok=True)
     if not args.table_only:
         for cell in cells:
             print(f"running {cell.name} ...", flush=True)
-            run_cell(cell, args.out_dir, args.seed, args.episodes, args.max_steps)
-    table = render_table(cells, args.out_dir)
-    (args.out_dir / "table.md").write_text(table, encoding="utf-8")
+            run_cell(cell, args.out, args.seed, args.episodes, args.max_steps, args.sim)
+    table = render_table(cells, args.out)
+    (args.out / "table.md").write_text(table, encoding="utf-8")
     print(table)
     return 0
 

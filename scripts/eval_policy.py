@@ -130,7 +130,7 @@ def main() -> int:
         "matching `collect_demos.py --sorting`",
     )
     ap.add_argument(
-        "--json-out", type=Path, help="write full per-episode results as JSON"
+        "--json", type=Path, help="write the full per-episode results to this JSON file"
     )
     args = ap.parse_args()
     if args.seeds is not None:
@@ -341,14 +341,14 @@ def main() -> int:
             f"({summary['held_out_episodes']} episodes)"
         )
 
-    if args.json_out:
-        args.json_out.parent.mkdir(parents=True, exist_ok=True)
+    if args.json:
+        args.json.parent.mkdir(parents=True, exist_ok=True)
         payload = report.to_dict()
         payload["checkpoint"] = str(args.checkpoint) if args.checkpoint else None
         payload["seed_start"] = episode_seeds[0]
         payload["policy_args"] = {key: repr(value) for key, value in args.policy_arg}
-        args.json_out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-        print(f"json -> {args.json_out}")
+        args.json.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        print(f"json -> {args.json}")
     return 0
 
 

@@ -42,12 +42,10 @@ def main() -> int:
     add_max_steps(ap, default=800)
     ap.add_argument("--dry-run", action="store_true", help="print the plan and exit")
     ap.add_argument(
-        "--save-plan", type=Path, help="write the plan as JSON to this file"
-    )
-    ap.add_argument(
-        "--save-frames",
+        "--out",
         type=Path,
-        help="write the images the planner sees, for debugging",
+        help="directory to save plan.json and, for debugging, the images the "
+        "planner sees (frames/)",
     )
     args = ap.parse_args()
 
@@ -63,13 +61,14 @@ def main() -> int:
     env = TaskRuntime(robot, create_task("single_cube_fixed_place"))
     obs = env.reset(seed=args.seed)
 
-    if args.save_frames:
+    if args.out:
         import imageio.v3 as iio
 
-        args.save_frames.mkdir(parents=True, exist_ok=True)
+        frames = args.out / "frames"
+        frames.mkdir(parents=True, exist_ok=True)
         for name, frame in obs.images.items():
-            iio.imwrite(args.save_frames / f"{name}.png", frame.data)
-        print(f"frames -> {args.save_frames}")
+            iio.imwrite(frames / f"{name}.png", frame.data)
+        print(f"frames -> {frames}")
 
     planner = ScriptedPlanner(env.cube_pos, env.target_pos)
     plan = planner.plan(args.instruction, obs)
@@ -84,12 +83,12 @@ def main() -> int:
         if sg.rationale:
             print(f"     {sg.rationale}")
 
-    if args.save_plan:
-        args.save_plan.parent.mkdir(parents=True, exist_ok=True)
-        args.save_plan.write_text(
+    if args.out:
+        args.out.mkdir(parents=True, exist_ok=True)
+        (args.out / "plan.json").write_text(
             json.dumps(plan.to_dict(), indent=2), encoding="utf-8"
         )
-        print(f"\nplan -> {args.save_plan}")
+        print(f"\nplan -> {args.out / 'plan.json'}")
 
     if args.dry_run or not plan.subgoals:
         env.close()

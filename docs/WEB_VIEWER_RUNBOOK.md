@@ -47,7 +47,7 @@ binding it to a non-loopback address lets anything that can reach the port send 
 commands, so keep it on a private network or behind an authenticated tunnel.
 
 **Isaac Sim.** `--sim isaac --serve` shows a mirror of the arm, table, target and cube
-(`--viewer` and `--dataset-dir` stay MuJoCo-only,
+(`--viewer` and `--dataset` stay MuJoCo-only,
 [ADR 15](adr/simulators.md#adr-15-simulator-engine-selection)). The header shows which
 simulator runs the session (a badge and the page title, from `GET /api/robots`).
 
@@ -130,11 +130,11 @@ in `localStorage`).
 
 ## Recording episodes
 
-Takes also carry `extras.*` arrays (joint velocity/effort, grip force, policy metrics; see `src/physai/data/extras.py`). Start the host with `--dataset-dir` to record from the browser (single robot only; refused with
+Takes also carry `extras.*` arrays (joint velocity/effort, grip force, policy metrics; see `src/physai/data/extras.py`). Start the host with `--dataset` to record from the browser (single robot only; refused with
 a world, and requires `--serve`):
 
 ```bash
-MUJOCO_GL=egl uv run python scripts/run_sim.py --robot so101 --serve --dataset-dir data/web_session
+MUJOCO_GL=egl uv run python scripts/run_sim.py --robot so101 --serve --dataset data/web_session
 ```
 
 A Recording panel appears. **Record** starts a take; **Save ✓ success** or **Save ✗ fail** ends
@@ -146,12 +146,12 @@ writes nothing.
   the host applied, so jog input is recorded as resolved targets.
 - Frames begin once every camera has produced an image (the panel says which it waits for). A
   world reset or a policy ending its episode discards the take.
-- Pointing `--dataset-dir` at an existing dataset from the same robot continues its numbering; a
+- Pointing `--dataset` at an existing dataset from the same robot continues its numbering; a
   dataset without `observation.environment_state` is rejected, so use a fresh directory.
 
 ## Episode playback
 
-With `--dataset-dir`, a Playback panel lists saved episodes with their success tags. **Load**
+With `--dataset`, a Playback panel lists saved episodes with their success tags. **Load**
 pauses the world and shows frame 0. **|◀ / ▶|** (or the arrow keys) step one frame and stop
 playing; the slider scrubs; **▶ / ❚❚** plays at 0.5x / 1x / 2x / 4x of the recorded real time
 (it stops at the last frame; Play restarts it); **Exit** restores the world you interrupted,
@@ -168,8 +168,8 @@ from a different scene (for example `--sorting`, which has three cubes) has a di
 width and is refused.
 
 ```bash
-uv run python scripts/collect_demos.py --episodes 5 --keep-failures --out data/debug_v1
-MUJOCO_GL=egl uv run python scripts/run_sim.py --robot so101 --serve --dataset-dir data/debug_v1
+uv run python scripts/collect_demos.py --episodes 5 --keep-failures --dataset data/debug_v1
+MUJOCO_GL=egl uv run python scripts/run_sim.py --robot so101 --serve --dataset data/debug_v1
 ```
 
 ## Troubleshooting

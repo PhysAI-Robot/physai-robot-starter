@@ -81,7 +81,7 @@ default camera and video folder.
    `EpisodeObserver`s.
 3. `max_steps` has no script default: it is the manifest's, and `--max-steps`
    overrides it. The output flags are defined once (`--video`, `--camera`, `--record`,
-   `--dataset-dir`, `--out-dir`, `--name`) and `scripts/_outputs.py` writes them.
+   `--out`, `--name`) and `scripts/_outputs.py` writes them.
 4. `collect_demos.py` and `eval_randomization.py` build their session from the same
    manifests and run episodes through `run_episode`, so they no longer assemble
    environments by hand. `run_sim.py` drops its deprecated `--config` and `--world`
@@ -95,7 +95,33 @@ failures run the full length. The research READMEs and `sweep_difficulty.py` sti
 `--max-steps 600` explicitly.
 `eval_policy.py` lost `--robot` and `--render` (the manifest names the robot; cameras
 render whenever a video, recording or image policy needs them), and `--video-dir` and
-`--video-name` became `--out-dir` (videos under `videos/`, recordings under
-`recordings/`) and `--name`. `--record-dir` is now `--dataset-dir` (the layout it writes, and the one
-`--dataset` reads for `--policy replay`). `collect_demos.py` also loses `--robot`, and its dataset now
+`--video-name` became `--out` (videos under `videos/`, recordings under
+`recordings/`) and `--name`; later flag renames are in ADR 21. `collect_demos.py` also loses `--robot`, and its dataset now
 carries the `extras.*` arrays; its states, actions and rewards are unchanged.
+
+## ADR 21: One flag name per concept across the scripts
+
+Status: accepted. Supersedes the flag names in ADR 20's consequences.
+
+**Context.** The scripts had grown their own names for the same things: the dataset
+folder was `--out` (`collect_demos`), `--dataset-dir` and `--dataset`; the output
+location was `--out` (a folder in one script, a file in two), `--out-dir` (a folder of
+videos in `run_sim`/`eval_policy`, a folder of results in `run_sharded_eval`/
+`sweep_difficulty`, so the two collided when one passed arguments to the other),
+`--dest`, `--save-plan` and `--save-frames`; results went to `--json-out` or
+`--merged-out`; the episode limit was `--max-steps` or `--max-ticks`. 45 flags had no help.
+
+**Decision.** One short name per concept (the table in
+[CLI conventions](../ARCHITECTURE.md#cli-conventions)): `--out DIR` for the folder a
+script writes into (`--out FILE` for the two single-file tools), `--json FILE` for a
+result, `--dataset DIR` for a dataset folder, `--max-steps` everywhere. Every script builds
+its parser with `scripts/_cli.new_parser`, so `--help` has one layout and shows defaults,
+and `tests/core/unit/test_cli_conventions.py` rejects the old names and flags without help.
+The old names are removed, not aliased.
+
+**Consequences.** Headless `run_sim.py` and `eval_policy.py` no longer write the dataset
+layout (`--dataset-dir` is gone); `--record` writes one file per episode, and a dataset
+comes from `collect_demos.py` or from recording in the browser (`run_sim.py --serve
+--dataset`). `run_sharded_eval.py` passes its `--out` to every shard, so their videos
+and recordings land in the result folder. `sweep_difficulty.py` takes `--sim`; on Isaac it
+runs only the cells `eval_policy.py` supports there.

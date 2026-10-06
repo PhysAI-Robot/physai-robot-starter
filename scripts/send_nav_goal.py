@@ -174,7 +174,7 @@ def main() -> int:
         help="metres from the goal that still count as arrived",
     )
     parser.add_argument(
-        "--json-out", type=Path, help="write the result as JSON to this file"
+        "--json", type=Path, help="write the result as JSON to this file"
     )
     args = parser.parse_args()
 
@@ -184,12 +184,12 @@ def main() -> int:
     )
     try:
         code = node.send_goal(args.x, args.y, args.yaw, args.max_position_error)
-        if args.json_out:
-            args.json_out.parent.mkdir(parents=True, exist_ok=True)
-            args.json_out.write_text(
+        if args.json:
+            args.json.parent.mkdir(parents=True, exist_ok=True)
+            args.json.write_text(
                 json.dumps(node.report.as_dict(), indent=2), encoding="utf-8"
             )
-            node.get_logger().info(f"navigation report -> {args.json_out}")
+            node.get_logger().info(f"navigation report -> {args.json}")
         return code
     finally:
         node.destroy_node()

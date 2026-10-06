@@ -340,7 +340,7 @@ class Host:
         if self._shared:
             raise ValueError("recording is not available for shared-world hosts")
         if self._recorder is None:
-            raise ValueError("recording is disabled; start the host with --dataset-dir")
+            raise ValueError("recording is disabled; start the host with --dataset")
         return self._recorder
 
     def _abort_recording(self, reason: str) -> None:

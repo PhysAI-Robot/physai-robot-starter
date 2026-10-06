@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import _bootstrap  # noqa: F401
 from _cli import new_parser
-from _common_args import add_robot, add_seed
+from _common_args import add_max_steps, add_robot, add_seed
 
 
 def main() -> int:
@@ -21,10 +21,8 @@ def main() -> int:
         help="task YAML (configs/tasks/...) for the robot environment",
     )
     add_seed(parser)
-    parser.add_argument(
-        "--max-ticks",
-        type=int,
-        help="stop after this many ticks (default: run until interrupted)",
+    add_max_steps(
+        parser, help="stop after this many steps (default: run until interrupted)"
     )
     parser.add_argument(
         "--scenario",
@@ -47,7 +45,7 @@ def main() -> int:
             node_kwargs["scenario"] = args.scenario
         driver = create_ros2_node(args.robot, node, **node_kwargs)
         node.get_logger().info(f"{args.robot} ROS2 MuJoCo driver started")
-        driver.run(seed=args.seed, max_ticks=args.max_ticks)
+        driver.run(seed=args.seed, max_ticks=args.max_steps)
     finally:
         if driver is not None:
             driver.close()

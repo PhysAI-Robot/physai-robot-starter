@@ -324,8 +324,8 @@ purposes, and each owns only what that purpose needs:
 | | `run_sim.py` | `eval_policy.py` | `collect_demos.py` |
 | --- | --- | --- | --- |
 | Purpose | Run and look at one session: quick check, debugging, demo, recording | Measure a policy over N seeds with numbers that can be compared | Make a dataset with the scripted expert, which reads privileged state |
-| Output | Viewer or web host, video, `.npz` recording | `EvaluationReport`, `--json-out`, a summary | `episode_*.npz` and `meta.json` |
-| Only here | `--viewer`, `--serve`, shared worlds, web `--dataset-dir` | `--seeds`, `--json-out`, `--policy replay`, the difficulty flags (`--camera-jitter`, `--lighting-scale`, `--clutter-count`, `--nominal-physics`), `--sorting`, the training-seed overlap warning | the expert, `environment_state` |
+| Output | Viewer or web host, video, `.npz` recording | `EvaluationReport`, `--json`, a summary | a dataset: `episode_*.npz` and `meta.json` (`--dataset`) |
+| Only here | `--viewer`, `--serve`, shared worlds, browser recording (`--serve --dataset`) | `--seeds`, `--json`, `--policy replay`, the difficulty flags (`--camera-jitter`, `--lighting-scale`, `--clutter-count`, `--nominal-physics`), `--sorting`, the training-seed overlap warning | the expert, `environment_state` |
 | Safety refusal | printed, the episode ends | counted as `unsafe_action` | not applicable |
 
 Who owns what, so the scripts do not drift apart:
@@ -342,10 +342,32 @@ Who owns what, so the scripts do not drift apart:
   uses them.
 - **A script** parses flags, builds a manifest with overrides, calls the rollout and
   prints or saves the result. The output flags (`--video`, `--camera`, `--record`,
-  `--dataset-dir`, `--out-dir`, `--name`) are defined once in `scripts/_common_args.py`, and
+  `--out`, `--name`) are defined once in `scripts/_common_args.py`, and
   `scripts/_outputs.py` writes what they ask for after each episode.
 
 The decision is [ADR 20](adr/config-and-sessions.md#adr-20-run_sim-and-eval_policy-share-one-session-and-one-rollout).
+
+### CLI conventions
+
+One name per concept, in every script (`--help` of each script follows the same layout,
+`scripts/_cli.py`). A test (`tests/core/unit/test_cli_conventions.py`) rejects the old names
+and any flag without a help text.
+
+| Concept | Flag | Meaning |
+| --- | --- | --- |
+| First episode seed | `--seed N` | Episode N uses seed + N. Default 0; `run_sim.py` defaults to the manifest's; `sweep_difficulty.py` uses 100 so its cells stay off seeds 0-99 |
+| Number of episodes | `--episodes N` | Default depends on the script's purpose and is in its `--help` |
+| Episode length | `--max-steps N` | Control steps. The manifest owns the default; the flag overrides it |
+| Session | `--manifest FILE` | Scripts without a manifest take `--robot NAME` |
+| Simulator | `--sim {mujoco,isaac}` | Overrides the manifest's `simulator` |
+| Policy | `--policy NAME`, `--checkpoint DIR`, `--policy-arg KEY=VALUE` | |
+| Output folder | `--out DIR` | Where a script writes many files: videos (`videos/`), recordings (`recordings/`), shards, downloaded assets, a plan |
+| Output file | `--out FILE` | Only `compare_cameras.py` and `export_scene.py`, which write one file; their help says `FILE` |
+| JSON result | `--json FILE` | Machine-readable result of an evaluation or measurement |
+| Dataset folder | `--dataset DIR` | `collect_demos.py` and browser recording (`run_sim.py --serve`) write it; `eval_policy.py --policy replay` reads it |
+| Video and recording | `--video [MODE]`, `--record`, `--camera`, `--name` | `--record` writes one `.npz` and `.json` per episode |
+
+Names are lower case, hyphenated, at most two words, and carry no `-dir` or `-out` suffix.
 
 ## Host + client API
 

@@ -135,14 +135,14 @@ def main() -> int:
     add_robot(ap, choices=sorted(SOURCES), default="so101")
     ap.add_argument("--force", action="store_true", help="re-download existing files")
     ap.add_argument(
-        "--dest",
+        "--out",
         type=Path,
         help="folder to download into (default: assets/<robot>)",
     )
     args = ap.parse_args()
 
     source = SOURCES[args.robot]
-    dest = args.dest or DEST_ROOT / args.robot
+    dest = args.out or DEST_ROOT / args.robot
     print(f"Fetching {source.repository}/{source.path} @ {source.ref}")
     print(f"  -> {dest}")
     try:

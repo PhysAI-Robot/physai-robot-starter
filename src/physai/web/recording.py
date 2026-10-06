@@ -68,7 +68,7 @@ class SessionRecorder:
         if meta.get("robot_type") != self._recorder.robot_type:
             raise ValueError(
                 f"{meta_path} was recorded for robot {meta.get('robot_type')!r}, "
-                f"not {self._recorder.robot_type!r}; use a fresh --dataset-dir"
+                f"not {self._recorder.robot_type!r}; use a fresh --dataset"
             )
         existing_state = meta.get("features", {}).get(_STATE_KEY)
         expected_shape = (
@@ -77,7 +77,7 @@ class SessionRecorder:
         if (existing_state or {}).get("shape") != expected_shape:
             raise ValueError(
                 f"{meta_path} has a different {_STATE_KEY} layout; "
-                "use a fresh --dataset-dir"
+                "use a fresh --dataset"
             )
         self._recorder.episodes = list(meta["episodes"])
 

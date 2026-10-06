@@ -105,7 +105,7 @@ jobs:
             --seed "$SEED_START" \
             --max-steps 600 \
             --camera-jitter "$CAMERA_JITTER" \
-            --json-out "outputs/shard-$SHARD.json"
+            --json "outputs/shard-$SHARD.json"
 
       - name: Record one episode
         if: matrix.shard == 0
@@ -116,7 +116,7 @@ jobs:
             --video \
             --episodes 1 \
             --seed 0 \
-            --out-dir outputs
+            --out outputs
 
       - name: Upload this shard's result
         if: ${{ !cancelled() }}
@@ -172,7 +172,7 @@ jobs:
           uv run python scripts/report_evaluation.py shards/*.json \
             --expect-episodes "$EPISODES" \
             --require-all-success \
-            --merged-out outputs/visual_servo_eval.json | tee -a "$GITHUB_STEP_SUMMARY"
+            --json outputs/visual_servo_eval.json | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the merged result
         if: ${{ !cancelled() }}
