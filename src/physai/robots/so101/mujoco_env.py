@@ -295,6 +295,23 @@ class SO101Env(MuJoCoSimulationCore):
     def close(self) -> None:
         super().close()
 
+    def gripper_contact_force(self) -> float:
+        """Total normal force (N) on the two gripper pads right now."""
+        pads = {
+            geom
+            for geom in range(self.model.ngeom)
+            if (
+                mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, geom) or ""
+            ).endswith(("pad_static", "pad_moving"))
+        }
+        wrench, total = np.zeros(6), 0.0
+        for index in range(self.data.ncon):
+            contact = self.data.contact[index]
+            if contact.geom1 in pads or contact.geom2 in pads:
+                mujoco.mj_contactForce(self.model, self.data, index, wrench)
+                total += float(wrench[0])
+        return total
+
     def joint_state(self) -> JointState:
         position = np.concatenate(
             [

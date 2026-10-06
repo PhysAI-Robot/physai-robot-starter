@@ -33,6 +33,7 @@ from ..contracts import (
 from ..robots.base import RobotPort
 from ..robots.registry import create_jog_resolver, create_shared_instance
 from ..sim.mujoco.world import RobotInstanceConfig, SharedWorld
+from ..data.extras import collect_extras
 from .cameras import CameraFeed
 from .lease import ControlLease
 from .playback import Playback
@@ -357,7 +358,10 @@ class Host:
         self._sync_observation_images()
         data = getattr(self.robot, "data", None)
         self._recorder.record_tick(
-            self._observation, action, None if data is None else data.qpos
+            self._observation,
+            action,
+            None if data is None else data.qpos,
+            collect_extras(self.robot, self.policy, self._observation, None),
         )
 
     # -- playback ------------------------------------------------------------

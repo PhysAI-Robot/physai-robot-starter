@@ -104,3 +104,23 @@ def add_simulator(parser: argparse.ArgumentParser, *, help: str | None = None) -
         default=None,
         help=help or "override the manifest's simulator engine",
     )
+
+
+DEFAULT_RECORD_DIR = Path("outputs/recordings")
+
+
+def add_record(parser: argparse.ArgumentParser) -> None:
+    """`--record` / `--record-dir`: save each episode's inputs as data."""
+    parser.add_argument(
+        "--record",
+        action="store_true",
+        help=f"record every input (cameras, joints, detections, grip force, ...) "
+        f"per episode to {DEFAULT_RECORD_DIR}/<simulator>_<robot>_<policy>_seed<seed>"
+        ".npz (+ .json), named like --video",
+    )
+    parser.add_argument(
+        "--record-dir",
+        type=Path,
+        help="record into this dataset directory (episode_NNNNN.npz + meta.json; "
+        "an existing dataset there is continued); implies --record",
+    )

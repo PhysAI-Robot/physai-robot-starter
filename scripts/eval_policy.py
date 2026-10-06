@@ -23,12 +23,14 @@ from _common_args import (
     add_episodes,
     add_max_steps,
     add_policy,
+    add_record,
     add_robot,
     add_seed,
     add_simulator,
     add_video_name,
 )
 
+from _recording import RunRecorder
 from _video import (
     VIDEO_MODES,
     default_video_name,
@@ -161,6 +163,7 @@ def main() -> int:
         "<simulator>_<robot>_<policy>_seed<seed>.mp4, with _02, _03, ... on repeats)",
     )
     add_video_name(ap)
+    add_record(ap)
     ap.add_argument(
         "--camera",
         default="front",
@@ -188,6 +191,7 @@ def main() -> int:
     # An image-conditioned policy cannot run without rendered cameras: render
     # defaulted to --render alone (so `--policy lerobot` died on an empty
     # images dict) once env construction moved behind create_robot().
+    recording = args.record or args.record_dir is not None
     needs_images = args.policy in {"lerobot", "visual_servo"}
     scene_type = (
         SortingMinimalSceneConfig if args.sorting else SingleCubeFixedPlaceSceneConfig
@@ -248,13 +252,26 @@ def main() -> int:
                 scene=scene,
                 seed=args.seed,
                 max_steps=args.max_steps,
-                render=args.render or needs_images or args.video is not None,
+                render=args.render
+                or needs_images
+                or args.video is not None
+                or recording,
                 domain_randomization=randomization,
             ),
         )
-    env = TaskRuntime(
-        robot,
-        create_task("sorting" if args.sorting else "single_cube_fixed_place"),
+    task_name = "sorting" if args.sorting else "single_cube_fixed_place"
+    env = TaskRuntime(robot, create_task(task_name))
+    recorder = (
+        RunRecorder(
+            robot,
+            fps=getattr(env.cfg, "control_hz", 30),
+            name=args.video_name
+            or default_video_name(args.simulator or "mujoco", args.robot, args.policy),
+            task=task_name,
+            record_dir=args.record_dir,
+        )
+        if recording
+        else None
     )
 
     episodes = None
@@ -349,9 +366,17 @@ def main() -> int:
                 frames.append(np.asarray(frame.data))
 
         grab(obs)
+        if recorder:
+            recorder.start()
         for _ in range(args.max_steps):
             try:
-                obs, reward, terminated, truncated, info = env.step(policy.act(obs))
+                action = policy.act(obs)
+                if recorder:
+                    recorder.capture(policy, obs, info)
+                seen = obs
+                obs, reward, terminated, truncated, info = env.step(action)
+                if recorder:
+                    recorder.record(seen, action, reward, terminated or truncated)
             except SafetyViolation as exc:
                 # The gate refused the action: the episode ends as an unsafe
                 # action rather than taking the whole evaluation down.
@@ -400,6 +425,10 @@ def main() -> int:
             f"d={_format_distance(results[-1]['dist_cube_target'])}"
             + (f"  UNSAFE: {violation}" if violation else "")
         )
+        if recorder:
+            saved = recorder.end(results[-1]["success"], seed)
+            if saved:
+                print(f"  record -> {saved}")
         if frames and keep_video(args.video, results[-1]["success"]):
             path = write_video(
                 np.stack(frames),
@@ -415,6 +444,8 @@ def main() -> int:
             )
             print(f"  video -> {path}")
 
+    if recorder:
+        recorder.close()
     env.close()
     report = EvaluationReport(
         policy=args.policy,

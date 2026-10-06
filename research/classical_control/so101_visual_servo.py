@@ -237,6 +237,8 @@ class VisualServoMetrics:
     phase_steps: int = 0
     settling_time_s: float | None = None
     grasp_retries: int = 0
+    feature_px: tuple[float, float] | None = None
+    feature_confidence: float | None = None
 
 
 class VisualServoPhase(Enum):
@@ -339,6 +341,8 @@ class SO101VisualServoPolicy(Policy):
         self._stall_steps = 0
         self._target_xy: np.ndarray | None = None
         self._q_cmd: np.ndarray | None = None
+        self._last_feature_px: tuple[float, float] | None = None
+        self._last_feature_confidence: float | None = None
         self._grip = 1.0
         self._elapsed_steps = 0
         self._settling_time_s: float | None = None
@@ -590,6 +594,8 @@ class SO101VisualServoPolicy(Policy):
                 return Action(
                     joint_position=self._q_cmd, gripper=GripperCommand(position=1.0)
                 )
+            self._last_feature_px = tuple(float(v) for v in feature.pixel)
+            self._last_feature_confidence = float(feature.confidence)
             self._last_detections[self.camera] = (
                 np.asarray(frame.data, dtype=np.uint8).copy(),
                 feature,
@@ -683,6 +689,8 @@ class SO101VisualServoPolicy(Policy):
             settling_time_s=self._settling_time_s,
             grasp_retries=self._grasp_retries,
             failure_reason=self._failure_reason,
+            feature_px=self._last_feature_px,
+            feature_confidence=self._last_feature_confidence,
         )
         return Action(
             joint_position=self._q_cmd, gripper=GripperCommand(position=self._grip)

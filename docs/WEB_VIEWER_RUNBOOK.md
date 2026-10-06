@@ -130,7 +130,7 @@ in `localStorage`).
 
 ## Recording episodes
 
-Start the host with `--record-dir` to record from the browser (single robot only; refused with
+Takes also carry `extras.*` arrays (joint velocity/effort, grip force, policy metrics; see `src/physai/data/extras.py`). Start the host with `--record-dir` to record from the browser (single robot only; refused with
 a world, and requires `--serve`):
 
 ```bash

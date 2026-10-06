@@ -112,7 +112,7 @@ def test_incompatible_flags_are_rejected(run_sim, monkeypatch, capsys):
         (["--manifest", "m.yaml", "--config", "c.yaml"], "cannot be combined"),
         (["--manifest", "m.yaml", "--robot", "so101"], "cannot be combined"),
         (["--world", "w.yaml", "--robot", "so101"], "cannot be combined"),
-        (["--record-dir", "d"], "requires --serve"),
+        (["--record", "--serve"], "use --record-dir"),
         (["--world", WORLD], "requires --viewer or --serve"),
         (
             ["--world", WORLD, "--serve", "--policy", "constant"],
