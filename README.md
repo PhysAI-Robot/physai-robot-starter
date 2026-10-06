@@ -78,7 +78,7 @@ MUJOCO_GL=egl uv run python scripts/run_sim.py --manifest configs/manifests/hete
 ```
 
 Serve mode holds the current pose until you pass `--policy` (for example `--policy scripted`);
-add `--dataset-dir data/web_session` to record episodes from the browser. Headless `run_sim.py` and `eval_policy.py` take `--record` (like `--video`: `outputs/recordings/<sim>_<robot>_<policy>_seed<seed>.npz` + `.json`; `--out-dir` moves `videos/` and `recordings/`, `--name` replaces the prefix) or `--dataset-dir` (a dataset directory); either saves every input per step (cameras, joints, `extras.*` such as grip force and visual-servo detections) for later analysis. `--viewer` opens
+add `--dataset data/web_session` to record episodes from the browser. Headless `run_sim.py` and `eval_policy.py` take `--record` (like `--video`: `outputs/recordings/<sim>_<robot>_<policy>_seed<seed>.npz` + `.json`; `--out` moves `videos/` and `recordings/`, `--name` replaces the prefix) it saves every input per step (cameras, joints, `extras.*` such as grip force and visual-servo detections) for later analysis. `--viewer` opens
 MuJoCo's own desktop window instead of, or alongside, `--serve`
 ([ADR 4](docs/adr/web-host.md#adr-4---viewer-is-mujocos-own-viewer-frozen-in-scope)). The third
 command puts several robots in one scene, model and clock. The
@@ -108,14 +108,14 @@ simulator instead):
 
 ```bash
 uv run python scripts/eval_policy.py --policy scripted --episodes 100
-uv run python scripts/collect_demos.py --episodes 50 --out data/pickplace_v1
+uv run python scripts/collect_demos.py --episodes 50 --dataset data/pickplace_v1
 uv run python scripts/eval_policy.py --policy replay --dataset data/pickplace_v1
 ```
 
 | Script | Use it to |
 | --- | --- |
 | `run_sim.py` | run and look at one session: quick check, viewer or web host, video, recording |
-| `eval_policy.py` | measure a policy over N seeds and compare the numbers (`--json-out`) |
+| `eval_policy.py` | measure a policy over N seeds and compare the numbers (`--json`) |
 | `collect_demos.py` | make a dataset with the scripted expert |
 
 Both `run_sim.py` and `eval_policy.py` run the session in a manifest and stop an episode the
@@ -167,7 +167,7 @@ nothing here does it for you.
 ```bash
 uv sync --extra isaac --extra training
 OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --sim isaac --policy visual_servo --video
-OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/eval_policy.py --sim isaac --policy visual_servo --episodes 100 --json-out outputs/isaac.json
+OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/eval_policy.py --sim isaac --policy visual_servo --episodes 100 --json outputs/isaac.json
 uv run python scripts/compare_evaluations.py outputs/mujoco.json outputs/isaac.json
 ```
 

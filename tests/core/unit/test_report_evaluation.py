@@ -148,7 +148,7 @@ def test_shards_merge_into_one_report_and_can_be_written_out(
         capsys,
         tmp_path,
         [shard(0, 3), shard(3, 3)],
-        "--merged-out",
+        "--json",
         str(out_path),
     )
     merged = json.loads(out_path.read_text(encoding="utf-8"))

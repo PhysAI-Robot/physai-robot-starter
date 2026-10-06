@@ -16,7 +16,7 @@ python scripts/run_sim.py --serve              # web host only, no desktop windo
 python scripts/run_sim.py --sim isaac --manifest configs/manifests/so101_single_cube_fixed_place.yaml --policy visual_servo
                                                 # the same manifest on Isaac Sim; --video, --record
                                                 # and --serve (web viewer) work as on MuJoCo
-                                                # (no --viewer/--dataset-dir with --serve; needs
+                                                # (no --viewer/--dataset with --serve; needs
                                                 # isaacsim installed, see README.md; not exercised
                                                 # by this repo's own CI)
 
@@ -102,6 +102,12 @@ def parse_args(
     add_camera_resolution(ap)
     add_run_outputs(ap)
     ap.add_argument(
+        "--dataset",
+        type=Path,
+        help="with --serve: record browser episodes into this dataset folder "
+        "(episode_NNNNN.npz + meta.json; an existing dataset there is continued)",
+    )
+    ap.add_argument(
         "--viewer",
         action="store_true",
         help="open MuJoCo's native interactive scene viewer",
@@ -145,21 +151,23 @@ def build_manifest(
 def main(argv: list[str] | None = None) -> int:
     ap, args = parse_args(argv)
     if args.record and args.serve:
-        ap.error("--record writes per-episode files; with --serve use --dataset-dir")
+        ap.error("--record writes per-episode files; with --serve use --dataset")
+    if args.dataset and not args.serve:
+        ap.error("--dataset records browser episodes and needs --serve")
 
     manifest = build_manifest(ap, args)
     if manifest.world is not None and not (args.viewer or args.serve):
         ap.error("a shared-world session requires --viewer or --serve")
-    if args.dataset_dir and manifest.world is not None:
-        ap.error("--dataset-dir is not available with a shared world")
+    if args.dataset and manifest.world is not None:
+        ap.error("--dataset is not available with a shared world")
     if manifest.simulator != "mujoco":
         if args.viewer:
             ap.error(
                 f"--viewer is MuJoCo-only; simulator {manifest.simulator!r} "
                 "supports --serve (web viewer) or headless episodes"
             )
-        if args.serve and args.dataset_dir:
-            ap.error("--dataset-dir is MuJoCo-only")
+        if args.serve and args.dataset:
+            ap.error("--dataset is MuJoCo-only")
 
     if args.viewer or args.serve:
         return run_viewer(args, manifest)
@@ -265,7 +273,7 @@ def build_host(
         policy=session.runtime.policy,
         reset_seed=manifest.simulation.seed,
         async_cameras=session.host_renders_cameras,
-        dataset_dir=args.dataset_dir,
+        record_dir=args.dataset,
     )
     return host, session
 

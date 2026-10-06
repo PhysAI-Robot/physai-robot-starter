@@ -80,7 +80,7 @@ def main() -> int:
         help="distractor boxes placed on the table, off the cube and target",
     )
     parser.add_argument(
-        "--json-out", type=Path, help="write both modes' results as JSON to this file"
+        "--json", type=Path, help="write both modes' results as JSON to this file"
     )
     args = parser.parse_args()
     if args.episodes < 1:
@@ -103,10 +103,10 @@ def main() -> int:
             f"mean_return={mode['mean_return']:.2f}, "
             f"mean_steps={mode['mean_steps']:.0f}"
         )
-    if args.json_out:
-        args.json_out.parent.mkdir(parents=True, exist_ok=True)
-        args.json_out.write_text(json.dumps(report, indent=2), encoding="utf-8")
-        print(f"json -> {args.json_out}")
+    if args.json:
+        args.json.parent.mkdir(parents=True, exist_ok=True)
+        args.json.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        print(f"json -> {args.json}")
     return 0
 
 

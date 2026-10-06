@@ -368,7 +368,7 @@ def test_recording_state_is_merged_into_the_live_snapshot(tmp_path):
 def test_recording_misuse_is_reported(tmp_path):
     plain = make_host()
     assert plain.recording_status() == {"enabled": False}
-    with pytest.raises(ValueError, match="--dataset-dir"):
+    with pytest.raises(ValueError, match="--dataset"):
         plain.start_recording()
 
     host = make_recording_host(tmp_path)

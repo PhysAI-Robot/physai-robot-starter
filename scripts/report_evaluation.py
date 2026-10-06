@@ -225,7 +225,7 @@ def main() -> int:
         "results",
         type=Path,
         nargs="+",
-        help="JSON from eval_policy.py --json-out; several files are merged",
+        help="JSON from eval_policy.py --json; several files are merged",
     )
     parser.add_argument(
         "--require-all-success",
@@ -238,7 +238,7 @@ def main() -> int:
         help="add a gate check that exactly this many episodes are present",
     )
     parser.add_argument(
-        "--merged-out",
+        "--json",
         type=Path,
         help="write the merged evaluation JSON here",
     )
@@ -250,9 +250,9 @@ def main() -> int:
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
 
-    if args.merged_out:
-        args.merged_out.parent.mkdir(parents=True, exist_ok=True)
-        args.merged_out.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    if args.json:
+        args.json.parent.mkdir(parents=True, exist_ok=True)
+        args.json.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
     failures = gate_failures(data["summary"], args.expect_episodes)
     sys.stdout.write(render(data, failures))

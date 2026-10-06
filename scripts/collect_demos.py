@@ -3,7 +3,7 @@
 This is the dataset you fine-tune a VLA on. Failed episodes are discarded by
 default — behaviour cloning on failures teaches failure.
 
-    python scripts/collect_demos.py --episodes 50 --out data/pickplace_v1
+    python scripts/collect_demos.py --episodes 50 --dataset data/pickplace_v1
     python scripts/collect_demos.py --episodes 50 --keep-failures   # for analysis
 
 Runs the same session as `eval_policy.py` (configs/manifests/so101_*.yaml), so a
@@ -22,7 +22,6 @@ from _common_args import (
     add_camera_resolution,
     add_episodes,
     add_max_steps,
-    add_out,
     add_seed,
 )
 from _recording import RunRecorder
@@ -37,7 +36,12 @@ from research.scripted_experts.so101_pick_place_expert import SO101PickPlaceExpe
 def main() -> int:
     ap = new_parser(__doc__)
     add_episodes(ap, default=20)
-    add_out(ap, default=Path("data/pickplace_v1"), help="the dataset directory")
+    ap.add_argument(
+        "--dataset",
+        type=Path,
+        default=Path("data/pickplace_v1"),
+        help="dataset folder to write (episode_NNNNN.npz + meta.json)",
+    )
     add_seed(ap)
     add_max_steps(ap, help="override the episode length (default: the manifest's)")
     add_camera_resolution(ap)
@@ -80,8 +84,7 @@ def main() -> int:
         fps=env.cfg.control_hz,
         name="demos",
         task=args.task,
-        dataset_dir=args.out,
-        fresh=True,
+        dataset_dir=args.dataset,
         metadata={
             "task_name": manifest.task_for(manifest.robots[0]),
             "store_images": not args.no_images,
@@ -126,7 +129,9 @@ def main() -> int:
 
     recorder.close()
     session.close()
-    print(f"\nwrote {kept} episodes ({attempted} attempts) -> {args.out / 'meta.json'}")
+    print(
+        f"\nwrote {kept} episodes ({attempted} attempts) -> {args.dataset / 'meta.json'}"
+    )
     return 0
 
 

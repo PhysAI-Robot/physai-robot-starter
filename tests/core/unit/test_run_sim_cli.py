@@ -104,14 +104,15 @@ def test_a_manifest_selects_the_run_and_the_old_flags_work_with_a_notice(
 def test_incompatible_flags_are_rejected(run_sim, monkeypatch, capsys):
     cases = [
         (["--manifest", "m.yaml", "--robot", "so101"], "cannot be combined"),
-        (["--record", "--serve"], "use --dataset-dir"),
+        (["--record", "--serve"], "use --dataset"),
+        (["--dataset", "d"], "needs --serve"),
         (["--manifest", WORLD], "requires --viewer or --serve"),
         (
             ["--manifest", WORLD, "--serve", "--policy", "constant"],
             "cannot be used with a shared world",
         ),
         (
-            ["--manifest", WORLD, "--serve", "--dataset-dir", "d"],
+            ["--manifest", WORLD, "--serve", "--dataset", "d"],
             "not available with a shared world",
         ),
         (
@@ -119,8 +120,8 @@ def test_incompatible_flags_are_rejected(run_sim, monkeypatch, capsys):
             "--viewer is MuJoCo-only",
         ),
         (
-            ["--sim", "isaac", "--manifest", ISAAC, "--serve", "--dataset-dir", "d"],
-            "--dataset-dir is MuJoCo-only",
+            ["--sim", "isaac", "--manifest", ISAAC, "--serve", "--dataset", "d"],
+            "--dataset is MuJoCo-only",
         ),
     ]
 
@@ -144,7 +145,7 @@ def test_headless_episodes_run_from_a_manifest_and_name_their_video(
         "3",
         "--episodes",
         "2",
-        "--out-dir",
+        "--out",
         str(tmp_path),
     ]
     monkeypatch.setattr(sys, "argv", manifest_run)
@@ -155,7 +156,7 @@ def test_headless_episodes_run_from_a_manifest_and_name_their_video(
     # policy actually run and the seed
     out = tmp_path / "run"
     video_run = ["run_sim.py", "--video", "--record", "--max-steps", "3"]
-    monkeypatch.setattr(sys, "argv", [*video_run, "--out-dir", str(out)])
+    monkeypatch.setattr(sys, "argv", [*video_run, "--out", str(out)])
     assert run_sim.main() == 0
     assert [path.stem for path in (out / "videos").iterdir()] == [
         "mujoco_so101_scripted_seed0000"
@@ -167,9 +168,7 @@ def test_headless_episodes_run_from_a_manifest_and_name_their_video(
     ]
 
     # --name replaces the automatic prefix for both
-    monkeypatch.setattr(
-        sys, "argv", [*video_run, "--name", "mine", "--out-dir", str(out)]
-    )
+    monkeypatch.setattr(sys, "argv", [*video_run, "--name", "mine", "--out", str(out)])
     assert run_sim.main() == 0
     assert (out / "videos" / "mine_seed0000.mp4").exists()
     assert (out / "recordings" / "mine_seed0000.npz").exists()

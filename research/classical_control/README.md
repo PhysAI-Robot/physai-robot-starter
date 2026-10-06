@@ -32,7 +32,7 @@ analysis behind them are in [FINDINGS.md](FINDINGS.md).
 
 ```bash
 uv run python scripts/eval_policy.py --policy visual_servo --episodes 1 --seed 0 --max-steps 400
-uv run python scripts/eval_policy.py --policy visual_servo --episodes 20 --seed 0 --max-steps 600 --camera-jitter 0.005 --json-out outputs/visual_servo_20seed_jitter.json
+uv run python scripts/eval_policy.py --policy visual_servo --episodes 20 --seed 0 --max-steps 600 --camera-jitter 0.005 --json outputs/visual_servo_20seed_jitter.json
 uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --policy visual_servo --serve --seed 0
 ```
 
@@ -55,9 +55,9 @@ out) and writes a Markdown table with the success rate, Wilson interval, place e
 settling time and failure categories:
 
 ```bash
-uv run python scripts/sweep_difficulty.py --out-dir outputs/difficulty
+uv run python scripts/sweep_difficulty.py --out outputs/difficulty
 uv run python scripts/sweep_difficulty.py --axis camera --episodes 50
-uv run python scripts/sweep_difficulty.py --table-only --out-dir outputs/difficulty
+uv run python scripts/sweep_difficulty.py --table-only --out outputs/difficulty
 ```
 
 A single cell runs by hand with `eval_policy.py --lighting-scale 0.5`,
@@ -66,7 +66,7 @@ A single cell runs by hand with `eval_policy.py --lighting-scale 0.5`,
 `--camera-shift-unknown` leaves the policy's calibration at the nominal pose while the
 camera has moved. `--policy-arg KEY=VALUE` overrides a policy option (for example
 `--policy-arg final_camera=front`) and `--seeds 5,13,28` runs an explicit seed list.
-`--video` writes one video per episode under `--out-dir` (default `outputs`, in `videos/`,
+`--video` writes one video per episode under `--out` (default `outputs`, in `videos/`,
 named `<simulator>_<robot>_<policy>_seed<seed>.mp4`, with `_02`, `_03` added on a
 repeat; `--name` replaces the prefix and `run_sim.py` uses the same names),
 `--video failures` only for failed episodes, and `--camera` picks the camera (default
@@ -80,8 +80,8 @@ The same manifest runs on both simulators (`uv sync --extra isaac`, then set
 ```bash
 uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --sim isaac --policy visual_servo --video --camera front
 uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --sim isaac --policy visual_servo --serve
-uv run python scripts/eval_policy.py --policy visual_servo --episodes 100 --json-out outputs/mujoco.json
-uv run python scripts/eval_policy.py --sim isaac --policy visual_servo --episodes 100 --json-out outputs/isaac.json
+uv run python scripts/eval_policy.py --policy visual_servo --episodes 100 --json outputs/mujoco.json
+uv run python scripts/eval_policy.py --sim isaac --policy visual_servo --episodes 100 --json outputs/isaac.json
 uv run python scripts/compare_evaluations.py outputs/mujoco.json outputs/isaac.json
 ```
 
@@ -90,7 +90,7 @@ clutter is MuJoCo only. Evaluations are slow and Isaac sometimes starts without 
 the robot, so run them in shards that retry on that failure:
 
 ```bash
-OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/run_sharded_eval.py --out-dir outputs/eval/isaac_rerun --seed 0 --episodes 100 --shard-size 10 -- --sim isaac --policy visual_servo --max-steps 600
+OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/run_sharded_eval.py --out outputs/eval/isaac_rerun --seed 0 --episodes 100 --shard-size 10 -- --sim isaac --policy visual_servo --max-steps 600
 ```
 
 `scripts/compare_cameras.py` renders both simulators at one arm pose and reports colour

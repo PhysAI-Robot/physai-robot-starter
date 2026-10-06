@@ -44,7 +44,7 @@ Real message and executor coverage needs ROS2 Jazzy:
 ```bash
 source /opt/ros/jazzy/setup.bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/core/robots/so101/test_so101_ros2_node.py -q
-MUJOCO_GL=egl uv run python scripts/run_ros2_sim.py --robot so101 --config configs/tasks/so101/single_cube_fixed_place.yaml --seed 0 --max-ticks 500
+MUJOCO_GL=egl uv run python scripts/run_ros2_sim.py --robot so101 --config configs/tasks/so101/single_cube_fixed_place.yaml --seed 0 --max-steps 500
 uv run python scripts/show_ros2_contract.py
 ```
 
@@ -91,7 +91,7 @@ motion, ground contact and camera output.
 ```bash
 source /opt/ros/jazzy/setup.bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/core/robots/turtlebot/test_turtlebot_ros2_node.py -q
-uv run python scripts/run_ros2_sim.py --robot turtlebot4 --max-ticks 100
+uv run python scripts/run_ros2_sim.py --robot turtlebot4 --max-steps 100
 ```
 
 The node subscribes to `/cmd_vel` and publishes `/joint_states`, `/odom` and the `odom` to

@@ -16,7 +16,7 @@ import; core never imports this package.
 ```bash
 uv run python scripts/eval_policy.py --policy scripted --episodes 5 --seed 0 --max-steps 500
 uv run python scripts/eval_policy.py --policy scripted --episodes 100 --seed 0 --max-steps 600
-uv run python scripts/eval_policy.py --policy scripted --episodes 5 --seed 0 --json-out outputs/local/so101_scripted_seed0.json
+uv run python scripts/eval_policy.py --policy scripted --episodes 5 --seed 0 --json outputs/local/so101_scripted_seed0.json
 uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --policy scripted --serve --seed 0
 ```
 

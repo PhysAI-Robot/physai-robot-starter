@@ -23,7 +23,7 @@ Once the scripted task is reliable ([robot runbook](../../docs/ROBOT_RUNBOOKS.md
 collect demonstrations and train an ACT policy:
 
 ```bash
-uv run python scripts/collect_demos.py --episodes 50 --out data/pickplace_v1
+uv run python scripts/collect_demos.py --episodes 50 --dataset data/pickplace_v1
 uv run python research/imitation_learning/train_act.py --dataset data/pickplace_v1 --steps 4000
 uv run python scripts/eval_policy.py --policy lerobot --checkpoint outputs/act_ckpt
 ```

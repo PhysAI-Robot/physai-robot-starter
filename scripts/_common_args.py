@@ -98,11 +98,11 @@ def policy_kwargs(args: argparse.Namespace, policy: str) -> dict[str, Any]:
 
 
 def add_out(
-    parser: argparse.ArgumentParser, *, default: Path, help: str | None = None
+    parser: argparse.ArgumentParser, *, default: Path, help: str, metavar: str = "FILE"
 ) -> None:
-    parser.add_argument(
-        "--out", type=Path, default=default, help=help or "where to write the result"
-    )
+    """`--out` as a single output file (scripts that write many files use
+    `--out DIR`; see the CLI conventions in docs/ARCHITECTURE.md)."""
+    parser.add_argument("--out", type=Path, default=default, metavar=metavar, help=help)
 
 
 def add_robot(
@@ -180,21 +180,13 @@ def add_run_outputs(parser: argparse.ArgumentParser) -> None:
         "--record",
         action="store_true",
         help="record every input (cameras, joints, detections, grip force, ...) "
-        "per episode as <out-dir>/recordings/<name>_seed<seed>.npz (+ .json)",
+        "per episode as <out>/recordings/<name>_seed<seed>.npz (+ .json)",
     )
     parser.add_argument(
-        "--dataset-dir",
-        type=Path,
-        help="record into this dataset directory instead (episode_NNNNN.npz + "
-        "meta.json, the layout training and --policy replay read; an existing "
-        "dataset there is continued); implies --record",
-    )
-    parser.add_argument(
-        "--out-dir",
+        "--out",
         type=Path,
         default=Path("outputs"),
-        help="where videos (videos/) and recordings (recordings/) are written "
-        "(default: outputs)",
+        help="directory the videos (videos/) and recordings (recordings/) go in",
     )
     parser.add_argument(
         "--name",

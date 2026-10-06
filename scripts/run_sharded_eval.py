@@ -1,7 +1,7 @@
 """Run `eval_policy.py` in small shards, each in its own process, and merge them.
 
     OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/run_sharded_eval.py \\
-        --out-dir outputs/eval/isaac_rerun --seed 0 --episodes 100 --shard-size 10 \\
+        --out outputs/eval/isaac_rerun --seed 0 --episodes 100 --shard-size 10 \\
         -- --sim isaac --policy visual_servo --max-steps 600
 
 Everything after `--` goes to `eval_policy.py`. Isaac Sim sometimes stops
@@ -11,7 +11,7 @@ up to `--retries` times in a fresh process. Every attempt is appended to
 `attempts.jsonl` (start time, duration, exit code, whether it was the render
 glitch, and the number of clean processes since the previous glitch) so the
 glitch's pattern can be read back later. The merged report is written to
-`<out-dir>/merged.json`.
+`<out>/merged.json`.
 """
 
 from __future__ import annotations
@@ -53,7 +53,9 @@ def run_shard(
         str(start),
         "--episodes",
         str(count),
-        "--json-out",
+        "--out",
+        str(out.parent),
+        "--json",
         str(out),
         *passthrough,
     ]
@@ -71,7 +73,7 @@ def run_shard(
 def main() -> int:
     ap = new_parser(__doc__)
     ap.add_argument(
-        "--out-dir",
+        "--out",
         type=Path,
         required=True,
         help="directory for shard-*.json, attempts.jsonl and the merged result",
@@ -113,12 +115,12 @@ def main() -> int:
     args = ap.parse_args()
     passthrough = [a for a in args.passthrough if a != "--"]
 
-    args.out_dir.mkdir(parents=True, exist_ok=True)
-    log_path = args.out_dir / "attempts.jsonl"
+    args.out.mkdir(parents=True, exist_ok=True)
+    log_path = args.out / "attempts.jsonl"
     clean_since_glitch = 0
     parts = []
     for start, count in shard_ranges(args.seed, args.episodes, args.shard_size):
-        out = args.out_dir / f"shard-{start}.json"
+        out = args.out / f"shard-{start}.json"
         for attempt in range(1, args.retries + 2):
             if out.exists():
                 out.unlink()
@@ -154,13 +156,13 @@ def main() -> int:
             )
 
     merged = parts[0] if len(parts) == 1 else merge_evaluations(parts)
-    (args.out_dir / "merged.json").write_text(
+    (args.out / "merged.json").write_text(
         json.dumps(merged, indent=2), encoding="utf-8"
     )
     summary = merged["summary"]
     print(
         f"merged {summary['episodes']} episodes: "
-        f"{summary['success_count']}/{summary['episodes']} succeeded -> {args.out_dir / 'merged.json'}"
+        f"{summary['success_count']}/{summary['episodes']} succeeded -> {args.out / 'merged.json'}"
     )
     return 0
 

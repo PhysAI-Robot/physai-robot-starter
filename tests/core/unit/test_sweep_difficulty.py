@@ -72,3 +72,16 @@ def test_table_reports_each_cell_and_marks_missing_ones(tmp_path):
     assert "timeout_in_close x2" in table
     assert "| 6.0 / 6.0 |" in table
     assert f"| lighting | {lighting.level} | not run |" in table
+
+
+def test_isaac_runs_only_the_cells_eval_policy_supports_there():
+    cells = sweep_difficulty.supported_cells(list(sweep_difficulty.CELLS), "isaac")
+    assert {cell.axis for cell in cells} == {"baseline", "lighting", "camera"}
+    assert all(
+        "--camera-shift-unknown" in cell.flags
+        for cell in cells
+        if cell.axis == "camera"
+    )
+    assert sweep_difficulty.supported_cells(list(sweep_difficulty.CELLS), None) == list(
+        sweep_difficulty.CELLS
+    )

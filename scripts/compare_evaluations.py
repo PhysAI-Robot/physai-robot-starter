@@ -3,7 +3,7 @@
     uv run python scripts/compare_evaluations.py outputs/mujoco.json outputs/isaac.json
     uv run python scripts/compare_evaluations.py a.json b.json --label-a MuJoCo --label-b Isaac
 
-Both files come from `eval_policy.py --json-out` over the same seeds (for
+Both files come from `eval_policy.py --json` over the same seeds (for
 `--sim isaac` a seed places the cube where MuJoCo does). The Markdown reports
 each side's success rate with a Wilson 95% interval, how the seeds agree
 between the two (both succeed, only one does, neither), the mean steps, and
