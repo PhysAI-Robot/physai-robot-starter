@@ -21,6 +21,7 @@ header {
 }
 header strong { font-size: 1.05rem; letter-spacing: 0.08em; }
 header strong span { color: var(--color-accent); }
+header .version { color: var(--color-text-muted); font: 11px var(--font-mono); }
 header label {
   margin-left: auto;
   color: var(--color-text-muted);

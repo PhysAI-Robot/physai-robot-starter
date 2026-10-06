@@ -2398,7 +2398,7 @@ wheels = [
 
 [[package]]
 name = "physai"
-version = "0.0.1"
+version = "0.0.2"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi", version = "0.139.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-6-physai-isaac'" },
