@@ -178,3 +178,13 @@ def test_headless_episodes_run_from_a_manifest_and_name_their_video(
 def test_without_a_manifest_the_single_cube_session_runs(run_sim, monkeypatch):
     manifest = capture_viewer(run_sim, monkeypatch, ["--serve"])["manifest"]
     assert manifest.scene.name == "single_cube_fixed_place"
+
+
+@requires_assets
+def test_a_robot_without_a_scripted_expert_runs_headless_on_the_constant_policy(
+    run_sim, monkeypatch, capsys
+):
+    argv = ["run_sim.py", "--manifest", "configs/manifests/turtlebot4.yaml"]
+    monkeypatch.setattr(sys, "argv", [*argv, "--max-steps", "3"])
+    assert run_sim.main() == 0
+    assert "episode 0:" in capsys.readouterr().out

@@ -139,6 +139,12 @@ def create_robot(
     return descriptor.factory(adapter=adapter, simulator=simulator, **kwargs)
 
 
+def has_robot_policy(robot_name: str, policy_name: str) -> bool:
+    """Whether a robot owns a policy of this name (research policies register on import)."""
+    _load_builtins()
+    return (robot_name, policy_name) in _POLICY_FACTORIES
+
+
 def create_robot_policy(robot_name: str, policy_name: str, **kwargs: Any) -> Any:
     """Create a robot-owned policy without importing its implementation."""
     _load_builtins()

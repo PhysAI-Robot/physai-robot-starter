@@ -77,7 +77,7 @@ endpoint.
 ```bash
 uv run python scripts/fetch_assets.py --robot turtlebot4
 uv run python scripts/run_sim.py --manifest configs/manifests/turtlebot4.yaml --serve --seed 0
-uv run python scripts/run_sim.py --manifest configs/manifests/turtlebot4.yaml --policy constant --seed 0 --max-steps 300
+uv run python scripts/run_sim.py --manifest configs/manifests/turtlebot4.yaml --seed 0 --max-steps 300
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/core/unit/test_robot_registry.py tests/core/acceptance/turtlebot/test_navigation.py -q
 ```
 
