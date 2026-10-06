@@ -1,6 +1,5 @@
 # The minimal single-cube pick-and-place session for the SO-101.
 # Run it with: python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml
-# (this replaces configs/tasks/so101/single_cube_fixed_place.yaml).
 schema_version: 1
 
 scene:

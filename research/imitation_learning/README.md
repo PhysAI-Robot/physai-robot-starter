@@ -15,7 +15,7 @@ import; core never imports this package. It needs the `training` extra
 (`uv sync --extra training`), which combines with `isaac` in one environment, so the same
 checkpoint runs on Isaac Sim (`eval_policy.py --sim isaac --policy lerobot`); the
 `numpy` and `packaging` overrides that make this possible are in
-[ADR 18](../../docs/adr/simulators.md#adr-18-one-environment-for-isaac-sim-and-lerobot).
+[DECISIONS.md D](../../docs/DECISIONS.md#d-isaac-sim-is-an-optional-peer-engine).
 
 ## SO-101 collect, train, evaluate
 

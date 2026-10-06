@@ -12,11 +12,9 @@ Keep each document focused on one audience:
 - `README.md` is the user-facing setup and workflow guide.
 - `docs/ARCHITECTURE.md` is the internal design reference and the source of
   truth for module boundaries and contracts.
-- `docs/adr/` records the decisions behind the frozen design, grouped by topic
-  in one file each, with one numbered `## ADR N` section per decision and an
-  index in `docs/adr/README.md`. Add a decision to its topic's file with the
-  next free number and a row in the index; do not rewrite an accepted
-  decision, supersede it.
+- `docs/DECISIONS.md` records the decisions behind the frozen design, one lettered
+  section each. Add a new decision as the next letter; when a decision stops holding,
+  edit it in place (git history keeps the old text).
 - `docs/ROBOT_RUNBOOKS.md` and `docs/WEB_VIEWER_RUNBOOK.md` are the operational
   runbooks for the robots and the browser viewer.
 - `research/<topic>/README.md` is that research topic's own runbook (setup,
@@ -119,29 +117,11 @@ contributors; do not create a second agent-only variant.
 
 ## Adding a component
 
-Every seam below is a new file plus one registration call — see
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)'s extension seam table for the
-exact registry function per seam.
-
-- New robot: build one `RobotDescriptor` and call `register_embodiment()`
-  once, then cover its capability contract and generic simulation path.
-- New scene: register a `SceneDefinition` declaring the robot kinds and task
-  names it supports.
-- New task: keep task state, reward, metrics, and termination independent
-  from robot internals; register with `tasks.registry`.
-- New planner: implement the `Planner` contract and return the existing plan
-  shape where possible; register with `planner.registry` (a research module
-  registers itself on import instead of core registering it).
-- New policy: implement the control-rate policy contract and make its
-  required observation/action capabilities explicit; register with
-  `policy.registry`, or `robots.registry.register_robot_policy()` if it is
-  owned by one robot.
-- New backend: implement the adapter shape in `robots/adapters.py` and call
-  `register_adapter()`.
-
-Update the architecture reference only when the supported design or ownership
-has changed. Update the README only when a user-visible setup or workflow has
-changed.
+Every seam is a new file plus one registration call; the exact registry function per seam
+is in the extension seam table of [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). A new robot
+registers one `RobotDescriptor` and covers its capability contract and generic simulation
+path in tests; a new task keeps state, reward, metrics and termination independent of robot
+internals; a research module registers itself on import instead of core registering it.
 
 ## Completion checklist
 

@@ -1,6 +1,5 @@
 # Two robot instances in one MuJoCo model and physics clock.
 # Run it with: python scripts/run_sim.py --manifest configs/manifests/heterogeneous_world.yaml --serve
-# (this replaces configs/worlds/heterogeneous.yaml).
 schema_version: 1
 
 world:

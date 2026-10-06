@@ -13,7 +13,7 @@ owns its README (setup and runbook) and, where it has measurement history, a
   `physai.robots.registry`).
 - `physai` (core) never imports `research/`. Research plugs in by registering itself when
   its module is imported (enforced by import-linter,
-  [ADR 3](../docs/adr/repo-scope.md#adr-3-research-code-lives-outside-the-core-package)).
+  [DECISIONS.md A](../docs/DECISIONS.md#a-research-code-lives-outside-the-core-package)).
 
 ## Topics
 

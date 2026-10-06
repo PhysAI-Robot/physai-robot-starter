@@ -75,7 +75,7 @@ the robot's first camera, `front`). `report_evaluation.py` and `compare_evaluati
 ## Isaac Sim
 
 The same manifest runs on both simulators (`uv sync --extra isaac`, then set
-`OMNI_KIT_ACCEPT_EULA=YES` yourself; see [ADR 16](../../docs/adr/simulators.md#adr-16-isaacsim-as-a-project-extra-not-a-separate-venv)):
+`OMNI_KIT_ACCEPT_EULA=YES` yourself; see [DECISIONS.md D](../../docs/DECISIONS.md#d-isaac-sim-is-an-optional-peer-engine)):
 
 ```bash
 uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --sim isaac --policy visual_servo --video --camera front
