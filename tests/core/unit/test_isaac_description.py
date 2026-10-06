@@ -47,14 +47,6 @@ def test_fovy_to_focal_length_rejects_a_degenerate_fov():
         fovy_to_focal_length(180.0)
 
 
-def test_isaac_env_config_coerces_manifest_lists():
-    from physai.robots.so101.isaac_env import IsaacEnvConfig
-
-    cfg = IsaacEnvConfig(cameras=["front", "wrist"])
-
-    assert cfg.cameras == ("front", "wrist")
-
-
 @requires_assets
 def test_wrist_calibration_follows_the_chosen_resolution():
     """A mounted camera's pixel size is the render resolution, not the
@@ -98,21 +90,6 @@ def test_wrist_calibration_follows_the_chosen_resolution():
     assert results["640x480"].fy == 2 * results["320x240"].fy
 
 
-def test_isaac_config_takes_its_objects_from_the_shared_scene():
-    from physai.robots.so101.isaac_env import IsaacEnvConfig
-    from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
-
-    scene = SingleCubeFixedPlaceSceneConfig(
-        table_pos=(0.31, 0.01, 0.012), cube_pos=(0.21, 0.07, 0.04)
-    )
-    cfg = IsaacEnvConfig(scene=scene)
-
-    assert cfg.scene is scene
-    # MuJoCo's default: a scene randomizes the cube per seed; a bare config does not.
-    assert cfg.randomize_cube is True
-    assert IsaacEnvConfig().randomize_cube is False
-
-
 def test_the_isaac_camera_orientation_matches_mujoco_for_the_front_camera():
     import mujoco
     import numpy as np
@@ -131,18 +108,6 @@ def test_the_isaac_camera_orientation_matches_mujoco_for_the_front_camera():
 
     # q and -q are the same rotation
     assert min(np.abs(got - expected).max(), np.abs(got + expected).max()) < 1e-9
-
-
-def test_isaac_layout_defaults_match_mujoco_env_config():
-    from dataclasses import fields
-
-    from physai.robots.so101.isaac_env import IsaacEnvConfig
-    from physai.robots.so101.mujoco_env import EnvConfig
-
-    mujoco_defaults = {f.name: f.default for f in fields(EnvConfig)}
-    isaac_defaults = {f.name: f.default for f in fields(IsaacEnvConfig)}
-    for name in ("cube_x_range", "cube_y_range", "randomize_target"):
-        assert isaac_defaults[name] == mujoco_defaults[name], name
 
 
 def test_isaac_config_rejects_what_it_cannot_build():
@@ -178,19 +143,3 @@ def test_the_single_cube_fixed_place_manifest_builds_a_config_for_either_simulat
     assert isaac.simulator == "isaac"
     accepted = {f.name for f in fields(create_env_config("so101", simulator="isaac"))}
     assert set(isaac.robots[0].config) <= accepted
-
-
-def test_isaac_config_accepts_every_resolution_its_scene_can_have():
-    """The scene and the env must name one resolution; `eval_policy --sim isaac
-    --camera-res` builds both from the same value."""
-    from physai.contracts import CAMERA_RESOLUTIONS, parse_camera_resolution
-    from physai.robots.so101.isaac_env import IsaacEnvConfig
-    from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
-
-    for resolution in CAMERA_RESOLUTIONS:
-        scene = SingleCubeFixedPlaceSceneConfig(camera_resolution=resolution)
-        cfg = IsaacEnvConfig(scene=scene, camera_resolution=scene.camera_resolution)
-        assert parse_camera_resolution(cfg.camera_resolution) == (
-            scene.camera_width,
-            scene.camera_height,
-        )

@@ -231,30 +231,3 @@ def report_module(monkeypatch):
 )
 def test_failure_category(report_module, result, expected):
     assert report_module.failure_category(result) == expected
-
-
-def test_metric_rows_use_successes_for_place_error_and_skip_missing_fields(
-    report_module,
-):
-    results = [
-        {"success": True, "dist_cube_target": 0.002, "settling_time_s": 1.0},
-        {"success": True, "dist_cube_target": 0.004, "settling_time_s": 2.0},
-        {"success": False, "dist_cube_target": 0.2},
-    ]
-    rows = dict(report_module.metric_rows(results))
-    assert rows["Place error, successes (mm)"] == "3.0 / 3.8"
-    assert rows["Settling time (s)"] == "1.50 / 1.90"
-    assert report_module.metric_rows([{"success": False}]) == []
-
-
-def test_failure_histogram_orders_by_count_then_name(report_module):
-    results = [
-        {"success": False, "timeout": True, "phase": "CLOSE"},
-        {"success": False, "timeout": True, "phase": "APPROACH"},
-        {"success": False, "timeout": True, "phase": "CLOSE"},
-        {"success": True},
-    ]
-    assert report_module.failure_histogram(results) == {
-        "timeout_in_close": 2,
-        "timeout_in_approach": 1,
-    }

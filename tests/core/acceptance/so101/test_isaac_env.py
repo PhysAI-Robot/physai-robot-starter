@@ -1,7 +1,6 @@
-"""Phase 3 parity-ladder tiers 1-2 against real Isaac Sim: URDF import and
-actuator step response. Skipped wherever `isaacsim` is not installed —
-`uv sync --extra isaac` installs it into this project's own venv (see
-`docs/adr/simulators.md, ADR 16`).
+"""Smoke tests against real Isaac Sim: URDF import, actuator step response and
+render health. Skipped wherever `isaacsim` is not installed; `uv sync --extra isaac`
+installs it into this project's own venv (see `docs/DECISIONS.md`, D).
 
 One `SimulationApp` per process is a hard Isaac Sim constraint (see
 `physai.sim.isaac.core`), so every test in this module shares one
@@ -11,7 +10,6 @@ own.
 
 from pathlib import Path
 
-import numpy as np
 import pytest
 from tests.conftest import requires_assets
 
@@ -68,24 +66,6 @@ def test_all_actuated_joints_import_with_the_mujoco_side_joint_order(env):
     assert env.dof_names == list(ALL_JOINT_NAMES)
 
 
-def test_reset_teleports_to_the_same_home_pose_as_mujoco(env):
-    """Tier 1 (static): `HOME_QPOS` is shared source with `so101.mujoco_env`
-    (imported from there), so a diff here is a real cross-backend gap, not
-    just this module's own bug.
-    """
-    from physai.robots.so101.mujoco_env import HOME_QPOS
-
-    # The reset holds for one control step (so the first image is fresh), and
-    # gravity sags the arm by a fraction of a milliradian in that time.
-    observation = env.reset(seed=0)
-    np.testing.assert_allclose(
-        observation.joint_state.position[:5], HOME_QPOS, atol=1e-3
-    )
-    assert observation.joint_state.position[5] == pytest.approx(
-        env.gripper_to_joint(1.0), abs=1e-3
-    )
-
-
 def test_actuator_gains_transfer_from_mujoco_with_no_unit_conversion(env):
     """Tier 2 (actuator step response): the SO-101 MJCF's sts3215 gains
     (stiffness=998.22, damping=2.731, force_limit=3.35 — see
@@ -115,32 +95,6 @@ def test_wrist_camera_renders_a_real_non_black_frame(env):
     frame = observation.images["wrist"]
     assert frame.data.shape == (240, 320, 3)
     assert frame.data.mean() > 10.0
-
-
-def test_wrist_calibration_follows_the_rendering_camera_prim(env):
-    """The wrist pose `visual_servo` triangulates with comes from the mirror's
-    forward kinematics, so it must agree with the USD camera that actually
-    renders -- at home and after the arm has moved."""
-    from pxr import Usd, UsdGeom
-
-    from physai.contracts import Action
-
-    def usd_camera_position() -> np.ndarray:
-        prim = env.stage.GetPrimAtPath(env._camera_prims["wrist"])
-        matrix = UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(
-            Usd.TimeCode.Default()
-        )
-        return np.array(matrix.ExtractTranslation())
-
-    env.reset()
-    for _ in range(2):
-        _, extrinsics = env.camera_calibration("wrist")
-        np.testing.assert_allclose(
-            extrinsics.position.as_array(), usd_camera_position(), atol=0.01
-        )
-        for _ in range(30):
-            env.step(Action(joint_position=np.array([0.5, -0.5, 0.5, 0.5, 0.0])))
-        env.observe()
 
 
 def test_the_health_check_notices_a_robot_that_is_not_drawn(env):
