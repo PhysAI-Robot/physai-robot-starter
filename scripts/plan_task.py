@@ -9,12 +9,12 @@ grounding quality on its own.
 
 from __future__ import annotations
 
-import argparse
 import json
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
 import numpy as np
+from _cli import new_parser
 from _common_args import add_max_steps, add_robot, add_seed
 
 from physai.planner import ScriptedPlanner
@@ -26,8 +26,12 @@ from physai.tasks import TaskRuntime, create_task
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--instruction", default="put the red cube on the green pad")
+    ap = new_parser(__doc__)
+    ap.add_argument(
+        "--instruction",
+        default="put the red cube on the green pad",
+        help="natural-language task given to the planner",
+    )
     add_robot(
         ap,
         default="so101",
@@ -37,7 +41,9 @@ def main() -> int:
     add_seed(ap)
     add_max_steps(ap, default=800)
     ap.add_argument("--dry-run", action="store_true", help="print the plan and exit")
-    ap.add_argument("--save-plan", type=Path)
+    ap.add_argument(
+        "--save-plan", type=Path, help="write the plan as JSON to this file"
+    )
     ap.add_argument(
         "--save-frames",
         type=Path,

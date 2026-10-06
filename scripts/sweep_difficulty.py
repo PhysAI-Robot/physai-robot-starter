@@ -16,7 +16,6 @@ place error, settling time and the most common failure category per cell.
 
 from __future__ import annotations
 
-import argparse
 import json
 import subprocess
 import sys
@@ -24,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
+from _cli import new_parser
 from report_evaluation import (
     failure_histogram,
     load_evaluation,
@@ -137,11 +137,26 @@ def render_table(cells: list[Cell], out_dir: Path) -> str:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--out-dir", type=Path, default=Path("outputs/difficulty"))
-    ap.add_argument("--axis", choices=("lighting", "camera", "clutter"))
-    ap.add_argument("--seed", type=int, default=100)
-    ap.add_argument("--episodes", type=int, default=50)
+    ap = new_parser(__doc__)
+    ap.add_argument(
+        "--out-dir",
+        type=Path,
+        default=Path("outputs/difficulty"),
+        help="directory for one JSON and log per cell, and table.md",
+    )
+    ap.add_argument(
+        "--axis",
+        choices=("lighting", "camera", "clutter"),
+        help="run only this axis plus the baseline (default: all axes)",
+    )
+    ap.add_argument(
+        "--seed",
+        type=int,
+        default=100,
+        help="seed of the first episode; 100 keeps the sweep off seeds 0-99, "
+        "which the policies were tuned on",
+    )
+    ap.add_argument("--episodes", type=int, default=50, help="episodes per cell")
     ap.add_argument(
         "--max-steps",
         type=int,

@@ -19,13 +19,13 @@ printed when the gate fails, so a failing run shows its numbers.
 
 from __future__ import annotations
 
-import argparse
 import json
 import math
 import sys
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
+from _cli import new_parser
 import numpy as np
 from physai.data.evaluation import EvaluationReport
 
@@ -220,7 +220,7 @@ def render(data: dict, failures: list[str]) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = new_parser(__doc__)
     parser.add_argument(
         "results",
         type=Path,

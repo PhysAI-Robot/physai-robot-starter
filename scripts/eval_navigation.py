@@ -2,18 +2,24 @@
 
 from __future__ import annotations
 
-import argparse
 
 import _bootstrap  # noqa: F401
+from _cli import new_parser
 from _common_args import add_max_steps, add_robot, add_seed
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
+    parser = new_parser(__doc__)
     add_robot(parser, default="turtlebot4")
-    parser.add_argument("--goal-x", type=float, default=1.0)
-    parser.add_argument("--goal-y", type=float, default=-1.0)
-    parser.add_argument("--goal-yaw", type=float, default=0.0)
+    parser.add_argument(
+        "--goal-x", type=float, default=1.0, help="goal x position in metres"
+    )
+    parser.add_argument(
+        "--goal-y", type=float, default=-1.0, help="goal y position in metres"
+    )
+    parser.add_argument(
+        "--goal-yaw", type=float, default=0.0, help="goal heading in radians"
+    )
     add_seed(parser)
     add_max_steps(parser, default=300)
     args = parser.parse_args()

@@ -25,6 +25,7 @@ from datetime import datetime
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
+from _cli import new_parser
 from report_evaluation import merge_evaluations
 
 GLITCH_MARKER = "not drawing the robot"
@@ -68,12 +69,34 @@ def run_shard(
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--out-dir", type=Path, required=True)
-    ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--episodes", type=int, default=100)
-    ap.add_argument("--shard-size", type=int, default=10)
-    ap.add_argument("--retries", type=int, default=6)
+    ap = new_parser(__doc__)
+    ap.add_argument(
+        "--out-dir",
+        type=Path,
+        required=True,
+        help="directory for shard-*.json, attempts.jsonl and the merged result",
+    )
+    ap.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="seed of the first episode of the first shard",
+    )
+    ap.add_argument(
+        "--episodes", type=int, default=100, help="total episodes across all shards"
+    )
+    ap.add_argument(
+        "--shard-size",
+        type=int,
+        default=10,
+        help="episodes per eval_policy process",
+    )
+    ap.add_argument(
+        "--retries",
+        type=int,
+        default=6,
+        help="extra attempts for a shard that fails or hits the Isaac render glitch",
+    )
     ap.add_argument(
         "--cooldown",
         type=float,
@@ -82,7 +105,11 @@ def main() -> int:
         "within a minute of the previous process glitched in 8 of 17 cases and "
         "starts after a 90 s pause in 1 of 5 (Fisher p = 0.36, so only suggestive)",
     )
-    ap.add_argument("passthrough", nargs=argparse.REMAINDER)
+    ap.add_argument(
+        "passthrough",
+        nargs=argparse.REMAINDER,
+        help="after `--`: the eval_policy.py arguments every shard runs with",
+    )
     args = ap.parse_args()
     passthrough = [a for a in args.passthrough if a != "--"]
 

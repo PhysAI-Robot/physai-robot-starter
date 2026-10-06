@@ -14,10 +14,10 @@ only links an MP4.
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
+from _cli import new_parser
 import imageio.v3 as iio
 import numpy as np
 
@@ -177,7 +177,7 @@ GROUPS = {
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
+    ap = new_parser(__doc__)
     ap.add_argument(
         "--only", choices=sorted(GROUPS), help="render one group instead of all of them"
     )

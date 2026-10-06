@@ -10,10 +10,10 @@ scene to another tool:
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
+from _cli import new_parser
 from _common_args import add_out, add_robot
 
 from physai.robots.registry import scene_defaults
@@ -21,11 +21,18 @@ from physai.sim.mujoco import available_scenes, create_scene, export_xml
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
-    add_out(ap, default=Path("outputs/scene_single_cube_fixed_place.xml"))
+    ap = new_parser(__doc__)
+    add_out(
+        ap,
+        default=Path("outputs/scene_single_cube_fixed_place.xml"),
+        help="MJCF file to write",
+    )
     add_robot(ap, default="so101")
     ap.add_argument(
-        "--scene", default="single_cube_fixed_place", choices=available_scenes()
+        "--scene",
+        default="single_cube_fixed_place",
+        choices=available_scenes(),
+        help="registered scene to export",
     )
     args = ap.parse_args()
 
