@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import argparse
 
 import _bootstrap  # noqa: F401
+from _cli import new_parser
 from _common_args import add_robot, add_seed
 
 
@@ -13,12 +13,24 @@ def main() -> int:
 
     from physai.robots import available_robots, create_ros2_node
 
-    parser = argparse.ArgumentParser()
+    parser = new_parser(__doc__)
     add_robot(parser, choices=available_robots(), default="so101")
-    parser.add_argument("--config", type=str)
+    parser.add_argument(
+        "--config",
+        type=str,
+        help="task YAML (configs/tasks/...) for the robot environment",
+    )
     add_seed(parser)
-    parser.add_argument("--max-ticks", type=int)
-    parser.add_argument("--scenario", default=None)
+    parser.add_argument(
+        "--max-ticks",
+        type=int,
+        help="stop after this many ticks (default: run until interrupted)",
+    )
+    parser.add_argument(
+        "--scenario",
+        default=None,
+        help="scenario name passed to the robot node (default: the robot's own)",
+    )
     args = parser.parse_args()
 
     config = None

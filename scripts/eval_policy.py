@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import _bootstrap  # noqa: F401
+from _cli import new_parser
 from _common_args import (
     DEFAULT_MANIFEST,
     SORTING_MANIFEST,
@@ -65,7 +66,7 @@ def _parse_seed_list(text: str) -> list[int]:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
+    ap = new_parser(__doc__)
     ap.add_argument(
         "--manifest",
         type=Path,

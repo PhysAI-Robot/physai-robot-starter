@@ -12,10 +12,10 @@ policy trained on these demos is evaluated on the scene it learned.
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
+from _cli import new_parser
 from _common_args import (
     DEFAULT_MANIFEST,
     SORTING_MANIFEST,
@@ -35,19 +35,27 @@ from research.scripted_experts.so101_pick_place_expert import SO101PickPlaceExpe
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
+    ap = new_parser(__doc__)
     add_episodes(ap, default=20)
     add_out(ap, default=Path("data/pickplace_v1"), help="the dataset directory")
     add_seed(ap)
     add_max_steps(ap, help="override the episode length (default: the manifest's)")
     add_camera_resolution(ap)
-    ap.add_argument("--keep-failures", action="store_true")
+    ap.add_argument(
+        "--keep-failures",
+        action="store_true",
+        help="also keep episodes where the expert failed (default: discard them)",
+    )
     ap.add_argument(
         "--no-images",
         action="store_true",
         help="record state/action only (much smaller files)",
     )
-    ap.add_argument("--task", default="put the red cube on the green pad")
+    ap.add_argument(
+        "--task",
+        default="put the red cube on the green pad",
+        help="instruction stored with each episode",
+    )
     ap.add_argument(
         "--sorting",
         action="store_true",

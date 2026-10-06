@@ -13,6 +13,7 @@ from pathlib import Path
 import _bootstrap  # noqa: F401
 import mujoco
 import numpy as np
+from _cli import new_parser
 from _common_args import add_seed
 
 from physai.robots.so101 import EnvConfig, SO101Env
@@ -113,10 +114,17 @@ def benchmark(args: argparse.Namespace) -> dict:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--targets", type=int, default=20)
+    parser = new_parser(__doc__)
+    parser.add_argument(
+        "--targets",
+        type=int,
+        default=20,
+        help="number of reachable target poses to test",
+    )
     add_seed(parser)
-    parser.add_argument("--json-out", type=Path)
+    parser.add_argument(
+        "--json-out", type=Path, help="write the metrics as JSON to this file"
+    )
     args = parser.parse_args()
     if args.targets < 1:
         parser.error("--targets must be positive")

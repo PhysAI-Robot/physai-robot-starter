@@ -16,11 +16,11 @@ side-by-side image.
 
 from __future__ import annotations
 
-import argparse
 import sys
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
+from _cli import new_parser
 import numpy as np
 
 from physai.contracts import Action, GripperCommand
@@ -199,14 +199,28 @@ def compare(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = new_parser(__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--dump", choices=("mujoco", "isaac"))
-    mode.add_argument("--compare", nargs=2, type=Path, metavar=("A.npz", "B.npz"))
+    mode.add_argument(
+        "--dump",
+        choices=("mujoco", "isaac"),
+        help="render this simulator's cameras and write them to --out",
+    )
+    mode.add_argument(
+        "--compare",
+        nargs=2,
+        type=Path,
+        metavar=("A.npz", "B.npz"),
+        help="report the differences between two dumps",
+    )
     parser.add_argument("--out", type=Path, help="with --dump: the .npz to write")
     parser.add_argument("--montage", type=Path, help="with --compare: write an image")
-    parser.add_argument("--label-a", default="MuJoCo")
-    parser.add_argument("--label-b", default="Isaac")
+    parser.add_argument(
+        "--label-a", default="MuJoCo", help="name of the first dump in the report"
+    )
+    parser.add_argument(
+        "--label-b", default="Isaac", help="name of the second dump in the report"
+    )
     args = parser.parse_args()
     if args.dump:
         if args.out is None:

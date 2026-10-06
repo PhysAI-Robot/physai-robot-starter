@@ -22,13 +22,23 @@ SORTING_MANIFEST = Path("configs/manifests/so101_sorting.yaml")
 def add_seed(
     parser: argparse.ArgumentParser, *, default: int | None = 0, help: str | None = None
 ) -> None:
-    parser.add_argument("--seed", type=int, default=default, help=help)
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=default,
+        help=help or "seed of the first episode; episode N uses seed + N",
+    )
 
 
 def add_episodes(
     parser: argparse.ArgumentParser, *, default: int, help: str | None = None
 ) -> None:
-    parser.add_argument("--episodes", type=int, default=default, help=help)
+    parser.add_argument(
+        "--episodes",
+        type=int,
+        default=default,
+        help=help or "number of episodes to run",
+    )
 
 
 def add_max_steps(
@@ -37,11 +47,18 @@ def add_max_steps(
     default: int | None = None,
     help: str | None = None,
 ) -> None:
-    parser.add_argument("--max-steps", type=int, default=default, help=help)
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=default,
+        help=help or "episode length in control steps (default: the manifest's)",
+    )
 
 
 def add_checkpoint(parser: argparse.ArgumentParser, *, help: str | None = None) -> None:
-    parser.add_argument("--checkpoint", type=Path, help=help)
+    parser.add_argument(
+        "--checkpoint", type=Path, help=help or "policy checkpoint directory"
+    )
 
 
 def parse_policy_arg(text: str) -> tuple[str, Any]:
@@ -83,7 +100,9 @@ def policy_kwargs(args: argparse.Namespace, policy: str) -> dict[str, Any]:
 def add_out(
     parser: argparse.ArgumentParser, *, default: Path, help: str | None = None
 ) -> None:
-    parser.add_argument("--out", type=Path, default=default, help=help)
+    parser.add_argument(
+        "--out", type=Path, default=default, help=help or "where to write the result"
+    )
 
 
 def add_robot(
@@ -93,7 +112,9 @@ def add_robot(
     choices=None,
     help: str | None = None,
 ) -> None:
-    parser.add_argument("--robot", default=default, choices=choices, help=help)
+    parser.add_argument(
+        "--robot", default=default, choices=choices, help=help or "robot to use"
+    )
 
 
 def add_policy(
@@ -103,7 +124,9 @@ def add_policy(
     choices=None,
     help: str | None = None,
 ) -> None:
-    parser.add_argument("--policy", default=default, choices=choices, help=help)
+    parser.add_argument(
+        "--policy", default=default, choices=choices, help=help or "policy to run"
+    )
 
 
 def add_camera_resolution(parser: argparse.ArgumentParser) -> None:

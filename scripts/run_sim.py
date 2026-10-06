@@ -33,6 +33,7 @@ import time
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
+from _cli import new_parser
 from _common_args import (
     add_camera_resolution,
     add_episodes,
@@ -68,7 +69,7 @@ DEFAULT_HEADLESS_POLICY = "scripted"
 def parse_args(
     argv: list[str] | None = None,
 ) -> tuple[argparse.ArgumentParser, argparse.Namespace]:
-    ap = argparse.ArgumentParser()
+    ap = new_parser(__doc__)
     ap.add_argument(
         "--manifest",
         type=Path,

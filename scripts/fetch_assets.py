@@ -13,7 +13,6 @@ filenames (they change between calibration revisions).
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import sys
@@ -22,6 +21,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
+from _cli import new_parser
 from _common_args import add_robot
 
 
@@ -131,10 +131,14 @@ def walk(
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
+    ap = new_parser(__doc__)
     add_robot(ap, choices=sorted(SOURCES), default="so101")
     ap.add_argument("--force", action="store_true", help="re-download existing files")
-    ap.add_argument("--dest", type=Path)
+    ap.add_argument(
+        "--dest",
+        type=Path,
+        help="folder to download into (default: assets/<robot>)",
+    )
     args = ap.parse_args()
 
     source = SOURCES[args.robot]

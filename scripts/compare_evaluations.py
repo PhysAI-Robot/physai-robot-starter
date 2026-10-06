@@ -12,11 +12,11 @@ the seeds on which they differ, so a gap is traceable to specific layouts.
 
 from __future__ import annotations
 
-import argparse
 import sys
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
+from _cli import new_parser
 from report_evaluation import load_evaluation, wilson_interval  # noqa: F401
 
 
@@ -86,11 +86,15 @@ def render(a: dict, b: dict, label_a: str, label_b: str) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = new_parser(__doc__)
     parser.add_argument("a", type=Path, help="first evaluation JSON")
     parser.add_argument("b", type=Path, help="second evaluation JSON")
-    parser.add_argument("--label-a", default="MuJoCo")
-    parser.add_argument("--label-b", default="Isaac")
+    parser.add_argument(
+        "--label-a", default="MuJoCo", help="name of the first evaluation in the report"
+    )
+    parser.add_argument(
+        "--label-b", default="Isaac", help="name of the second evaluation in the report"
+    )
     args = parser.parse_args()
     try:
         a, b = load_evaluation(args.a), load_evaluation(args.b)

@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
+from _cli import new_parser
 from _common_args import DEFAULT_MANIFEST, add_episodes, add_max_steps, add_seed
 
 from physai.config import DomainRandomizationConfig, load_manifest
@@ -68,12 +69,19 @@ def evaluate_mode(args: argparse.Namespace, randomized: bool) -> dict:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
+    parser = new_parser(__doc__)
     add_episodes(parser, default=20)
     add_seed(parser)
     add_max_steps(parser, help="override the episode length (default: the manifest's)")
-    parser.add_argument("--clutter-count", type=int, default=0)
-    parser.add_argument("--json-out", type=Path)
+    parser.add_argument(
+        "--clutter-count",
+        type=int,
+        default=0,
+        help="distractor boxes placed on the table, off the cube and target",
+    )
+    parser.add_argument(
+        "--json-out", type=Path, help="write both modes' results as JSON to this file"
+    )
     args = parser.parse_args()
     if args.episodes < 1:
         parser.error("--episodes must be positive")
