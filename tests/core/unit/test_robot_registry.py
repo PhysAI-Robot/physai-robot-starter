@@ -205,3 +205,10 @@ def test_the_registry_validates_simulator_support_before_building():
     # turtlebot4's config factory never has to accept a `simulator` kwarg it
     # has no second value for.
     assert create_env_config("turtlebot4").max_steps > 0
+
+
+def test_has_robot_policy_tells_a_robot_with_an_expert_from_one_without():
+    from physai.robots import has_robot_policy
+
+    assert not has_robot_policy("turtlebot4", "scripted")
+    assert not has_robot_policy("so101", "no_such_policy")

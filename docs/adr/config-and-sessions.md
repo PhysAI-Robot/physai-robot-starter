@@ -149,5 +149,6 @@ compares the two). `SimulationConfig` and its parser now live in `config/manifes
 dependency.
 
 **Consequences.** `run_sim.py --robot X` and `run_ros2_sim.py --config FILE` are gone; the
-runbooks use manifests. The ROS2 node itself is only exercised where ROS2 is installed; the
+runbooks use manifests. A headless run with no policy now picks the robot's `scripted` expert
+if it has one and `constant` otherwise (TurtleBot4 has no expert, so it used to fail). The ROS2 node itself is only exercised where ROS2 is installed; the
 config it receives is checked against `create_session` on MuJoCo.

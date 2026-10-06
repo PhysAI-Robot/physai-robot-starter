@@ -57,11 +57,15 @@ from _outputs import RunOutputs, wants_cameras
 from physai.config import SessionManifest, load_manifest
 from physai.config.compat import with_overrides
 from physai.policy import available_policies
+from physai.robots import has_robot_policy
 from physai.runtime import RenderGlitch, Session, create_session, run_episode
 from physai.web.host import Host
 
-# What a headless episode runs when neither --policy nor the manifest names one.
-DEFAULT_HEADLESS_POLICY = "scripted"
+
+# What a headless episode runs when neither --policy nor the manifest names one:
+# the robot's scripted expert if it has one, otherwise the do-nothing policy.
+def default_headless_policy(robot: str) -> str:
+    return "scripted" if has_robot_policy(robot, "scripted") else "constant"
 
 
 def parse_args(
@@ -161,10 +165,12 @@ def run_episodes(args: argparse.Namespace, manifest: SessionManifest) -> int:
         if manifest.simulator != "mujoco":
             raise SystemExit(
                 f"--policy is required for simulator {manifest.simulator!r}: the "
-                f"default headless policy ({DEFAULT_HEADLESS_POLICY!r}) needs "
+                f"default headless policy ({default_headless_policy(manifest.robots[0].robot)!r}) needs "
                 "MuJoCo-only kinematics (ArmKinematics)"
             )
-        manifest = with_overrides(manifest, policy=DEFAULT_HEADLESS_POLICY)
+        manifest = with_overrides(
+            manifest, policy=default_headless_policy(manifest.robots[0].robot)
+        )
     policy_name = manifest.policy_for(manifest.robots[0])
     # Built once — a lerobot checkpoint is expensive to reload per episode.
     session = create_session(

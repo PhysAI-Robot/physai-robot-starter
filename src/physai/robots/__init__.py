@@ -18,6 +18,7 @@ from .registry import (
     create_ros2_node,
     create_shared_instance,
     default_task,
+    has_robot_policy,
     navigate,
     register_embodiment,
     register_robot_policy,
@@ -45,6 +46,7 @@ __all__ = [
     "navigate",
     "register_adapter",
     "register_embodiment",
+    "has_robot_policy",
     "register_robot_policy",
     "shared_attach",
 ]
