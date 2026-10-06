@@ -407,7 +407,7 @@ written by `train_act.py` into the ignored `outputs/` and loaded through an expl
 
 The boundary also holds at test time: `tests/core/` (mirroring `physai`'s subpackages) sits
 next to `tests/research/<topic>/`, each in its own CI job (`test-core`, `test-research`), so
-a research topic's failures and heavier dependencies (such as the `vla` extra) stay
+a research topic's failures and heavier dependencies (such as torch and LeRobot in the `training` extra) stay
 isolated.
 
 ## Demonstration data
