@@ -269,7 +269,6 @@ class SO101VisualServoPolicy(Policy):
         target_plane_z: float = 0.035,
         squeeze_grip: float = SQUEEZE_GRIP,
         kp: float = 2.0,
-        max_speed: float = 0.08,
         pixel_tolerance: float = 8.0,
         ee_tolerance: float = 0.012,
         max_joint_rate: float = 1.2,
@@ -322,7 +321,6 @@ class SO101VisualServoPolicy(Policy):
         self._grasp_retries = 0
         self._failure_reason: str | None = None
         self.kp = float(kp)
-        self.max_speed = float(max_speed)
         self.pixel_tolerance = float(pixel_tolerance)
         self.ee_tolerance = float(ee_tolerance)
         control_dt = dt or (1.0 / float(getattr(env.cfg, "control_hz", 30.0)))
@@ -649,8 +647,7 @@ class SO101VisualServoPolicy(Policy):
         # pause as final settlement exits CLOSE, and therefore starts the
         # next phase's arm motion, before the slip finishes -- the launch
         # this policy's shared grasp choreography otherwise avoids by never
-        # moving the arm until the squeeze is done (as CLOSE's own waypoint,
-        # and `grasp_and_lift` in test_so101_grasp_hold_isaac.py, both do).
+        # moving the arm until the squeeze is done (as CLOSE's own waypoint does).
         # Requiring a much longer stall before accepting it gives a mid-slip
         # pause time to resolve on its own first.
         stalled = ramp_done and (
