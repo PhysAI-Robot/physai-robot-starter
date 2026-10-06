@@ -49,18 +49,24 @@ def default_video_name(simulator: str, robot: str, policy: str) -> str:
     return f"{simulator}_{robot}_{policy}"
 
 
-def next_video_stem(directory: Path, name: str, seed: int) -> Path:
+def next_video_stem(
+    directory: Path,
+    name: str,
+    seed: int,
+    suffixes: tuple[str, ...] = (".mp4", ".gif"),
+) -> Path:
     """`<dir>/<name>_seed<seed>` for the first video of a seed, then `..._02`,
     `..._03` and so on, so a repeat run never overwrites an earlier video of
     the same seed. `name` is `default_video_name(...)` unless overridden."""
     stem = directory / f"{name}_seed{seed:04d}"
-    repeat = re.compile(rf"{re.escape(stem.name)}_(\d{{2,}})\.(?:mp4|gif)$")
+    ext = "|".join(re.escape(suffix) for suffix in suffixes)
+    repeat = re.compile(rf"{re.escape(stem.name)}_(\d{{2,}})(?:{ext})$")
     runs = [
         int(match.group(1))
         for path in directory.glob(f"{stem.name}_*")
         if (match := repeat.fullmatch(path.name))
     ]
-    if any(stem.with_suffix(suffix).exists() for suffix in (".mp4", ".gif")):
+    if any(stem.with_suffix(suffix).exists() for suffix in suffixes):
         runs.append(1)
     if not runs:
         return stem

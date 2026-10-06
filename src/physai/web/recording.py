@@ -142,6 +142,7 @@ class SessionRecorder:
         observation: Observation,
         action: Action,
         environment_state: np.ndarray | None,
+        extras: dict[str, Any] | None = None,
     ) -> None:
         """Record one step; a bad frame aborts the take instead of raising.
 
@@ -170,6 +171,7 @@ class SessionRecorder:
                     action,
                     gripper_joint=gripper_joint,
                     environment_state=environment_state,
+                    extras=extras,
                 )
                 self._frames += 1
             except ValueError as exc:

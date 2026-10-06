@@ -42,6 +42,7 @@ from _common_args import (
     add_max_steps,
     add_out,
     add_policy,
+    add_record,
     add_robot,
     add_seed,
     add_simulator,
@@ -54,6 +55,7 @@ from _common_args import (
 import research.classical_control.so101_visual_servo
 import research.imitation_learning.vla_adapter
 import research.scripted_experts.so101_pick_place_expert  # noqa: F401
+from _recording import RunRecorder
 from _video import default_video_name, next_video_stem, write_video
 from physai.config import SessionManifest, load_manifest, load_sim_config
 from physai.config.compat import (
@@ -134,12 +136,7 @@ def parse_args(
         help="serve the same authoritative simulation to the web viewer; "
         "without --viewer, this runs with no desktop window",
     )
-    ap.add_argument(
-        "--record-dir",
-        type=Path,
-        help="enable browser episode recording into this dataset directory "
-        "(requires --serve; an existing dataset there is continued)",
-    )
+    add_record(ap)
     ap.add_argument("--host", default="127.0.0.1", help="web host bind address")
     ap.add_argument("--port", type=int, default=8000, help="web host port")
     return ap, ap.parse_args(argv)
@@ -200,8 +197,8 @@ def note_deprecated(flag: str, replacement: str) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     ap, args = parse_args(argv)
-    if args.record_dir and not args.serve:
-        ap.error("--record-dir requires --serve")
+    if args.record and args.serve:
+        ap.error("--record writes per-episode files; with --serve use --record-dir")
 
     manifest = build_manifest(ap, args)
     if manifest.world is not None and not (args.viewer or args.serve):
@@ -242,9 +239,12 @@ def run_episodes(args: argparse.Namespace, manifest: SessionManifest) -> int:
                 "MuJoCo-only kinematics (ArmKinematics)"
             )
         manifest = with_overrides(manifest, policy=DEFAULT_HEADLESS_POLICY)
+    recording = args.record or args.record_dir is not None
     # Built once — a lerobot checkpoint is expensive to reload per episode.
     session = create_session(
-        manifest, render=args.video, policy_kwargs=policy_inputs(args, manifest)
+        manifest,
+        render=args.video or recording,
+        policy_kwargs=policy_inputs(args, manifest),
     )
     runtime = session.runtime
     env, policy = runtime.robot, runtime.policy
@@ -253,6 +253,20 @@ def run_episodes(args: argparse.Namespace, manifest: SessionManifest) -> int:
     camera_name = args.camera or next(iter(env.robot_spec.camera_frames))
     policy_name = manifest.policy_for(manifest.robots[0])
     args.out.mkdir(parents=True, exist_ok=True)
+    recorder = (
+        RunRecorder(
+            env,
+            fps=env.cfg.control_hz,
+            name=args.video_name
+            or default_video_name(
+                manifest.simulator, manifest.robots[0].robot, policy_name
+            ),
+            task=policy_name,
+            record_dir=args.record_dir,
+        )
+        if recording
+        else None
+    )
     successes = 0
 
     for ep in range(args.episodes):
@@ -262,10 +276,18 @@ def run_episodes(args: argparse.Namespace, manifest: SessionManifest) -> int:
             print(f"  randomization={randomization.as_dict()}")
         frames, total_reward, info = [], 0.0, {}
 
+        if recorder:
+            recorder.start()
         for _ in range(max_steps):
             if args.video:
                 frames.append(env.render_camera(camera_name))
-            obs, reward, terminated, truncated, info = runtime.step(policy.act(obs))
+            action = policy.act(obs)
+            if recorder:
+                recorder.capture(policy, obs, info)
+            seen = obs
+            obs, reward, terminated, truncated, info = runtime.step(action)
+            if recorder:
+                recorder.record(seen, action, reward, terminated or truncated)
             total_reward += reward
             if terminated or truncated or policy.done:
                 break
@@ -279,6 +301,10 @@ def run_episodes(args: argparse.Namespace, manifest: SessionManifest) -> int:
             f"return={total_reward:.2f}{suffix}"
         )
 
+        if recorder:
+            saved = recorder.end(ok, seed + ep)
+            if saved:
+                print(f"  record -> {saved}")
         if frames and args.video:
             path = write_video(
                 np.stack(frames),
@@ -294,6 +320,8 @@ def run_episodes(args: argparse.Namespace, manifest: SessionManifest) -> int:
             )
             print(f"  video -> {path}")
 
+    if recorder:
+        recorder.close()
     session.close()
     print(f"\n{successes}/{args.episodes} successful")
     return 0

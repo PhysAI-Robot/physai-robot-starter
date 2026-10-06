@@ -70,3 +70,14 @@ def test_the_default_name_starts_with_the_simulator_and_an_override_replaces_it(
     assert (
         _video.next_video_stem(tmp_path, "my_run", 7) == tmp_path / "my_run_seed0007_02"
     )
+
+
+def test_next_video_stem_counts_recordings_by_their_own_suffix(tmp_path):
+    (tmp_path / "mujoco_so101_visual_servo_seed0101.mp4").touch()
+    assert _video.next_video_stem(tmp_path, NAME, 101, (".npz",)) == (
+        tmp_path / "mujoco_so101_visual_servo_seed0101"
+    )
+    (tmp_path / "mujoco_so101_visual_servo_seed0101.npz").touch()
+    assert _video.next_video_stem(tmp_path, NAME, 101, (".npz",)) == (
+        tmp_path / "mujoco_so101_visual_servo_seed0101_02"
+    )
