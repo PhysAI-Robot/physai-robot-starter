@@ -1,7 +1,13 @@
-"""Evaluate any Policy over N seeds and report a success rate.
+"""Measure a Policy: run it over N seeds of one session and report a success rate.
 
     python scripts/eval_policy.py --policy scripted --episodes 20
     python scripts/eval_policy.py --policy replay --dataset data/pickplace_v1
+
+For looking at a run (viewer, web host, one quick episode) use `run_sim.py`;
+this script is for numbers you compare. It runs the session in a manifest
+(default: configs/manifests/so101_single_cube_fixed_place.yaml, or
+so101_sorting.yaml with `--sorting`) and its flags only turn the difficulty
+knobs, so MuJoCo and Isaac Sim evaluate the same scene, seeds and task.
 
 `replay` re-runs recorded actions through the sim. If replay succeeds but your
 VLA does not, the problem is the model. If replay itself fails, the problem is
@@ -12,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import json
 from pathlib import Path
 from typing import Any
 
@@ -24,29 +31,11 @@ from _common_args import (
     add_max_steps,
     add_policy,
     add_record,
-    add_robot,
     add_seed,
     add_simulator,
+    add_video,
     add_video_name,
 )
-
-from _recording import RunRecorder
-from _video import (
-    VIDEO_MODES,
-    default_video_name,
-    keep_video,
-    next_video_stem,
-    write_video,
-)
-from physai.contracts import DEFAULT_CAMERA_RESOLUTION
-from physai.control import SafetyViolation
-from physai.data import EvaluationReport, load_episode
-from physai.policy import available_policies, create_policy
-from physai.robots import create_robot
-from physai.robots.so101 import EnvConfig
-from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig, SortingMinimalSceneConfig
-from physai.sim.mujoco.domain_randomization import DomainRandomizationConfig
-from physai.tasks import TaskRuntime, create_task
 
 # Registers so101's "scripted"/"visual_servo" policies and the checkpoint-
 # backed "lerobot" policy with their registries; --policy may select any of
@@ -54,6 +43,22 @@ from physai.tasks import TaskRuntime, create_task
 import research.classical_control.so101_visual_servo  # noqa: E402,F401
 import research.imitation_learning.vla_adapter  # noqa: E402,F401
 import research.scripted_experts.so101_pick_place_expert  # noqa: E402,F401
+from _recording import RunRecorder
+from _video import (
+    VideoObserver,
+    default_video_name,
+    keep_video,
+    next_video_stem,
+    write_video,
+)
+from physai.config import DomainRandomizationConfig, load_manifest
+from physai.config.compat import with_overrides
+from physai.data import EvaluationReport, load_episode
+from physai.policy import available_policies, create_policy
+from physai.runtime import RenderGlitch, create_session, run_episode
+
+DEFAULT_MANIFEST = Path("configs/manifests/so101_single_cube_fixed_place.yaml")
+SORTING_MANIFEST = Path("configs/manifests/so101_sorting.yaml")
 
 
 def _parse_policy_arg(text: str) -> tuple[str, Any]:
@@ -83,16 +88,16 @@ def _parse_seed_list(text: str) -> list[int]:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    add_robot(
-        ap,
-        default="so101",
-        choices=["so101"],
-        help="eval_policy currently supports the SO-101 manipulation workflow",
+    ap.add_argument(
+        "--manifest",
+        type=Path,
+        help=f"session manifest to evaluate (default: {DEFAULT_MANIFEST}, or "
+        f"{SORTING_MANIFEST} with --sorting)",
     )
     add_policy(ap, default="scripted", choices=available_policies())
     add_episodes(ap, default=20)
     add_seed(ap)
-    add_max_steps(ap, default=600)
+    add_max_steps(ap, help="override the episode length (default: the manifest's)")
     ap.add_argument(
         "--camera-jitter",
         type=float,
@@ -128,8 +133,9 @@ def main() -> int:
     add_camera_resolution(ap)
     add_simulator(
         ap,
-        help="simulator engine (default mujoco); isaac runs the same scene, seeds "
-        "and task on Isaac Sim (visual_servo, constant or lerobot; no randomization)",
+        help="simulator engine (default: the manifest's, mujoco); isaac runs the same "
+        "scene, seeds and task on Isaac Sim (visual_servo, constant or lerobot; "
+        "no randomization)",
     )
     ap.add_argument(
         "--policy-arg",
@@ -147,28 +153,9 @@ def main() -> int:
         help="comma-separated episode seeds (for example 5,13,28) instead of "
         "--seed .. --seed + --episodes",
     )
-    ap.add_argument(
-        "--video",
-        nargs="?",
-        const="all",
-        choices=VIDEO_MODES,
-        help="write a video per episode (`--video` or `--video all`), or only "
-        "for the episodes that fail (`--video failures`)",
-    )
-    ap.add_argument(
-        "--video-dir",
-        type=Path,
-        default=Path("outputs/eval_videos"),
-        help="where --video writes (one file per episode, named "
-        "<simulator>_<robot>_<policy>_seed<seed>.mp4, with _02, _03, ... on repeats)",
-    )
+    add_video(ap)
     add_video_name(ap)
     add_record(ap)
-    ap.add_argument(
-        "--camera",
-        default="front",
-        help="camera that --video records (default: front)",
-    )
     ap.add_argument(
         "--render",
         action="store_true",
@@ -188,36 +175,35 @@ def main() -> int:
         args.episodes = len(args.seeds)
     episode_seeds = args.seeds or [args.seed + ep for ep in range(args.episodes)]
 
-    # An image-conditioned policy cannot run without rendered cameras: render
-    # defaulted to --render alone (so `--policy lerobot` died on an empty
-    # images dict) once env construction moved behind create_robot().
-    recording = args.record or args.record_dir is not None
-    needs_images = args.policy in {"lerobot", "visual_servo"}
-    scene_type = (
-        SortingMinimalSceneConfig if args.sorting else SingleCubeFixedPlaceSceneConfig
-    )
+    if args.manifest and args.sorting:
+        ap.error(
+            "--sorting selects its own manifest; it cannot be used with --manifest"
+        )
     if args.camera_jitter < 0:
         ap.error("--camera-jitter must be non-negative")
     if args.lighting_scale <= 0:
         ap.error("--lighting-scale must be positive")
     if args.clutter_count < 0:
         ap.error("--clutter-count must be non-negative")
+    if args.policy == "replay":
+        if not args.dataset:
+            ap.error("--policy replay needs --dataset")
+        meta = json.loads((args.dataset / "meta.json").read_text(encoding="utf-8"))
+        replay_episodes = meta["episodes"]
+        if not replay_episodes:
+            ap.error(f"no episodes in {args.dataset}")
+    if args.policy == "lerobot" and not args.checkpoint:
+        ap.error("--policy lerobot needs --checkpoint")
+
+    manifest = load_manifest(
+        args.manifest or (SORTING_MANIFEST if args.sorting else DEFAULT_MANIFEST)
+    )
+    simulator = args.simulator or manifest.simulator
     difficulty = (
         args.camera_jitter > 0 or args.lighting_scale != 1.0 or args.clutter_count > 0
     )
-    physics = {"friction_scale": (1.0, 1.0), "mass_scale": (1.0, 1.0)}
-    randomization = DomainRandomizationConfig(
-        enabled=difficulty,
-        camera_position_jitter=args.camera_jitter,
-        camera_shift_calibrated=not args.camera_shift_unknown,
-        lighting_scale=(args.lighting_scale, args.lighting_scale),
-        **(physics if args.nominal_physics else {}),
-    )
-    scene = scene_type(
-        camera_resolution=args.camera_resolution or DEFAULT_CAMERA_RESOLUTION,
-        clutter_count=args.clutter_count,
-    )
-    if args.simulator == "isaac":
+    overrides: dict[str, Any] = {}
+    if simulator == "isaac":
         # The same scene config MuJoCo builds from, so both engines share the
         # table, cube, target, cameras and per-seed cube layout.
         if args.sorting or args.clutter_count:
@@ -229,44 +215,63 @@ def main() -> int:
             )
         if args.policy not in {"visual_servo", "constant", "lerobot"}:
             ap.error("--sim isaac supports --policy visual_servo, constant or lerobot")
-        from physai.robots.so101.isaac_env import IsaacEnvConfig
+        if difficulty:
+            overrides["robot_config"] = {
+                "lighting_scale": args.lighting_scale,
+                "camera_position_jitter": args.camera_jitter,
+            }
+    elif difficulty:
+        physics = {"friction_scale": (1.0, 1.0), "mass_scale": (1.0, 1.0)}
+        overrides["domain_randomization"] = DomainRandomizationConfig(
+            enabled=True,
+            camera_position_jitter=args.camera_jitter,
+            camera_shift_calibrated=not args.camera_shift_unknown,
+            lighting_scale=(args.lighting_scale, args.lighting_scale),
+            **(physics if args.nominal_physics else {}),
+        )
+        if args.clutter_count:
+            overrides["scene_overrides"] = {"clutter_count": args.clutter_count}
+    manifest = with_overrides(
+        manifest,
+        seed=args.seed,
+        max_steps=args.max_steps,
+        camera_resolution=args.camera_resolution,
+        # replay builds its policy per episode, from that episode's actions
+        policy="idle" if args.policy == "replay" else args.policy,
+        simulator=args.simulator,
+        **overrides,
+    )
+    robot_name = manifest.robots[0].robot
+    task_name = manifest.task_for(manifest.robots[0])
 
-        robot = create_robot(
-            args.robot,
-            simulator="isaac",
-            config=IsaacEnvConfig(
-                scene=scene,
-                camera_resolution=scene.camera_resolution,
-                lighting_scale=args.lighting_scale,
-                camera_position_jitter=args.camera_jitter,
-                cameras=("front", "wrist"),
-                seed=args.seed,
-                max_steps=args.max_steps,
-                render=True,
-            ),
-        )
-    else:
-        robot = create_robot(
-            args.robot,
-            config=EnvConfig(
-                scene=scene,
-                seed=args.seed,
-                max_steps=args.max_steps,
-                render=args.render
-                or needs_images
-                or args.video is not None
-                or recording,
-                domain_randomization=randomization,
-            ),
-        )
-    task_name = "sorting" if args.sorting else "single_cube_fixed_place"
-    env = TaskRuntime(robot, create_task(task_name))
+    # An image-conditioned policy cannot run without rendered cameras.
+    needs_images = args.policy in {"lerobot", "visual_servo"}
+    recording = args.record or args.record_dir is not None
+    policy_kwargs = dict(args.policy_arg)
+    if args.policy == "lerobot":
+        policy_kwargs["checkpoint"] = args.checkpoint
+    # Built once outside the loop where possible — reloading the checkpoint
+    # from disk per episode would dominate wall-clock time for no reason.
+    session = create_session(
+        manifest,
+        render=simulator == "isaac"
+        or args.render
+        or needs_images
+        or args.video is not None
+        or recording,
+        policy_kwargs=policy_kwargs,
+    )
+    runtime = session.runtime
+    env = runtime.robot
+    fps = getattr(env.cfg, "control_hz", 30)
+    video_name = args.video_name or default_video_name(
+        simulator, robot_name, args.policy
+    )
     recorder = (
         RunRecorder(
-            robot,
-            fps=getattr(env.cfg, "control_hz", 30),
-            name=args.video_name
-            or default_video_name(args.simulator or "mujoco", args.robot, args.policy),
+            runtime,
+            fps=fps,
+            name=video_name,
             task=task_name,
             record_dir=args.record_dir,
         )
@@ -274,127 +279,61 @@ def main() -> int:
         else None
     )
 
-    episodes = None
-    if args.policy == "replay":
-        if not args.dataset:
-            ap.error("--policy replay needs --dataset")
-        import json
-
-        meta = json.loads((args.dataset / "meta.json").read_text(encoding="utf-8"))
-        episodes = meta["episodes"]
-        if not episodes:
-            ap.error(f"no episodes in {args.dataset}")
-
-    if args.policy == "lerobot" and not args.checkpoint:
-        ap.error("--policy lerobot needs --checkpoint")
-
     # Evaluating on seeds the policy trained on measures recall, not
     # generalisation, and the two can differ by a lot: a sorting checkpoint
     # scored 70% on seeds that were 80% training layouts and 10% on held-out
     # ones. Checkpoints written before train_seeds was recorded simply skip
     # this check.
+    train_seeds: set[int] = set()
     if args.policy == "lerobot":
-        import json
-
         meta_path = args.checkpoint / "training_meta.json"
         if meta_path.exists():
             train_seeds = set(
                 json.loads(meta_path.read_text(encoding="utf-8")).get("train_seeds")
                 or []
             )
-            overlap = sorted(train_seeds & set(episode_seeds))
-            if overlap:
-                print(
-                    f"WARNING: {len(overlap)}/{args.episodes} evaluation seeds were in "
-                    f"this checkpoint's training set {overlap[:8]}"
-                    f"{'...' if len(overlap) > 8 else ''}\n"
-                    f"         This measures memorisation, not generalisation. "
-                    f"Pick a --seed beyond {max(train_seeds)}."
-                )
-
-    # Built once outside the loop where possible — reloading the checkpoint
-    # from disk per episode would dominate wall-clock time for no reason.
-    reusable_policy = None
-    if args.policy != "replay":
-        policy_kwargs = {"env": env, **dict(args.policy_arg)}
-        if args.policy == "lerobot":
-            policy_kwargs["checkpoint"] = args.checkpoint
-        reusable_policy = create_policy(
-            args.policy,
-            **policy_kwargs,
-        )
+        overlap = sorted(train_seeds & set(episode_seeds))
+        if overlap:
+            print(
+                f"WARNING: {len(overlap)}/{args.episodes} evaluation seeds were in "
+                f"this checkpoint's training set {overlap[:8]}"
+                f"{'...' if len(overlap) > 8 else ''}\n"
+                f"         This measures memorisation, not generalisation. "
+                f"Pick a --seed beyond {max(train_seeds)}."
+            )
 
     results = []
-    train_seeds: set[int] = set()
-    if args.policy == "lerobot" and args.checkpoint:
-        import json
-
-        meta_path = args.checkpoint / "training_meta.json"
-        if meta_path.exists():
-            train_seeds = set(
-                json.loads(meta_path.read_text(encoding="utf-8")).get("train_seeds")
-                or []
-            )
     for ep in range(args.episodes):
         if args.policy == "replay":
-            entry = episodes[ep % len(episodes)]
+            entry = replay_episodes[ep % len(replay_episodes)]
             data = load_episode(args.dataset / entry["file"])
             seed = entry.get("seed", episode_seeds[ep])
-            policy = create_policy("replay", env=env, actions=data["action"])
+            runtime.policy = create_policy("replay", env=env, actions=data["action"])
         else:
             seed = episode_seeds[ep]
-            policy = reusable_policy
 
-        obs = env.reset(seed=seed)
-        # Isaac Sim sometimes stops drawing the robot (a startup glitch);
-        # camera policies then fail for a reason unrelated to the policy, so
-        # stop instead of recording those episodes as failures.
-        rendered = getattr(robot, "robot_is_rendered", None)
-        if rendered is not None and not rendered():
+        video = VideoObserver(runtime, args.camera) if args.video is not None else None
+        observers = tuple(item for item in (video, recorder) if item is not None)
+        try:
+            outcome = run_episode(runtime, seed, observers)
+        except RenderGlitch as exc:
+            # Camera policies would fail for a reason unrelated to the policy,
+            # so stop instead of recording those episodes as failures.
             raise SystemExit(
-                f"episode {ep} (seed {seed}): Isaac Sim is not drawing the robot; "
-                "restart the evaluation (results so far are valid)"
-            )
-        policy.reset(obs)
-        total, info = 0.0, {}
-        violation = None
-        frames = []
-
-        def grab(observation) -> None:
-            frame = observation.images.get(args.camera)
-            if args.video is not None and frame is not None:
-                frames.append(np.asarray(frame.data))
-
-        grab(obs)
-        if recorder:
-            recorder.start()
-        for _ in range(args.max_steps):
-            try:
-                action = policy.act(obs)
-                if recorder:
-                    recorder.capture(policy, obs, info)
-                seen = obs
-                obs, reward, terminated, truncated, info = env.step(action)
-                if recorder:
-                    recorder.record(seen, action, reward, terminated or truncated)
-            except SafetyViolation as exc:
-                # The gate refused the action: the episode ends as an unsafe
-                # action rather than taking the whole evaluation down.
-                violation = str(exc)
-                break
-            grab(obs)
-            total += reward
-            if terminated or truncated:
-                break
+                f"episode {ep} ({exc}); restart the evaluation "
+                "(results so far are valid)"
+            ) from exc
+        info, violation, policy = outcome.info, outcome.violation, runtime.policy
 
         results.append(
             {
                 "seed": seed,
-                "success": violation is None and bool(info.get("success")),
-                "steps": env.step_count,
-                "reward": total,
-                "return": total,
-                "timeout": violation is None and bool(truncated or info.get("timeout")),
+                "success": outcome.success,
+                "steps": outcome.steps,
+                "reward": outcome.reward,
+                "return": outcome.reward,
+                "timeout": violation is None
+                and bool(outcome.truncated or info.get("timeout")),
                 "collision": bool(
                     info.get("collision") or info.get("collision_detected")
                 ),
@@ -416,12 +355,16 @@ def main() -> int:
                 ),
                 # Which cube the episode asked for, so a per-color breakdown is
                 # possible after the fact. ACT never receives this.
-                **({"target_color": info["target_color"]} if args.sorting else {}),
+                **(
+                    {"target_color": info["target_color"]}
+                    if task_name == "sorting"
+                    else {}
+                ),
             }
         )
         print(
             f"ep {ep:3d} seed={seed:<5d} success={results[-1]['success']!s:<5} "
-            f"steps={env.step_count:<4d} return={total:7.2f} "
+            f"steps={outcome.steps:<4d} return={outcome.reward:7.2f} "
             f"d={_format_distance(results[-1]['dist_cube_target'])}"
             + (f"  UNSAFE: {violation}" if violation else "")
         )
@@ -429,28 +372,21 @@ def main() -> int:
             saved = recorder.end(results[-1]["success"], seed)
             if saved:
                 print(f"  record -> {saved}")
-        if frames and keep_video(args.video, results[-1]["success"]):
+        if video and video.frames and keep_video(args.video, results[-1]["success"]):
             path = write_video(
-                np.stack(frames),
-                next_video_stem(
-                    args.video_dir,
-                    args.video_name
-                    or default_video_name(
-                        args.simulator or "mujoco", args.robot, args.policy
-                    ),
-                    seed,
-                ),
-                fps=int(getattr(env.cfg, "control_hz", 30)),
+                np.stack(video.frames),
+                next_video_stem(args.video_dir, video_name, seed),
+                fps=int(fps),
             )
             print(f"  video -> {path}")
 
     if recorder:
         recorder.close()
-    env.close()
+    session.close()
     report = EvaluationReport(
         policy=args.policy,
-        robot=args.robot,
-        task="sorting" if args.sorting else "single_cube_fixed_place",
+        robot=robot_name,
+        task=task_name,
         results=tuple(results),
     )
     summary = report.summary
@@ -470,8 +406,6 @@ def main() -> int:
         )
 
     if args.json_out:
-        import json
-
         args.json_out.parent.mkdir(parents=True, exist_ok=True)
         payload = report.to_dict()
         payload["checkpoint"] = str(args.checkpoint) if args.checkpoint else None

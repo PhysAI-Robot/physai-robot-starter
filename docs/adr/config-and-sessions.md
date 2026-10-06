@@ -54,3 +54,36 @@ length lived in four files).
 no branch in `run_sim.py`. Other scripts still assemble robots by hand and
 shared-world sessions still run no task or policy; both are listed under
 [Known remaining gaps](../ARCHITECTURE.md#known-remaining-gaps).
+
+## ADR 20: `run_sim` and `eval_policy` share one session and one rollout
+
+Status: accepted. Narrows ADR 10's "other scripts still assemble robots by hand" for
+`eval_policy.py`.
+
+**Context.** Both scripts run episodes, so they had drifted: `eval_policy.py` built its
+env and task from flags and its own defaults (600 steps against the manifest's 400)
+while `run_sim.py` read a manifest, and the episode loop was written twice. The copies
+disagreed on `policy.done` (ignored by evaluation), on a refused action (a crash in
+`run_sim`, an `unsafe_action` result in evaluation), on the Isaac render check and on the
+default camera and video folder.
+
+**Decision.** The two scripts keep different purposes (`run_sim.py` to run and look,
+`eval_policy.py` to measure; see
+[Script roles](../ARCHITECTURE.md#script-roles)) and share the rest.
+1. The session comes from a manifest. `eval_policy.py` loads one
+   (`so101_single_cube_fixed_place.yaml`, or the new `so101_sorting.yaml` for
+   `--sorting`) and turns its difficulty flags into overrides through
+   `config.compat.with_overrides` (`domain_randomization`, `scene_overrides`,
+   `robot_config`, which carries Isaac's lighting and camera-jitter knobs).
+2. `physai.runtime.run_episode` owns the loop: it ends an episode on termination,
+   truncation, `policy.done` or a `SafetyViolation` (recorded in the result), and raises
+   `RenderGlitch` when Isaac stops drawing the robot. Video and recording are
+   `EpisodeObserver`s.
+3. `max_steps` has no script default: it is the manifest's, and `--max-steps`
+   overrides it. The video flags are defined once (`--video`, `--video-dir` with `--out`
+   as an alias, `--camera`).
+
+**Consequences.** The evaluation default is 400 steps, not 600; runs that must keep 600
+pass `--max-steps 600`, as the research READMEs and `sweep_difficulty.py` already do.
+`eval_policy.py` lost `--robot` (the manifest names the robot). `collect_demos.py` and
+`eval_randomization.py` still assemble their own environments.

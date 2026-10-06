@@ -1,0 +1,19 @@
+# The three-cube color sorting session for the SO-101 (scripted expert and
+# eval_policy --sorting). Same robot setup as so101_single_cube_fixed_place.yaml;
+# sorting needs more steps than one pick-and-place, hence max_steps 600.
+schema_version: 1
+
+scene:
+  name: sorting_minimal
+
+task: sorting
+
+robots:
+  - id: so101
+    robot: so101
+    config:
+      cameras: [front, wrist]
+      max_steps: 600
+
+viewer:
+  mode: none

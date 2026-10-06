@@ -66,11 +66,11 @@ A single cell runs by hand with `eval_policy.py --lighting-scale 0.5`,
 `--camera-shift-unknown` leaves the policy's calibration at the nominal pose while the
 camera has moved. `--policy-arg KEY=VALUE` overrides a policy option (for example
 `--policy-arg final_camera=front`) and `--seeds 5,13,28` runs an explicit seed list.
-`--video` writes one video per episode to `--video-dir` (default `outputs/eval_videos`,
+`--video` writes one video per episode to `--video-dir` (default `outputs/videos`,
 named `<simulator>_<robot>_<policy>_seed<seed>.mp4`, with `_02`, `_03` added on a
 repeat; `--video-name` replaces the prefix and `run_sim.py` uses the same names),
 `--video failures` only for failed episodes, and `--camera` picks the camera (default
-`front`). `report_evaluation.py` and `compare_evaluations.py` read the merged JSON.
+the robot's first camera, `front`). `report_evaluation.py` and `compare_evaluations.py` read the merged JSON.
 
 ## Isaac Sim
 

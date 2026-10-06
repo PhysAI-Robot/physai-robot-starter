@@ -10,6 +10,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from _video import VIDEO_MODES
+
 
 def add_seed(
     parser: argparse.ArgumentParser, *, default: int | None = 0, help: str | None = None
@@ -123,4 +125,29 @@ def add_record(parser: argparse.ArgumentParser) -> None:
         type=Path,
         help="record into this dataset directory (episode_NNNNN.npz + meta.json; "
         "an existing dataset there is continued); implies --record",
+    )
+
+
+def add_video(parser: argparse.ArgumentParser) -> None:
+    """`--video`, `--video-dir`, `--camera`: the same video flags in every run script."""
+    parser.add_argument(
+        "--video",
+        nargs="?",
+        const="all",
+        choices=VIDEO_MODES,
+        help="write a video per episode (`--video` or `--video all`), or only "
+        "for the episodes that fail (`--video failures`)",
+    )
+    parser.add_argument(
+        "--video-dir",
+        "--out",
+        dest="video_dir",
+        type=Path,
+        default=Path("outputs/videos"),
+        help="where --video writes (one file per episode, named "
+        "<simulator>_<robot>_<policy>_seed<seed>.mp4, with _02, _03, ... on repeats)",
+    )
+    parser.add_argument(
+        "--camera",
+        help="camera that --video records (default: the robot's first camera)",
     )
