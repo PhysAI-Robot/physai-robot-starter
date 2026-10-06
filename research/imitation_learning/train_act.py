@@ -74,7 +74,9 @@ def main() -> int:
     action_schema = meta.get("action_schema", meta["features"]["action"])
     checkpoint_meta = CheckpointMetadata(
         robot=meta.get("robot", meta.get("robot_type", "unknown")),
-        task=task,
+        # The task *name* (what LeRobotPolicy.from_checkpoint compares against
+        # env.task.name), not the natural-language instruction in meta["task"].
+        task=meta.get("task_name", task),
         observation_schema=meta.get(
             "observation_schema",
             {
