@@ -127,7 +127,7 @@ def main() -> int:
     add_simulator(
         ap,
         help="simulator engine (default mujoco); isaac runs the same scene, seeds "
-        "and task on Isaac Sim (visual_servo only, no randomization)",
+        "and task on Isaac Sim (visual_servo, constant or lerobot; no randomization)",
     )
     ap.add_argument(
         "--policy-arg",
@@ -223,8 +223,8 @@ def main() -> int:
                 "--sim isaac moves cameras without telling the policy: "
                 "add --camera-shift-unknown to --camera-jitter"
             )
-        if args.policy not in {"visual_servo", "constant"}:
-            ap.error("--sim isaac supports --policy visual_servo or constant")
+        if args.policy not in {"visual_servo", "constant", "lerobot"}:
+            ap.error("--sim isaac supports --policy visual_servo, constant or lerobot")
         from physai.robots.so101.isaac_env import IsaacEnvConfig
 
         robot = create_robot(
