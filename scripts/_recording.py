@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from _common_args import DEFAULT_RECORD_DIR
 from _video import next_video_stem
 
 from physai.data import EpisodeRecorder
@@ -26,15 +25,23 @@ class RunRecorder(EpisodeObserver):
         name: str,
         task: str,
         record_dir: Path | None = None,
+        out_dir: Path = Path("outputs"),
+        metadata: dict | None = None,
+        fresh: bool = False,
     ) -> None:
+        """`metadata` is extra `EpisodeRecorder` arguments (scene, cameras, ...);
+        `fresh` starts a dataset in `record_dir` instead of continuing one."""
         self._runtime, self._robot = runtime, runtime.robot
         self._fps, self._name, self._task = fps, name, task
         self._record_dir = record_dir
+        self._metadata = metadata or {}
+        self._flat_dir = out_dir / "recordings"
         self._rec: EpisodeRecorder | None = None
         self._pending: tuple | None = None
         if record_dir is not None:
             self._rec = self._new_recorder(record_dir)
-            self._load_existing()
+            if not fresh:
+                self._load_existing()
 
     def _new_recorder(self, root: Path) -> EpisodeRecorder:
         robot = self._robot
@@ -45,7 +52,7 @@ class RunRecorder(EpisodeObserver):
             fps=self._fps,
             robot_spec=robot.robot_spec,
             training_contract=getattr(robot, "training_contract", None),
-            simulator_config={"control_hz": self._fps},
+            **{"simulator_config": {"control_hz": self._fps}, **self._metadata},
             environment_state_dim=None if data is None else int(data.qpos.size),
         )
 
@@ -60,7 +67,7 @@ class RunRecorder(EpisodeObserver):
 
     def on_reset(self, observation) -> None:
         if self._record_dir is None:
-            self._rec = self._new_recorder(DEFAULT_RECORD_DIR)
+            self._rec = self._new_recorder(self._flat_dir)
         self._rec.start_episode()
 
     def before_step(self, observation, action, info: dict) -> None:
@@ -92,11 +99,19 @@ class RunRecorder(EpisodeObserver):
             extras=extras,
         )
 
+    def set_task(self, task: str) -> None:
+        """The instruction of the episode just run (it can depend on the seed)."""
+        self._rec.task = task
+
+    def discard(self) -> None:
+        """Drop the episode just run without writing it (e.g. a failed demo)."""
+        self._rec.discard_episode()
+
     def end(self, success: bool, seed: int, **extra) -> Path | None:
         extra = {"seed": seed, **extra}
         if self._record_dir is not None:
             return self._rec.end_episode(success, extra=extra)
-        stem = next_video_stem(DEFAULT_RECORD_DIR, self._name, seed, (".npz",))
+        stem = next_video_stem(self._flat_dir, self._name, seed, (".npz",))
         path = self._rec.end_episode(
             success, extra=extra, path=stem.with_suffix(".npz")
         )

@@ -1,9 +1,13 @@
-"""Run one episode, optionally writing a video. The 30-second sanity check.
+"""Run a session and look at it: a quick check, the viewer or web host, a video, a recording.
+
+For numbers you compare across policies use `eval_policy.py`; both run the session in
+a manifest and stop an episode the same way.
 
 python scripts/run_sim.py                      # scripted expert, 1 episode
 python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml
 python scripts/run_sim.py --episodes 5 --seed 0
 python scripts/run_sim.py --video --episodes 5 --seed 0
+python scripts/run_sim.py --record --video     # also save every input as data (outputs/)
 python scripts/run_sim.py --policy constant    # baseline: do nothing
 python scripts/run_sim.py --policy lerobot --checkpoint outputs/act_ckpt
 python scripts/run_sim.py --viewer             # native MuJoCo viewer
@@ -16,8 +20,7 @@ python scripts/run_sim.py --sim isaac --manifest configs/manifests/so101_single_
                                                 # isaacsim installed, see README.md; not exercised
                                                 # by this repo's own CI)
 
-A run is described by a session manifest (`--manifest`). The older `--config`
-(task file), `--world` (world file), and bare `--robot` inputs are converted
+A run is described by a session manifest (`--manifest`); a bare `--robot` is converted
 into one, so every run takes the same path from there on.
 """
 
@@ -25,25 +28,22 @@ from __future__ import annotations
 
 import argparse
 import signal
-import sys
 import threading
 import time
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
-import numpy as np
 from _common_args import (
     add_camera_resolution,
-    add_checkpoint,
     add_episodes,
     add_max_steps,
     add_policy,
-    add_record,
+    add_policy_args,
     add_robot,
+    add_run_outputs,
     add_seed,
     add_simulator,
-    add_video,
-    add_video_name,
+    policy_kwargs,
 )
 
 # Registers so101's "scripted"/"visual_servo" policies and the checkpoint-
@@ -52,21 +52,9 @@ from _common_args import (
 import research.classical_control.so101_visual_servo
 import research.imitation_learning.vla_adapter
 import research.scripted_experts.so101_pick_place_expert  # noqa: F401
-from _recording import RunRecorder
-from _video import (
-    VideoObserver,
-    default_video_name,
-    keep_video,
-    next_video_stem,
-    write_video,
-)
+from _outputs import RunOutputs, wants_cameras
 from physai.config import SessionManifest, load_manifest, load_sim_config
-from physai.config.compat import (
-    manifest_for_robot,
-    manifest_from_task_file,
-    manifest_from_world_file,
-    with_overrides,
-)
+from physai.config.compat import manifest_for_robot, with_overrides
 from physai.policy import available_policies
 from physai.robots import available_robots
 from physai.runtime import RenderGlitch, Session, create_session, run_episode
@@ -89,21 +77,13 @@ def parse_args(
     ap.add_argument(
         "--sim-config",
         type=Path,
-        help="shared simulation settings for --config/--world/--robot "
+        help="shared simulation settings for --robot "
         f"(default: {DEFAULT_SIM_CONFIG}); a manifest has its own",
     )
-    ap.add_argument(
-        "--config",
-        type=Path,
-        help="deprecated: task YAML (for example configs/tasks/so101/single_cube_fixed_place.yaml)",
-    )
-    ap.add_argument(
-        "--world",
-        type=Path,
-        help="deprecated: shared-world YAML; use with --viewer and/or --serve",
-    )
     add_robot(
-        ap, choices=available_robots(), help="the robot to run when no file selects one"
+        ap,
+        choices=available_robots(),
+        help="the robot to run when no manifest selects one",
     )
     add_simulator(ap)
     # "lerobot" belongs here: main() handles it and the module docstring
@@ -117,10 +97,9 @@ def parse_args(
     add_episodes(ap, default=1)
     add_seed(ap, default=None, help="override the seed (default: the manifest's, or 0)")
     add_max_steps(ap, help="override the episode length")
-    add_checkpoint(ap)
+    add_policy_args(ap)
     add_camera_resolution(ap)
-    add_video_name(ap)
-    add_video(ap)
+    add_run_outputs(ap)
     ap.add_argument(
         "--viewer",
         action="store_true",
@@ -132,7 +111,6 @@ def parse_args(
         help="serve the same authoritative simulation to the web viewer; "
         "without --viewer, this runs with no desktop window",
     )
-    add_record(ap)
     ap.add_argument("--host", default="127.0.0.1", help="web host bind address")
     ap.add_argument("--port", type=int, default=8000, help="web host port")
     return ap, ap.parse_args(argv)
@@ -142,34 +120,14 @@ def build_manifest(
     ap: argparse.ArgumentParser, args: argparse.Namespace
 ) -> SessionManifest:
     """The session the flags describe, with command-line overrides applied."""
-    sources = [flag for flag in ("manifest", "config", "world") if getattr(args, flag)]
-    if len(sources) > 1:
-        ap.error(f"--{' and --'.join(sources)} cannot be combined")
     if args.manifest and (args.sim_config or args.robot):
         ap.error("--manifest cannot be combined with --sim-config or --robot")
-    if args.world and args.robot:
-        ap.error("--world cannot be combined with --robot")
 
     if args.manifest:
         manifest = load_manifest(args.manifest)
     else:
         simulation = load_sim_config(args.sim_config or DEFAULT_SIM_CONFIG)
-        if args.world:
-            note_deprecated("--world", "configs/manifests/heterogeneous_world.yaml")
-            manifest = manifest_from_world_file(args.world, simulation=simulation)
-        elif args.config:
-            note_deprecated(
-                "--config", "configs/manifests/so101_single_cube_fixed_place.yaml"
-            )
-            manifest = manifest_from_task_file(args.config, simulation=simulation)
-            configured = manifest.robots[0].robot
-            if args.robot and args.robot != configured:
-                ap.error(
-                    f"--robot {args.robot!r} does not match --config robot "
-                    f"{configured!r}"
-                )
-        else:
-            manifest = manifest_for_robot(args.robot or "so101", simulation=simulation)
+        manifest = manifest_for_robot(args.robot or "so101", simulation=simulation)
 
     if manifest.world is not None and args.policy:
         ap.error("--policy cannot be used with a shared world")
@@ -180,14 +138,6 @@ def build_manifest(
         camera_resolution=args.camera_resolution,
         policy=args.policy,
         simulator=args.simulator,
-    )
-
-
-def note_deprecated(flag: str, replacement: str) -> None:
-    print(
-        f"warning: {flag} is deprecated; describe the run with --manifest "
-        f"(see {replacement})",
-        file=sys.stderr,
     )
 
 
@@ -215,17 +165,6 @@ def main(argv: list[str] | None = None) -> int:
     return run_episodes(args, manifest)
 
 
-def policy_inputs(args: argparse.Namespace, manifest: SessionManifest) -> dict:
-    """Run-time inputs a manifest cannot hold, for the policy it names."""
-    if manifest.world is not None:
-        return {}
-    if manifest.policy_for(manifest.robots[0]) != "lerobot":
-        return {}
-    if args.checkpoint is None:
-        raise ValueError("--policy lerobot needs --checkpoint")
-    return {"checkpoint": args.checkpoint}
-
-
 def run_episodes(args: argparse.Namespace, manifest: SessionManifest) -> int:
     if manifest.policy_for(manifest.robots[0]) == "idle":
         if manifest.simulator != "mujoco":
@@ -235,38 +174,30 @@ def run_episodes(args: argparse.Namespace, manifest: SessionManifest) -> int:
                 "MuJoCo-only kinematics (ArmKinematics)"
             )
         manifest = with_overrides(manifest, policy=DEFAULT_HEADLESS_POLICY)
-    recording = args.record or args.record_dir is not None
+    policy_name = manifest.policy_for(manifest.robots[0])
     # Built once — a lerobot checkpoint is expensive to reload per episode.
     session = create_session(
         manifest,
-        render=args.video is not None or recording,
-        policy_kwargs=policy_inputs(args, manifest),
+        render=wants_cameras(args),
+        policy_kwargs=policy_kwargs(args, policy_name),
     )
     runtime = session.runtime
     env = runtime.robot
     seed = manifest.simulation.seed
-    policy_name = manifest.policy_for(manifest.robots[0])
-    video_name = args.video_name or default_video_name(
-        manifest.simulator, manifest.robots[0].robot, policy_name
-    )
-    recorder = (
-        RunRecorder(
-            runtime,
-            fps=env.cfg.control_hz,
-            name=video_name,
-            task=policy_name,
-            record_dir=args.record_dir,
-        )
-        if recording
-        else None
+    outputs = RunOutputs(
+        runtime,
+        args,
+        simulator=manifest.simulator,
+        robot=manifest.robots[0].robot,
+        policy=policy_name,
+        task=policy_name,
+        fps=env.cfg.control_hz,
     )
     successes = 0
 
     for ep in range(args.episodes):
-        video = VideoObserver(runtime, args.camera) if args.video is not None else None
-        observers = tuple(item for item in (video, recorder) if item is not None)
         try:
-            outcome = run_episode(runtime, seed + ep, observers)
+            outcome = run_episode(runtime, seed + ep, outputs.begin())
         except RenderGlitch as exc:
             session.close()
             raise SystemExit(f"episode {ep}: {exc}; restart the run") from exc
@@ -283,20 +214,9 @@ def run_episodes(args: argparse.Namespace, manifest: SessionManifest) -> int:
             f"return={outcome.reward:.2f}{suffix}{refused}"
         )
 
-        if recorder:
-            saved = recorder.end(outcome.success, seed + ep)
-            if saved:
-                print(f"  record -> {saved}")
-        if video and video.frames and keep_video(args.video, outcome.success):
-            path = write_video(
-                np.stack(video.frames),
-                next_video_stem(args.video_dir, video_name, seed + ep),
-                fps=int(env.cfg.control_hz),
-            )
-            print(f"  video -> {path}")
+        outputs.save(outcome.success, seed + ep)
 
-    if recorder:
-        recorder.close()
+    outputs.close()
     session.close()
     print(f"\n{successes}/{args.episodes} successful")
     return 0
@@ -329,7 +249,11 @@ def build_host(
         manifest,
         render=True,
         host_driven=True,
-        policy_kwargs=policy_inputs(args, manifest),
+        policy_kwargs=(
+            {}
+            if manifest.world is not None
+            else policy_kwargs(args, manifest.policy_for(manifest.robots[0]))
+        ),
     )
     if session.world is not None:
         return Host.for_world(session.world, session.instances), session

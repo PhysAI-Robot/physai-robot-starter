@@ -5,8 +5,7 @@ import pytest
 from tests.conftest import requires_assets
 
 SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"
-WORLD = "configs/worlds/heterogeneous.yaml"
-TASK = "configs/tasks/so101/single_cube_fixed_place.yaml"
+WORLD = "configs/manifests/heterogeneous_world.yaml"
 ISAAC = "configs/manifests/so101_single_cube_fixed_place.yaml"
 
 
@@ -98,31 +97,23 @@ def test_a_manifest_selects_the_run_and_the_old_flags_work_with_a_notice(
     assert manifest.robots[0].id == "so101"
     assert manifest.robots[0].config["max_steps"] == 600
 
-    config = capture_viewer(run_sim, monkeypatch, ["--config", TASK, "--serve"])
-    assert config["manifest"].scene.name == "single_cube_fixed_place"
-    assert "--config is deprecated" in capsys.readouterr().err
-
-    world = capture_viewer(run_sim, monkeypatch, ["--world", WORLD, "--serve"])
+    world = capture_viewer(run_sim, monkeypatch, ["--manifest", WORLD, "--serve"])
     assert world["manifest"].world is not None
-    assert "--world is deprecated" in capsys.readouterr().err
 
 
 def test_incompatible_flags_are_rejected(run_sim, monkeypatch, capsys):
     cases = [
-        (["--manifest", "m.yaml", "--config", "c.yaml"], "cannot be combined"),
         (["--manifest", "m.yaml", "--robot", "so101"], "cannot be combined"),
-        (["--world", "w.yaml", "--robot", "so101"], "cannot be combined"),
         (["--record", "--serve"], "use --record-dir"),
-        (["--world", WORLD], "requires --viewer or --serve"),
+        (["--manifest", WORLD], "requires --viewer or --serve"),
         (
-            ["--world", WORLD, "--serve", "--policy", "constant"],
+            ["--manifest", WORLD, "--serve", "--policy", "constant"],
             "cannot be used with a shared world",
         ),
         (
-            ["--world", WORLD, "--serve", "--record-dir", "d"],
+            ["--manifest", WORLD, "--serve", "--record-dir", "d"],
             "not available with a shared world",
         ),
-        (["--config", TASK, "--robot", "turtlebot4"], "does not match"),
         (
             ["--sim", "isaac", "--manifest", ISAAC, "--viewer"],
             "--viewer is MuJoCo-only",
@@ -153,7 +144,7 @@ def test_headless_episodes_run_from_a_manifest_and_name_their_video(
         "3",
         "--episodes",
         "2",
-        "--out",
+        "--out-dir",
         str(tmp_path),
     ]
     monkeypatch.setattr(sys, "argv", manifest_run)
@@ -162,10 +153,23 @@ def test_headless_episodes_run_from_a_manifest_and_name_their_video(
 
     # with no policy named, the video is named after the simulator, the robot, the
     # policy actually run and the seed
-    videos = tmp_path / "videos"
-    video_run = ["run_sim.py", "--video", "--max-steps", "3"]
-    monkeypatch.setattr(sys, "argv", [*video_run, "--out", str(videos)])
+    out = tmp_path / "run"
+    video_run = ["run_sim.py", "--video", "--record", "--max-steps", "3"]
+    monkeypatch.setattr(sys, "argv", [*video_run, "--out-dir", str(out)])
     assert run_sim.main() == 0
-    assert [path.stem for path in videos.iterdir()] == [
+    assert [path.stem for path in (out / "videos").iterdir()] == [
         "mujoco_so101_scripted_seed0000"
     ]
+    # the recording is named like the video, with its meta next to it
+    assert sorted(path.name for path in (out / "recordings").iterdir()) == [
+        "mujoco_so101_scripted_seed0000.json",
+        "mujoco_so101_scripted_seed0000.npz",
+    ]
+
+    # --name replaces the automatic prefix for both
+    monkeypatch.setattr(
+        sys, "argv", [*video_run, "--name", "mine", "--out-dir", str(out)]
+    )
+    assert run_sim.main() == 0
+    assert (out / "videos" / "mine_seed0000.mp4").exists()
+    assert (out / "recordings" / "mine_seed0000.npz").exists()

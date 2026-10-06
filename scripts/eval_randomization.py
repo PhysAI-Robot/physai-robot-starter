@@ -10,17 +10,14 @@ import json
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
-from _common_args import add_episodes, add_max_steps, add_seed
+from _common_args import DEFAULT_MANIFEST, add_episodes, add_max_steps, add_seed
 
-from physai.config import DomainRandomizationConfig
-from physai.policy import create_policy
-from physai.robots import create_robot
-from physai.robots.so101 import EnvConfig
-from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
-from physai.tasks import TaskRuntime, create_task
+from physai.config import DomainRandomizationConfig, load_manifest
+from physai.config.compat import with_overrides
+from physai.runtime import create_session, run_episode
 
-# Registers so101's "scripted" policy with the robot registry.
-import research.scripted_experts.so101_pick_place_expert  # noqa: E402,F401
+# Registers so101's "scripted" policy with the policy registry.
+import research.scripted_experts.so101_pick_place_expert  # noqa: F401
 
 
 def evaluate_mode(args: argparse.Namespace, randomized: bool) -> dict:
@@ -30,43 +27,34 @@ def evaluate_mode(args: argparse.Namespace, randomized: bool) -> dict:
         clutter_y_range=(-0.16, 0.16),
         camera_position_jitter=0.005 if randomized else 0.0,
     )
-    robot = create_robot(
-        "so101",
-        config=EnvConfig(
-            scene=SingleCubeFixedPlaceSceneConfig(clutter_count=args.clutter_count),
-            max_steps=args.max_steps,
-            render=False,
-            domain_randomization=config,
-        ),
+    manifest = with_overrides(
+        load_manifest(DEFAULT_MANIFEST),
+        seed=args.seed,
+        max_steps=args.max_steps,
+        policy="scripted",
+        domain_randomization=config,
+        scene_overrides={"clutter_count": args.clutter_count}
+        if args.clutter_count
+        else None,
     )
-    env = TaskRuntime(robot, create_task("single_cube_fixed_place"))
-    policy = create_policy("scripted", env=env)
+    session = create_session(manifest, render=False)
+    runtime = session.runtime
     results = []
     try:
         for episode in range(args.episodes):
             seed = args.seed + episode
-            observation = env.reset(seed=seed)
-            policy.reset(observation)
-            total = 0.0
-            info: dict = {}
-            for _ in range(args.max_steps):
-                observation, reward, terminated, truncated, info = env.step(
-                    policy.act(observation)
-                )
-                total += reward
-                if terminated or truncated or policy.done:
-                    break
+            outcome = run_episode(runtime, seed)
             results.append(
                 {
                     "seed": seed,
-                    "success": bool(info.get("success")),
-                    "steps": env.step_count,
-                    "return": total,
-                    "randomization": env.randomization_metadata.as_dict(),
+                    "success": outcome.success,
+                    "steps": outcome.steps,
+                    "return": outcome.reward,
+                    "randomization": runtime.robot.randomization_metadata.as_dict(),
                 }
             )
     finally:
-        env.close()
+        session.close()
     success_count = sum(item["success"] for item in results)
     return {
         "enabled": randomized,
@@ -83,7 +71,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     add_episodes(parser, default=20)
     add_seed(parser)
-    add_max_steps(parser, default=600)
+    add_max_steps(parser, help="override the episode length (default: the manifest's)")
     parser.add_argument("--clutter-count", type=int, default=0)
     parser.add_argument("--json-out", type=Path)
     args = parser.parse_args()

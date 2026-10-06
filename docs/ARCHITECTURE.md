@@ -310,11 +310,10 @@ any `viewer.mode` other than `none`
 `configs/manifests/so101_single_cube_fixed_place.yaml` runs on both engines). `run_sim.py --sim {mujoco,isaac}`
 overrides it through `physai.config.compat.with_overrides`, which re-runs the validation.
 
-`run_sim.py` builds every run this way. Its older `--config` (task file), `--world` and bare
-`--robot` inputs are converted by `physai.config.compat` with a deprecation notice; those
-loaders (`physai.config.legacy`) and `configs/tasks/`, `configs/worlds/` remain for that
-window and for `scripts/run_ros2_sim.py --config`. Worked examples are in
-`configs/manifests/`; the decision is
+`run_sim.py` builds every run this way; a bare `--robot` is converted by
+`physai.config.compat.manifest_for_robot`. The task-file loaders (`physai.config.legacy`)
+and `configs/tasks/` remain only for `scripts/run_ros2_sim.py --config`. Worked examples are
+in `configs/manifests/`; the decision is
 [ADR 10](adr/config-and-sessions.md#adr-10-the-manifest-becomes-the-run-description).
 
 ### Script roles
@@ -326,7 +325,7 @@ purposes, and each owns only what that purpose needs:
 | --- | --- | --- | --- |
 | Purpose | Run and look at one session: quick check, debugging, demo, recording | Measure a policy over N seeds with numbers that can be compared | Make a dataset with the scripted expert, which reads privileged state |
 | Output | Viewer or web host, video, `.npz` recording | `EvaluationReport`, `--json-out`, a summary | `episode_*.npz` and `meta.json` |
-| Only here | `--viewer`, `--serve`, shared worlds, web `--record-dir`, the legacy `--config`/`--world` inputs | `--seeds`, `--json-out`, `--policy replay`, the difficulty flags (`--camera-jitter`, `--lighting-scale`, `--clutter-count`, `--nominal-physics`), `--sorting`, the training-seed overlap warning | the expert, `environment_state` |
+| Only here | `--viewer`, `--serve`, shared worlds, web `--record-dir` | `--seeds`, `--json-out`, `--policy replay`, the difficulty flags (`--camera-jitter`, `--lighting-scale`, `--clutter-count`, `--nominal-physics`), `--sorting`, the training-seed overlap warning | the expert, `environment_state` |
 | Safety refusal | printed, the episode ends | counted as `unsafe_action` | not applicable |
 
 Who owns what, so the scripts do not drift apart:
@@ -342,8 +341,9 @@ Who owns what, so the scripts do not drift apart:
 - **Metrics and reports** belong to `physai.data.EvaluationReport`; only the evaluation
   uses them.
 - **A script** parses flags, builds a manifest with overrides, calls the rollout and
-  prints or saves the result. The video flags (`--video`, `--video-dir`, `--camera`)
-  and `--record` are defined once in `scripts/_common_args.py`.
+  prints or saves the result. The output flags (`--video`, `--camera`, `--record`,
+  `--record-dir`, `--out-dir`, `--name`) are defined once in `scripts/_common_args.py`, and
+  `scripts/_outputs.py` writes what they ask for after each episode.
 
 The decision is [ADR 20](adr/config-and-sessions.md#adr-20-run_sim-and-eval_policy-share-one-session-and-one-rollout).
 
@@ -505,14 +505,12 @@ contact behavior and reachable area.
   a dozen places, because only a single robot runs a policy, records or plays back. The
   branches go away when shared-world sessions gain tasks and policies, not by splitting `Host`
   (its lease, `web/lease.py`, and camera worker, `web/cameras.py`, are already separate).
-- **`scripts/` composition-root adoption.** Scripts other than `run_sim.py` and
-  `eval_policy.py` (`workspace_map`,
-  `benchmark_ik`, `render_docs_media`, `teleop_keyboard`, `collect_demos`,
-  `eval_randomization`, `plan_task`) still hand-assemble `EnvConfig` and environments instead
+- **`scripts/` composition-root adoption.** Scripts other than `run_sim.py`, `eval_policy.py`,
+  `collect_demos.py` and `eval_randomization.py` (`workspace_map`,
+  `benchmark_ik`, `render_docs_media`, `teleop_keyboard`, `plan_task`) still hand-assemble `EnvConfig` and environments instead
   of calling `create_runtime()` or `create_session()`. They are safety-gated either way, since
   the gate lives in the adapter.
-- **Legacy configuration.** `--config`, `--world`, `configs/tasks/` and `configs/worlds/` are
-  deprecated in favor of manifests and removed after a deprecation window;
+- **Legacy configuration.** `configs/tasks/` and its loaders remain only because
   `scripts/run_ros2_sim.py --config` still reads the task file. Shared-world sessions run no
   tasks or policies yet.
 - **Isaac Sim is single-cube and observation-only.** It supports the single-cube pick-and-place
