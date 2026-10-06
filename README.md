@@ -72,7 +72,7 @@ Start the host with `--serve` and open the browser client (Three.js, configurabl
 per-policy debug overlays):
 
 ```bash
-MUJOCO_GL=egl uv run python scripts/run_sim.py --robot so101 --serve
+MUJOCO_GL=egl uv run python scripts/run_sim.py --serve
 MUJOCO_GL=egl uv run python scripts/run_web.py --connect http://127.0.0.1:8000
 MUJOCO_GL=egl uv run python scripts/run_sim.py --manifest configs/manifests/heterogeneous_world.yaml --serve
 ```

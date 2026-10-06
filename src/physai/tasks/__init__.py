@@ -1,6 +1,6 @@
 """Task definitions independent from robot embodiments and model approaches."""
 
-from .base import Task, TaskBackend
+from .base import Task
 from .single_cube_fixed_place import (
     SingleCubeFixedPlaceBackend,
     SingleCubeFixedPlaceTask,
@@ -15,7 +15,6 @@ __all__ = [
     "SortingBackend",
     "SortingTask",
     "Task",
-    "TaskBackend",
     "TaskRuntime",
     "available_tasks",
     "create_task",

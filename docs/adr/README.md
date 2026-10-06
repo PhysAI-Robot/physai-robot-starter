@@ -24,6 +24,7 @@ later ADR may supersede part of an earlier one; the entry says so.
 | 19 | One manifest runs on both simulators (supersedes 15's robot-only manifest) | [simulators.md](simulators.md) |
 | 20 | `run_sim` and `eval_policy` share one session and one rollout (narrows 10) | [config-and-sessions.md](config-and-sessions.md) |
 | 21 | One flag name per concept across the scripts (renames flags in 20) | [config-and-sessions.md](config-and-sessions.md) |
+| 22 | The manifest is the only run description (finishes 10) | [config-and-sessions.md](config-and-sessions.md) |
 | 3 | Research code lives outside the core package | [repo-scope.md](repo-scope.md) |
 | 5 | TurtleBot4 stays as the second embodiment | [repo-scope.md](repo-scope.md) |
 | 8 | Enforce dependency direction with import-linter | [repo-scope.md](repo-scope.md) |

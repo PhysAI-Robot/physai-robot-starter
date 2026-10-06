@@ -98,16 +98,74 @@ from typing import Any
 
 import yaml
 
+from ..contracts import DEFAULT_CAMERA_RESOLUTION, parse_camera_resolution
 from ..policy.registry import available_policies
 from ..robots.registry import available_robots, available_simulators, robot_kind
+from ..sim.mujoco.domain_randomization import DomainRandomizationConfig
 from ..sim.mujoco.scenes.common import REPO_ROOT
 from ..sim.mujoco.scenes.registry import get_scene_definition
 from ..tasks.registry import available_tasks
-from .legacy import SimulationConfig, _parse_simulation_config
 
 SCHEMA_VERSION = 1
 _BACKENDS = ("direct", "ros2_sim", "ros2_real")
 _VIEWER_MODES = ("none", "native", "web", "both")
+
+
+@dataclass(frozen=True)
+class SimulationConfig:
+    """Settings shared by robot environments and simulation entry points."""
+
+    seed: int = 0
+    domain_randomization: DomainRandomizationConfig = field(
+        default_factory=DomainRandomizationConfig
+    )
+    camera_resolution: str = DEFAULT_CAMERA_RESOLUTION
+
+
+def _parse_simulation_config(
+    data: dict[str, Any],
+    source: Path | str,
+) -> SimulationConfig:
+    seed = data.get("seed", 0)
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise ValueError(  # noqa: TRY004
+            f"{source}: simulation seed must be an integer"
+        )
+    randomization_data = data.get("domain_randomization", {})
+    if not isinstance(randomization_data, dict):
+        raise ValueError(  # noqa: TRY004
+            f"{source}: domain_randomization must be a mapping"
+        )
+    enabled = randomization_data.get("enabled", False)
+    kwargs: dict[str, Any] = {"enabled": enabled}
+    for key in (
+        "friction_scale",
+        "mass_scale",
+        "lighting_scale",
+        "clutter_x_range",
+        "clutter_y_range",
+    ):
+        if key in randomization_data:
+            value = randomization_data[key]
+            if not isinstance(value, (list, tuple)) or len(value) != 2:
+                raise ValueError(f"{source}: domain_randomization.{key} must be a pair")
+            kwargs[key] = tuple(float(item) for item in value)
+    if "camera_position_jitter" in randomization_data:
+        kwargs["camera_position_jitter"] = float(
+            randomization_data["camera_position_jitter"]
+        )
+    if "clutter_clearance" in randomization_data:
+        kwargs["clutter_clearance"] = float(randomization_data["clutter_clearance"])
+    resolution = data.get("camera_resolution", DEFAULT_CAMERA_RESOLUTION)
+    try:
+        parse_camera_resolution(resolution)
+    except (ValueError, AttributeError) as exc:
+        raise ValueError(f"{source}: simulation {exc}") from exc
+    return SimulationConfig(
+        seed=seed,
+        domain_randomization=DomainRandomizationConfig(**kwargs),
+        camera_resolution=resolution,
+    )
 
 
 @dataclass(frozen=True)

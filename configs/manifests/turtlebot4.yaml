@@ -1,0 +1,9 @@
+# One TurtleBot4 on its own (no task): run it with
+#   python scripts/run_sim.py --manifest configs/manifests/turtlebot4.yaml --serve
+schema_version: 1
+
+robots:
+  - id: turtlebot4
+    robot: turtlebot4
+    config:
+      max_steps: 600

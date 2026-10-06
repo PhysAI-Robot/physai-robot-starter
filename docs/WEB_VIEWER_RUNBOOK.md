@@ -20,13 +20,13 @@ With no `--policy`, the host holds its current pose and waits for browser jog co
 `--viewer` for MuJoCo's desktop window on the same host:
 
 ```bash
-MUJOCO_GL=egl uv run python scripts/run_sim.py --robot so101 --serve --seed 0
+MUJOCO_GL=egl uv run python scripts/run_sim.py --serve --seed 0
 MUJOCO_GL=egl uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --policy scripted --serve --seed 0
 MUJOCO_GL=egl uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --viewer --serve --host 0.0.0.0 --port 8004
 ```
 
 Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/) or run
-`uv run python scripts/run_web.py --connect http://127.0.0.1:8000`. `--manifest`, `--robot`,
+`uv run python scripts/run_web.py --connect http://127.0.0.1:8000`. `--manifest`,
 `--seed` and `--policy` belong to the host; `run_web.py` only opens a client. The host reuses
 `--seed` on each automatic reset, and a policy is reset only if one was supplied.
 
@@ -134,7 +134,7 @@ Takes also carry `extras.*` arrays (joint velocity/effort, grip force, policy me
 a world, and requires `--serve`):
 
 ```bash
-MUJOCO_GL=egl uv run python scripts/run_sim.py --robot so101 --serve --dataset data/web_session
+MUJOCO_GL=egl uv run python scripts/run_sim.py --serve --dataset data/web_session
 ```
 
 A Recording panel appears. **Record** starts a take; **Save ✓ success** or **Save ✗ fail** ends
@@ -169,7 +169,7 @@ width and is refused.
 
 ```bash
 uv run python scripts/collect_demos.py --episodes 5 --keep-failures --dataset data/debug_v1
-MUJOCO_GL=egl uv run python scripts/run_sim.py --robot so101 --serve --dataset data/debug_v1
+MUJOCO_GL=egl uv run python scripts/run_sim.py --serve --dataset data/debug_v1
 ```
 
 ## Troubleshooting

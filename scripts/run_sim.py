@@ -20,8 +20,8 @@ python scripts/run_sim.py --sim isaac --manifest configs/manifests/so101_single_
                                                 # isaacsim installed, see README.md; not exercised
                                                 # by this repo's own CI)
 
-A run is described by a session manifest (`--manifest`); a bare `--robot` is converted
-into one, so every run takes the same path from there on.
+A run is described by a session manifest (`--manifest`, default: the SO-101
+single-cube pick-and-place).
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ from _common_args import (
     add_max_steps,
     add_policy,
     add_policy_args,
-    add_robot,
+    DEFAULT_MANIFEST,
     add_run_outputs,
     add_seed,
     add_simulator,
@@ -54,14 +54,12 @@ import research.classical_control.so101_visual_servo
 import research.imitation_learning.vla_adapter
 import research.scripted_experts.so101_pick_place_expert  # noqa: F401
 from _outputs import RunOutputs, wants_cameras
-from physai.config import SessionManifest, load_manifest, load_sim_config
-from physai.config.compat import manifest_for_robot, with_overrides
+from physai.config import SessionManifest, load_manifest
+from physai.config.compat import with_overrides
 from physai.policy import available_policies
-from physai.robots import available_robots
 from physai.runtime import RenderGlitch, Session, create_session, run_episode
 from physai.web.host import Host
 
-DEFAULT_SIM_CONFIG = Path("configs/sim_config.yaml")
 # What a headless episode runs when neither --policy nor the manifest names one.
 DEFAULT_HEADLESS_POLICY = "scripted"
 
@@ -73,18 +71,9 @@ def parse_args(
     ap.add_argument(
         "--manifest",
         type=Path,
-        help="session manifest YAML (for example configs/manifests/so101_single_cube_fixed_place.yaml)",
-    )
-    ap.add_argument(
-        "--sim-config",
-        type=Path,
-        help="shared simulation settings for --robot "
-        f"(default: {DEFAULT_SIM_CONFIG}); a manifest has its own",
-    )
-    add_robot(
-        ap,
-        choices=available_robots(),
-        help="the robot to run when no manifest selects one",
+        default=DEFAULT_MANIFEST,
+        help="session manifest to run (for example "
+        "configs/manifests/turtlebot4.yaml or heterogeneous_world.yaml)",
     )
     add_simulator(ap)
     # "lerobot" belongs here: main() handles it and the module docstring
@@ -127,14 +116,7 @@ def build_manifest(
     ap: argparse.ArgumentParser, args: argparse.Namespace
 ) -> SessionManifest:
     """The session the flags describe, with command-line overrides applied."""
-    if args.manifest and (args.sim_config or args.robot):
-        ap.error("--manifest cannot be combined with --sim-config or --robot")
-
-    if args.manifest:
-        manifest = load_manifest(args.manifest)
-    else:
-        simulation = load_sim_config(args.sim_config or DEFAULT_SIM_CONFIG)
-        manifest = manifest_for_robot(args.robot or "so101", simulation=simulation)
+    manifest = load_manifest(args.manifest)
 
     if manifest.world is not None and args.policy:
         ap.error("--policy cannot be used with a shared world")

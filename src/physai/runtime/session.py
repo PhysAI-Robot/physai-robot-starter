@@ -13,8 +13,13 @@ from dataclasses import dataclass, field, fields
 from typing import Any
 
 from ..config.manifest import SessionManifest, SessionRobotConfig
-from ..robots.registry import create_env_config, robot_kind, shared_attach
-from ..sim.mujoco.scenes import default_scene_for
+from ..robots.registry import (
+    create_env_config,
+    robot_kind,
+    scene_defaults,
+    shared_attach,
+)
+from ..sim.mujoco.scenes import create_scene, default_scene_for
 from ..sim.mujoco.world import RobotInstanceConfig, SharedWorld
 from .composition import RuntimeComposition, create_runtime
 
@@ -116,6 +121,21 @@ def _create_single_session(
         runtime=create_runtime(robot.robot, **kwargs),
         host_renders_cameras=host_renders_cameras,
     )
+
+
+def robot_env_config(manifest: SessionManifest) -> Any:
+    """The environment config a one-robot manifest describes, for entry points that
+    build the environment themselves (the ROS2 driver) instead of `create_session`."""
+    robot = manifest.robots[0]
+    fields_, _ = _robot_fields(manifest, robot, render=None, host_driven=False)
+    scene_name = manifest.scene.name or default_scene_for(
+        robot_kind(robot.robot), manifest.task_for(robot)
+    )
+    if scene_name is not None:
+        fields_["scene"] = create_scene(
+            scene_name, **{**scene_defaults(robot.robot), **_scene_kwargs(manifest)}
+        )
+    return create_env_config(robot.robot, simulator=manifest.simulator, **fields_)
 
 
 def _create_world_session(manifest: SessionManifest) -> Session:

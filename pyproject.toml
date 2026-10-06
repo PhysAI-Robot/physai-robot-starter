@@ -28,7 +28,6 @@ dependencies = [
     # dependency, so there is no audience that wants physai without the
     # ability to run its own test suite.
     "pytest>=9.1.1",
-    "lark>=1.2",
     "ruff>=0.16.9",
     "import-linter>=2.1",
 ]

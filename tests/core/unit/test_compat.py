@@ -1,20 +1,14 @@
 import pytest
 
-from physai.config import SimulationConfig, load_manifest
-from physai.config.compat import manifest_for_robot, with_overrides
-
-SIMULATION = SimulationConfig(seed=3)
+from physai.config import load_manifest
+from physai.config.compat import with_overrides
 
 
-def test_a_bare_robot_gets_its_defaults_and_command_line_overrides():
-    arm = manifest_for_robot("so101", simulation=SIMULATION)
+def test_command_line_overrides_apply_to_a_manifest():
+    arm = load_manifest("configs/manifests/so101_single_cube_fixed_place.yaml")
+    base = load_manifest("configs/manifests/turtlebot4.yaml")
     assert arm.task == "single_cube_fixed_place"
-    assert arm.scene.overrides == {}
-    assert arm.robots[0].config == {"max_steps": 600}
-
-    base = manifest_for_robot("turtlebot4", simulation=SIMULATION)
     assert base.task is None
-    assert base.scene.overrides == {}
 
     changed = with_overrides(arm, seed=9, max_steps=50, policy="constant")
     assert changed.simulation.seed == 9

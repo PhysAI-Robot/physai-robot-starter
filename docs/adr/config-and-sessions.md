@@ -82,9 +82,10 @@ default camera and video folder.
 3. `max_steps` has no script default: it is the manifest's, and `--max-steps`
    overrides it. The output flags are defined once (`--video`, `--camera`, `--record`,
    `--out`, `--name`) and `scripts/_outputs.py` writes them.
-4. `collect_demos.py` and `eval_randomization.py` build their session from the same
-   manifests and run episodes through `run_episode`, so they no longer assemble
-   environments by hand. `run_sim.py` drops its deprecated `--config` and `--world`
+4. `collect_demos.py` builds its session from the same manifests and runs episodes
+   through `run_episode`, so it no longer assembles an environment by hand
+   (`eval_randomization.py` was dropped: two `eval_policy.py` runs, with and without the
+   difficulty flags, compare the same thing). `run_sim.py` drops its deprecated `--config` and `--world`
    inputs (and `compat.manifest_from_task_file`/`manifest_from_world_file`, with
    `configs/worlds/`); `--policy-arg` and `--checkpoint` are shared.
 
@@ -125,3 +126,28 @@ comes from `collect_demos.py` or from recording in the browser (`run_sim.py --se
 --dataset`). `run_sharded_eval.py` passes its `--out` to every shard, so their videos
 and recordings land in the result folder. `sweep_difficulty.py` takes `--sim`; on Isaac it
 runs only the cells `eval_policy.py` supports there.
+
+## ADR 22: The manifest is the only run description
+
+Status: accepted. Finishes the migration ADR 10 started; supersedes its note that a bare
+`--robot` and the task files stay as conversions.
+
+**Context.** After ADR 20 every run script read a manifest except two paths kept for
+back-compat: `run_sim.py --robot/--sim-config` (a manifest built from a robot name and
+`configs/sim_config.yaml`) and `run_ros2_sim.py --config` (a task YAML read by
+`load_task_config`). They needed a second loader module (`config/legacy.py`), the
+`configs/tasks/` and `configs/sim_config.yaml` files, `compat.manifest_for_robot` and their
+own tests, to describe what a manifest already says.
+
+**Decision.** Remove them. `run_sim.py` takes `--manifest` (default: the SO-101 single-cube
+session) and TurtleBot4 gets `configs/manifests/turtlebot4.yaml`. `run_ros2_sim.py
+--manifest` builds the node's environment with `physai.runtime.robot_env_config`, which
+reuses the manifest's robot fields and scene exactly as `create_session` does (a test
+compares the two). `SimulationConfig` and its parser now live in `config/manifest.py`;
+`config/legacy.py` is gone. The same pass dropped `scripts/eval_randomization.py` (two
+`eval_policy.py` runs cover it), the empty `TaskBackend` protocol and the unused `lark`
+dependency.
+
+**Consequences.** `run_sim.py --robot X` and `run_ros2_sim.py --config FILE` are gone; the
+runbooks use manifests. The ROS2 node itself is only exercised where ROS2 is installed; the
+config it receives is checked against `create_session` on MuJoCo.
