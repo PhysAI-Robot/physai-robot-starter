@@ -74,7 +74,9 @@ def test_camera_res_flag_reaches_the_manifest_and_rejects_other_sizes(
 
 def test_turtlebot_viewer_gets_a_resolved_step_limit(run_sim, monkeypatch):
     captured = capture_viewer(
-        run_sim, monkeypatch, ["--robot", "turtlebot4", "--serve"]
+        run_sim,
+        monkeypatch,
+        ["--manifest", "configs/manifests/turtlebot4.yaml", "--serve"],
     )
 
     (robot,) = captured["manifest"].robots
@@ -103,7 +105,6 @@ def test_a_manifest_selects_the_run_and_the_old_flags_work_with_a_notice(
 
 def test_incompatible_flags_are_rejected(run_sim, monkeypatch, capsys):
     cases = [
-        (["--manifest", "m.yaml", "--robot", "so101"], "cannot be combined"),
         (["--record", "--serve"], "use --dataset"),
         (["--dataset", "d"], "needs --serve"),
         (["--manifest", WORLD], "requires --viewer or --serve"),
@@ -172,3 +173,8 @@ def test_headless_episodes_run_from_a_manifest_and_name_their_video(
     assert run_sim.main() == 0
     assert (out / "videos" / "mine_seed0000.mp4").exists()
     assert (out / "recordings" / "mine_seed0000.npz").exists()
+
+
+def test_without_a_manifest_the_single_cube_session_runs(run_sim, monkeypatch):
+    manifest = capture_viewer(run_sim, monkeypatch, ["--serve"])["manifest"]
+    assert manifest.scene.name == "single_cube_fixed_place"

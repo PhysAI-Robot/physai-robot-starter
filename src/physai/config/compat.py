@@ -1,10 +1,4 @@
-"""Build a session manifest from a bare robot name, and apply command-line overrides.
-
-A bare `--robot` is the one input `scripts/run_sim.py` still turns into a manifest
-(`manifest_for_robot`); `with_overrides` applies the flags both run scripts share.
-Both go through `parse_manifest`/`validate_manifest`, so the rest of the code only
-ever sees a validated `SessionManifest`.
-"""
+"""Command-line overrides for a session manifest (`with_overrides`), shared by the run scripts."""
 
 from __future__ import annotations
 
@@ -13,32 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from ..contracts import parse_camera_resolution
-from ..robots.registry import default_task
-from .legacy import DomainRandomizationConfig, SimulationConfig
-from .manifest import SCHEMA_VERSION, SessionManifest, parse_manifest, validate_manifest
-
-# Episode length of a bare `--robot` run that gives no --max-steps.
-BARE_ROBOT_MAX_STEPS = 600
-
-
-def manifest_for_robot(robot: str, *, simulation: SimulationConfig) -> SessionManifest:
-    """The manifest of `run_sim.py --robot <name>` without a config file."""
-    task = default_task(robot)
-    manifest_data: dict[str, Any] = {
-        "schema_version": SCHEMA_VERSION,
-        "robots": [
-            {
-                "id": robot,
-                "robot": robot,
-                "config": {"max_steps": BARE_ROBOT_MAX_STEPS},
-            }
-        ],
-    }
-    if task is not None:
-        manifest_data["task"] = task
-    return _with_simulation(
-        parse_manifest(manifest_data, Path(f"<--robot {robot}>")), simulation, None
-    )
+from ..sim.mujoco.domain_randomization import DomainRandomizationConfig
+from .manifest import SessionManifest, validate_manifest
 
 
 def with_overrides(
@@ -99,17 +69,6 @@ def with_overrides(
     return updated
 
 
-def _with_simulation(
-    manifest: SessionManifest, simulation: SimulationConfig, seed: int | None
-) -> SessionManifest:
-    """Attach the shared simulation settings; a file's own seed wins over them."""
-    if seed is not None:
-        simulation = replace(simulation, seed=seed)
-    return replace(manifest, simulation=simulation)
-
-
 __all__ = [
-    "BARE_ROBOT_MAX_STEPS",
-    "manifest_for_robot",
     "with_overrides",
 ]

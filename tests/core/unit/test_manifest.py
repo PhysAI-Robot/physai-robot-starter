@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from tests.conftest import requires_assets
 
 
 def _write(tmp_path: Path, data: dict) -> Path:
@@ -204,3 +205,21 @@ def test_the_sorting_manifest_names_the_sorting_scene_and_task():
     manifest = load_manifest("configs/manifests/so101_sorting.yaml")
     assert manifest.scene.name == "sorting_minimal"
     assert manifest.task_for(manifest.robots[0]) == "sorting"
+
+
+@requires_assets
+def test_robot_env_config_matches_the_environment_a_session_builds():
+    from dataclasses import fields
+
+    from physai.config import load_manifest
+    from physai.runtime import create_session, robot_env_config
+
+    manifest = load_manifest("configs/manifests/so101_single_cube_fixed_place.yaml")
+    expected = robot_env_config(manifest)
+    session = create_session(manifest)
+    try:
+        built = session.runtime.robot.cfg
+        for item in fields(expected):
+            assert getattr(built, item.name) == getattr(expected, item.name), item.name
+    finally:
+        session.close()

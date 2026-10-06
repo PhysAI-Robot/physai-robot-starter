@@ -16,7 +16,6 @@ place error, settling time and the most common failure category per cell.
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 from dataclasses import dataclass

@@ -11,7 +11,7 @@ this file only says how to start it.
 
 ```bash
 uv run python scripts/fetch_assets.py --robot so101
-uv run python scripts/run_sim.py --robot so101 --serve --seed 0
+uv run python scripts/run_sim.py --serve --seed 0
 uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --serve --seed 0
 uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --seed 0 --max-steps 500
 ```
@@ -44,7 +44,7 @@ Real message and executor coverage needs ROS2 Jazzy:
 ```bash
 source /opt/ros/jazzy/setup.bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/core/robots/so101/test_so101_ros2_node.py -q
-MUJOCO_GL=egl uv run python scripts/run_ros2_sim.py --robot so101 --config configs/tasks/so101/single_cube_fixed_place.yaml --seed 0 --max-steps 500
+MUJOCO_GL=egl uv run python scripts/run_ros2_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --seed 0 --max-steps 500
 uv run python scripts/show_ros2_contract.py
 ```
 
@@ -76,8 +76,8 @@ endpoint.
 
 ```bash
 uv run python scripts/fetch_assets.py --robot turtlebot4
-uv run python scripts/run_sim.py --robot turtlebot4 --serve --seed 0
-uv run python scripts/run_sim.py --robot turtlebot4 --seed 0 --max-steps 300
+uv run python scripts/run_sim.py --manifest configs/manifests/turtlebot4.yaml --serve --seed 0
+uv run python scripts/run_sim.py --manifest configs/manifests/turtlebot4.yaml --policy constant --seed 0 --max-steps 300
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/core/unit/test_robot_registry.py tests/core/acceptance/turtlebot/test_navigation.py -q
 ```
 

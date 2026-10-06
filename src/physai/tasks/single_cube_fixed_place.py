@@ -6,10 +6,10 @@ from typing import Protocol
 
 import numpy as np
 
-from .base import Task, TaskBackend
+from .base import Task
 
 
-class SingleCubeFixedPlaceBackend(TaskBackend, Protocol):
+class SingleCubeFixedPlaceBackend(Protocol):
     """Minimal geometry state required by pick-and-place evaluation."""
 
     cube_pos: np.ndarray

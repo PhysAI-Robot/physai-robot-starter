@@ -1,23 +1,14 @@
-"""Typed YAML configuration.
+"""Typed YAML configuration: the session manifest (robots + scene + task + policy +
+backend + viewer in one file) and the command-line overrides applied to it."""
 
-`legacy` holds the pre-manifest per-robot loaders, re-exported
-here unchanged for CLI back-compat. `manifest` is the new unified session
-manifest (robots + scene + task + policy + backend + viewer in one file).
-"""
-
-from .legacy import (
-    DomainRandomizationConfig,
-    SimulationConfig,
-    TaskConfig,
-    load_sim_config,
-    load_task_config,
-)
+from ..sim.mujoco.domain_randomization import DomainRandomizationConfig
 from .manifest import (
     SessionManifest,
     SessionRobotConfig,
     SessionSceneConfig,
     SessionViewerConfig,
     SessionWorldConfig,
+    SimulationConfig,
     load_manifest,
 )
 
@@ -29,8 +20,5 @@ __all__ = [
     "SessionViewerConfig",
     "SessionWorldConfig",
     "SimulationConfig",
-    "TaskConfig",
     "load_manifest",
-    "load_sim_config",
-    "load_task_config",
 ]

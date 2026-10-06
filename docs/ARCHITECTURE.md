@@ -73,7 +73,7 @@ translate to the same `Observation` and `Action` at the boundary.
 | Module | Owns | Must not own |
 | --- | --- | --- |
 | `physai.contracts` | Shared `Observation`, `Action` and ROS2-shaped value types | Robot-specific ordering or task rules |
-| `physai.config` | Typed YAML parsing: `manifest` (the session manifest) and `legacy` (`load_sim_config`, `load_task_config`, kept for the deprecated CLI inputs) | Simulation behavior, robot construction or task evaluation |
+| `physai.config` | Typed YAML parsing: `manifest` (the session manifest and its `simulation` block) and `compat` (the command-line overrides, `with_overrides`) | Simulation behavior, robot construction or task evaluation |
 | `physai.robots` | Embodiment discovery, `RobotSpec`, robot ports, factories, environments, adapters, the backend registry, shared-world instance/attach factories | Task reward, planner decisions or model SDKs |
 | `physai.tasks` | Task state, reset rules, reward, metrics, termination | Robot internals or action generation |
 | `physai.sim` | One subpackage per engine plus the neutral modules both read (`studio`: the common look; `workspace`: table, target, cubes and front camera) | Engine code in the namespace; importing `physai.sim` must never need an engine SDK, and the neutral modules never import one |
@@ -94,7 +94,7 @@ translate to the same `Observation` and `Action` at the boundary.
 ```text
 src/physai/
 ├── contracts.py       shared message-shaped values
-├── config/            typed YAML configuration (manifest.py; legacy.py and compat.py are deprecated)
+├── config/            typed YAML configuration (manifest.py; compat.py applies the CLI overrides)
 ├── robots/            embodiment ports, adapters, registries, factories
 │   ├── description.py sim-neutral RobotDescription schema + YAML loader
 │   ├── so101/         environments (mujoco_env.py, isaac_env.py), layouts, kinematics, shared-world adapter
@@ -310,10 +310,9 @@ any `viewer.mode` other than `none`
 `configs/manifests/so101_single_cube_fixed_place.yaml` runs on both engines). `run_sim.py --sim {mujoco,isaac}`
 overrides it through `physai.config.compat.with_overrides`, which re-runs the validation.
 
-`run_sim.py` builds every run this way; a bare `--robot` is converted by
-`physai.config.compat.manifest_for_robot`. The task-file loaders (`physai.config.legacy`)
-and `configs/tasks/` remain only for `scripts/run_ros2_sim.py --config`. Worked examples are
-in `configs/manifests/`; the decision is
+`run_sim.py` builds every run this way (default: `configs/manifests/so101_single_cube_fixed_place.yaml`),
+and `run_ros2_sim.py --manifest` builds the node's environment from one
+(`physai.runtime.robot_env_config`). Worked examples are in `configs/manifests/`; the decision is
 [ADR 10](adr/config-and-sessions.md#adr-10-the-manifest-becomes-the-run-description).
 
 ### Script roles
@@ -358,7 +357,7 @@ and any flag without a help text.
 | First episode seed | `--seed N` | Episode N uses seed + N. Default 0; `run_sim.py` defaults to the manifest's; `sweep_difficulty.py` uses 100 so its cells stay off seeds 0-99 |
 | Number of episodes | `--episodes N` | Default depends on the script's purpose and is in its `--help` |
 | Episode length | `--max-steps N` | Control steps. The manifest owns the default; the flag overrides it |
-| Session | `--manifest FILE` | Scripts without a manifest take `--robot NAME` |
+| Session | `--manifest FILE` | Scripts that do not build a session from one take `--robot NAME` |
 | Simulator | `--sim {mujoco,isaac}` | Overrides the manifest's `simulator` |
 | Policy | `--policy NAME`, `--checkpoint DIR`, `--policy-arg KEY=VALUE` | |
 | Output folder | `--out DIR` | Where a script writes many files: videos (`videos/`), recordings (`recordings/`), shards, downloaded assets, a plan |
@@ -527,14 +526,12 @@ contact behavior and reachable area.
   a dozen places, because only a single robot runs a policy, records or plays back. The
   branches go away when shared-world sessions gain tasks and policies, not by splitting `Host`
   (its lease, `web/lease.py`, and camera worker, `web/cameras.py`, are already separate).
-- **`scripts/` composition-root adoption.** Scripts other than `run_sim.py`, `eval_policy.py`,
-  `collect_demos.py` and `eval_randomization.py` (`workspace_map`,
+- **`scripts/` composition-root adoption.** Scripts other than `run_sim.py`, `eval_policy.py` and
+  `collect_demos.py` (`workspace_map`,
   `benchmark_ik`, `render_docs_media`, `teleop_keyboard`, `plan_task`) still hand-assemble `EnvConfig` and environments instead
   of calling `create_runtime()` or `create_session()`. They are safety-gated either way, since
   the gate lives in the adapter.
-- **Legacy configuration.** `configs/tasks/` and its loaders remain only because
-  `scripts/run_ros2_sim.py --config` still reads the task file. Shared-world sessions run no
-  tasks or policies yet.
+- **Shared-world sessions** run no tasks or policies yet.
 - **Isaac Sim is single-cube and observation-only.** It supports the single-cube pick-and-place
   scene, headless or with `--serve` (a MuJoCo display mirror of the scene), a fixed target, a
   lighting scale and camera jitter, and observation-based policies. `--viewer`, shared worlds,
