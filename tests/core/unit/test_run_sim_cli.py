@@ -96,7 +96,7 @@ def test_a_manifest_selects_the_run_and_the_old_flags_work_with_a_notice(
         ],
     )["manifest"]
     assert manifest.robots[0].id == "so101"
-    assert manifest.robots[0].config["max_steps"] == 400
+    assert manifest.robots[0].config["max_steps"] == 600
 
     config = capture_viewer(run_sim, monkeypatch, ["--config", TASK, "--serve"])
     assert config["manifest"].scene.name == "single_cube_fixed_place"

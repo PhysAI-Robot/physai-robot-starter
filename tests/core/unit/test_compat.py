@@ -36,7 +36,7 @@ def test_a_task_file_becomes_a_one_robot_manifest(tmp_path):
     assert manifest.success_hold_steps == 10
     assert manifest.task_kwargs == {"success_xy_tol": 0.04}
     assert robot.config["cameras"] == ("front", "wrist")
-    assert robot.config["max_steps"] == 400
+    assert robot.config["max_steps"] == 600
     assert manifest.scene.overrides["cube_names"] == ("cube",)
     assert manifest.simulation.seed == 3
     # settings the manifest owns elsewhere are not left in the robot config

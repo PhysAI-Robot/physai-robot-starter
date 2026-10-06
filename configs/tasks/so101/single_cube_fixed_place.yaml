@@ -26,7 +26,7 @@ env:
   control_hz: 30
   render: true
   cameras: [front, wrist]
-  max_steps: 400
+  max_steps: 600
   randomize_cube: true
   cube_x_range: [0.20, 0.24]
   cube_y_range: [0.05, 0.13]

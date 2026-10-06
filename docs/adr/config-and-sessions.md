@@ -61,7 +61,7 @@ Status: accepted. Narrows ADR 10's "other scripts still assemble robots by hand"
 `eval_policy.py`.
 
 **Context.** Both scripts run episodes, so they had drifted: `eval_policy.py` built its
-env and task from flags and its own defaults (600 steps against the manifest's 400)
+env and task from flags and its own defaults (600 steps against the manifest's 400 at the time)
 while `run_sim.py` read a manifest, and the episode loop was written twice. The copies
 disagreed on `policy.done` (ignored by evaluation), on a refused action (a crash in
 `run_sim`, an `unsafe_action` result in evaluation), on the Isaac render check and on the
@@ -83,7 +83,10 @@ default camera and video folder.
    overrides it. The video flags are defined once (`--video`, `--video-dir` with `--out`
    as an alias, `--camera`).
 
-**Consequences.** The evaluation default is 400 steps, not 600; runs that must keep 600
-pass `--max-steps 600`, as the research READMEs and `sweep_difficulty.py` already do.
+**Consequences.** The manifest's `max_steps` is now 600, so evaluation keeps its old length
+and `run_sim.py` runs 600 steps too (it was 400). Every successful episode in the
+existing ACT, visual servo and scripted results ended within 353 steps, so 600 is margin;
+failures run the full length. The research READMEs and `sweep_difficulty.py` still pass
+`--max-steps 600` explicitly.
 `eval_policy.py` lost `--robot` (the manifest names the robot). `collect_demos.py` and
 `eval_randomization.py` still assemble their own environments.

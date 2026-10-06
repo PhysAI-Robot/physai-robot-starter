@@ -17,7 +17,7 @@ def test_the_legacy_loaders_still_read_the_shipped_files():
     assert isinstance(task.env, EnvConfig)
     assert isinstance(task.env.scene, SingleCubeFixedPlaceSceneConfig)
     assert task.env.scene.cube_names == ("cube",)
-    assert task.env.max_steps == 400
+    assert task.env.max_steps == 600
 
     sim = load_sim_config(ROOT / "configs" / "sim_config.yaml")
     assert sim.seed == 0
