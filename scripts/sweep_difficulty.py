@@ -79,7 +79,9 @@ def select_cells(axis: str | None) -> list[Cell]:
     return chosen
 
 
-def run_cell(cell: Cell, out_dir: Path, seed: int, episodes: int, max_steps: int):
+def run_cell(
+    cell: Cell, out_dir: Path, seed: int, episodes: int, max_steps: int | None
+):
     out = out_dir / f"{cell.name}.json"
     command = [
         sys.executable,
@@ -90,8 +92,7 @@ def run_cell(cell: Cell, out_dir: Path, seed: int, episodes: int, max_steps: int
         str(seed),
         "--episodes",
         str(episodes),
-        "--max-steps",
-        str(max_steps),
+        *(["--max-steps", str(max_steps)] if max_steps is not None else []),
         "--nominal-physics",
         "--json-out",
         str(out),
@@ -141,7 +142,11 @@ def main() -> int:
     ap.add_argument("--axis", choices=("lighting", "camera", "clutter"))
     ap.add_argument("--seed", type=int, default=100)
     ap.add_argument("--episodes", type=int, default=50)
-    ap.add_argument("--max-steps", type=int, default=600)
+    ap.add_argument(
+        "--max-steps",
+        type=int,
+        help="override the episode length (default: the manifest's)",
+    )
     ap.add_argument(
         "--table-only",
         action="store_true",

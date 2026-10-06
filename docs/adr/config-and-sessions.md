@@ -80,13 +80,21 @@ default camera and video folder.
    `RenderGlitch` when Isaac stops drawing the robot. Video and recording are
    `EpisodeObserver`s.
 3. `max_steps` has no script default: it is the manifest's, and `--max-steps`
-   overrides it. The video flags are defined once (`--video`, `--video-dir` with `--out`
-   as an alias, `--camera`).
+   overrides it. The output flags are defined once (`--video`, `--camera`, `--record`,
+   `--record-dir`, `--out-dir`, `--name`) and `scripts/_outputs.py` writes them.
+4. `collect_demos.py` and `eval_randomization.py` build their session from the same
+   manifests and run episodes through `run_episode`, so they no longer assemble
+   environments by hand. `run_sim.py` drops its deprecated `--config` and `--world`
+   inputs (and `compat.manifest_from_task_file`/`manifest_from_world_file`, with
+   `configs/worlds/`); `--policy-arg` and `--checkpoint` are shared.
 
 **Consequences.** The manifest's `max_steps` is now 600, so evaluation keeps its old length
 and `run_sim.py` runs 600 steps too (it was 400). Every successful episode in the
 existing ACT, visual servo and scripted results ended within 353 steps, so 600 is margin;
 failures run the full length. The research READMEs and `sweep_difficulty.py` still pass
 `--max-steps 600` explicitly.
-`eval_policy.py` lost `--robot` (the manifest names the robot). `collect_demos.py` and
-`eval_randomization.py` still assemble their own environments.
+`eval_policy.py` lost `--robot` and `--render` (the manifest names the robot; cameras
+render whenever a video, recording or image policy needs them), and `--video-dir` and
+`--video-name` became `--out-dir` (videos under `videos/`, recordings under
+`recordings/`) and `--name`. `collect_demos.py` also loses `--robot`, and its dataset now
+carries the `extras.*` arrays; its states, actions and rewards are unchanged.

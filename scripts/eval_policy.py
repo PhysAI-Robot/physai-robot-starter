@@ -17,24 +17,23 @@ your action space, units, or control rate — check that before blaming training
 from __future__ import annotations
 
 import argparse
-import ast
 import json
 from pathlib import Path
 from typing import Any
 
 import _bootstrap  # noqa: F401
-import numpy as np
 from _common_args import (
+    DEFAULT_MANIFEST,
+    SORTING_MANIFEST,
     add_camera_resolution,
-    add_checkpoint,
     add_episodes,
     add_max_steps,
     add_policy,
-    add_record,
+    add_policy_args,
+    add_run_outputs,
     add_seed,
     add_simulator,
-    add_video,
-    add_video_name,
+    policy_kwargs,
 )
 
 # Registers so101's "scripted"/"visual_servo" policies and the checkpoint-
@@ -43,33 +42,12 @@ from _common_args import (
 import research.classical_control.so101_visual_servo  # noqa: E402,F401
 import research.imitation_learning.vla_adapter  # noqa: E402,F401
 import research.scripted_experts.so101_pick_place_expert  # noqa: E402,F401
-from _recording import RunRecorder
-from _video import (
-    VideoObserver,
-    default_video_name,
-    keep_video,
-    next_video_stem,
-    write_video,
-)
+from _outputs import RunOutputs, wants_cameras
 from physai.config import DomainRandomizationConfig, load_manifest
 from physai.config.compat import with_overrides
 from physai.data import EvaluationReport, load_episode
 from physai.policy import available_policies, create_policy
 from physai.runtime import RenderGlitch, create_session, run_episode
-
-DEFAULT_MANIFEST = Path("configs/manifests/so101_single_cube_fixed_place.yaml")
-SORTING_MANIFEST = Path("configs/manifests/so101_sorting.yaml")
-
-
-def _parse_policy_arg(text: str) -> tuple[str, Any]:
-    """Split `KEY=VALUE`, reading VALUE as a Python literal (a bare word stays a string)."""
-    key, separator, raw = text.partition("=")
-    if not separator or not key:
-        raise argparse.ArgumentTypeError(f"expected KEY=VALUE, got {text!r}")
-    try:
-        return key, ast.literal_eval(raw)
-    except (ValueError, SyntaxError):
-        return key, raw
 
 
 def _format_distance(distance: float | None) -> str:
@@ -129,7 +107,7 @@ def main() -> int:
         "requested difficulty axis varies",
     )
     ap.add_argument("--dataset", type=Path, help="required for --policy replay")
-    add_checkpoint(ap, help="required for --policy lerobot")
+    add_policy_args(ap)
     add_camera_resolution(ap)
     add_simulator(
         ap,
@@ -138,29 +116,12 @@ def main() -> int:
         "no randomization)",
     )
     ap.add_argument(
-        "--policy-arg",
-        action="append",
-        default=[],
-        metavar="KEY=VALUE",
-        type=_parse_policy_arg,
-        help="override a policy constructor option, e.g. "
-        "--policy-arg final_camera=front "
-        "--policy-arg grasp_offset_xy='(0.0, 0.0)'; repeatable",
-    )
-    ap.add_argument(
         "--seeds",
         type=_parse_seed_list,
         help="comma-separated episode seeds (for example 5,13,28) instead of "
         "--seed .. --seed + --episodes",
     )
-    add_video(ap)
-    add_video_name(ap)
-    add_record(ap)
-    ap.add_argument(
-        "--render",
-        action="store_true",
-        help="render cameras (slower; needed for image-conditioned policies)",
-    )
+    add_run_outputs(ap)
     ap.add_argument(
         "--sorting",
         action="store_true",
@@ -246,37 +207,24 @@ def main() -> int:
 
     # An image-conditioned policy cannot run without rendered cameras.
     needs_images = args.policy in {"lerobot", "visual_servo"}
-    recording = args.record or args.record_dir is not None
-    policy_kwargs = dict(args.policy_arg)
-    if args.policy == "lerobot":
-        policy_kwargs["checkpoint"] = args.checkpoint
     # Built once outside the loop where possible — reloading the checkpoint
     # from disk per episode would dominate wall-clock time for no reason.
     session = create_session(
         manifest,
-        render=simulator == "isaac"
-        or args.render
-        or needs_images
-        or args.video is not None
-        or recording,
-        policy_kwargs=policy_kwargs,
+        render=simulator == "isaac" or needs_images or wants_cameras(args),
+        policy_kwargs=policy_kwargs(args, args.policy),
     )
     runtime = session.runtime
     env = runtime.robot
     fps = getattr(env.cfg, "control_hz", 30)
-    video_name = args.video_name or default_video_name(
-        simulator, robot_name, args.policy
-    )
-    recorder = (
-        RunRecorder(
-            runtime,
-            fps=fps,
-            name=video_name,
-            task=task_name,
-            record_dir=args.record_dir,
-        )
-        if recording
-        else None
+    outputs = RunOutputs(
+        runtime,
+        args,
+        simulator=simulator,
+        robot=robot_name,
+        policy=args.policy,
+        task=task_name,
+        fps=fps,
     )
 
     # Evaluating on seeds the policy trained on measures recall, not
@@ -312,10 +260,8 @@ def main() -> int:
         else:
             seed = episode_seeds[ep]
 
-        video = VideoObserver(runtime, args.camera) if args.video is not None else None
-        observers = tuple(item for item in (video, recorder) if item is not None)
         try:
-            outcome = run_episode(runtime, seed, observers)
+            outcome = run_episode(runtime, seed, outputs.begin())
         except RenderGlitch as exc:
             # Camera policies would fail for a reason unrelated to the policy,
             # so stop instead of recording those episodes as failures.
@@ -368,20 +314,9 @@ def main() -> int:
             f"d={_format_distance(results[-1]['dist_cube_target'])}"
             + (f"  UNSAFE: {violation}" if violation else "")
         )
-        if recorder:
-            saved = recorder.end(results[-1]["success"], seed)
-            if saved:
-                print(f"  record -> {saved}")
-        if video and video.frames and keep_video(args.video, results[-1]["success"]):
-            path = write_video(
-                np.stack(video.frames),
-                next_video_stem(args.video_dir, video_name, seed),
-                fps=int(fps),
-            )
-            print(f"  video -> {path}")
+        outputs.save(results[-1]["success"], seed)
 
-    if recorder:
-        recorder.close()
+    outputs.close()
     session.close()
     report = EvaluationReport(
         policy=args.policy,

@@ -4,9 +4,7 @@ backend, and viewer options for a run.
 A single-robot run is just a manifest with one entry in ``robots``; a
 ``world`` block turns a session into one shared MuJoCo world with N robots.
 `physai.runtime.create_session` builds a session from a manifest, and
-`physai.config.compat` converts the older `configs/tasks/<robot>/*.yaml` and
-`configs/worlds/*.yaml` files into one (see `physai.config.legacy` for their
-loaders).
+`physai.config.compat` turns a bare robot name into one.
 
 Schema (YAML)::
 

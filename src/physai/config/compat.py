@@ -1,11 +1,9 @@
-"""Turn the older run configuration into a session manifest.
+"""Build a session manifest from a bare robot name, and apply command-line overrides.
 
-`configs/tasks/<robot>/*.yaml` (one robot, task, scene, and env),
-`configs/worlds/*.yaml` (robot placement in a shared world), and a bare robot
-name are the inputs `scripts/run_sim.py` accepted before manifests existed.
-Each converter builds manifest-shaped data and runs it through
-`parse_manifest`, so a legacy file gets exactly the validation a manifest
-does and the rest of the code only ever sees a `SessionManifest`.
+A bare `--robot` is the one input `scripts/run_sim.py` still turns into a manifest
+(`manifest_for_robot`); `with_overrides` applies the flags both run scripts share.
+Both go through `parse_manifest`/`validate_manifest`, so the rest of the code only
+ever sees a validated `SessionManifest`.
 """
 
 from __future__ import annotations
@@ -14,95 +12,13 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from ..contracts import parse_camera_resolution
 from ..robots.registry import default_task
-from .legacy import (
-    DomainRandomizationConfig,
-    SimulationConfig,
-    _required_mapping,
-    _required_string,
-)
+from .legacy import DomainRandomizationConfig, SimulationConfig
 from .manifest import SCHEMA_VERSION, SessionManifest, parse_manifest, validate_manifest
 
-# The camera resolution a bare `--robot` run has always rendered at; scene
-# files that name a task without one use the scene's own (smaller) default.
-# Episode length of a run that names neither a config nor --max-steps.
+# Episode length of a bare `--robot` run that gives no --max-steps.
 BARE_ROBOT_MAX_STEPS = 600
-
-
-def manifest_from_task_file(
-    path: str | Path, *, simulation: SimulationConfig
-) -> SessionManifest:
-    """A `configs/tasks/<robot>/<task>.yaml` file as a one-robot manifest."""
-    source = Path(path).resolve()
-    data = _read_mapping(source)
-    robot = _required_string(data, "robot")
-    task_data = _required_mapping(data, "task")
-    task_name = _required_string(task_data, "name")
-    env_data = dict(_required_mapping(data, "env"))
-    configured_task = env_data.pop("task", task_name)
-    if configured_task != task_name:
-        raise ValueError(
-            f"task mismatch: task.name={task_name!r}, env.task={configured_task!r}"
-        )
-    task_kwargs = {}
-    if "success_xy_tol" in env_data:
-        task_kwargs["success_xy_tol"] = env_data.pop("success_xy_tol")
-    seed = env_data.pop("seed", None)
-    hold_steps = env_data.pop("success_hold_steps", None)
-
-    manifest_data: dict[str, Any] = {
-        "schema_version": SCHEMA_VERSION,
-        "scene": {
-            "name": _required_string(task_data, "scene"),
-            "overrides": dict(_required_mapping(data, "scene")),
-        },
-        "robots": [{"id": robot, "robot": robot, "config": env_data}],
-        "task": task_name,
-        "task_kwargs": task_kwargs,
-    }
-    if hold_steps is not None:
-        manifest_data["success_hold_steps"] = hold_steps
-    return _with_simulation(parse_manifest(manifest_data, source), simulation, seed)
-
-
-def manifest_from_world_file(
-    path: str | Path, *, simulation: SimulationConfig
-) -> SessionManifest:
-    """A `configs/worlds/*.yaml` file as a shared-world manifest."""
-    source = Path(path).resolve()
-    data = _read_mapping(source)
-    raw_robots = data.get("robots")
-    if not isinstance(raw_robots, list) or not raw_robots:
-        raise ValueError("world configuration field 'robots' must be a non-empty list")
-    robots = []
-    for index, raw in enumerate(raw_robots):
-        if not isinstance(raw, dict):
-            raise ValueError(  # noqa: TRY004
-                f"world robots[{index}] must be a mapping"
-            )
-        robot: dict[str, Any] = {
-            "id": raw.get("id"),
-            "robot": raw.get("robot"),
-            "model": raw.get("model"),
-            "pose": {},
-        }
-        for key in ("position", "quaternion"):
-            if key in raw:
-                robot["pose"][key] = raw[key]
-        robots.append(robot)
-    manifest_data = {
-        "schema_version": SCHEMA_VERSION,
-        "world": {
-            key: data[key]
-            for key in ("timestep", "control_hz", "add_floor")
-            if key in data
-        },
-        "robots": robots,
-    }
-    return _with_simulation(parse_manifest(manifest_data, source), simulation, None)
 
 
 def manifest_for_robot(robot: str, *, simulation: SimulationConfig) -> SessionManifest:
@@ -192,20 +108,8 @@ def _with_simulation(
     return replace(manifest, simulation=simulation)
 
 
-def _read_mapping(path: Path) -> dict[str, Any]:
-    with path.open(encoding="utf-8") as stream:
-        data = yaml.safe_load(stream)
-    if not isinstance(data, dict):
-        raise ValueError(  # noqa: TRY004
-            f"configuration root must be a mapping: {path}"
-        )
-    return data
-
-
 __all__ = [
     "BARE_ROBOT_MAX_STEPS",
     "manifest_for_robot",
-    "manifest_from_task_file",
-    "manifest_from_world_file",
     "with_overrides",
 ]

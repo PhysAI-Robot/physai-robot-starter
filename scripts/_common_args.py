@@ -8,9 +8,15 @@ for flags that appear in more than one script.
 from __future__ import annotations
 
 import argparse
+import ast
 from pathlib import Path
+from typing import Any
 
 from _video import VIDEO_MODES
+
+# The SO-101 sessions every run script defaults to (and `--sorting` selects).
+DEFAULT_MANIFEST = Path("configs/manifests/so101_single_cube_fixed_place.yaml")
+SORTING_MANIFEST = Path("configs/manifests/so101_sorting.yaml")
 
 
 def add_seed(
@@ -36,6 +42,42 @@ def add_max_steps(
 
 def add_checkpoint(parser: argparse.ArgumentParser, *, help: str | None = None) -> None:
     parser.add_argument("--checkpoint", type=Path, help=help)
+
+
+def parse_policy_arg(text: str) -> tuple[str, Any]:
+    """Split `KEY=VALUE`, reading VALUE as a Python literal (a bare word stays a string)."""
+    key, separator, raw = text.partition("=")
+    if not separator or not key:
+        raise argparse.ArgumentTypeError(f"expected KEY=VALUE, got {text!r}")
+    try:
+        return key, ast.literal_eval(raw)
+    except (ValueError, SyntaxError):
+        return key, raw
+
+
+def add_policy_args(parser: argparse.ArgumentParser) -> None:
+    """`--checkpoint` and `--policy-arg`: the run-time inputs of a policy."""
+    add_checkpoint(parser, help="required for --policy lerobot")
+    parser.add_argument(
+        "--policy-arg",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        type=parse_policy_arg,
+        help="override a policy constructor option, e.g. "
+        "--policy-arg final_camera=front "
+        "--policy-arg grasp_offset_xy='(0.0, 0.0)'; repeatable",
+    )
+
+
+def policy_kwargs(args: argparse.Namespace, policy: str) -> dict[str, Any]:
+    """The constructor arguments `--policy-arg` and `--checkpoint` give `policy`."""
+    kwargs = dict(args.policy_arg)
+    if policy == "lerobot":
+        if args.checkpoint is None:
+            raise ValueError("--policy lerobot needs --checkpoint")
+        kwargs["checkpoint"] = args.checkpoint
+    return kwargs
 
 
 def add_out(
@@ -64,25 +106,6 @@ def add_policy(
     parser.add_argument("--policy", default=default, choices=choices, help=help)
 
 
-def _video_name(text: str) -> str:
-    if not text or any(char in text for char in "/\\"):
-        raise argparse.ArgumentTypeError(
-            f"--video-name must be a plain file name prefix, got {text!r}"
-        )
-    return text
-
-
-def add_video_name(parser: argparse.ArgumentParser) -> None:
-    """`--video-name`: replace the automatic `<sim>_<robot>_<policy>` prefix."""
-    parser.add_argument(
-        "--video-name",
-        type=_video_name,
-        help="video file name prefix, replacing the automatic "
-        "<simulator>_<robot>_<policy>; `_seed<seed>` and, on a repeat, `_02`, "
-        "`_03`, ... are still added",
-    )
-
-
 def add_camera_resolution(parser: argparse.ArgumentParser) -> None:
     """`--camera-res`: one of the supported resolutions (default 320x240)."""
     from physai.contracts import CAMERA_RESOLUTIONS, DEFAULT_CAMERA_RESOLUTION
@@ -108,28 +131,16 @@ def add_simulator(parser: argparse.ArgumentParser, *, help: str | None = None) -
     )
 
 
-DEFAULT_RECORD_DIR = Path("outputs/recordings")
+def _run_name(text: str) -> str:
+    if not text or any(char in text for char in "/\\"):
+        raise argparse.ArgumentTypeError(
+            f"--name must be a plain file name prefix, got {text!r}"
+        )
+    return text
 
 
-def add_record(parser: argparse.ArgumentParser) -> None:
-    """`--record` / `--record-dir`: save each episode's inputs as data."""
-    parser.add_argument(
-        "--record",
-        action="store_true",
-        help=f"record every input (cameras, joints, detections, grip force, ...) "
-        f"per episode to {DEFAULT_RECORD_DIR}/<simulator>_<robot>_<policy>_seed<seed>"
-        ".npz (+ .json), named like --video",
-    )
-    parser.add_argument(
-        "--record-dir",
-        type=Path,
-        help="record into this dataset directory (episode_NNNNN.npz + meta.json; "
-        "an existing dataset there is continued); implies --record",
-    )
-
-
-def add_video(parser: argparse.ArgumentParser) -> None:
-    """`--video`, `--video-dir`, `--camera`: the same video flags in every run script."""
+def add_run_outputs(parser: argparse.ArgumentParser) -> None:
+    """What a run saves: a video, a data recording, and where and under what name."""
     parser.add_argument(
         "--video",
         nargs="?",
@@ -139,15 +150,33 @@ def add_video(parser: argparse.ArgumentParser) -> None:
         "for the episodes that fail (`--video failures`)",
     )
     parser.add_argument(
-        "--video-dir",
-        "--out",
-        dest="video_dir",
-        type=Path,
-        default=Path("outputs/videos"),
-        help="where --video writes (one file per episode, named "
-        "<simulator>_<robot>_<policy>_seed<seed>.mp4, with _02, _03, ... on repeats)",
-    )
-    parser.add_argument(
         "--camera",
         help="camera that --video records (default: the robot's first camera)",
+    )
+    parser.add_argument(
+        "--record",
+        action="store_true",
+        help="record every input (cameras, joints, detections, grip force, ...) "
+        "per episode as <out-dir>/recordings/<name>_seed<seed>.npz (+ .json)",
+    )
+    parser.add_argument(
+        "--record-dir",
+        type=Path,
+        help="record into this dataset directory instead (episode_NNNNN.npz + "
+        "meta.json, the layout training and --policy replay read; an existing "
+        "dataset there is continued); implies --record",
+    )
+    parser.add_argument(
+        "--out-dir",
+        type=Path,
+        default=Path("outputs"),
+        help="where videos (videos/) and recordings (recordings/) are written "
+        "(default: outputs)",
+    )
+    parser.add_argument(
+        "--name",
+        type=_run_name,
+        help="file name prefix for videos and recordings, replacing the automatic "
+        "<simulator>_<robot>_<policy>; `_seed<seed>` and, on a repeat, `_02`, "
+        "`_03`, ... are still added",
     )
