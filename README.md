@@ -120,8 +120,8 @@ uv run python scripts/eval_policy.py --policy replay --dataset data/pickplace_v1
 
 Both `run_sim.py` and `eval_policy.py` run the session in a manifest and stop an episode the
 same way; `eval_policy.py` takes difficulty flags and reports a success rate
-([script roles](docs/ARCHITECTURE.md#script-roles)). Episode length comes from the manifest
-(`--max-steps` overrides it).
+([script roles](docs/ARCHITECTURE.md#script-roles)). Episode length (600 steps) comes from the
+manifest (`--max-steps` overrides it).
 
 Add `--sorting` to `eval_policy.py` and `collect_demos.py` for the three-cube sorting task, and
 `--keep-failures` to keep failed demonstrations (discarded by default). Use at least 100 seeds:
