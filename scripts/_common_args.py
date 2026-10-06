@@ -160,7 +160,7 @@ def add_run_outputs(parser: argparse.ArgumentParser) -> None:
         "per episode as <out-dir>/recordings/<name>_seed<seed>.npz (+ .json)",
     )
     parser.add_argument(
-        "--record-dir",
+        "--dataset-dir",
         type=Path,
         help="record into this dataset directory instead (episode_NNNNN.npz + "
         "meta.json, the layout training and --policy replay read; an existing "

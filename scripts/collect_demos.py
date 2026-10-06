@@ -72,7 +72,7 @@ def main() -> int:
         fps=env.cfg.control_hz,
         name="demos",
         task=args.task,
-        record_dir=args.out,
+        dataset_dir=args.out,
         fresh=True,
         metadata={
             "task_name": manifest.task_for(manifest.robots[0]),
