@@ -1,169 +1,96 @@
 # Project Roadmap: physai-robot-starter
 
-`physai-robot-starter` is an open-source starter kit for embodied AI and robotics research. It provides stable robot, task, observation, and action contracts so the same policy can be evaluated across backends: direct MuJoCo, ROS2 + MuJoCo, and (in the future) real robots.
+`physai-robot-starter` is an open-source starter kit for embodied AI and robotics research. It provides stable robot, task, observation and action contracts so the same policy can be evaluated across transports (direct, ROS2, and in the future real robots) and simulator engines (MuJoCo, Isaac Sim).
 
-## Supported robots
+## Supported robots and scope
 
 | Robot | Status | Notes |
 | --- | --- | --- |
 | SO-101 | Supported, **current focus** | All new research work goes here |
 | TurtleBot4 | Supported, maintained | Existing navigation code and tests stay green; no new work |
-| Others | Planned | Added later through the robot adapter interface |
-
-**Current focus robot:** SO-101
-
-## Scope
+| Others | Planned | Added later through the robot adapter interface, only after SO-101 has a solid report |
 
 - **Simulation only for now.** No hardware work is planned; the architecture stays open for it.
-- **New robots** are added only after the current focus robot has a solid report (see Phase 3 and 4).
-
-## Out of scope / limitations
-
-| Robot | Out of scope / limitation | Status |
-| --- | --- | --- |
-| SO-101 | Transparent or thin real-world objects (glass, ballpoint pens): hard for simulated contact and vision, and for the low-cost gripper | Revisit after the v0.2 report |
-| TurtleBot4 | Research benchmark (task ladder, baselines, learned policies) | To be implemented after the SO-101 v0.2 report |
+- **Out of scope for now:** transparent or thin real-world objects for SO-101; a TurtleBot4 research benchmark (after the SO-101 v0.2 report).
 
 ## Research story
 
-Phase 2 answers one question: **why is learning needed for manipulation, and how far does it get us?** Three methods are compared with the same seeds, tasks, and metrics:
+Phase 2 asks one question: **why is learning needed for manipulation, and how far does it get us?** Three methods are compared with the same seeds, tasks and metrics, and the difficulty sweep (lighting, camera shift, clutter, distractors, occlusion) is the evidence:
 
 | Method | Perception | Role |
 | --- | --- | --- |
-| Scripted expert | Privileged simulator state | Intended upper bound and demonstration teacher — 100% on single-cube and sorting (300 seeds each); see the [results table](research/scripted_experts/README.md#results) |
-| Classical vision + state machine | Camera only | What hand-engineered perception and control can do without cheating |
-| ACT (imitation learning) | Camera + proprioception | Does learning from pixels close the gap or extend beyond the classical limits? |
+| Scripted expert | Privileged simulator state | Upper bound and demonstration teacher ([results](research/scripted_experts/README.md#results)) |
+| Classical vision + state machine | Camera only | What hand-engineered perception and control can do ([findings](research/classical_control/FINDINGS.md)) |
+| ACT (imitation learning) | Camera + proprioception | Does learning from pixels close the gap? ([findings](research/imitation_learning/FINDINGS.md)) |
 
-All methods are evaluated on a difficulty sweep (lighting, camera shift, clutter, distractors, occlusion). The expected result is that the classical pipeline degrades as perception gets harder; the curves are the evidence, not the narrative.
+## Status
 
-## Current status
+Done, with focused tests: Phase 1 (capability-aware contracts, the SO-101 MuJoCo baseline and ROS2 bridge, FK/IK and safety validation, seeded domain randomization, the TurtleBot4 navigation baseline), the training bridge (observation/action specs, Gymnasium adapter, versioned datasets and checkpoints, shared evaluation reports), the classical vision baseline (100/100 nominal on seeds 0-99 on MuJoCo and Isaac, the difficulty sweep, missed-grasp detection with retry) and the Isaac Sim backend with sim-to-sim parity tiers 1 to 4. Numbers and causes are in the research FINDINGS; design is in [DECISIONS.md](docs/DECISIONS.md).
 
-**Phase 1 and the training bridge are complete. Phase 2 is the current focus.**
-`[x]` = deliverable exists with focused test coverage. `[ ]` = planned, missing, or partial.
+`[ ]` below marks planned, missing or partial work.
 
-```
-Phase 1 (done) -> Bridge (done) -> Phase 2: benchmark -> classical baseline -> ACT -> backend study -> v0.2 report
-                                                                                                          |
-                                                                       Phase 3 and 4: not in focus yet
-```
-
----
-
-## Phase 1: Foundation and ROS2 contract (complete)
-
-- [x] Capability-aware `Observation -> Action` contracts, robot registry, unit/frame validation, deterministic resets, seeded regression coverage.
-- [x] SO-101 MuJoCo baseline: scripted single-cube pick-and-place, 300/300
-      on seeds 0-299 (see the [results table](research/scripted_experts/README.md#results)).
-- [x] SO-101 ROS2 bridge: joint, gripper, camera, TF, teleoperation, `rclpy` acceptance coverage.
-- [x] SO-101 FK, Jacobian, numerical IK, Cartesian targeting, joint-limit and collision safety validation.
-- [x] Seeded domain randomization (physics, visuals, cameras, clutter) with deterministic baseline preserved.
-- [x] TurtleBot4 navigation baseline and ROS2/Nav2 path (maintained only).
-- [x] Phase 1 runs without Phase 2+ dependencies (LeRobot, VLA).
-
-## Training bridge (complete)
-
-- [x] Canonical `ObservationSpec` / `ActionSpec` schemas and robot-owned training contracts.
-- [x] Gymnasium adapter routed through the existing safety gate.
-- [x] Explicit SO-101 action layout shared by policies, recorder, replay, ROS2 conversion, and datasets.
-- [x] Versioned dataset metadata; checkpoint metadata with compatibility validation.
-- [x] Shared evaluation reports (success, collision, timeout, unsafe action, reward, held-out seeds).
-
----
-
-## Phase 2: Benchmark, baselines, and learning (current focus)
+## Phase 2: benchmark, baselines and learning
 
 ### 2.0 Task ladder and capability report
 
-Define what the SO-101 can do, with one fixed-seed evaluation per level.
-
 | Level | Task | Tests |
 | --- | --- | --- |
-| T0 | Single cube, fixed setup | Scripted 300/300 — done |
+| T0 | Single cube, fixed setup | Scripted 300/300, done |
 | T1 | Single cube, randomized pose / color / lighting / camera | Perception robustness |
 | T2 | Cube size variation | Gripper aperture limits |
 | T3 | Shape variation (cylinder, sphere, prism) | Grasp difficulty |
-| T4 | Multi-object sorting: 3 colored cubes into 3 bins, then scale toward 9 | Multi-step planning and perception |
+| T4 | Multi-object sorting: 3 colored cubes into 3 bins, then toward 9 | Multi-step planning and perception |
 | T5 (stretch) | Clutter, distractors, occlusion, stacking | Hard perception and contact |
 
-**Resolved finding (2026-09-21).** The scripted expert was far weaker than the
-historical `20/20` suggested (a 20-seed run scored 45% and 60% on two seed
-ranges), which is why the ≥100-seed rule below exists. Three bugs were fixed;
-the root causes and reverted experiments are in
-[research/scripted_experts/FINDINGS.md](research/scripted_experts/FINDINGS.md)
-and current rates are in the
-[results table](research/scripted_experts/README.md#results).
+Sorting (3 cubes) already reaches 300/300 with the scripted expert. Evaluate on **at least 100 seeds** (20 cannot resolve reliability).
 
-Deliverables:
-
-- [x] Diagnose the scripted-expert timeouts and restore a high single-cube success rate.
-- [x] Diagnose and reduce the sorting transfer-slip and neighbor-clutter failures (now 300/300 on seeds 0-299).
 - [ ] Task definitions and scripted experts for T1-T4 (T5 stretch), each with fixed seeds.
 - [ ] `scripts/capability_report.py`: reachable workspace, min/max graspable size, placement repeatability.
-- [ ] Trajectory-quality metrics for the scripted expert: completion time, path length, jerk, joint-limit margin, peak speed.
-- [ ] Compare the current scripted trajectory with a smoother variant (for example minimum-jerk). Smooth, consistent demonstrations matter for imitation learning; "optimal" is not required.
+- [ ] Trajectory-quality metrics for the scripted expert (completion time, path length, jerk, joint-limit margin, peak speed) and a smoother variant such as minimum-jerk.
 
-Definition of done:
-
-1. The scripted expert reaches about 100% on T0-T4 (lower confidence bound reported). If it cannot, the task or the robot limit is documented as a finding.
-2. T0 and T1 are re-evaluated on **at least 100 seeds**, not 20.
-3. The capability report answers what sizes, shapes, and positions the SO-101 can handle in simulation.
+Done when: the scripted expert reaches about 100% on T0-T4 (lower confidence bound reported, or the limit documented), T0 and T1 are re-evaluated on at least 100 seeds, and the capability report says what sizes, shapes and positions the SO-101 can handle.
 
 ### 2A Classical vision baseline (required)
 
-A camera-only state-machine pipeline (color segmentation or fiducials, pose estimate, approach, grasp, place), all actions passing through the safety layer. This is the "before learning" reference.
+A camera-only state machine, all actions through the safety layer: the "before learning" reference ([README](research/classical_control/README.md), [FINDINGS](research/classical_control/FINDINGS.md)).
 
-- [x] Perception module without simulator ground truth (`ColorBlobDetector` in `research/classical_control/so101_visual_servo.py`; reads camera calibration only, never object pose).
-- [x] State machine covering approach, grasp, lift, place, and recovery on failure (`SO101VisualServoPolicy`, registered as the `visual_servo` policy).
-- [x] All actions pass the safety layer: `SafetyController` now gates the direct-MuJoCo path inside `DirectMuJoCoAdapter`, not only the ROS2 and Gymnasium paths.
-- [ ] Diagnose the `visual_servo` timeouts (95/100 on seeds 0-99: seeds 13, 15, 28, 64, 76) that appeared after the fingertip pad refit; the visual-servo CI check (20 seeds, all must succeed) is expected to fail until this is fixed.
-- [ ] Report position error, settling time, and categorized failure reasons.
-- [ ] Give it a fair tuning effort; it must not be a strawman.
+- [ ] A fair tuning effort so it is not a strawman: the clutter failures remain and need a grasp check, not a threshold.
+- [ ] Recover from a missed grasp (retrying from the front or wrist estimate recovered 2 of 41 and 3 of 28 episodes; not tried: approach from the other side, change the pick offset, move the box).
 
-Definition of done: evaluated on T0-T4 and the difficulty sweep with the shared protocol, with its failure modes documented.
+Done when: evaluated on T0-T4 and the difficulty sweep with the shared protocol, failure modes documented.
 
 ### 2B Imitation learning with ACT
 
-Train from scripted-expert demonstrations. The configuration must fit a single 6 GB laptop GPU.
+Train from scripted-expert demonstrations on a single 6 GB laptop GPU. One checkpoint (100 demos, 30k steps) already scores 92/100 on MuJoCo seeds 1000-1099 ([FINDINGS](research/imitation_learning/FINDINGS.md)).
 
 - [ ] Fix and document the training configuration (image size, chunk size, batch size, precision).
-- [ ] `scripts/collect_demos.py`: export standard `LeRobotDataset` format (currently a LeRobot-shaped `.npz`, partial).
-- [ ] `research/imitation_learning/train_act.py`: fixed seeds, logged loss curves, checkpoint metadata.
-- [ ] `scripts/eval_policy.py`: closed-loop held-out evaluation with success, collision, timeout, and unsafe-action counts.
-- [ ] At least two ablations (for example number of demonstrations, camera views, randomization on/off).
+- [ ] `collect_demos.py` exports the standard `LeRobotDataset` format (currently a LeRobot-shaped `.npz`).
+- [ ] Reproducible training (fixed seeds, logged loss curves, checkpoint metadata) and at least two ablations (number of demonstrations, camera views, randomization on/off).
 
-Definition of done: 50-100 demonstrations per task, reproducible training, evaluation on the shared protocol for T0-T4, and categorized failure analysis.
+Done when: 50-100 demonstrations per task, reproducible training, evaluation on the shared protocol for T0-T4, categorized failure analysis.
 
 ### 2C Backend comparison study
 
-Run the same checkpoint through direct MuJoCo and through the ROS2 bridge to measure the effect of the integration layer, with no hardware needed.
+Run the same checkpoint through direct MuJoCo and the ROS2 bridge to measure the integration layer, no hardware needed.
 
-- [ ] ROS2-in-the-loop evaluation path in `scripts/eval_policy.py`.
-- [ ] Metrics per backend: success, end-to-end latency, effective control rate, action deviation, unsafe-action rejections.
-- [ ] Optional controlled perturbations: added latency, reduced control rate, camera noise.
+- [ ] ROS2-in-the-loop evaluation path in `eval_policy.py`.
+- [ ] Per backend: success, end-to-end latency, effective control rate, action deviation, unsafe-action rejections; optional perturbations (latency, reduced rate, camera noise).
 
-Definition of done: identical seeds on both backends, a results table, and the main causes of any gap identified.
+### 2E MuJoCo and Isaac Sim comparison
+
+Local RTX GPU only, never installed by CI. Design: [DECISIONS.md D](docs/DECISIONS.md#d-isaac-sim-is-an-optional-peer-engine); measurements: [FINDINGS](research/classical_control/FINDINGS.md). `visual_servo` matches 100/100 on both engines; ACT scores 92/100 on MuJoCo and 54/100 on Isaac.
+
+- [ ] Close the ACT sim-to-sim gap. The cameras differ strongly (mean absolute pixel difference 56 front, 47 wrist) while the cube position agrees, which is the leading suspect and is untested; next try colour and lighting augmentation in training.
 
 ### 2D Report and release (v0.2)
 
 - [ ] 2-4 page report in `docs/`: setup, task ladder, three-method comparison, difficulty sweep, ablations, backend comparison, failure analysis, limitations.
-- [ ] Tag `v0.2` with the exact configs, seeds, and checkpoints to reproduce every reported number.
+- [ ] Tag `v0.2` with the exact configs, seeds and checkpoints to reproduce every reported number.
 
 ### Evaluation protocol (shared by all methods)
 
-- Held-out seeds: at least 50 per task and condition (at least 100 for T0/T1).
-- Report success rate with a 95% confidence interval (for example Wilson).
-- Metrics: success, collision, timeout, unsafe action, completion time.
-- Difficulty axes: lighting, camera shift, clutter, distractors, occlusion.
+Held-out seeds: at least 50 per task and condition (at least 100 for T0/T1). Success rate with a 95% Wilson confidence interval. Metrics: success, collision, timeout, unsafe action, completion time. Difficulty axes: lighting, camera shift, clutter, distractors, occlusion. Optional after the report: state-based deep RL (PPO or SAC).
 
-### Optional after the report
+## Phase 3 and 4: not in focus yet
 
-- State-based deep RL (PPO or SAC) as a further comparison. Vision-based RL only if the state-based version works.
-
----
-
-## Phase 3 and Phase 4: not in focus yet
-
-**Not in focus yet.** Listed only so the architecture keeps room for them.
-
-- **Phase 3, language and planning:** only the planner *contract* and its scripted backend remain (`physai.planner`, `scripts/plan_task.py`). The SmolVLM and Claude backends were removed in the 2026-09-20 cleanup — they were untested, unrunnable without absent dependencies, and out of focus; git history has them. Speech input, plan schemas, error-recovery loops, and a ROS2 VLM node are not planned.
-- **Phase 4, scale and generalization:** VLA fine-tuning, parallel data generation, cross-simulator portability (for example Isaac Lab), a real SO-101 backend, and additional embodiments. These need compute and hardware beyond the current setup.
+Listed only so the architecture keeps room for them. **Phase 3, language and planning:** only the planner contract and its scripted backend remain (`physai.planner`, `scripts/plan_task.py`); model-backed planners are not planned. **Phase 4, scale and generalization:** VLA fine-tuning, parallel data generation, a real SO-101 backend and additional embodiments.

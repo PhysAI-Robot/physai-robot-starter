@@ -8,7 +8,7 @@ from .contracts import (
     so101_observation_schema,
     so101_training_contract,
 )
-from .env import HOME_QPOS, EnvConfig, SO101Env
+from .mujoco_env import HOME_QPOS, EnvConfig, SO101Env
 from .kinematics import TOP_DOWN, ArmKinematics, IKResult, top_down_quat
 
 __all__ = [

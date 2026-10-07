@@ -12,4 +12,4 @@ Direct MuJoCo and ROS2-backed execution share the same application contracts;
 ROS2 message conversion remains at the bridge boundary.
 """
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"

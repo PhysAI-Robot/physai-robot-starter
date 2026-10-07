@@ -11,6 +11,14 @@ if TYPE_CHECKING:
     from ..robots.base import RobotSpec
 
 
+class SafetyViolation(ValueError):
+    """An action the safety gate refused: stale, out of limits, or too large a step.
+
+    A `ValueError` subclass so existing handlers keep working; an evaluation
+    catches this one to record an unsafe action instead of aborting the run.
+    """
+
+
 class SafetyController:
     """Validate commands before they reach simulation or hardware.
 
@@ -47,9 +55,9 @@ class SafetyController:
         if action.stamp is not None:
             age = current_time - action.stamp
             if age < -self.future_tolerance:
-                raise ValueError("action timestamp is too far in the future")
+                raise SafetyViolation("action timestamp is too far in the future")
             if self.max_action_age is not None and age > self.max_action_age:
-                raise ValueError("action is stale")
+                raise SafetyViolation("action is stale")
 
         if action.mode != "joint_position":
             return action
@@ -64,7 +72,7 @@ class SafetyController:
         for index, name in enumerate(names):
             limit = self.robot_spec.joint_limits.get(name)
             if limit is not None and not limit[0] <= values[index] <= limit[1]:
-                raise ValueError(
+                raise SafetyViolation(
                     f"action for joint {name!r} is outside limits {limit}: "
                     f"{values[index]}"
                 )
@@ -73,7 +81,7 @@ class SafetyController:
                 if max_delta is not None:
                     current = observation.joint_state.get(name)
                     if abs(values[index] - current) > max_delta:
-                        raise ValueError(
+                        raise SafetyViolation(
                             f"action for joint {name!r} exceeds max step {max_delta}"
                         )
         return action

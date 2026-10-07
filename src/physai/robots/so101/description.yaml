@@ -1,0 +1,152 @@
+# Sim-neutral SO-101 robot data, loaded by `physai.robots.description` and
+# consumed by each simulator's own scene builder (today, MuJoCo via
+# `sim.mujoco.scenes.common.apply_description`). See that module's docstring for the
+# frame/unit conventions (parent-link-relative poses, wxyz quaternions,
+# meters, radians).
+#
+# `urdf`/`mjcf` are filenames inside the fetched `assets/so101/` directory
+# (see `scripts/fetch_assets.py`), not paths — the repository root is not
+# known here. `robots/so101/scene.py` resolves them and falls back to the
+# uncalibrated-camera MJCF when the camera variant has not been fetched.
+urdf: so101_new_calib_camera.urdf
+mjcf: so101_new_calib_camera.xml
+ee_site: gripperframe
+
+frames:
+  # A zero-offset site so a restricted-joint jog IK can target the wrist
+  # rather than the gripper tip. Added here (not hand-edited into the fetched
+  # MJCF) because assets/ is downloaded and not committed to the repo.
+  - name: wristframe
+    parent_link: wrist
+    pos: [0.0, 0.0, 0.0]
+    quat: [1.0, 0.0, 0.0, 0.0]
+
+cameras:
+  # Two mounts for the same logical wrist camera: the "camera" MJCF variant
+  # ships a premade `wrist_camera` mount body: the sensor only needs a small
+  # offset to clear the physical lens housing (placing it at the body origin
+  # makes the housing occlude the image as a large black spot) and an axis
+  # flip (MuJoCo camera sensors look along local -z; the mount's +z is the
+  # optical direction). Only one of `wrist_camera`/`gripper` exists in a
+  # given loaded model, so the scene builder adds whichever camera's
+  # parent_link it finds and skips the other.
+  - name: wrist
+    parent_link: wrist_camera
+    pos: [0.0, 0.0, 0.025]
+    quat: [0.0, 1.0, 0.0, 0.0]
+    fovy_deg: 62
+    width: 320
+    height: 240
+  # Fallback for the plain MJCF variant (no premade camera body): mounted
+  # directly on the static pad's parent link, fitted by eye to frame the
+  # jaws and the object below them.
+  - name: wrist
+    parent_link: gripper
+    pos: [0.0, -0.07, 0.05]
+    quat: [0.9238795325, 0.3826834324, 0.0, 0.0]
+    fovy_deg: 62
+    width: 320
+    height: 240
+
+contact_pads:
+  # Collision-only proxies for the fingertip meshes, fitted to the SO-101
+  # jaws: each pad's outer face is flush with the tip's inner face, its
+  # 12 x 12 mm footprint is the bounding square of the tapered tip face and
+  # sits on the finger centre line, and it is 6 mm thick so a squeezed cube
+  # cannot pass through it into the finger. Only the last ~6 mm of each
+  # fingertip is a flat face (behind it the lattice is recessed), so the
+  # pads are fitted to that zone. Narrower pads (8-10 mm) fit the tip more
+  # tightly but make `visual_servo` miss the cube on some seeds: it grasps up
+  # to ~15 mm off the pinch centre. The quaternions are baked FK output (see
+  # `derivation` below), not hand-picked: they express the pad's orientation
+  # in its parent link's own frame at the alignment angle where the pad faces
+  # are one cube width apart.
+  - name: pad_static
+    parent_link: gripper
+    pos: [-0.0109, -0.0002, -0.0979]
+    quat: [0.7071067812, 0.0, 0.7071067812, -0.0]
+    half_size: [0.006, 0.006, 0.003]
+    friction: [2.0, 0.02, 0.001]
+    disable_parent_mesh_collision: true
+  - name: pad_moving
+    parent_link: moving_jaw_so101_v1
+    pos: [-0.0093, -0.0753, 0.0190]
+    quat: [-0.493660464, 0.493660464, -0.5062601568, 0.5062601568]
+    half_size: [0.006, 0.006, 0.003]
+    friction: [2.0, 0.02, 0.001]
+    disable_parent_mesh_collision: true
+
+# Drive characteristics transcribed from the fetched MJCF's `sts3215`
+# actuator class at the pinned commit (see `scripts/fetch_assets.py`).
+# MuJoCo reads these from the fetched file directly and ignores this list;
+# it exists for a simulator that does not (a URDF has no drive gains).
+actuators:
+  - joint: shoulder_pan
+    stiffness: 998.22
+    damping: 2.731
+    force_limit: 3.35
+    ctrl_range: [-1.91986, 1.91986]
+  - joint: shoulder_lift
+    stiffness: 998.22
+    damping: 2.731
+    force_limit: 3.35
+    ctrl_range: [-1.74533, 1.74533]
+  - joint: elbow_flex
+    stiffness: 998.22
+    damping: 2.731
+    force_limit: 3.35
+    ctrl_range: [-1.69, 1.69]
+  - joint: wrist_flex
+    stiffness: 998.22
+    damping: 2.731
+    force_limit: 3.35
+    ctrl_range: [-1.65806, 1.65806]
+  - joint: wrist_roll
+    stiffness: 998.22
+    damping: 2.731
+    force_limit: 3.35
+    ctrl_range: [-2.74385, 2.84121]
+  - joint: gripper
+    stiffness: 998.22
+    damping: 2.731
+    force_limit: 3.35
+    ctrl_range: [-0.17453, 1.74533]
+
+sim_overrides:
+  mujoco:
+    # MuJoCo models friction as a soft constraint, so a held object under a
+    # constant load (a cube's own weight, ~0.3 N, against ~4 N of squeeze)
+    # creeps out of the fingers at about 1 mm/s even though the friction
+    # force is a small fraction of its limit; a cube held for ~15 s falls out
+    # regardless of grip force. The no-slip post-solver removes that creep
+    # (0.0 mm over 30 s) for ~30% more solver time.
+    noslip_iterations: 5
+    pad:
+      # The pads render in the web viewer (a group-3 box drawn by its rgba)
+      # so their fit can be checked by eye; MuJoCo camera renders skip
+      # group 3, so dataset images are unaffected. Alpha 0 hides it without
+      # touching contact behavior. The solref time constant is already at
+      # the stability floor (2 x timestep): a stiffer direct solref throws
+      # the cube out of the grasp or blows up the arm at this timestep. The
+      # high impedance (solimp) is the safe remaining lever.
+      rgba: [0.95, 0.6, 0.1, 0.6]
+      condim: 4
+      solimp: [0.99, 0.999, 0.001, 0.5, 2.0]
+      solref: [0.004, 1.0]
+      group: 3
+
+# Reference values the contact-pad fit above was derived at (not consumed by
+# any scene builder): `pad_align_gripper_q` is the gripper joint angle at
+# which the pad faces are one cube width (28 mm) apart at the pad centres,
+# and `moving_pad_tilt` is the rotation of the moving pad about its lateral
+# axis, on top of being parallel to the static pad at that angle — the
+# moving finger's face is not parallel to the static one (the fingers form a
+# V, about 8 degrees apart), so this lays the pad along that face; positive
+# raises the face toward the tip.
+# `tests/core/integration/test_so101_grasp_pads.py` re-derives the baked
+# quaternions above from these numbers via forward kinematics so the fit
+# stays traceable when it is re-tuned.
+derivation:
+  gripper_joint: gripper
+  pad_align_gripper_q: 0.16
+  moving_pad_tilt: 0.1348

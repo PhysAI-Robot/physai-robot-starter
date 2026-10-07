@@ -13,10 +13,10 @@ Keys (press inside the viewer window):
 
 from __future__ import annotations
 
-import argparse
 
 import _bootstrap  # noqa: F401
 import numpy as np
+from _cli import new_parser
 from _common_args import add_seed
 
 from physai.contracts import GripperCommand, Twist, Vector3
@@ -34,7 +34,7 @@ KEYMAP = {
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
+    ap = new_parser(__doc__)
     ap.add_argument("--speed", type=float, default=0.06, help="m/s per key press")
     add_seed(ap)
     args = ap.parse_args()

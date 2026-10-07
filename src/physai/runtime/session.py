@@ -13,14 +13,19 @@ from dataclasses import dataclass, field, fields
 from typing import Any
 
 from ..config.manifest import SessionManifest, SessionRobotConfig
-from ..robots.registry import create_env_config, robot_kind, shared_attach
-from ..sim.scenes import default_scene_for
-from ..sim.world import RobotInstanceConfig, SharedWorld
+from ..robots.registry import (
+    create_env_config,
+    robot_kind,
+    scene_defaults,
+    shared_attach,
+)
+from ..sim.mujoco.scenes import create_scene, default_scene_for
+from ..sim.mujoco.world import RobotInstanceConfig, SharedWorld
 from .composition import RuntimeComposition, create_runtime
 
 # Settings the `simulation` block owns; a robot's own `config` must not repeat
 # them, so each default has exactly one source.
-_SIMULATION_OWNED = ("seed", "domain_randomization")
+_SIMULATION_OWNED = ("seed", "domain_randomization", "camera_resolution")
 
 
 @dataclass
@@ -101,8 +106,9 @@ def _create_single_session(
     )
     kwargs: dict[str, Any] = {
         "robot_kwargs": fields_,
+        "simulator": manifest.simulator,
         "scene_name": scene_name,
-        "scene_kwargs": dict(manifest.scene.overrides),
+        "scene_kwargs": _scene_kwargs(manifest),
         "task_name": task_name,
         "task_kwargs": {**manifest.task_kwargs, **robot.task_kwargs},
         "task_success_hold_steps": manifest.success_hold_steps,
@@ -115,6 +121,21 @@ def _create_single_session(
         runtime=create_runtime(robot.robot, **kwargs),
         host_renders_cameras=host_renders_cameras,
     )
+
+
+def robot_env_config(manifest: SessionManifest) -> Any:
+    """The environment config a one-robot manifest describes, for entry points that
+    build the environment themselves (the ROS2 driver) instead of `create_session`."""
+    robot = manifest.robots[0]
+    fields_, _ = _robot_fields(manifest, robot, render=None, host_driven=False)
+    scene_name = manifest.scene.name or default_scene_for(
+        robot_kind(robot.robot), manifest.task_for(robot)
+    )
+    if scene_name is not None:
+        fields_["scene"] = create_scene(
+            scene_name, **{**scene_defaults(robot.robot), **_scene_kwargs(manifest)}
+        )
+    return create_env_config(robot.robot, simulator=manifest.simulator, **fields_)
 
 
 def _create_world_session(manifest: SessionManifest) -> Session:
@@ -149,6 +170,18 @@ def _create_world_session(manifest: SessionManifest) -> Session:
     return Session(manifest, world=world, instances=instances)
 
 
+def _scene_kwargs(manifest: SessionManifest) -> dict[str, Any]:
+    """The scene's overrides plus the simulation block's camera resolution."""
+    if "camera_resolution" in manifest.scene.overrides:
+        raise ValueError(
+            "scene overrides set camera_resolution; set it under 'simulation' instead"
+        )
+    return {
+        **manifest.scene.overrides,
+        "camera_resolution": manifest.simulation.camera_resolution,
+    }
+
+
 def _robot_fields(
     manifest: SessionManifest,
     robot: SessionRobotConfig,
@@ -163,19 +196,28 @@ def _robot_fields(
     never have to know which robot defines what. A robot that renders inline
     and can be told to stop (`camera_stride`) hands its cameras to the host.
     """
+    if "simulator" in robot.config:
+        raise ValueError(
+            f"robot {robot.id!r} config sets 'simulator'; set it at the "
+            "manifest's top level instead"
+        )
     duplicated = [key for key in _SIMULATION_OWNED if key in robot.config]
     if duplicated:
         raise ValueError(
             f"robot {robot.id!r} config sets {', '.join(duplicated)}; "
             "set it under 'simulation' instead"
         )
-    accepted = {item.name for item in fields(create_env_config(robot.robot))}
+    accepted = {
+        item.name
+        for item in fields(create_env_config(robot.robot, simulator=manifest.simulator))
+    }
     simulation = manifest.simulation
     result = {
         key: value
         for key, value in {
             "seed": simulation.seed,
             "domain_randomization": simulation.domain_randomization,
+            "camera_resolution": simulation.camera_resolution,
         }.items()
         if key in accepted
     }

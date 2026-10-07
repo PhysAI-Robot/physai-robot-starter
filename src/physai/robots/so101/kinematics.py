@@ -105,6 +105,31 @@ class ArmKinematics:
             offset, dtype=np.float64
         )
 
+    def qpos_to_site_pose(self, q) -> tuple[np.ndarray, np.ndarray]:
+        """Site position and rotation matrix for a joint-position array.
+
+        Uses the same scratch `MjData` as `ik()` purely as an FK workspace —
+        no live simulator state is read. Lets a non-MuJoCo simulator (Isaac
+        Sim) that only has observed joint positions, not a MuJoCo `MjData`,
+        still ask "where would the gripper be at this q" without depending
+        on `fk`/`tool_pose`/`pinch_center`'s live-`data` signatures.
+        """
+        data = self._scratch
+        mujoco.mj_resetData(self.model, data)
+        data.qpos[self.qpos_adr] = np.asarray(q, dtype=np.float64).reshape(
+            len(self.joint_names)
+        )
+        mujoco.mj_kinematics(self.model, data)
+        return (
+            data.site_xpos[self.site_id].copy(),
+            data.site_xmat[self.site_id].reshape(3, 3).copy(),
+        )
+
+    def pinch_center_from_qpos(self, q, offset=PINCH_OFFSET) -> np.ndarray:
+        """`pinch_center()`, but from a joint-position array instead of a live `MjData`."""
+        pos, rotation = self.qpos_to_site_pose(q)
+        return pos + rotation @ np.asarray(offset, dtype=np.float64)
+
     def site_jacobian(self, data: mujoco.MjData) -> np.ndarray:
         jacp = np.zeros((3, self.model.nv))
         jacr = np.zeros((3, self.model.nv))

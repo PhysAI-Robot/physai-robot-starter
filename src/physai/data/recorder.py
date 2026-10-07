@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -24,6 +25,7 @@ class EpisodeBuffer:
     done: list = field(default_factory=list)
     phase: list = field(default_factory=list)
     environment_state: list = field(default_factory=list)
+    extras: dict[str, dict[int, Any]] = field(default_factory=dict)
 
     def __len__(self) -> int:
         return len(self.state)
@@ -88,7 +90,7 @@ class EpisodeRecorder:
         self.scene_config = scene_config or {}
         self.training_contract = training_contract
         # When set, every step must carry the full simulator qpos (see
-        # docs/adr/0009); it lets a viewer restore the exact scene, including
+        # docs/DECISIONS.md, E); it lets a viewer restore the exact scene, including
         # objects that `observation.state` (robot joints only) cannot describe.
         self.environment_state_dim = environment_state_dim
         self.action_encoder = (
@@ -106,6 +108,7 @@ class EpisodeRecorder:
         self._action_names: tuple[str, ...] | None = None
         self.episodes: list[dict] = []
         self._buf: EpisodeBuffer | None = None
+        self.extras_features: dict[str, dict] = {}
 
     def start_episode(self) -> None:
         self._buf = EpisodeBuffer()
@@ -119,6 +122,7 @@ class EpisodeRecorder:
         phase: str = "",
         gripper_joint: float | None = None,
         environment_state: np.ndarray | None = None,
+        extras: Mapping[str, Any] | None = None,
     ) -> None:
         if self._buf is None:
             raise RuntimeError("call start_episode() first")
@@ -152,18 +156,24 @@ class EpisodeRecorder:
             self._buf.environment_state.append(
                 np.asarray(environment_state, dtype=np.float64).copy()
             )
+        step = len(self._buf) - 1
+        for key, value in (extras or {}).items():
+            self._buf.extras.setdefault(key, {})[step] = value
 
     def discard_episode(self) -> None:
         """Drop the episode in progress without writing a file."""
         self._buf = None
 
-    def end_episode(self, success: bool, extra: dict | None = None) -> Path | None:
+    def end_episode(
+        self, success: bool, extra: dict | None = None, path: Path | None = None
+    ) -> Path | None:
+        """Write the episode; `path` overrides the `episode_NNNNN.npz` name."""
         if self._buf is None or len(self._buf) == 0:
             self._buf = None
             return None
 
         idx = len(self.episodes)
-        path = self.root / f"episode_{idx:05d}.npz"
+        path = path or self.root / f"episode_{idx:05d}.npz"
         arrays = {
             "observation.state": np.stack(self._buf.state),
             "action": np.stack(self._buf.action),
@@ -177,6 +187,13 @@ class EpisodeRecorder:
             )
         for name, frames in self._buf.images.items():
             arrays[f"observation.images.{name}"] = np.stack(frames)
+        for key, values in self._buf.extras.items():
+            arrays[f"extras.{key}"] = _stack_sparse(values, len(self._buf))
+        self.extras_features = {
+            name: {"dtype": str(array.dtype), "shape": list(array.shape[1:])}
+            for name, array in arrays.items()
+            if name.startswith("extras.")
+        }
         np.savez_compressed(path, **arrays)
 
         self.episodes.append(
@@ -193,7 +210,7 @@ class EpisodeRecorder:
         self._buf = None
         return path
 
-    def write_meta(self) -> Path:
+    def write_meta(self, path: Path | None = None) -> Path:
         n_ok = sum(e["success"] for e in self.episodes)
         state_names = list(self._state_names or ())
         action_names = list(self._action_names or ())
@@ -228,6 +245,7 @@ class EpisodeRecorder:
                 "shape": [self.environment_state_dim],
                 "description": "full simulator qpos",
             }
+        features.update(self.extras_features)
         metadata = DatasetMetadata(
             robot=self.robot_type,
             task=self.task,
@@ -264,11 +282,22 @@ class EpisodeRecorder:
             "features": features,
             "episodes": self.episodes,
         }
-        path = self.root / "meta.json"
+        path = path or self.root / "meta.json"
         path.write_text(
             json.dumps(meta, indent=2, default=_json_default), encoding="utf-8"
         )
         return path
+
+
+def _stack_sparse(values: dict[int, Any], length: int) -> np.ndarray:
+    """One array over `length` steps; steps without a value get NaN (or "")."""
+    first = np.asarray(next(iter(values.values())))
+    if first.dtype.kind in "US":
+        return np.asarray([str(values.get(step, "")) for step in range(length)])
+    fill = np.full(first.shape, np.nan, dtype=np.float64)
+    return np.stack(
+        [np.asarray(values.get(step, fill), dtype=np.float64) for step in range(length)]
+    )
 
 
 def _json_default(value: object) -> str:

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import argparse
+
+from _cli import new_parser
 import math
 import os
 import signal
@@ -59,10 +60,25 @@ def _wait_for_scan(timeout: float) -> float:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--startup-timeout", type=float, default=60.0)
-    parser.add_argument("--goal-timeout", type=float, default=150.0)
-    parser.add_argument("--max-position-error", type=float, default=0.35)
+    parser = new_parser(__doc__)
+    parser.add_argument(
+        "--startup-timeout",
+        type=float,
+        default=60.0,
+        help="seconds to wait for Nav2 and /scan to come up",
+    )
+    parser.add_argument(
+        "--goal-timeout",
+        type=float,
+        default=150.0,
+        help="seconds the robot has to reach the goal",
+    )
+    parser.add_argument(
+        "--max-position-error",
+        type=float,
+        default=0.35,
+        help="metres from the goal that still count as arrived",
+    )
     args = parser.parse_args()
 
     launch_command = [

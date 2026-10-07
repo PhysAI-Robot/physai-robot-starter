@@ -4,9 +4,7 @@ backend, and viewer options for a run.
 A single-robot run is just a manifest with one entry in ``robots``; a
 ``world`` block turns a session into one shared MuJoCo world with N robots.
 `physai.runtime.create_session` builds a session from a manifest, and
-`physai.config.compat` converts the older `configs/tasks/<robot>/*.yaml` and
-`configs/worlds/*.yaml` files into one (see `physai.config.legacy` for their
-loaders).
+`physai.config.compat` turns a bare robot name into one.
 
 Schema (YAML)::
 
@@ -18,8 +16,18 @@ Schema (YAML)::
         enabled: false
 
     scene:
-      name: pick_place_minimal       # optional; must be a registered scene
+      name: single_cube_fixed_place       # optional; must be a registered scene
       overrides: {}                  # optional kwargs to the scene factory
+
+    simulator: mujoco                # optional; default "mujoco". Which
+                                      # physics engine builds every robot in
+                                      # this session (a robot's own `config`
+                                      # must not repeat it; see validation 10
+                                      # below). Not every robot supports every
+                                      # engine (validation 11); a non-"mujoco"
+                                      # engine does not yet support `world`,
+                                      # `backend: ros2_sim`, or a viewer
+                                      # (validation 12).
 
     backend: direct                  # direct | ros2_sim | ros2_real
 
@@ -36,12 +44,12 @@ Schema (YAML)::
         pose:
           position: [0.0, 0.0, 0.0]
           quaternion: [1.0, 0.0, 0.0, 0.0]
-        task: pick_place             # optional per-instance override
+        task: single_cube_fixed_place             # optional per-instance override
         task_kwargs: {}
         policy: scripted             # optional; default is "idle" if omitted
         policy_kwargs: {}
 
-    task: pick_place                 # optional global default task
+    task: single_cube_fixed_place                 # optional global default task
     task_kwargs: {}
     success_hold_steps: 10           # optional; steps a success must hold
     policy: idle                     # optional global default policy
@@ -71,6 +79,15 @@ Validation performed at load time (see `load_manifest`):
 8. ``viewer.mode`` must be one of ``none``, ``native``, ``web``, ``both``.
 9. Several robots share one world (default ``world`` settings unless the
    block sets them), and every robot in a world names its ``model``.
+10. A robot's ``config`` must not set ``simulator``; the manifest's top-level
+    ``simulator`` is the only source (checked at session composition, the
+    same way a robot's ``config`` must not repeat the ``simulation`` block's
+    ``seed``/``domain_randomization``).
+11. ``simulator`` must be one every robot in the session supports (checked
+    through the robot registry, without constructing any robot).
+12. A non-``"mujoco"`` ``simulator`` rejects a ``world`` block, ``backend:
+    ros2_sim``, and a ``viewer.mode`` other than ``none`` — none of those
+    paths support a second engine yet.
 """
 
 from __future__ import annotations
@@ -81,16 +98,74 @@ from typing import Any
 
 import yaml
 
+from ..contracts import DEFAULT_CAMERA_RESOLUTION, parse_camera_resolution
 from ..policy.registry import available_policies
-from ..robots.registry import available_robots, robot_kind
-from ..sim.scenes.common import REPO_ROOT
-from ..sim.scenes.registry import get_scene_definition
+from ..robots.registry import available_robots, available_simulators, robot_kind
+from ..sim.mujoco.domain_randomization import DomainRandomizationConfig
+from ..sim.mujoco.scenes.common import REPO_ROOT
+from ..sim.mujoco.scenes.registry import get_scene_definition
 from ..tasks.registry import available_tasks
-from .legacy import SimulationConfig, _parse_simulation_config
 
 SCHEMA_VERSION = 1
 _BACKENDS = ("direct", "ros2_sim", "ros2_real")
 _VIEWER_MODES = ("none", "native", "web", "both")
+
+
+@dataclass(frozen=True)
+class SimulationConfig:
+    """Settings shared by robot environments and simulation entry points."""
+
+    seed: int = 0
+    domain_randomization: DomainRandomizationConfig = field(
+        default_factory=DomainRandomizationConfig
+    )
+    camera_resolution: str = DEFAULT_CAMERA_RESOLUTION
+
+
+def _parse_simulation_config(
+    data: dict[str, Any],
+    source: Path | str,
+) -> SimulationConfig:
+    seed = data.get("seed", 0)
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise ValueError(  # noqa: TRY004
+            f"{source}: simulation seed must be an integer"
+        )
+    randomization_data = data.get("domain_randomization", {})
+    if not isinstance(randomization_data, dict):
+        raise ValueError(  # noqa: TRY004
+            f"{source}: domain_randomization must be a mapping"
+        )
+    enabled = randomization_data.get("enabled", False)
+    kwargs: dict[str, Any] = {"enabled": enabled}
+    for key in (
+        "friction_scale",
+        "mass_scale",
+        "lighting_scale",
+        "clutter_x_range",
+        "clutter_y_range",
+    ):
+        if key in randomization_data:
+            value = randomization_data[key]
+            if not isinstance(value, (list, tuple)) or len(value) != 2:
+                raise ValueError(f"{source}: domain_randomization.{key} must be a pair")
+            kwargs[key] = tuple(float(item) for item in value)
+    if "camera_position_jitter" in randomization_data:
+        kwargs["camera_position_jitter"] = float(
+            randomization_data["camera_position_jitter"]
+        )
+    if "clutter_clearance" in randomization_data:
+        kwargs["clutter_clearance"] = float(randomization_data["clutter_clearance"])
+    resolution = data.get("camera_resolution", DEFAULT_CAMERA_RESOLUTION)
+    try:
+        parse_camera_resolution(resolution)
+    except (ValueError, AttributeError) as exc:
+        raise ValueError(f"{source}: simulation {exc}") from exc
+    return SimulationConfig(
+        seed=seed,
+        domain_randomization=DomainRandomizationConfig(**kwargs),
+        camera_resolution=resolution,
+    )
 
 
 @dataclass(frozen=True)
@@ -145,6 +220,7 @@ class SessionManifest:
     schema_version: int
     robots: tuple[SessionRobotConfig, ...]
     backend: str = "direct"
+    simulator: str = "mujoco"
     scene: SessionSceneConfig = field(default_factory=SessionSceneConfig)
     task: str | None = None
     task_kwargs: dict[str, Any] = field(default_factory=dict)
@@ -195,6 +271,10 @@ def parse_manifest(data: Any, config_path: Path) -> SessionManifest:
             "backend='ros2_real' is not yet implemented; simulation only for "
             "now (see ROADMAP.md)"
         )
+
+    simulator = data.get("simulator", "mujoco")
+    if not isinstance(simulator, str) or not simulator:
+        raise ValueError(f"{config_path}: manifest field 'simulator' must be a string")
 
     scene_data = data.get("scene") or {}
     if not isinstance(scene_data, dict):
@@ -292,6 +372,7 @@ def parse_manifest(data: Any, config_path: Path) -> SessionManifest:
         schema_version=schema_version,
         robots=tuple(robots),
         backend=backend,
+        simulator=simulator,
         scene=scene,
         task=task,
         task_kwargs=dict(data.get("task_kwargs", {})),
@@ -301,8 +382,40 @@ def parse_manifest(data: Any, config_path: Path) -> SessionManifest:
         simulation=simulation,
         viewer=viewer,
     )
-    _validate_names_and_compatibility(manifest, config_path)
+    validate_manifest(manifest, config_path)
     return manifest
+
+
+def validate_manifest(manifest: SessionManifest, source: Path) -> None:
+    """Re-run every load-time check against an already-built manifest.
+
+    `parse_manifest` calls this once; `physai.config.compat.with_overrides`
+    calls it again after applying a command-line override (for example
+    `--sim`) that a bare `dataclasses.replace` would not otherwise recheck
+    against the robot registry or the other manifest fields.
+    """
+    _validate_simulator_support(manifest, source)
+    _validate_names_and_compatibility(manifest, source)
+
+
+def _validate_simulator_support(manifest: SessionManifest, source: Path) -> None:
+    if manifest.simulator == "mujoco":
+        return
+    if manifest.backend == "ros2_sim":
+        raise ValueError(
+            f"{source}: simulator {manifest.simulator!r} does not support "
+            "backend='ros2_sim' yet"
+        )
+    if manifest.world is not None:
+        raise ValueError(
+            f"{source}: simulator {manifest.simulator!r} does not support a "
+            "shared 'world' (or more than one robot, which implies one) yet"
+        )
+    if manifest.viewer.mode != "none":
+        raise ValueError(
+            f"{source}: simulator {manifest.simulator!r} does not support "
+            f"viewer.mode {manifest.viewer.mode!r} yet"
+        )
 
 
 def _validate_names_and_compatibility(manifest: SessionManifest, source: Path) -> None:
@@ -312,6 +425,13 @@ def _validate_names_and_compatibility(manifest: SessionManifest, source: Path) -
         get_scene_definition(manifest.scene.name) if manifest.scene.name else None
     )
     for instance in manifest.robots:
+        supported = available_simulators(instance.robot)
+        if manifest.simulator not in supported:
+            raise ValueError(
+                f"{source}: robot {instance.id!r} ({instance.robot!r}) does not "
+                f"support simulator {manifest.simulator!r}; available: "
+                f"{', '.join(supported)}"
+            )
         task_name = manifest.task_for(instance)
         if task_name is not None and task_name not in known_tasks:
             raise ValueError(
@@ -400,4 +520,5 @@ __all__ = [
     "SessionWorldConfig",
     "load_manifest",
     "parse_manifest",
+    "validate_manifest",
 ]

@@ -9,25 +9,29 @@ grounding quality on its own.
 
 from __future__ import annotations
 
-import argparse
 import json
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
 import numpy as np
+from _cli import new_parser
 from _common_args import add_max_steps, add_robot, add_seed
 
 from physai.planner import ScriptedPlanner
 from physai.policy.plan_runner import PlanRunner
 from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
-from physai.sim import PickPlaceMinimalSceneConfig
+from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
 from physai.tasks import TaskRuntime, create_task
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--instruction", default="put the red cube on the green pad")
+    ap = new_parser(__doc__)
+    ap.add_argument(
+        "--instruction",
+        default="put the red cube on the green pad",
+        help="natural-language task given to the planner",
+    )
     add_robot(
         ap,
         default="so101",
@@ -37,33 +41,34 @@ def main() -> int:
     add_seed(ap)
     add_max_steps(ap, default=800)
     ap.add_argument("--dry-run", action="store_true", help="print the plan and exit")
-    ap.add_argument("--save-plan", type=Path)
     ap.add_argument(
-        "--save-frames",
+        "--out",
         type=Path,
-        help="write the images the planner sees, for debugging",
+        help="directory to save plan.json and, for debugging, the images the "
+        "planner sees (frames/)",
     )
     args = ap.parse_args()
 
     robot = create_robot(
         args.robot,
         config=EnvConfig(
-            scene=PickPlaceMinimalSceneConfig(camera_width=512, camera_height=384),
+            scene=SingleCubeFixedPlaceSceneConfig(),
             seed=args.seed,
             max_steps=args.max_steps,
             render=True,
         ),
     )
-    env = TaskRuntime(robot, create_task("pick_place"))
+    env = TaskRuntime(robot, create_task("single_cube_fixed_place"))
     obs = env.reset(seed=args.seed)
 
-    if args.save_frames:
+    if args.out:
         import imageio.v3 as iio
 
-        args.save_frames.mkdir(parents=True, exist_ok=True)
+        frames = args.out / "frames"
+        frames.mkdir(parents=True, exist_ok=True)
         for name, frame in obs.images.items():
-            iio.imwrite(args.save_frames / f"{name}.png", frame.data)
-        print(f"frames -> {args.save_frames}")
+            iio.imwrite(frames / f"{name}.png", frame.data)
+        print(f"frames -> {frames}")
 
     planner = ScriptedPlanner(env.cube_pos, env.target_pos)
     plan = planner.plan(args.instruction, obs)
@@ -78,12 +83,12 @@ def main() -> int:
         if sg.rationale:
             print(f"     {sg.rationale}")
 
-    if args.save_plan:
-        args.save_plan.parent.mkdir(parents=True, exist_ok=True)
-        args.save_plan.write_text(
+    if args.out:
+        args.out.mkdir(parents=True, exist_ok=True)
+        (args.out / "plan.json").write_text(
             json.dumps(plan.to_dict(), indent=2), encoding="utf-8"
         )
-        print(f"\nplan -> {args.save_plan}")
+        print(f"\nplan -> {args.out / 'plan.json'}")
 
     if args.dry_run or not plan.subgoals:
         env.close()

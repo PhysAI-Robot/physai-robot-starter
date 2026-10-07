@@ -1,6 +1,6 @@
 """ROS2 transport, message conversion, and simulation bridge adapters."""
 
-from .adapters import ROS2HardwareAdapter, ROS2MuJoCoAdapter, ROS2Transport
+from .adapters import ROS2HardwareAdapter, ROS2SimAdapter, ROS2Transport
 from .cartesian import (
     CartesianTargetRequest,
     CartesianTargetResult,
@@ -37,7 +37,7 @@ __all__ = [
     "MuJoCoROSBridge",
     "ROS2HardwareAdapter",
     "ROS2MessageCodec",
-    "ROS2MuJoCoAdapter",
+    "ROS2SimAdapter",
     "ROS2Transport",
     "RclpyTransport",
     "describe",
