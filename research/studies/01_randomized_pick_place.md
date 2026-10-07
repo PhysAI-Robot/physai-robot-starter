@@ -120,9 +120,9 @@ Done when: the task above is runnable on both engines and the manifest is commit
 - [x] Detect the place target from the camera (`TargetDiscDetector`); it used to read
   `env.target_pos`, which is privileged and would break the camera-only claim once the target
   is random.
-- [ ] Evaluate on the protocol below on both engines, with a success heatmap over the
-  workspace. Done so far: MuJoCo 296/300 on seeds 1000-1299, Isaac Sim 88/100 on seeds
-  1000-1099 (seeds 1100-1299 on Isaac and the heatmap remain). No further grasp-recovery or
+- [ ] Evaluate on the protocol below on both engines, with a success map over the
+  workspace (`scripts/plot_workspace.py`). Done so far: MuJoCo 296/300 on seeds 1000-1299, Isaac Sim 88/100 on seeds
+  1000-1099 (seeds 1100-1299 on Isaac remain). No further grasp-recovery or
   robustness tuning: report it as it stands.
 
 ### M3: ACT
