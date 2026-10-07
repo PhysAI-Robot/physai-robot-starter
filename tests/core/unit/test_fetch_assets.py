@@ -1,5 +1,6 @@
 import io
 import json
+import subprocess
 import sys
 import urllib.request
 from pathlib import Path
@@ -80,3 +81,14 @@ def test_the_token_is_never_sent_with_file_downloads(
     assert api.get_header("Authorization") == "Bearer secret-token"
     assert download.full_url.startswith("https://raw.githubusercontent.com/")
     assert download.get_header("Authorization") is None
+
+
+def test_the_script_runs_with_the_standard_library_alone():
+    """CI fetches assets with the system Python before any dependency is installed."""
+    # -S drops site-packages, so a third-party import (numpy) would fail here.
+    result = subprocess.run(
+        [sys.executable, "-S", str(SCRIPTS / "fetch_assets.py"), "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
