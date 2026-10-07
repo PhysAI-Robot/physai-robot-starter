@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import _bootstrap  # noqa: F401
+import numpy as np
 from _cli import new_parser
 from _common_args import (
     DEFAULT_MANIFEST,
@@ -47,8 +48,14 @@ from _outputs import RunOutputs, wants_cameras
 from physai.config import DomainRandomizationConfig, load_manifest
 from physai.config.compat import with_overrides
 from physai.data import EvaluationReport, load_episode
+from physai.data.evaluation import trajectory_metrics
 from physai.policy import available_policies, create_policy
-from physai.runtime import RenderGlitch, create_session, run_episode
+from physai.runtime import (
+    EpisodeObserver,
+    RenderGlitch,
+    create_session,
+    run_episode,
+)
 
 
 def _format_distance(distance: float | None) -> str:
@@ -63,6 +70,37 @@ def _parse_seed_list(text: str) -> list[int]:
     if len(set(seeds)) != len(seeds):
         raise argparse.ArgumentTypeError("seeds must be distinct")
     return seeds
+
+
+class _EpisodeTrace(EpisodeObserver):
+    """Where the episode started (single-cube scenes) and how the gripper moved."""
+
+    def __init__(self, robot: Any) -> None:
+        self._robot = robot
+        self.pose: dict[str, list[float]] = {}
+        self._ee: list[tuple[float, float, float]] = []
+
+    def metrics(self) -> dict[str, float]:
+        if len(self._ee) < 2:
+            return {}
+        return trajectory_metrics(np.array(self._ee), 1.0 / self._robot.cfg.control_hz)
+
+    def _track(self, observation) -> None:
+        if observation.ee_pose is not None:
+            p = observation.ee_pose.pose.position
+            self._ee.append((p.x, p.y, p.z))
+
+    def after_step(self, observation, action, next_observation, *_) -> None:
+        self._track(next_observation)
+
+    def on_reset(self, observation) -> None:
+        self._track(observation)
+        if getattr(self._robot, "cube_positions", None):
+            return
+        for key, attr in (("cube_start", "cube_pos"), ("target_pos", "target_pos")):
+            value = getattr(self._robot, attr, None)
+            if value is not None:
+                self.pose[key] = [round(float(v), 4) for v in value[:2]]
 
 
 def main() -> int:
@@ -261,8 +299,9 @@ def main() -> int:
         else:
             seed = episode_seeds[ep]
 
+        trace = _EpisodeTrace(runtime.robot)
         try:
-            outcome = run_episode(runtime, seed, outputs.begin())
+            outcome = run_episode(runtime, seed, (*outputs.begin(), trace))
         except RenderGlitch as exc:
             # Camera policies would fail for a reason unrelated to the policy,
             # so stop instead of recording those episodes as failures.
@@ -288,6 +327,9 @@ def main() -> int:
                 or bool(info.get("unsafe_action")),
                 "held_out": bool(train_seeds) and seed not in train_seeds,
                 "dist_cube_target": info.get("dist_cube_target"),
+                # Where the episode started, for failures by workspace region.
+                **trace.pose,
+                **trace.metrics(),
                 **(
                     {
                         "visual_error_px": policy.metrics.visual_error_px,
