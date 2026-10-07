@@ -83,7 +83,9 @@ class _EpisodeTrace(EpisodeObserver):
     def metrics(self) -> dict[str, float]:
         if len(self._ee) < 2:
             return {}
-        return trajectory_metrics(np.array(self._ee), 1.0 / self._robot.cfg.control_hz)
+        return trajectory_metrics(
+            np.array(self._ee), 1.0 / getattr(self._robot.cfg, "control_hz", 30)
+        )
 
     def _track(self, observation) -> None:
         if observation.ee_pose is not None:
@@ -152,7 +154,7 @@ def main() -> int:
         ap,
         help="simulator engine (default: the manifest's, mujoco); isaac runs the same "
         "scene, seeds and task on Isaac Sim (visual_servo, constant or lerobot; "
-        "no randomization)",
+        "single-cube scenes only)",
     )
     ap.add_argument(
         "--seeds",
