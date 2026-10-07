@@ -112,7 +112,7 @@ finally:
 - [Design decisions](docs/DECISIONS.md): why the frozen design is shaped this way.
 - Runbooks: [robots](docs/ROBOT_RUNBOOKS.md) and [web viewer](docs/WEB_VIEWER_RUNBOOK.md).
 - [Research](research/README.md): scripted experts, classical control and imitation learning,
-  with results.
+  with results, and the plan for each study.
 - [Contributing](CONTRIBUTING.md), [agent guide](AGENTS.md), [roadmap](ROADMAP.md) and
   [third-party notices](THIRD_PARTY_NOTICES.md).
 
