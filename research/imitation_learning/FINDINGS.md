@@ -21,8 +21,8 @@ The 4k and the first 50-demo 30k runs (17/50 and 37/50) ran before the joint-lim
 below; the 30k row shows the same checkpoint with the clip.
 
 More demos and more steps each lift 82% to 96-98% on 50 seeds; together they add
-nothing, and 50 episodes cannot separate 96% from 98%. Scripted expert: 300/300;
-`visual_servo`: 100/100 on both engines.
+nothing, and 50 episodes cannot separate 96% from 98%. The scripted expert and
+`visual_servo` rows are in the [results table](../scripted_experts/README.md#results).
 
 ## Sim-to-sim gap
 

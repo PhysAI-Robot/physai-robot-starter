@@ -1,6 +1,6 @@
 name: "Research: visual servo evaluation"
 
-# Reproduces the Phase 2A claim on a clean Linux runner: the SO-101 visual servo
+# Reproduces the visual servo baseline claim on a clean Linux runner: the SO-101 visual servo
 # policy over a seed range with bounded camera jitter. Software rendering costs
 # about 130 seconds per episode, so the seeds are split across parallel shards
 # and merged by a final job that enforces the documented result. It runs on

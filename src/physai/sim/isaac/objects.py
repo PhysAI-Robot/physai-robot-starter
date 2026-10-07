@@ -4,7 +4,7 @@ The Isaac analogue of `sim.mujoco.scenes.common.add_cube` — but unlike this
 project's other Isaac primitives (`scene.py`'s ground plane, the robot's
 own already-imported URDF geometry), a graspable object needs a rigid body
 and mass in addition to collision geometry. Nothing in this codebase
-authored one before the grasp-hold parity tier (`ROADMAP.md`'s 2E, tier 3),
+authored one before the grasp-hold parity tier (sim-to-sim parity tier 3),
 so this is unverified against any prior working example here; treat it the
 way `sim.isaac.description`'s own docstring treats the rest of this
 project's Isaac integration — checked against the real app, not derived

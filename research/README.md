@@ -24,7 +24,15 @@ owns its README (setup and runbook) and, where it has measurement history, a
 | [`imitation_learning/`](imitation_learning/README.md) | ACT/LeRobot dataset tooling, training and checkpoint-backed policies |
 | [`vlm_planners/`](vlm_planners/README.md) | Model- or heuristic-grounded `Planner` implementations beyond the scripted baseline |
 
-Reinforcement learning and VLA research are planned (see [ROADMAP.md](../ROADMAP.md))
-and get their directory when their first module exists. See
+## Studies
+
+One plan per paper, in `studies/`; a topic directory appears when its first module exists
+(RL lands with study 1).
+
+| Study | Status | Question |
+| --- | --- | --- |
+| [01 randomized pick-and-place](studies/01_randomized_pick_place.md) | active | How far do scripted, classical, ACT and ACT + RL go on a randomized SO-101 pick-and-place, on MuJoCo and Isaac Sim? |
+
+See
 [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md#research-boundary) for the dependency rule
 and how a module registers itself.

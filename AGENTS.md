@@ -28,8 +28,11 @@ Keep each document focused on one audience:
   commit message conventions.
 - `AGENTS.md` is the agent-facing workflow, validation, and repository hygiene
   guide.
-- `ROADMAP.md` records planned work and should not be treated as current
-  behavior.
+- `ROADMAP.md` records planned framework features and should not be treated as
+  current behavior.
+- `research/studies/<NN>_<name>.md` is one study's plan (question, frozen task,
+  milestones, paper). Results stay in the topic `FINDINGS.md`/README. A finished
+  study is not reopened; follow-up work is a new study file.
 
 Do not copy detailed architecture, setup commands, or agent instructions into
 the other documents. Link to the owning document instead, and when a fact

@@ -21,7 +21,7 @@ class SubGoal:
 
     `skill` names the low-level behaviour the VLA policy should run; `waypoint`
     is the grounded 3-D goal in the robot base frame (the PoseStamped that
-    would go to Nav2 / MoveIt in Phase 1). `target_description` keeps the
+    would go to Nav2 / MoveIt on a ROS2 robot). `target_description` keeps the
     language grounding around for the VLA's text conditioning.
     """
 

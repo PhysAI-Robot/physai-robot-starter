@@ -63,5 +63,5 @@ physics floor; no retry-on-drop was added.
 ## Why the protocol needs at least 100 seeds
 
 A 20-seed run cannot resolve a policy's reliability (the pre-fix expert scored 45% and
-60% on two seed ranges). [ROADMAP.md](../../ROADMAP.md)'s evaluation protocol and the
+60% on two seed ranges). [study 1's evaluation protocol](../studies/01_randomized_pick_place.md#evaluation-protocol-shared-by-all-methods) and the
 README results table both rest on this.

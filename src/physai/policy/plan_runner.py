@@ -91,7 +91,7 @@ class PlanRunner(Policy):
         """Advance the sub-goal cursor. Call once per control tick after `act`.
 
         Kept separate from `act` so the caller supplies the measured pinch
-        centre (sim) or the TF lookup (Phase 1 / ROS2) rather than this class
+        centre (sim) or the TF lookup (ROS2) rather than this class
         reaching into the simulator.
         """
         if self.done:

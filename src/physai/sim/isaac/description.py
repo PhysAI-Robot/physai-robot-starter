@@ -4,7 +4,7 @@ robot's own frames, cameras, contact-pad friction, and actuator gains on
 top — the Isaac analogue of `sim.mujoco.scenes.common.apply_description`.
 
 Findings this module encodes, verified against Isaac Sim 6.1.0.0 on an
-RTX 3060 (see the plan's Phase 2.0/2.2 notes; there is no public spec for
+RTX 3060 (there is no public spec for
 most of this, so treat the version pin as load-bearing):
 
 - `isaacsim.asset.importer.urdf.{URDFImporter, URDFImporterConfig}` is the
@@ -180,7 +180,7 @@ def fovy_to_focal_length(
     (`vertical_aperture = 2 * focal_length * tan(fovy / 2)`) for focal
     length, matching `fovy` the way MuJoCo itself defines it: the full
     vertical angle. Not independently re-verified against a rendered
-    projection (see this module's docstring) — Phase 3's camera parity tier
+    projection (see this module's docstring) — the camera parity tier
     is what validates or corrects this.
     """
     import math

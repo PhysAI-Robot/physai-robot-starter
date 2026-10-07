@@ -45,7 +45,7 @@ and fails unless every episode succeeded with no collision, timeout or unsafe ac
 (floating-point differences). In the browser, the camera panels are configurable and a
 `front:detections` / `wrist:detections` overlay shows the last detected pixel, which
 separates a detection failure from a control failure
-([runbook](../../docs/WEB_VIEWER_RUNBOOK.md#camera-panels)).
+([runbook](../../docs/WEB_VIEWER_RUNBOOK.md#browser-controls)).
 
 ### Difficulty sweep and report
 
