@@ -12,6 +12,7 @@ import ast
 from pathlib import Path
 from typing import Any
 
+from _cli import add_robot  # noqa: F401  (stdlib-only, re-exported for the scripts)
 from _video import VIDEO_MODES
 
 # The SO-101 sessions every run script defaults to (and `--sorting` selects).
@@ -103,18 +104,6 @@ def add_out(
     """`--out` as a single output file (scripts that write many files use
     `--out DIR`; see the CLI conventions in docs/ARCHITECTURE.md)."""
     parser.add_argument("--out", type=Path, default=default, metavar=metavar, help=help)
-
-
-def add_robot(
-    parser: argparse.ArgumentParser,
-    *,
-    default: str | None = None,
-    choices=None,
-    help: str | None = None,
-) -> None:
-    parser.add_argument(
-        "--robot", default=default, choices=choices, help=help or "robot to use"
-    )
 
 
 def add_policy(

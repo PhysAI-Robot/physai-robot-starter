@@ -32,3 +32,15 @@ def new_parser(doc: str | None, **kwargs) -> argparse.ArgumentParser:
         formatter_class=Formatter,
         **kwargs,
     )
+
+
+def add_robot(
+    parser: argparse.ArgumentParser,
+    *,
+    default: str | None = None,
+    choices=None,
+    help: str | None = None,
+) -> None:
+    parser.add_argument(
+        "--robot", default=default, choices=choices, help=help or "robot to use"
+    )

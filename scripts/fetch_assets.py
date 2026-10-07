@@ -21,8 +21,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-from _cli import new_parser
-from _common_args import add_robot
+from _cli import add_robot, new_parser
 
 
 @dataclass(frozen=True)
