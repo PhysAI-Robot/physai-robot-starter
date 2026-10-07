@@ -46,7 +46,7 @@ Simulation only for now; no hardware work is planned.
 
 - [x] Shared evaluation reports with Wilson 95% intervals, sharded runs, difficulty sweeps (`scripts/eval_policy.py`, `run_sharded_eval.py`, `sweep_difficulty.py`).
 - [ ] Trajectory-quality metrics in the report: completion time, path length, jerk (done in `eval_policy.py`), joint-limit margin, peak speed.
-- [ ] Per-region success breakdown over the workspace (each result row now carries `cube_start` and `target_pos`).
+- [x] Per-region success breakdown over the workspace (`scripts/plot_workspace.py`, from `cube_start` and `target_pos` in each result row).
 
 ## Transports and bridges
 
