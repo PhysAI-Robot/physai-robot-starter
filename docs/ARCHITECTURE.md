@@ -153,7 +153,7 @@ a registered task and owns reset, metrics, reward, success hold and termination.
 `create_runtime` validates the task's required capabilities against the `RobotSpec`, resolves
 the scene and wraps the robot with `TaskRuntime`; safety is the adapter's job, not its.
 
-Registered compositions: `so101` + `single_cube_fixed_place` (or `sorting`) with the
+Registered compositions: `so101` + `single_cube_place` (or `sorting`) with the
 scripted, visual-servo or Planner + `PlanRunner` policies, and `turtlebot4` with a constant
 twist policy. TurtleBot4 proves the capability abstraction generalizes beyond an arm; it is
 maintained, not a development focus ([ROADMAP.md](../ROADMAP.md)).
@@ -174,11 +174,11 @@ shared MuJoCo world.
 schema_version: 1
 simulation: {seed: 0}            # the one source of seed and randomization
 scene:
-  name: single_cube_fixed_place
+  name: single_cube_place
   overrides: {target_radius: 0.04}
 simulator: mujoco                # mujoco | isaac
 backend: direct                  # direct | ros2_sim | ros2_real
-task: single_cube_fixed_place
+task: single_cube_place
 success_hold_steps: 10
 robots:
   - id: arm_1

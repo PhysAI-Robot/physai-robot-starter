@@ -117,8 +117,8 @@ def test_the_scripted_baselines_are_available():
 
     plan = ScriptedPlanner((0.2, 0.08, 0.036), (0.2, -0.1, 0.021)).plan("", None)
     assert [subgoal.skill for subgoal in plan.subgoals]
-    assert "single_cube_fixed_place" in available_tasks()
-    assert create_task("single_cube_fixed_place").name == "single_cube_fixed_place"
+    assert "single_cube_place" in available_tasks()
+    assert create_task("single_cube_place").name == "single_cube_place"
 
 
 def test_registering_an_embodiment_wires_every_factory_and_can_be_extended_once():

@@ -19,7 +19,7 @@ REGISTRIES = [
         "physai.tasks.registry",
         "register_task",
         "available_tasks",
-        "single_cube_fixed_place",
+        "single_cube_place",
     ),
     (
         "physai.robots.adapters",

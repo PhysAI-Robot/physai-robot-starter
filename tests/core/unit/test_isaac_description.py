@@ -95,9 +95,9 @@ def test_the_isaac_camera_orientation_matches_mujoco_for_the_front_camera():
     import numpy as np
 
     from physai.sim.isaac.scene import xyaxes_to_quat_wxyz
-    from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
+    from physai.sim.mujoco import SingleCubePlaceSceneConfig
 
-    xyaxes = SingleCubeFixedPlaceSceneConfig().front_cam_xyaxes
+    xyaxes = SingleCubePlaceSceneConfig().front_cam_xyaxes
     x_axis, y_axis = np.asarray(xyaxes[:3]), np.asarray(xyaxes[3:])
     x_axis, y_axis = x_axis / np.linalg.norm(x_axis), y_axis / np.linalg.norm(y_axis)
     rotation = np.stack([x_axis, y_axis, np.cross(x_axis, y_axis)], axis=1)
@@ -115,7 +115,7 @@ def test_isaac_config_rejects_what_it_cannot_build():
 
     from physai.robots.so101.isaac_env import IsaacEnvConfig
     from physai.sim.mujoco import (
-        SingleCubeFixedPlaceSceneConfig,
+        SingleCubePlaceSceneConfig,
         SortingMinimalSceneConfig,
     )
 
@@ -123,7 +123,7 @@ def test_isaac_config_rejects_what_it_cannot_build():
         IsaacEnvConfig(scene=SortingMinimalSceneConfig())
     with pytest.raises(ValueError, match="camera_resolution"):
         IsaacEnvConfig(
-            scene=SingleCubeFixedPlaceSceneConfig(camera_resolution="640x480"),
+            scene=SingleCubePlaceSceneConfig(camera_resolution="640x480"),
         )
 
 

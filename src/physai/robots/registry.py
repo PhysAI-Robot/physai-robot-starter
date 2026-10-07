@@ -250,7 +250,7 @@ def _load_builtins() -> None:
                 kind="fixed_base_manipulator",
                 simulators=("mujoco", "isaac"),
                 scene_defaults=so101_scene_defaults,
-                default_task="single_cube_fixed_place",
+                default_task="single_cube_place",
                 env_config=so101_env_config,
                 ros2_node=SO101ROS2Node,
                 shared_attach=so101_shared_attach,

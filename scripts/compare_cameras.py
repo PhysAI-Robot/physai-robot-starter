@@ -51,14 +51,14 @@ def _teleport_arm(env, sim: str) -> None:
 
 
 def dump(sim: str, out: Path) -> None:
-    from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
+    from physai.sim.mujoco import SingleCubePlaceSceneConfig
 
-    scene = SingleCubeFixedPlaceSceneConfig()
+    scene = SingleCubePlaceSceneConfig()
     if sim == "mujoco":
         from physai.robots.so101 import EnvConfig, SO101Env
         from physai.robots.so101.scene import scene_defaults
 
-        scene = SingleCubeFixedPlaceSceneConfig(**scene_defaults())
+        scene = SingleCubePlaceSceneConfig(**scene_defaults())
         env = SO101Env(EnvConfig(scene=scene, randomize_cube=False, render=True))
     else:
         from physai.robots.so101.isaac_env import IsaacEnvConfig, SO101IsaacEnv

@@ -85,7 +85,7 @@ Both run in one world, as in the screenshot above. Robot workflows are in the
 ```python
 from physai.runtime import create_runtime
 
-runtime = create_runtime("so101", task_name="single_cube_fixed_place")
+runtime = create_runtime("so101", task_name="single_cube_place")
 observation = runtime.reset(seed=0)
 try:
     ...  # pass actions from a policy here

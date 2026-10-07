@@ -43,7 +43,7 @@ def test_serve_alone_runs_headless_and_overrides_reach_the_manifest(
 
     assert (captured["args"].viewer, captured["args"].serve) == (False, True)
     manifest = captured["manifest"]
-    assert manifest.task == "single_cube_fixed_place"
+    assert manifest.task == "single_cube_place"
     assert manifest.simulation.seed == 4
     assert manifest.robots[0].config["max_steps"] == 77
 

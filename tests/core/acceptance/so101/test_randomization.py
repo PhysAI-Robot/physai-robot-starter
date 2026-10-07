@@ -11,10 +11,10 @@ def test_domain_randomization_is_seeded_bounded_and_restores_baseline():
     from physai.sim.mujoco import (
         DomainRandomizationConfig,
         DomainRandomizationEngine,
-        SingleCubeFixedPlaceSceneConfig,
+        SingleCubePlaceSceneConfig,
     )
 
-    model, _ = SingleCubeFixedPlaceSceneConfig(
+    model, _ = SingleCubePlaceSceneConfig(
         clutter_count=2, **scene_defaults("so101")
     ).build_model()
     baseline_friction = model.geom_friction.copy()

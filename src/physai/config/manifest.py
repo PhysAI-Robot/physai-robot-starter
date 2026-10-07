@@ -16,7 +16,7 @@ Schema (YAML)::
         enabled: false
 
     scene:
-      name: single_cube_fixed_place       # optional; must be a registered scene
+      name: single_cube_place       # optional; must be a registered scene
       overrides: {}                  # optional kwargs to the scene factory
 
     simulator: mujoco                # optional; default "mujoco". Which
@@ -44,12 +44,12 @@ Schema (YAML)::
         pose:
           position: [0.0, 0.0, 0.0]
           quaternion: [1.0, 0.0, 0.0, 0.0]
-        task: single_cube_fixed_place             # optional per-instance override
+        task: single_cube_place             # optional per-instance override
         task_kwargs: {}
         policy: scripted             # optional; default is "idle" if omitted
         policy_kwargs: {}
 
-    task: single_cube_fixed_place                 # optional global default task
+    task: single_cube_place                 # optional global default task
     task_kwargs: {}
     success_hold_steps: 10           # optional; steps a success must hold
     policy: idle                     # optional global default policy
