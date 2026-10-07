@@ -56,6 +56,7 @@ class ACTEpisodeDataset(Dataset):
         chunk_size: int = 30,
         image_size: int = 128,
         task: str | None = None,
+        max_episodes: int | None = None,
     ) -> None:
         self.dataset_dir = Path(dataset_dir)
         self.chunk_size = chunk_size
@@ -72,7 +73,9 @@ class ACTEpisodeDataset(Dataset):
         self.task = task if task is not None else meta.get("task", "")
         self.episodes: list[dict[str, np.ndarray]] = []
         self.index: list[tuple[int, int]] = []  # (episode_idx, timestep)
-        for e in meta["episodes"]:
+        # The first `max_episodes` recorded episodes, so one dataset serves
+        # several demonstration counts.
+        for e in meta["episodes"][:max_episodes]:
             data = load_episode(self.dataset_dir / e["file"])
             data = {k: np.asarray(v) for k, v in data.items()}
             # Keep only the policy-sized frames: full-resolution episodes are

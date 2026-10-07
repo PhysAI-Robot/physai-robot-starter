@@ -36,6 +36,11 @@ from research.imitation_learning.act_dataset import ACTEpisodeDataset
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", type=Path, required=True)
+    ap.add_argument(
+        "--episodes",
+        type=int,
+        help="train on the first N episodes of the dataset (default: all)",
+    )
     ap.add_argument("--out", type=Path, default=Path("outputs/act_ckpt"))
     ap.add_argument("--steps", type=int, default=4000)
     ap.add_argument("--batch-size", type=int, default=16)
@@ -63,8 +68,11 @@ def main() -> int:
         chunk_size=args.chunk_size,
         image_size=args.image_size,
         task=meta.get("task_name", task),
+        max_episodes=args.episodes,
     )
-    print(f"{len(train_set)} (timestep) training samples")
+    print(
+        f"{len(train_set.episodes)} episodes, {len(train_set)} (timestep) training samples"
+    )
 
     print("computing normalization stats...")
     stats = train_set.compute_stats()
@@ -140,7 +148,9 @@ def main() -> int:
     # sorting run was evaluated on seeds 0-19 while training had consumed
     # 0-65, and the resulting 70% was mostly memorised layouts.
     train_seeds = sorted(
-        e["seed"] for e in meta.get("episodes", []) if e.get("seed") is not None
+        e["seed"]
+        for e in meta.get("episodes", [])[: args.episodes]
+        if e.get("seed") is not None
     )
     with (args.out / "training_meta.json").open("w", encoding="utf-8") as f:
         json.dump(
