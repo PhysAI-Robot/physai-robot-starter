@@ -83,8 +83,12 @@ what the results support:
 - **Target is visible** in the front camera everywhere in the region, as the existing
   target disc; no method except the scripted expert reads its position from state.
 - **Success:** unchanged (`success_xy_tol` 0.04 m, held 10 steps).
-- **Seeds:** demonstrations from 0-999, evaluation on held-out 1000-1299 (300 episodes);
-  the same seeds for every method and both engines.
+- **Seeds:** demonstrations from 0-899, validation 900-999 (choosing a training or
+  execution setting, never reported as a result), evaluation on held-out 1000-1299 (300
+  episodes); the same evaluation seeds for every method and both engines. The first ACT runs
+  (below) were scored on 1000-1299 before this split existed, so they are the initial
+  configuration; every later setting is chosen on 900-999 and only the chosen one is run on
+  1000-1299.
 
 ## Milestones
 
@@ -128,10 +132,18 @@ Done when: the task above is runnable on both engines and the manifest is commit
 
 ### M3: ACT
 
-- [ ] Demonstrations from the M1 expert: 100, 200 and 500 episodes.
-- [ ] One fixed training configuration (image size, chunk size, batch, precision, steps)
-  that fits the 6 GB GPU, with seeds and loss curves logged.
-- [ ] Evaluate on both engines; ablations: number of demonstrations, wrist camera on/off.
+- [x] Demonstrations from the M1 expert: 100 and 200 episodes (seeds 0-199, all kept). 500 is
+  deferred: its policy-sized frames are about 11 GB in RAM.
+- [x] Initial configuration (batch 16, chunk 30, image 128, lr 1e-5, 30k steps, front and
+  wrist cameras), with seeds and loss logged: MuJoCo 220/300 with 100 demos, 206/300 with 200
+  demos (seeds 1000-1299), Isaac Sim on 100 seeds for the 100-demo run.
+- [ ] Choose the final configuration on validation seeds 900-999, in this order: (1) how much
+  of each chunk to run (`--policy-arg n_action_steps=N`, or `temporal_ensemble_coeff`), an
+  evaluation-time change on the existing checkpoints; (2) more training steps; (3) the
+  demonstration-count ablation at an equal number of epochs, so it measures demonstrations and
+  not training time. Then freeze it and run it once on 1000-1299.
+- [ ] Evaluate the frozen configuration on both engines; ablation: number of demonstrations
+  (wrist camera on/off deferred).
 - [ ] Choose the paper's contributions from the results so far.
 
 ### M4: sim-to-sim gap
