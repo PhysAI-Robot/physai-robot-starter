@@ -75,6 +75,12 @@ class ACTEpisodeDataset(Dataset):
         for e in meta["episodes"]:
             data = load_episode(self.dataset_dir / e["file"])
             data = {k: np.asarray(v) for k, v in data.items()}
+            # Keep only the policy-sized frames: full-resolution episodes are
+            # ~95 MB each, so 100 of them do not fit in memory (nor pickle
+            # into DataLoader workers on Windows).
+            for cam in self.camera_keys:
+                key = f"observation.images.{cam}"
+                data[key] = self._shrink(data[key])
             self.episodes.append(data)
             ep_idx = len(self.episodes) - 1
             T = data["observation.state"].shape[0]
@@ -109,6 +115,12 @@ class ACTEpisodeDataset(Dataset):
             ).squeeze(0)
         return t
 
+    def _shrink(self, frames: np.ndarray) -> np.ndarray:
+        """(T, H, W, 3) uint8 -> (T, 3, image_size, image_size) uint8."""
+        return np.stack(
+            [(self._image(f) * 255.0).round().byte().numpy() for f in frames]
+        )
+
     def __getitem__(self, i: int) -> dict:
         ep_idx, t = self.index[i]
         ep = self.episodes[ep_idx]
@@ -132,7 +144,7 @@ class ACTEpisodeDataset(Dataset):
         }
         for cam in self.camera_keys:
             key = f"observation.images.{cam}"
-            sample[key] = self._image(ep[key][t])
+            sample[key] = torch.from_numpy(ep[key][t]).float() / 255.0
         return sample
 
     def compute_stats(self) -> DatasetStats:
@@ -160,8 +172,8 @@ class ACTEpisodeDataset(Dataset):
                     0, frames.shape[0] - 1, num=min(8, frames.shape[0])
                 ).astype(int)
                 sample_frames.append(frames[idx].astype(np.float32) / 255.0)
-            stacked = np.concatenate(sample_frames, axis=0)  # (N, H, W, 3)
-            mean = stacked.mean(axis=(0, 1, 2))
-            std = stacked.std(axis=(0, 1, 2)) + 1e-6
+            stacked = np.concatenate(sample_frames, axis=0)  # (N, 3, S, S)
+            mean = stacked.mean(axis=(0, 2, 3))
+            std = stacked.std(axis=(0, 2, 3)) + 1e-6
             per_key[key] = {"mean": mean.tolist(), "std": std.tolist()}
         return DatasetStats(per_key)

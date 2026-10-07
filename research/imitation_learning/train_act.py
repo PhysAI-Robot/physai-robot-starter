@@ -4,7 +4,7 @@ Uses the real `lerobot` ACTPolicy/ACTConfig — every input/output shape and key
 name was verified against the installed library before this script was
 written (see conversation history / commit message), not guessed from memory.
 
-    python scripts/collect_demos.py --episodes 50 --out data/pickplace_v1
+    python scripts/collect_demos.py --episodes 50 --dataset data/pickplace_v1
     python research/imitation_learning/train_act.py --dataset data/pickplace_v1 --steps 4000
 
 Chosen over SmolVLA for this hardware: SmolVLA carries a VLM backbone and
@@ -74,7 +74,9 @@ def main() -> int:
     action_schema = meta.get("action_schema", meta["features"]["action"])
     checkpoint_meta = CheckpointMetadata(
         robot=meta.get("robot", meta.get("robot_type", "unknown")),
-        task=task,
+        # The task *name* (what LeRobotPolicy.from_checkpoint compares against
+        # env.task.name), not the natural-language instruction in meta["task"].
+        task=meta.get("task_name", task),
         observation_schema=meta.get(
             "observation_schema",
             {

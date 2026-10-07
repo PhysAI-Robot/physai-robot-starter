@@ -1,41 +1,50 @@
-"""Run one episode, optionally writing a video. The 30-second sanity check.
+"""Run a session and look at it: a quick check, the viewer or web host, a video, a recording.
+
+For numbers you compare across policies use `eval_policy.py`; both run the session in
+a manifest and stop an episode the same way.
 
 python scripts/run_sim.py                      # scripted expert, 1 episode
-python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml
+python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml
 python scripts/run_sim.py --episodes 5 --seed 0
 python scripts/run_sim.py --video --episodes 5 --seed 0
+python scripts/run_sim.py --record --video     # also save every input as data (outputs/)
 python scripts/run_sim.py --policy constant    # baseline: do nothing
 python scripts/run_sim.py --policy lerobot --checkpoint outputs/act_ckpt
 python scripts/run_sim.py --viewer             # native MuJoCo viewer
 python scripts/run_sim.py --viewer --serve     # native viewer plus shared web host
 python scripts/run_sim.py --serve              # web host only, no desktop window
+python scripts/run_sim.py --sim isaac --manifest configs/manifests/so101_single_cube_fixed_place.yaml --policy visual_servo
+                                                # the same manifest on Isaac Sim; --video, --record
+                                                # and --serve (web viewer) work as on MuJoCo
+                                                # (no --viewer/--dataset with --serve; needs
+                                                # isaacsim installed, see README.md; not exercised
+                                                # by this repo's own CI)
 
-A run is described by a session manifest (`--manifest`). The older `--config`
-(task file), `--world` (world file), and bare `--robot` inputs are converted
-into one, so every run takes the same path from there on.
+A run is described by a session manifest (`--manifest`, default: the SO-101
+single-cube pick-and-place).
 """
 
 from __future__ import annotations
 
 import argparse
 import signal
-import sys
 import threading
 import time
 from pathlib import Path
 
 import _bootstrap  # noqa: F401
-import mujoco
-import mujoco.viewer
-import numpy as np
+from _cli import new_parser
 from _common_args import (
-    add_checkpoint,
+    add_camera_resolution,
     add_episodes,
     add_max_steps,
-    add_out,
     add_policy,
-    add_robot,
+    add_policy_args,
+    DEFAULT_MANIFEST,
+    add_run_outputs,
     add_seed,
+    add_simulator,
+    policy_kwargs,
 )
 
 # Registers so101's "scripted"/"visual_servo" policies and the checkpoint-
@@ -44,77 +53,33 @@ from _common_args import (
 import research.classical_control.so101_visual_servo
 import research.imitation_learning.vla_adapter
 import research.scripted_experts.so101_pick_place_expert  # noqa: F401
-from physai.config import SessionManifest, load_manifest, load_sim_config
-from physai.config.compat import (
-    manifest_for_robot,
-    manifest_from_task_file,
-    manifest_from_world_file,
-    with_overrides,
-)
+from _outputs import RunOutputs, wants_cameras
+from physai.config import SessionManifest, load_manifest
+from physai.config.compat import with_overrides
 from physai.policy import available_policies
-from physai.robots import available_robots
-from physai.runtime import Session, create_session
+from physai.robots import has_robot_policy
+from physai.runtime import RenderGlitch, Session, create_session, run_episode
 from physai.web.host import Host
 
-DEFAULT_SIM_CONFIG = Path("configs/sim_config.yaml")
-# What a headless episode runs when neither --policy nor the manifest names one.
-DEFAULT_HEADLESS_POLICY = "scripted"
 
-
-def write_video(frames: np.ndarray, stem: Path, fps: int) -> Path:
-    """Write mp4 if an H.264 encoder is available, otherwise fall back to GIF.
-
-    imageio's default pyav path raises an unhelpful `expected bytes, NoneType`
-    when no codec is registered, so the codec is named explicitly and the
-    fallback is silent-but-reported rather than a stack trace.
-    """
-    import imageio.v3 as iio
-
-    mp4 = stem.with_suffix(".mp4")
-    for plugin, kwargs in (
-        ("FFMPEG", {"codec": "libx264"}),
-        ("pyav", {"codec": "libx264"}),
-    ):
-        try:
-            iio.imwrite(mp4, frames, fps=fps, plugin=plugin, **kwargs)
-            return mp4
-        except (ImportError, OSError, RuntimeError, TypeError, ValueError):
-            continue
-
-    gif = stem.with_suffix(".gif")
-    iio.imwrite(gif, frames[::2], duration=2000 / fps, loop=0)
-    print("  (no H.264 encoder found — wrote a GIF; run `uv sync` for mp4 support)")
-    return gif
+# What a headless episode runs when neither --policy nor the manifest names one:
+# the robot's scripted expert if it has one, otherwise the do-nothing policy.
+def default_headless_policy(robot: str) -> str:
+    return "scripted" if has_robot_policy(robot, "scripted") else "constant"
 
 
 def parse_args(
     argv: list[str] | None = None,
 ) -> tuple[argparse.ArgumentParser, argparse.Namespace]:
-    ap = argparse.ArgumentParser()
+    ap = new_parser(__doc__)
     ap.add_argument(
         "--manifest",
         type=Path,
-        help="session manifest YAML (for example configs/manifests/so101_pick_place.yaml)",
+        default=DEFAULT_MANIFEST,
+        help="session manifest to run (for example "
+        "configs/manifests/turtlebot4.yaml or heterogeneous_world.yaml)",
     )
-    ap.add_argument(
-        "--sim-config",
-        type=Path,
-        help="shared simulation settings for --config/--world/--robot "
-        f"(default: {DEFAULT_SIM_CONFIG}); a manifest has its own",
-    )
-    ap.add_argument(
-        "--config",
-        type=Path,
-        help="deprecated: task YAML (for example configs/tasks/so101/pick_place.yaml)",
-    )
-    ap.add_argument(
-        "--world",
-        type=Path,
-        help="deprecated: shared-world YAML; use with --viewer and/or --serve",
-    )
-    add_robot(
-        ap, choices=available_robots(), help="the robot to run when no file selects one"
-    )
+    add_simulator(ap)
     # "lerobot" belongs here: main() handles it and the module docstring
     # documents it, but dropping it from choices made argparse reject the
     # documented command before it ever got there.
@@ -126,23 +91,14 @@ def parse_args(
     add_episodes(ap, default=1)
     add_seed(ap, default=None, help="override the seed (default: the manifest's, or 0)")
     add_max_steps(ap, help="override the episode length")
+    add_policy_args(ap)
+    add_camera_resolution(ap)
+    add_run_outputs(ap)
     ap.add_argument(
-        "--camera",
-        help="camera to record with --video (default: the robot's first camera)",
-    )
-    add_checkpoint(ap)
-    ap.add_argument(
-        "--camera-size",
-        type=int,
-        help="square render resolution. IMPORTANT for --policy lerobot: "
-        "a policy trained on square images (collect_demos.py's "
-        "default) sees a stretched, off-distribution image if "
-        "you render non-square here — pass the training size "
-        "(e.g. 128) to avoid the mismatch.",
-    )
-    add_out(ap, default=Path("outputs"))
-    ap.add_argument(
-        "--video", action="store_true", help="render frames and write an episode video"
+        "--dataset",
+        type=Path,
+        help="with --serve: record browser episodes into this dataset folder "
+        "(episode_NNNNN.npz + meta.json; an existing dataset there is continued)",
     )
     ap.add_argument(
         "--viewer",
@@ -155,12 +111,6 @@ def parse_args(
         help="serve the same authoritative simulation to the web viewer; "
         "without --viewer, this runs with no desktop window",
     )
-    ap.add_argument(
-        "--record-dir",
-        type=Path,
-        help="enable browser episode recording into this dataset directory "
-        "(requires --serve; an existing dataset there is continued)",
-    )
     ap.add_argument("--host", default="127.0.0.1", help="web host bind address")
     ap.add_argument("--port", type=int, default=8000, help="web host port")
     return ap, ap.parse_args(argv)
@@ -170,32 +120,7 @@ def build_manifest(
     ap: argparse.ArgumentParser, args: argparse.Namespace
 ) -> SessionManifest:
     """The session the flags describe, with command-line overrides applied."""
-    sources = [flag for flag in ("manifest", "config", "world") if getattr(args, flag)]
-    if len(sources) > 1:
-        ap.error(f"--{' and --'.join(sources)} cannot be combined")
-    if args.manifest and (args.sim_config or args.robot):
-        ap.error("--manifest cannot be combined with --sim-config or --robot")
-    if args.world and args.robot:
-        ap.error("--world cannot be combined with --robot")
-
-    if args.manifest:
-        manifest = load_manifest(args.manifest)
-    else:
-        simulation = load_sim_config(args.sim_config or DEFAULT_SIM_CONFIG)
-        if args.world:
-            note_deprecated("--world", "configs/manifests/heterogeneous_world.yaml")
-            manifest = manifest_from_world_file(args.world, simulation=simulation)
-        elif args.config:
-            note_deprecated("--config", "configs/manifests/so101_pick_place.yaml")
-            manifest = manifest_from_task_file(args.config, simulation=simulation)
-            configured = manifest.robots[0].robot
-            if args.robot and args.robot != configured:
-                ap.error(
-                    f"--robot {args.robot!r} does not match --config robot "
-                    f"{configured!r}"
-                )
-        else:
-            manifest = manifest_for_robot(args.robot or "so101", simulation=simulation)
+    manifest = load_manifest(args.manifest)
 
     if manifest.world is not None and args.policy:
         ap.error("--policy cannot be used with a shared world")
@@ -203,92 +128,92 @@ def build_manifest(
         manifest,
         seed=args.seed,
         max_steps=args.max_steps,
-        camera_size=args.camera_size,
+        camera_resolution=args.camera_resolution,
         policy=args.policy,
-    )
-
-
-def note_deprecated(flag: str, replacement: str) -> None:
-    print(
-        f"warning: {flag} is deprecated; describe the run with --manifest "
-        f"(see {replacement})",
-        file=sys.stderr,
+        simulator=args.simulator,
     )
 
 
 def main(argv: list[str] | None = None) -> int:
     ap, args = parse_args(argv)
-    if args.record_dir and not args.serve:
-        ap.error("--record-dir requires --serve")
+    if args.record and args.serve:
+        ap.error("--record writes per-episode files; with --serve use --dataset")
+    if args.dataset and not args.serve:
+        ap.error("--dataset records browser episodes and needs --serve")
 
     manifest = build_manifest(ap, args)
     if manifest.world is not None and not (args.viewer or args.serve):
         ap.error("a shared-world session requires --viewer or --serve")
-    if args.record_dir and manifest.world is not None:
-        ap.error("--record-dir is not available with a shared world")
+    if args.dataset and manifest.world is not None:
+        ap.error("--dataset is not available with a shared world")
+    if manifest.simulator != "mujoco":
+        if args.viewer:
+            ap.error(
+                f"--viewer is MuJoCo-only; simulator {manifest.simulator!r} "
+                "supports --serve (web viewer) or headless episodes"
+            )
+        if args.serve and args.dataset:
+            ap.error("--dataset is MuJoCo-only")
 
     if args.viewer or args.serve:
         return run_viewer(args, manifest)
     return run_episodes(args, manifest)
 
 
-def policy_inputs(args: argparse.Namespace, manifest: SessionManifest) -> dict:
-    """Run-time inputs a manifest cannot hold, for the policy it names."""
-    if manifest.world is not None:
-        return {}
-    if manifest.policy_for(manifest.robots[0]) != "lerobot":
-        return {}
-    if args.checkpoint is None:
-        raise ValueError("--policy lerobot needs --checkpoint")
-    return {"checkpoint": args.checkpoint}
-
-
 def run_episodes(args: argparse.Namespace, manifest: SessionManifest) -> int:
     if manifest.policy_for(manifest.robots[0]) == "idle":
-        manifest = with_overrides(manifest, policy=DEFAULT_HEADLESS_POLICY)
+        if manifest.simulator != "mujoco":
+            raise SystemExit(
+                f"--policy is required for simulator {manifest.simulator!r}: the "
+                f"default headless policy ({default_headless_policy(manifest.robots[0].robot)!r}) needs "
+                "MuJoCo-only kinematics (ArmKinematics)"
+            )
+        manifest = with_overrides(
+            manifest, policy=default_headless_policy(manifest.robots[0].robot)
+        )
+    policy_name = manifest.policy_for(manifest.robots[0])
     # Built once — a lerobot checkpoint is expensive to reload per episode.
     session = create_session(
-        manifest, render=args.video, policy_kwargs=policy_inputs(args, manifest)
+        manifest,
+        render=wants_cameras(args),
+        policy_kwargs=policy_kwargs(args, policy_name),
     )
     runtime = session.runtime
-    env, policy = runtime.robot, runtime.policy
+    env = runtime.robot
     seed = manifest.simulation.seed
-    max_steps = env.cfg.max_steps
-    camera_name = args.camera or next(iter(env.robot_spec.camera_frames))
-    policy_name = manifest.policy_for(manifest.robots[0])
-    args.out.mkdir(parents=True, exist_ok=True)
+    outputs = RunOutputs(
+        runtime,
+        args,
+        simulator=manifest.simulator,
+        robot=manifest.robots[0].robot,
+        policy=policy_name,
+        task=policy_name,
+        fps=env.cfg.control_hz,
+    )
     successes = 0
 
     for ep in range(args.episodes):
-        obs = runtime.reset(seed=seed + ep)
-        print(f"  randomization={env.randomization_metadata.as_dict()}")
-        frames, total_reward, info = [], 0.0, {}
+        try:
+            outcome = run_episode(runtime, seed + ep, outputs.begin())
+        except RenderGlitch as exc:
+            session.close()
+            raise SystemExit(f"episode {ep}: {exc}; restart the run") from exc
+        randomization = getattr(env, "randomization_metadata", None)
+        if randomization is not None:
+            print(f"  randomization={randomization.as_dict()}")
 
-        for _ in range(max_steps):
-            if args.video:
-                frames.append(env.render_camera(camera_name))
-            obs, reward, terminated, truncated, info = runtime.step(policy.act(obs))
-            total_reward += reward
-            if terminated or truncated or policy.done:
-                break
-
-        ok = bool(info.get("success"))
-        successes += ok
-        distance = info.get("dist_cube_target")
+        successes += outcome.success
+        distance = outcome.info.get("dist_cube_target")
         suffix = f" dist_cube_target={distance:.3f}" if distance is not None else ""
+        refused = f" UNSAFE: {outcome.violation}" if outcome.violation else ""
         print(
-            f"episode {ep}: success={ok} steps={env.step_count} "
-            f"return={total_reward:.2f}{suffix}"
+            f"episode {ep}: success={outcome.success} steps={outcome.steps} "
+            f"return={outcome.reward:.2f}{suffix}{refused}"
         )
 
-        if frames and args.video:
-            path = write_video(
-                np.stack(frames),
-                args.out / f"{policy_name}_ep{ep:03d}",
-                fps=int(env.cfg.control_hz),
-            )
-            print(f"  video -> {path}")
+        outputs.save(outcome.success, seed + ep)
 
+    outputs.close()
     session.close()
     print(f"\n{successes}/{args.episodes} successful")
     return 0
@@ -321,7 +246,11 @@ def build_host(
         manifest,
         render=True,
         host_driven=True,
-        policy_kwargs=policy_inputs(args, manifest),
+        policy_kwargs=(
+            {}
+            if manifest.world is not None
+            else policy_kwargs(args, manifest.policy_for(manifest.robots[0]))
+        ),
     )
     if session.world is not None:
         return Host.for_world(session.world, session.instances), session
@@ -332,14 +261,30 @@ def build_host(
         policy=session.runtime.policy,
         reset_seed=manifest.simulation.seed,
         async_cameras=session.host_renders_cameras,
-        record_dir=args.record_dir,
+        record_dir=args.dataset,
     )
     return host, session
 
 
+def serve_on_own_loop(server) -> None:
+    """Run uvicorn without `asyncio.run`, which Isaac Sim's Kit app replaces
+    with a version that rejects uvicorn's `loop_factory` argument."""
+    import asyncio
+
+    loop = asyncio.new_event_loop()
+    try:
+        loop.run_until_complete(server.serve())
+    finally:
+        loop.close()
+
+
 def run_viewer(args: argparse.Namespace, manifest: SessionManifest) -> int:
+    if args.viewer:
+        import mujoco
+        import mujoco.viewer
     host, _session = build_host(args, manifest)
-    host.start()
+    if manifest.simulator == "mujoco":
+        host.start()
     server = None
     server_thread = None
     if args.serve:
@@ -348,9 +293,10 @@ def run_viewer(args: argparse.Namespace, manifest: SessionManifest) -> int:
 
             from physai.web.app import create_app
         except ImportError as exc:
-            host.stop()
+            if manifest.simulator == "mujoco":
+                host.stop()
             raise SystemExit(
-                "install web dependencies with: uv sync --extra web"
+                "fastapi/uvicorn are missing; reinstall with: uv sync"
             ) from exc
         server = uvicorn.Server(
             uvicorn.Config(
@@ -360,11 +306,23 @@ def run_viewer(args: argparse.Namespace, manifest: SessionManifest) -> int:
                 log_level="info",
             )
         )
-        server_thread = threading.Thread(target=server.run, daemon=True)
+        server_thread = threading.Thread(
+            target=server.run if manifest.simulator == "mujoco" else serve_on_own_loop,
+            args=() if manifest.simulator == "mujoco" else (server,),
+            daemon=True,
+        )
         server_thread.start()
 
     try:
-        if not args.viewer:
+        if manifest.simulator != "mujoco":
+            # Isaac Sim must be driven from the thread that created it, so
+            # the host loop takes the main thread; signals just stop it.
+            print(f"Isaac host running. Web viewer: http://{args.host}:{args.port}/")
+            print("Press Ctrl+C to stop.")
+            signal.signal(signal.SIGINT, lambda *_: host.stop())
+            signal.signal(signal.SIGTERM, lambda *_: host.stop())
+            host.run()
+        elif not args.viewer:
             # No desktop window: --serve alone runs headless.
             print(f"Headless host running. Web viewer: http://{args.host}:{args.port}/")
             print("Press Ctrl+C to stop.")
@@ -379,7 +337,7 @@ def run_viewer(args: argparse.Namespace, manifest: SessionManifest) -> int:
             # against Host's physics/camera threads (both guarded by
             # host.physics_lock, which the native viewer knows nothing
             # about). Mirror Host._camera_loop's pattern instead: render a
-            # private copy, refreshed each tick under the same lock (ADR 4).
+            # private copy, refreshed each tick under the same lock (docs/DECISIONS.md, E).
             viewer_data = mujoco.MjData(host.model)
             with mujoco.viewer.launch_passive(host.model, viewer_data) as viewer:
                 period = 1.0 / host.control_hz

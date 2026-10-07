@@ -1,6 +1,6 @@
 """Seam for dropping a real VLA checkpoint into the loop.
 
-Nothing here imports torch at module scope. When you `uv sync --extra vla`
+Nothing here imports torch at module scope. When you `uv sync --extra training`
 and load an ACT checkpoint trained on the demos from
 `scripts/collect_demos.py`, the only thing you write is `_infer`. Everything
 else — observation packing, action chunk buffering, unit conversion — comes
@@ -190,7 +190,22 @@ class LeRobotPolicy(VLAPolicy):
         processed = self.preprocessor(sample)
         action = self.policy.select_action(processed)
         action = self.postprocessor(action)
-        return action.squeeze(0).detach().cpu().numpy()
+        return self._clip_to_joint_limits(action.squeeze(0).detach().cpu().numpy())
+
+    def _clip_to_joint_limits(self, values: np.ndarray) -> np.ndarray:
+        """Clip the model's output to the robot's joint limits.
+
+        ACT regresses joint targets, so near a limit it can overshoot by a few
+        milliradians (a `wrist_flex` of 1.659 against a 1.658 limit ended
+        episodes in the first 30 steps). The safety gate must keep refusing
+        out-of-range commands; staying in range is the policy's job.
+        """
+        limits = self.robot.robot_spec.joint_limits
+        clipped = np.array(values, dtype=np.float64, copy=True)
+        for column, name in enumerate(self._model_action_names()):
+            if name in limits and column < clipped.shape[-1]:
+                clipped[..., column] = np.clip(clipped[..., column], *limits[name])
+        return clipped
 
 
 def make_lerobot(*, env, checkpoint, **kwargs: Any) -> LeRobotPolicy:

@@ -13,7 +13,6 @@ filenames (they change between calibration revisions).
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import sys
@@ -22,7 +21,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-from _common_args import add_robot
+from _cli import add_robot, new_parser
 
 
 @dataclass(frozen=True)
@@ -37,11 +36,19 @@ class AssetSource:
 
 
 SOURCES: dict[str, AssetSource] = {
-    "so101": AssetSource("TheRobotStudio/SO-ARM100", "Simulation/SO101", "main"),
+    # Pinned to a commit, not a branch: an upstream push must not change what
+    # this project fetches. Bump deliberately (see THIRD_PARTY_NOTICES.md) and
+    # re-run the full test suite plus a `visual_servo` eval before adopting a
+    # new commit.
+    "so101": AssetSource(
+        "TheRobotStudio/SO-ARM100",
+        "Simulation/SO101",
+        "5f6d2b876a53a4872e405b991dd925556c9e38a4",
+    ),
     "turtlebot4": AssetSource(
         "narcispr/turtlebot4_mujoco",
         "",
-        "main",
+        "e5d772caf426179b3d93eb91741965529239ae80",
         description_globs=("*.xml",),
         include=("turtlebot4.xml", "assets/meshes/*.stl", "assets/meshes/*.obj"),
     ),
@@ -123,14 +130,18 @@ def walk(
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
+    ap = new_parser(__doc__)
     add_robot(ap, choices=sorted(SOURCES), default="so101")
     ap.add_argument("--force", action="store_true", help="re-download existing files")
-    ap.add_argument("--dest", type=Path)
+    ap.add_argument(
+        "--out",
+        type=Path,
+        help="folder to download into (default: assets/<robot>)",
+    )
     args = ap.parse_args()
 
     source = SOURCES[args.robot]
-    dest = args.dest or DEST_ROOT / args.robot
+    dest = args.out or DEST_ROOT / args.robot
     print(f"Fetching {source.repository}/{source.path} @ {source.ref}")
     print(f"  -> {dest}")
     try:

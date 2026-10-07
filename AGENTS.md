@@ -12,14 +12,18 @@ Keep each document focused on one audience:
 - `README.md` is the user-facing setup and workflow guide.
 - `docs/ARCHITECTURE.md` is the internal design reference and the source of
   truth for module boundaries and contracts.
-- `docs/adr/` records the decisions behind the frozen design, one file per
-  decision.
+- `docs/DECISIONS.md` records the decisions behind the frozen design, one lettered
+  section each. Add a new decision as the next letter; when a decision stops holding,
+  edit it in place (git history keeps the old text).
+- `docs/ROBOT_RUNBOOKS.md` and `docs/WEB_VIEWER_RUNBOOK.md` are the operational
+  runbooks for the robots and the browser viewer.
 - `research/<topic>/README.md` is that research topic's own runbook (setup,
-  commands, workflow). Detailed research workflows belong there, not in a
-  `docs/*_RUNBOOK.md` file — a robot runbook links to the relevant
+  commands, workflow). Detailed research workflows belong there, not in
+  `docs/ROBOT_RUNBOOKS.md`, which links to the relevant
   `research/<topic>/README.md` instead of embedding its commands.
-  Measurement history behind a research result (investigations, reverted
-  experiments) goes in that topic's `FINDINGS.md`, not the README.
+  What was measured and tried behind a research result goes in that topic's
+  `FINDINGS.md` as causes, final numbers and one line per failed experiment,
+  not as trace logs; git history keeps the trace.
 - `CONTRIBUTING.md` is the contributor-facing source of truth for workflow and
   commit message conventions.
 - `AGENTS.md` is the agent-facing workflow, validation, and repository hygiene
@@ -28,7 +32,9 @@ Keep each document focused on one audience:
   behavior.
 
 Do not copy detailed architecture, setup commands, or agent instructions into
-the other documents. Link to the owning document instead.
+the other documents. Link to the owning document instead, and when a fact
+changes, update it in its owning document and fix the others by link, not by
+a second copy.
 
 ## Before changing code
 
@@ -58,7 +64,7 @@ boundaries merely to make a local test pass.
   — a research module registers itself with the relevant core registry
   (`physai.robots.registry`, `physai.policy.registry`,
   `physai.planner.registry`) on import instead. This is checked by
-  `uv run lint-imports` and by `tests/boundaries/test_import_boundaries.py`.
+  `uv run lint-imports` and by `tests/core/boundaries/test_import_boundaries.py`.
 - Prefer the smallest compatible change and avoid unrelated refactors.
 - Do not commit downloaded assets, model snapshots, demonstrations, videos, or
   generated plans.
@@ -85,7 +91,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 ```
 
 Use a focused test path first when one exists, then run the full suite for
-changes that cross module boundaries. `tests/boundaries/test_import_boundaries.py`
+changes that cross module boundaries. `tests/core/boundaries/test_import_boundaries.py`
 runs the dependency-direction contracts in `pyproject.toml`'s
 `[tool.importlinter]` section as part of that same suite; a new cross-module
 import can fail there even when its own tests pass. For documentation-only
@@ -111,29 +117,11 @@ contributors; do not create a second agent-only variant.
 
 ## Adding a component
 
-Every seam below is a new file plus one registration call — see
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)'s extension seam table for the
-exact registry function per seam.
-
-- New robot: build one `RobotDescriptor` and call `register_embodiment()`
-  once, then cover its capability contract and generic simulation path.
-- New scene: register a `SceneDefinition` declaring the robot kinds and task
-  names it supports.
-- New task: keep task state, reward, metrics, and termination independent
-  from robot internals; register with `tasks.registry`.
-- New planner: implement the `Planner` contract and return the existing plan
-  shape where possible; register with `planner.registry` (a research module
-  registers itself on import instead of core registering it).
-- New policy: implement the control-rate policy contract and make its
-  required observation/action capabilities explicit; register with
-  `policy.registry`, or `robots.registry.register_robot_policy()` if it is
-  owned by one robot.
-- New backend: implement the adapter shape in `robots/adapters.py` and call
-  `register_adapter()`.
-
-Update the architecture reference only when the supported design or ownership
-has changed. Update the README only when a user-visible setup or workflow has
-changed.
+Every seam is a new file plus one registration call; the exact registry function per seam
+is in the extension seam table of [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). A new robot
+registers one `RobotDescriptor` and covers its capability contract and generic simulation
+path in tests; a new task keeps state, reward, metrics and termination independent of robot
+internals; a research module registers itself on import instead of core registering it.
 
 ## Completion checklist
 

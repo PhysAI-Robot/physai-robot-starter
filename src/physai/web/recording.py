@@ -3,7 +3,7 @@
 `SessionRecorder` owns no episode format: it feeds the same recorder,
 `.npz` layout and `meta.json` that `scripts/collect_demos.py` uses, plus the
 optional `observation.environment_state` key (full simulator qpos) that lets
-the viewer restore a recorded frame exactly. See docs/adr/0009.
+the viewer restore a recorded frame exactly. See docs/DECISIONS.md, E.
 
 The physics thread calls `record_tick()` while a browser-facing thread calls
 `start()` / `stop()`. `_lock` guards the state `record_tick()` touches;
@@ -68,7 +68,7 @@ class SessionRecorder:
         if meta.get("robot_type") != self._recorder.robot_type:
             raise ValueError(
                 f"{meta_path} was recorded for robot {meta.get('robot_type')!r}, "
-                f"not {self._recorder.robot_type!r}; use a fresh --record-dir"
+                f"not {self._recorder.robot_type!r}; use a fresh --dataset"
             )
         existing_state = meta.get("features", {}).get(_STATE_KEY)
         expected_shape = (
@@ -77,7 +77,7 @@ class SessionRecorder:
         if (existing_state or {}).get("shape") != expected_shape:
             raise ValueError(
                 f"{meta_path} has a different {_STATE_KEY} layout; "
-                "use a fresh --record-dir"
+                "use a fresh --dataset"
             )
         self._recorder.episodes = list(meta["episodes"])
 
@@ -142,6 +142,7 @@ class SessionRecorder:
         observation: Observation,
         action: Action,
         environment_state: np.ndarray | None,
+        extras: dict[str, Any] | None = None,
     ) -> None:
         """Record one step; a bad frame aborts the take instead of raising.
 
@@ -170,6 +171,7 @@ class SessionRecorder:
                     action,
                     gripper_joint=gripper_joint,
                     environment_state=environment_state,
+                    extras=extras,
                 )
                 self._frames += 1
             except ValueError as exc:

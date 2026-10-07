@@ -1,19 +1,19 @@
 """Open the browser viewer for an existing simulation host.
 
-Usage: uv run --extra web python scripts/run_web.py --connect http://127.0.0.1:8000
+Usage: uv run python scripts/run_web.py --connect http://127.0.0.1:8000
 """
 
 from __future__ import annotations
 
-import argparse
 import webbrowser
 from urllib.parse import urlparse
 
 import _bootstrap  # noqa: F401
+from _cli import new_parser
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = new_parser(__doc__)
     parser.add_argument(
         "--connect",
         default="http://127.0.0.1:8000",

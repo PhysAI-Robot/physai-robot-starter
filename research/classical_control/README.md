@@ -1,77 +1,97 @@
 # Classical control
 
-Closed-loop control baselines that do not use a learned model: visual servo,
-trajectory generation, and similar techniques.
+Closed-loop control baselines that do not use a learned model: visual servo and
+similar techniques.
 
-- `so101_visual_servo.py` — calibrated-camera color-blob visual servo policy
-  for SO-101 (`SO101VisualServoPolicy`, `ColorBlobDetector`, `CameraCalibration`).
+- `so101_visual_servo.py`: calibrated-camera colour-blob visual servo for SO-101
+  (`SO101VisualServoPolicy`, `ColorBlobDetector`, `CameraCalibration`).
 
-Registers the `"visual_servo"` policy with `physai.robots.registry` on
-import; core never imports this package.
+It registers the `"visual_servo"` policy with `physai.robots.registry` on import; core
+never imports this package.
 
 ## SO-101 visual servo baseline
 
-The deterministic `visual_servo` policy detects the configured RGB blob in
-the front camera, projects its centroid through a pinhole calibration onto
-the configured workspace plane, and executes a bounded pick-and-place state
-machine through the existing IK and joint-position safety path.
+The policy detects the configured RGB blob in the front camera, projects its centroid
+through a pinhole calibration onto the workspace plane, and runs a bounded
+pick-and-place state machine through the existing IK and joint-position safety path.
+The fixed front camera does the macro approach; during descent the wrist camera
+recalibrates from its current pose and gives a guarded final alignment. After the
+grasp it lifts, transfers, releases and retreats, and it checks from the wrist camera
+and joint angles that the cube is held (a miss retries twice, then stops with
+`grasp_missed`). Use `SO101VisualServoPolicy` directly to change the target colour,
+target pixel, intrinsics or camera-to-base transform. The public calibration is a
+right-handed pinhole frame with `+z` forward; MuJoCo's `-z` convention is converted at
+the adapter boundary. The wrist camera moves with the arm, so its calibration is
+recomputed every control tick. The policy exposes `metrics.visual_error_px`,
+`metrics.ee_error_m`, `metrics.settled` and `metrics.failure_reason` separately from
+reward.
 
-Run one episode:
+Current results are in the
+[results table](../scripted_experts/README.md#results); the measurements and failure
+analysis behind them are in [FINDINGS.md](FINDINGS.md).
 
 ```bash
 uv run python scripts/eval_policy.py --policy visual_servo --episodes 1 --seed 0 --max-steps 400
+uv run python scripts/eval_policy.py --policy visual_servo --episodes 20 --seed 0 --max-steps 600 --camera-jitter 0.005 --json outputs/visual_servo_20seed_jitter.json
+uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --policy visual_servo --serve --seed 0
 ```
 
-Run the bounded camera-jitter robustness check and save its per-episode
-metrics as JSON:
+The same 20-seed evaluation runs in CI as `Research: visual servo evaluation`
+(`.github/workflows/research-visual-servo-eval.yml`): on pull requests that touch the code
+it depends on, and by hand from the Actions tab. Software rendering takes about 130 s
+per episode, so seeds are split across four parallel jobs and a final job merges them
+and fails unless every episode succeeded with no collision, timeout or unsafe action. A
+20-seed run on `ubuntu-24.04` with OSMesa is not bit-identical to a Windows run
+(floating-point differences). In the browser, the camera panels are configurable and a
+`front:detections` / `wrist:detections` overlay shows the last detected pixel, which
+separates a detection failure from a control failure
+([runbook](../../docs/WEB_VIEWER_RUNBOOK.md#camera-panels)).
+
+### Difficulty sweep and report
+
+`scripts/sweep_difficulty.py` runs the policy over lighting, camera-shift and clutter
+levels (one `eval_policy.py` process per cell, seeds 100-149 so the baseline is held
+out) and writes a Markdown table with the success rate, Wilson interval, place error,
+settling time and failure categories:
 
 ```bash
-uv run python scripts/eval_policy.py --policy visual_servo --episodes 20 --seed 0 --max-steps 600 --camera-jitter 0.005 --json-out outputs/visual_servo_20seed_jitter.json
+uv run python scripts/sweep_difficulty.py --out outputs/difficulty
+uv run python scripts/sweep_difficulty.py --axis camera --episodes 50
+uv run python scripts/sweep_difficulty.py --table-only --out outputs/difficulty
 ```
 
-The same evaluation runs on a clean Linux runner through the `Visual servo
-evaluation` workflow (`.github/workflows/visual-servo-eval.yml`). It starts on
-pull requests that touch the code the result depends on, and by hand from the
-Actions tab once the workflow is on the default branch, with the total episode
-count and the jitter as inputs. Software rendering takes about 130 seconds per
-episode, so the seeds are split across four parallel jobs and a final job
-merges them and fails unless every episode succeeded with no collision,
-timeout, or unsafe action. The result table is in the job summary, and the
-merged JSON, each shard's JSON, and one recorded episode are uploaded as
-artifacts.
+A single cell runs by hand with `eval_policy.py --lighting-scale 0.5`,
+`--camera-jitter 0.01 --camera-shift-unknown`, `--clutter-count 2` and
+`--nominal-physics` (friction and mass stay nominal so only that axis varies).
+`--camera-shift-unknown` leaves the policy's calibration at the nominal pose while the
+camera has moved. `--policy-arg KEY=VALUE` overrides a policy option (for example
+`--policy-arg final_camera=front`) and `--seeds 5,13,28` runs an explicit seed list.
+`--video` writes one video per episode under `--out` (default `outputs`, in `videos/`,
+named `<simulator>_<robot>_<policy>_seed<seed>.mp4`, with `_02`, `_03` added on a
+repeat; `--name` replaces the prefix and `run_sim.py` uses the same names),
+`--video failures` only for failed episodes, and `--camera` picks the camera (default
+the robot's first camera, `front`). `report_evaluation.py` and `compare_evaluations.py` read the merged JSON.
 
-The current baseline is **95/100** with 5 timeouts and no collisions or unsafe
-actions (see [Results](../scripted_experts/README.md#results)); it was 100%
-before the fingertip pad refit (`fad205d`), and the timeouts are not yet
-diagnosed. Seeds 13 and 15 time out without camera jitter, so expect the
-workflow's all-success check on 20 seeds to fail until this is fixed. Before
-the refit, a 20-seed run on `ubuntu-24.04` with OSMesa reproduced 20/20; it was
-not bit-identical to a Windows run (17 of 20 seeds took the same number of
-steps, the other three differed by one), as expected from floating-point
-differences between platforms.
+## Isaac Sim
 
-Inspect the policy interactively in the browser — the front and wrist camera
-panels are configurable, and a `front:detections`/`wrist:detections` debug
-overlay shows the last detected pixel as a crosshair, useful for telling a
-detection failure apart from a control failure (see the
-[Web Viewer Runbook](../../docs/WEB_VIEWER_RUNBOOK.md#camera-panels)):
+The same manifest runs on both simulators (`uv sync --extra isaac`, then set
+`OMNI_KIT_ACCEPT_EULA=YES` yourself; see [DECISIONS.md D](../../docs/DECISIONS.md#d-isaac-sim-is-an-optional-peer-engine)):
 
 ```bash
-uv run python scripts/run_sim.py --manifest configs/manifests/so101_pick_place.yaml --policy visual_servo --serve --seed 0
+uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --sim isaac --policy visual_servo --video --camera front
+uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --sim isaac --policy visual_servo --serve
+uv run python scripts/eval_policy.py --policy visual_servo --episodes 100 --json outputs/mujoco.json
+uv run python scripts/eval_policy.py --sim isaac --policy visual_servo --episodes 100 --json outputs/isaac.json
+uv run python scripts/compare_evaluations.py outputs/mujoco.json outputs/isaac.json
 ```
 
-The default detector targets the red pick cube. The fixed front camera
-performs the macro approach; during descent, the moving wrist camera
-recalibrates from its current MuJoCo pose and provides a guarded final
-alignment correction. After detection, the policy closes the gripper, lifts,
-transfers to the configured target, releases, and retreats. Use
-`SO101VisualServoPolicy` directly when the target RGB, target pixel, camera
-intrinsics, or camera-to-base transform must be changed. The public
-calibration uses a right-handed pinhole frame with `+z` forward; MuJoCo's
-camera `-z` viewing convention is converted at the adapter boundary. The
-fixed front camera can derive its calibration from the environment; the
-wrist camera moves with the arm and therefore requires a fresh TF-based
-calibration each control tick before it can be used for metric servoing.
+On Isaac, `--lighting-scale` and `--camera-jitter` (with `--camera-shift-unknown`) work;
+clutter is MuJoCo only. Evaluations are slow and Isaac sometimes starts without drawing
+the robot, so run them in shards that retry on that failure:
 
-The policy exposes `metrics.visual_error_px`, `metrics.ee_error_m`,
-`metrics.settled`, and `metrics.failure_reason` separately from task reward.
+```bash
+OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/run_sharded_eval.py --out outputs/eval/isaac_rerun --seed 0 --episodes 100 --shard-size 10 -- --sim isaac --policy visual_servo --max-steps 600
+```
+
+`scripts/compare_cameras.py` renders both simulators at one arm pose and reports colour
+statistics and what `ColorBlobDetector` finds in each.

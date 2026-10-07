@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 import math
 import time
@@ -16,6 +15,7 @@ from rclpy.action import ActionClient
 from rclpy.node import Node
 from std_msgs.msg import UInt32
 
+from _cli import new_parser
 from _common_args import add_robot
 from physai.robots.turtlebot.navigation import Nav2AcceptanceResult
 
@@ -145,16 +145,37 @@ class NavigateToPoseClient(Node):
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
+    parser = new_parser(__doc__)
     add_robot(parser, default="turtlebot4")
-    parser.add_argument("--action", default="navigate_to_pose")
-    parser.add_argument("--odom-topic", default="/odom")
-    parser.add_argument("--collision-topic", default="/simulation/collision_count")
-    parser.add_argument("--x", type=float, default=1.0)
-    parser.add_argument("--y", type=float, default=0.0)
-    parser.add_argument("--yaw", type=float, default=0.0)
-    parser.add_argument("--max-position-error", type=float, default=0.30)
-    parser.add_argument("--json-out", type=Path)
+    parser.add_argument(
+        "--action", default="navigate_to_pose", help="NavigateToPose action name"
+    )
+    parser.add_argument(
+        "--odom-topic", default="/odom", help="odometry topic read for the final pose"
+    )
+    parser.add_argument(
+        "--collision-topic",
+        default="/simulation/collision_count",
+        help="topic that publishes the collision count",
+    )
+    parser.add_argument(
+        "--x", type=float, default=1.0, help="goal x position in metres"
+    )
+    parser.add_argument(
+        "--y", type=float, default=0.0, help="goal y position in metres"
+    )
+    parser.add_argument(
+        "--yaw", type=float, default=0.0, help="goal heading in radians"
+    )
+    parser.add_argument(
+        "--max-position-error",
+        type=float,
+        default=0.30,
+        help="metres from the goal that still count as arrived",
+    )
+    parser.add_argument(
+        "--json", type=Path, help="write the result as JSON to this file"
+    )
     args = parser.parse_args()
 
     rclpy.init()
@@ -163,12 +184,12 @@ def main() -> int:
     )
     try:
         code = node.send_goal(args.x, args.y, args.yaw, args.max_position_error)
-        if args.json_out:
-            args.json_out.parent.mkdir(parents=True, exist_ok=True)
-            args.json_out.write_text(
+        if args.json:
+            args.json.parent.mkdir(parents=True, exist_ok=True)
+            args.json.write_text(
                 json.dumps(node.report.as_dict(), indent=2), encoding="utf-8"
             )
-            node.get_logger().info(f"navigation report -> {args.json_out}")
+            node.get_logger().info(f"navigation report -> {args.json}")
         return code
     finally:
         node.destroy_node()

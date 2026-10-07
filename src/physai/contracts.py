@@ -142,6 +142,25 @@ class Quaternion:
     def to_mujoco(self) -> np.ndarray:
         return np.array([self.w, self.x, self.y, self.z], dtype=np.float64)
 
+    def to_matrix(self) -> np.ndarray:
+        """This orientation as a 3x3 rotation matrix (no simulator dependency,
+        unlike ``mujoco.mju_quat2Mat``: a consumer that only has a `Pose`
+        — e.g. `ImageFrame.extrinsics` — should not need MuJoCo installed to
+        use it).
+        """
+        x, y, z, w = self.x, self.y, self.z, self.w
+        norm = x * x + y * y + z * z + w * w
+        if norm < 1e-12:
+            return np.eye(3)
+        s = 2.0 / norm
+        return np.array(
+            [
+                [1 - s * (y * y + z * z), s * (x * y - z * w), s * (x * z + y * w)],
+                [s * (x * y + z * w), 1 - s * (x * x + z * z), s * (y * z - x * w)],
+                [s * (x * z - y * w), s * (y * z + x * w), 1 - s * (x * x + y * y)],
+            ]
+        )
+
 
 @dataclass
 class Pose:
@@ -199,6 +218,44 @@ class GripperCommand:
         return float(np.clip(self.position, 0.0, 1.0))
 
 
+# The SO-101 camera resolutions a simulation may render at (4:3 webcam-like
+# 320x240, 640x480, and 16:9 1280x720). The first is the default every test,
+# script and run uses unless a resolution is chosen on purpose; choosing is
+# done in one place (the manifest's `simulation.camera_resolution` or a
+# script's `--camera-res`), never by a scene, env or test setting its own size.
+CAMERA_RESOLUTIONS = ("320x240", "640x480", "1280x720")
+DEFAULT_CAMERA_RESOLUTION = CAMERA_RESOLUTIONS[0]
+
+
+def parse_camera_resolution(resolution: str) -> tuple[int, int]:
+    """`(width, height)` of a supported resolution name such as "640x480"."""
+    if resolution not in CAMERA_RESOLUTIONS:
+        raise ValueError(
+            f"unsupported camera resolution {resolution!r}; "
+            f"choose one of {', '.join(CAMERA_RESOLUTIONS)}"
+        )
+    width, height = resolution.split("x")
+    return int(width), int(height)
+
+
+CAMERA_SIZE = parse_camera_resolution(DEFAULT_CAMERA_RESOLUTION)
+CAMERA_WIDTH, CAMERA_HEIGHT = CAMERA_SIZE
+
+
+@dataclass(frozen=True)
+class CameraIntrinsics:
+    """sensor_msgs/msg/CameraInfo's pinhole intrinsics, no distortion model."""
+
+    fx: float
+    fy: float
+    cx: float
+    cy: float
+
+    def __post_init__(self) -> None:
+        if self.fx <= 0 or self.fy <= 0:
+            raise ValueError("camera intrinsics must have positive focal lengths")
+
+
 @dataclass
 class ImageFrame:
     """sensor_msgs/msg/Image (rgb8) plus the bits of CameraInfo we care about."""
@@ -206,6 +263,16 @@ class ImageFrame:
     data: np.ndarray  # (H, W, 3) uint8
     camera_name: str = ""
     header: Header = field(default_factory=Header)
+    intrinsics: CameraIntrinsics | None = None
+    # The camera's pose in the robot base frame, in the ROS optical-frame
+    # convention (REP 103: x right, y down, z forward — the same convention
+    # sensor_msgs consumers assume, and a pinhole projection's natural frame).
+    # A MuJoCo camera's own axes are x right, y up, z backward; a backend
+    # that reads MuJoCo state converts once here so no consumer has to know
+    # any simulator's camera-axis convention. None when a backend has not
+    # supplied calibration (e.g. an uncalibrated real camera).
+    extrinsics: Pose | None = None
+    encoding: str = "rgb8"
 
     @property
     def height(self) -> int:
@@ -214,8 +281,6 @@ class ImageFrame:
     @property
     def width(self) -> int:
         return int(self.data.shape[1])
-
-    encoding: str = "rgb8"
 
     def __post_init__(self) -> None:
         self.data = np.asarray(self.data)

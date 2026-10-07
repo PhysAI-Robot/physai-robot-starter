@@ -1,0 +1,214 @@
+import numpy as np
+import pytest
+
+
+def test_the_builtin_robots_are_registered_with_what_they_own():
+    from physai import sim
+    from physai.robots import (
+        DirectAdapter,
+        available_robots,
+        available_ros2_robots,
+        create_jog_resolver,
+        create_robot,
+        navigate,
+    )
+    from physai.robots.so101 import EnvConfig, SO101Env
+    from physai.robots.turtlebot import TurtleBot4Env
+    from physai.sim.mujoco import MuJoCoSimulationCore
+
+    assert "so101" in available_robots()
+    env = create_robot("so101", render=False)
+    try:
+        assert isinstance(env, DirectAdapter)
+        assert env.robot_spec.name == "so101"
+        assert env.robot_spec.kind == "fixed_base_manipulator"
+    finally:
+        env.close()
+
+    assert available_ros2_robots() == ("so101", "turtlebot4")
+    with pytest.raises(ValueError, match="so101"):
+        create_robot("does-not-exist")  # the error lists what is available
+    with pytest.raises(ValueError, match="has no registered navigation baseline"):
+        navigate("so101", goal_x=1.0, goal_y=0.0)
+    assert issubclass(TurtleBot4Env, MuJoCoSimulationCore)
+
+    # the SO-101 environment belongs to its robot package and knows no task
+    own = SO101Env(EnvConfig(render=False))
+    try:
+        assert SO101Env.__module__ == "physai.robots.so101.mujoco_env"
+        assert not hasattr(own, "task")
+    finally:
+        own.close()
+    assert not hasattr(sim, "SO101Env")
+
+    class Arm:
+        def resolve_twist_jog(self):
+            return "resolved"
+
+    assert create_jog_resolver("so101", Arm())() == "resolved"
+    assert create_jog_resolver("turtlebot4", object()) is None
+    assert create_jog_resolver("_no_such_robot", object()) is None
+
+
+def test_turtlebot4_is_registered_and_uses_twist_control():
+    from physai.contracts import Action, Twist, Vector3
+    from physai.robots import create_robot
+
+    env = create_robot("turtlebot4", control_hz=10.0)
+    try:
+        obs = env.reset()
+        assert env.robot_spec.name == "turtlebot4"
+        assert env.robot_spec.kind == "mobile_base"
+        assert env.robot_spec.supports("base_velocity", "odometry")
+        assert not env.robot_spec.supports("arm_kinematics")
+        assert env.robot_spec.action_modes == ("twist",)
+        obs, _, _, _, _ = env.step(Action(ee_twist=Twist(linear=Vector3(x=0.2))))
+        assert obs.step == 1
+        assert env.model.nu == 3
+        assert obs.ee_pose.pose.position.z > 0.0
+        assert np.all(obs.joint_state.position > 0.0)
+        assert np.all(obs.joint_state.velocity > 0.0)
+    finally:
+        env.close()
+
+
+def test_robot_spec_validates_actions_and_unit_declarations():
+    from physai.contracts import Action, Twist
+    from physai.robots import RobotSpec
+
+    spec = RobotSpec(
+        name="test_arm",
+        kind="manipulator",
+        action_joint_names=("joint_a", "joint_b"),
+        action_modes=("joint_position",),
+        units={"joint_position": "rad", "joint_velocity": "rad/s"},
+    )
+    with pytest.raises(ValueError, match="expects 2 joint targets"):
+        spec.validate_action(Action(joint_position=np.zeros(1)))
+    with pytest.raises(ValueError, match="does not support action mode 'twist'"):
+        spec.validate_action(Action(ee_twist=Twist()))
+    with pytest.raises(ValueError, match="non-finite"):
+        spec.validate_action(Action(joint_position=np.array([0.0, np.nan])))
+
+    unitless = RobotSpec(name="unitless", kind="mobile_base", action_modes=("twist",))
+    assert unitless.units == {
+        "joint_position": "rad",
+        "joint_velocity": "rad/s",
+        "linear_velocity": "m/s",
+        "angular_velocity": "rad/s",
+    }
+    with pytest.raises(ValueError, match="invalid unit declarations"):
+        RobotSpec(
+            name="wrong_units",
+            kind="mobile_base",
+            action_modes=("twist",),
+            units={
+                "joint_position": "degrees",
+                "joint_velocity": "rad/s",
+                "linear_velocity": "m/s",
+                "angular_velocity": "rad/s",
+            },
+        )
+
+
+def test_the_scripted_baselines_are_available():
+    from physai.planner import ScriptedPlanner
+    from physai.tasks import available_tasks, create_task
+
+    plan = ScriptedPlanner((0.2, 0.08, 0.036), (0.2, -0.1, 0.021)).plan("", None)
+    assert [subgoal.skill for subgoal in plan.subgoals]
+    assert "single_cube_fixed_place" in available_tasks()
+    assert create_task("single_cube_fixed_place").name == "single_cube_fixed_place"
+
+
+def test_registering_an_embodiment_wires_every_factory_and_can_be_extended_once():
+    from physai.robots.registry import (
+        RobotDescriptor,
+        available_robots,
+        available_ros2_robots,
+        create_env_config,
+        create_robot,
+        navigate,
+        register_embodiment,
+        robot_kind,
+        scene_defaults,
+    )
+
+    calls: list[str] = []
+    register_embodiment(
+        "_fake_test_embodiment",
+        RobotDescriptor(
+            factory=lambda **_: calls.append("factory") or object(),
+            kind="fake_kind",
+            scene_defaults=lambda: {"fake": True},
+            env_config=lambda **_: calls.append("env_config") or object(),
+            ros2_node=object,
+            navigation=lambda **_: calls.append("navigation") or "ok",
+        ),
+    )
+
+    assert "_fake_test_embodiment" in available_robots()
+    assert robot_kind("_fake_test_embodiment") == "fake_kind"
+    assert scene_defaults("_fake_test_embodiment") == {"fake": True}
+    assert "_fake_test_embodiment" in available_ros2_robots()
+    create_env_config("_fake_test_embodiment")
+    navigate("_fake_test_embodiment")
+    create_robot("_fake_test_embodiment")
+    assert calls == ["env_config", "navigation", "factory"]
+
+
+def test_so101_factory_dispatches_on_simulator_not_a_separate_adapter(monkeypatch):
+    """`DirectAdapter` only wraps a generic `RobotPort` (see its own
+    docstring), so `simulator` picks which port `make_so101` builds and
+    `adapter` still wraps either one — there is no `direct_isaac` adapter.
+    """
+    from physai.robots import DirectAdapter
+    from physai.robots.so101 import isaac_env
+    from physai.robots.so101.factory import make_so101
+
+    built: list[object] = []
+
+    class FakeIsaacEnv:
+        def __init__(self, config):
+            self.config = config
+            self.robot_spec = None
+            built.append(self)
+
+    monkeypatch.setattr(isaac_env, "SO101IsaacEnv", FakeIsaacEnv)
+
+    result = make_so101(simulator="isaac", control_hz=15.0)
+    assert isinstance(result, DirectAdapter)
+    assert isinstance(result._environment, FakeIsaacEnv)
+    assert built[0].config.control_hz == 15.0
+
+    with pytest.raises(ValueError, match="unknown simulator"):
+        make_so101(simulator="not-a-real-simulator")
+
+
+def test_the_registry_validates_simulator_support_before_building():
+    from physai.robots import create_robot
+    from physai.robots.registry import available_simulators, create_env_config
+
+    assert available_simulators("so101") == ("mujoco", "isaac")
+    assert available_simulators("turtlebot4") == ("mujoco",)
+    with pytest.raises(ValueError, match="turtlebot4.*does not support"):
+        create_robot("turtlebot4", simulator="isaac")
+
+    from physai.robots.so101.mujoco_env import EnvConfig
+
+    assert isinstance(create_env_config("so101"), EnvConfig)
+    assert isinstance(create_env_config("so101", simulator="mujoco"), EnvConfig)
+
+    from physai.robots.so101.isaac_env import IsaacEnvConfig
+
+    assert isinstance(create_env_config("so101", simulator="isaac"), IsaacEnvConfig)
+    # turtlebot4's config factory never has to accept a `simulator` kwarg it
+    # has no second value for.
+    assert create_env_config("turtlebot4").max_steps > 0
+
+
+def test_has_robot_policy_tells_a_robot_with_an_expert_from_one_without():
+    from physai.robots import has_robot_policy
+
+    assert not has_robot_policy("turtlebot4", "scripted")
+    assert not has_robot_policy("so101", "no_such_policy")

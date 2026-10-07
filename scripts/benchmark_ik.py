@@ -1,6 +1,6 @@
 """Benchmark SO-101 FK/IK metrics over a deterministic reachable target set.
 
-uv run python scripts/benchmark_ik.py --targets 20 --json-out outputs/ik_benchmark.json
+uv run python scripts/benchmark_ik.py --targets 20 --json outputs/ik_benchmark.json
 """
 
 from __future__ import annotations
@@ -13,11 +13,12 @@ from pathlib import Path
 import _bootstrap  # noqa: F401
 import mujoco
 import numpy as np
+from _cli import new_parser
 from _common_args import add_seed
 
 from physai.robots.so101 import EnvConfig, SO101Env
 from physai.robots.so101.kinematics import top_down_quat
-from physai.sim import PickPlaceMinimalSceneConfig
+from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
 
 TARGET_OFFSETS = (
     (0.00, -0.03, 0.01),
@@ -31,7 +32,7 @@ TARGET_OFFSETS = (
 def benchmark(args: argparse.Namespace) -> dict:
     env = SO101Env(
         EnvConfig(
-            scene=PickPlaceMinimalSceneConfig(camera_width=64, camera_height=64),
+            scene=SingleCubeFixedPlaceSceneConfig(),
             render=False,
             max_steps=1,
         )
@@ -113,10 +114,17 @@ def benchmark(args: argparse.Namespace) -> dict:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--targets", type=int, default=20)
+    parser = new_parser(__doc__)
+    parser.add_argument(
+        "--targets",
+        type=int,
+        default=20,
+        help="number of reachable target poses to test",
+    )
     add_seed(parser)
-    parser.add_argument("--json-out", type=Path)
+    parser.add_argument(
+        "--json", type=Path, help="write the metrics as JSON to this file"
+    )
     args = parser.parse_args()
     if args.targets < 1:
         parser.error("--targets must be positive")
@@ -130,10 +138,10 @@ def main() -> int:
         f"mean_iterations={report['mean_iterations']:.1f}, "
         f"mean_runtime={report['mean_runtime_ms']:.3f} ms"
     )
-    if args.json_out:
-        args.json_out.parent.mkdir(parents=True, exist_ok=True)
-        args.json_out.write_text(json.dumps(report, indent=2), encoding="utf-8")
-        print(f"json -> {args.json_out}")
+    if args.json:
+        args.json.parent.mkdir(parents=True, exist_ok=True)
+        args.json.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        print(f"json -> {args.json}")
     return 0
 
 

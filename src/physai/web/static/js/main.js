@@ -9,6 +9,8 @@ import * as pose from "./pose.js";
 import * as playback from "./playback.js";
 
 const robotSelect = document.querySelector("#robot-select");
+const simBadge = document.querySelector("#sim-badge");
+const SIMULATOR_LABELS = { mujoco: "MuJoCo", isaac: "Isaac Sim" };
 const robotInfo = new Map();
 let activeRobot = "";
 
@@ -54,12 +56,21 @@ pauseButton.onclick = () => {
 
 async function selectRobot(name) {
   activeRobot = name;
+  showSimulator(robotInfo.get(name)?.simulator);
   controls.setActiveRobot(name);
   controls.configureControls(robotInfo.get(name));
   joints.configureForRobot(robotInfo.get(name));
   await scene.loadScene(name);
   cameras.setAvailableCameras(name, robotInfo.get(name)?.cameras || []);
   net.send({ type: "select_robot", robot: name });
+}
+
+function showSimulator(simulator) {
+  const label = SIMULATOR_LABELS[simulator] || simulator || "";
+  simBadge.textContent = label;
+  simBadge.dataset.simulator = simulator || "";
+  simBadge.hidden = !label;
+  document.title = label ? `PhysAI Viewer — ${label}` : "PhysAI Viewer";
 }
 
 async function initialize() {

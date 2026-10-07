@@ -22,10 +22,18 @@ import imageio.v3 as iio
 import mujoco
 import numpy as np
 
-from ..contracts import Action, GripperCommand, Header, ImageFrame, Twist
+from ..contracts import (
+    CAMERA_SIZE,
+    Action,
+    GripperCommand,
+    Header,
+    ImageFrame,
+    Twist,
+)
 from ..robots.base import RobotPort
 from ..robots.registry import create_jog_resolver, create_shared_instance
-from ..sim.world import RobotInstanceConfig, SharedWorld
+from ..sim.mujoco.world import RobotInstanceConfig, SharedWorld
+from ..data.extras import collect_extras
 from .cameras import CameraFeed
 from .lease import ControlLease
 from .playback import Playback
@@ -88,6 +96,7 @@ class Host:
         self._physics_lock = threading.Lock()
         self._state: dict[str, Any] | None = None
         self._thread: threading.Thread | None = None
+        self._inline = False
         self._stop = threading.Event()
         self._paused = False
         self._observation = None
@@ -195,6 +204,9 @@ class Host:
                     "name": instance_id,
                     "kind": spec.kind,
                     "robot": spec.name,
+                    # Shown in the page header; a shared world is MuJoCo-only.
+                    "simulator": spec.metadata.get("simulator")
+                    or ("mujoco" if self._shared else None),
                     "action_modes": list(spec.action_modes),
                     "capabilities": list(spec.capabilities),
                     "cameras": cameras,
@@ -234,8 +246,22 @@ class Host:
         )
         self._thread.start()
 
+    def run(self) -> None:
+        """Step the host on the calling thread until `stop()` is requested.
+
+        For a simulator whose runtime must stay on the thread that created it
+        (Isaac Sim); `start()` runs the same loop on a worker thread instead.
+        """
+        if self._thread is not None:
+            raise RuntimeError("host already started")
+        self._start_camera_thread()
+        self._inline = True
+        self._run()
+
     def stop(self) -> None:
         self._stop.set()
+        if self._inline:
+            return  # run()'s own finally closes the robot
         if self._thread is None:
             self._close()
             return
@@ -314,7 +340,7 @@ class Host:
         if self._shared:
             raise ValueError("recording is not available for shared-world hosts")
         if self._recorder is None:
-            raise ValueError("recording is disabled; start the host with --record-dir")
+            raise ValueError("recording is disabled; start the host with --dataset")
         return self._recorder
 
     def _abort_recording(self, reason: str) -> None:
@@ -332,7 +358,10 @@ class Host:
         self._sync_observation_images()
         data = getattr(self.robot, "data", None)
         self._recorder.record_tick(
-            self._observation, action, None if data is None else data.qpos
+            self._observation,
+            action,
+            None if data is None else data.qpos,
+            collect_extras(self.robot, self.policy, self._observation, None),
         )
 
     # -- playback ------------------------------------------------------------
@@ -592,11 +621,25 @@ class Host:
             return
         data_obj = getattr(self.robot, "data", None)
         stamp = float(data_obj.time) if data_obj is not None else 0.0
+        # `camera_calibration` is an optional, duck-typed convention (like
+        # `debug_frames()` below) rather than a `RobotPort` method: only a
+        # robot whose environment can report a camera's intrinsics/pose (e.g.
+        # SO101Env) provides it, and a vision policy that needs calibration
+        # (visual_servo) already fails clearly without it.
+        calibration = getattr(self.robot, "camera_calibration", None)
         for name, data in cached.items():
+            intrinsics = extrinsics = None
+            if calibration is not None:
+                try:
+                    intrinsics, extrinsics = calibration(name)
+                except (KeyError, ValueError):
+                    pass
             self._observation.images[name] = ImageFrame(
                 data=data,
                 camera_name=name,
                 header=Header(stamp=stamp, frame_id=f"camera_{name}"),
+                intrinsics=intrinsics,
+                extrinsics=extrinsics,
             )
 
     def _publish_debug_frames(self) -> None:
@@ -712,9 +755,9 @@ class Host:
         if not camera_specs:
             return
         if self._shared:
-            size = (320, 240)
+            size = CAMERA_SIZE
         else:
-            size = getattr(self.robot, "camera_size", None) or (640, 480)
+            size = getattr(self.robot, "camera_size", None) or CAMERA_SIZE
         self._cameras.start(
             self.model,
             self.data,

@@ -11,9 +11,9 @@ will fail on cubes it physically cannot grasp — which looks like a bad policy.
 
 from __future__ import annotations
 
-import argparse
 
 import _bootstrap  # noqa: F401
+from _cli import new_parser
 import numpy as np
 
 from physai.robots.so101 import EnvConfig, SO101Env
@@ -21,12 +21,31 @@ from physai.robots.so101.kinematics import TOP_DOWN
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
+    ap = new_parser(__doc__)
     ap.add_argument("--z", type=float, default=0.034, help="object centre height")
     ap.add_argument("--hover", type=float, default=0.045, help="pre-grasp clearance")
-    ap.add_argument("--x-range", type=float, nargs=2, default=(0.14, 0.30))
-    ap.add_argument("--y-range", type=float, nargs=2, default=(-0.14, 0.14))
-    ap.add_argument("--step", type=float, default=0.01)
+    ap.add_argument(
+        "--x-range",
+        type=float,
+        nargs=2,
+        metavar=("MIN", "MAX"),
+        default=(0.14, 0.30),
+        help="x range scanned, in metres",
+    )
+    ap.add_argument(
+        "--y-range",
+        type=float,
+        nargs=2,
+        metavar=("MIN", "MAX"),
+        default=(-0.14, 0.14),
+        help="y range scanned, in metres",
+    )
+    ap.add_argument(
+        "--step",
+        type=float,
+        default=0.01,
+        help="grid spacing along x in metres (y uses 0.02)",
+    )
     args = ap.parse_args()
 
     env = SO101Env(EnvConfig(seed=0, render=False))
