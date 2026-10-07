@@ -75,6 +75,11 @@ class LeRobotPolicy(VLAPolicy):
         device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         policy = ACTPolicy.from_pretrained(checkpoint_dir).to(device)
         policy.eval()
+        _set_execution(
+            policy,
+            n_action_steps=kw.pop("n_action_steps", None),
+            temporal_ensemble_coeff=kw.pop("temporal_ensemble_coeff", None),
+        )
 
         stats = json.loads(
             (checkpoint_dir / "dataset_stats.json").read_text(encoding="utf-8")
@@ -206,6 +211,37 @@ class LeRobotPolicy(VLAPolicy):
             if name in limits and column < clipped.shape[-1]:
                 clipped[..., column] = np.clip(clipped[..., column], *limits[name])
         return clipped
+
+
+def _set_execution(
+    policy, *, n_action_steps: int | None, temporal_ensemble_coeff: float | None
+) -> None:
+    """How many of each predicted chunk to run before predicting again.
+
+    A checkpoint is trained for a chunk of `chunk_size` actions and by default
+    plays all of them open-loop. Running fewer (`n_action_steps`), or blending
+    overlapping chunks every step (`temporal_ensemble_coeff`, 0.01 in the ACT
+    paper), reacts to what the cameras see sooner, with no retraining.
+    """
+    config = policy.config
+    if temporal_ensemble_coeff is not None:
+        if n_action_steps not in (None, 1):
+            raise ValueError(
+                "temporal ensembling predicts every step: n_action_steps=1"
+            )
+        from lerobot.policies.act.modeling_act import ACTTemporalEnsembler
+
+        config.temporal_ensemble_coeff = float(temporal_ensemble_coeff)
+        config.n_action_steps = 1
+        policy.temporal_ensembler = ACTTemporalEnsembler(
+            config.temporal_ensemble_coeff, config.chunk_size
+        )
+    elif n_action_steps is not None:
+        if not 1 <= n_action_steps <= config.chunk_size:
+            raise ValueError(
+                f"n_action_steps must be in 1..{config.chunk_size}, got {n_action_steps}"
+            )
+        config.n_action_steps = int(n_action_steps)
 
 
 def make_lerobot(*, env, checkpoint, **kwargs: Any) -> LeRobotPolicy:
