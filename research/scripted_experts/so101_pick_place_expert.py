@@ -22,6 +22,7 @@ from physai.robots.registry import register_robot_policy
 
 
 class Phase(Enum):
+    RISE = auto()
     APPROACH = auto()
     DESCEND = auto()
     CLOSE = auto()
@@ -74,7 +75,8 @@ class SO101PickPlaceExpert(Policy):
         self.kin = kin
         self.env = env
         self.cfg = cfg or ExpertConfig()
-        self.phase = Phase.APPROACH
+        self.phase = Phase.RISE
+        self._rise_xy: np.ndarray | None = None
         self._phase_steps = 0
         self._settle = 0
         self._q_cmd: np.ndarray | None = None
@@ -94,7 +96,8 @@ class SO101PickPlaceExpert(Policy):
         goal: PoseStamped | None = None,
         instruction: str | None = None,
     ) -> None:
-        self.phase = Phase.APPROACH
+        self.phase = Phase.RISE
+        self._rise_xy = None
         self._phase_steps = 0
         self._settle = 0
         self._q_cmd = observation.joint_state.position[: self._joint_count].copy()
@@ -116,7 +119,10 @@ class SO101PickPlaceExpert(Policy):
         # midpoint of the pad geoms' origins is not the same reference point
         # the calibrated constant represents, so "exact" was exact for the
         # wrong target. See README.md's root-cause investigation.
-        res = self.kin.ik_pinch(target_xyz, self.cfg.approach_dir, q_init=self._q_cmd)
+        # RISE keeps the wrist as it is: turning it top-down from HOME is
+        # itself a sweep of the static jaw toward the base.
+        direction = None if self.phase is Phase.RISE else self.cfg.approach_dir
+        res = self.kin.ik_pinch(target_xyz, direction, q_init=self._q_cmd)
         if not res.converged:
             return self._q_cmd
         return res.qpos
@@ -127,6 +133,17 @@ class SO101PickPlaceExpert(Policy):
         table_top = self.env.cfg.scene.table_pos[2] + self.env.cfg.scene.table_size[2]
         rest_z = table_top + self.env.cfg.scene.cube_half
 
+        if self.phase is Phase.RISE:
+            # Straight up to hover height before any lateral move. From HOME
+            # (or a failed grasp) a direct joint-space move to the hover pose
+            # sweeps the open jaws sideways at cube height, and with the cube
+            # spawned near the base on the centre line it pushed the cube out
+            # of reach (5 of 300 held-out seeds on the randomized task).
+            if self._rise_xy is None:
+                self._rise_xy = self.kin.pinch_center(self.env.data)[:2].copy()
+            return np.array(
+                [*self._rise_xy, self.env.cube_pos[2] + cfg.hover_height]
+            ), cfg.gripper_open
         if self.phase in (Phase.APPROACH, Phase.DESCEND, Phase.CLOSE, Phase.SQUEEZE):
             cube = self.env.cube_pos
             if self._grasp_xy is None:
@@ -173,6 +190,7 @@ class SO101PickPlaceExpert(Policy):
             # pick-place, which has nothing nearby to nudge, is unaffected.
             self._grasp_xy = self.env.cube_pos[:2].copy()
         order = [
+            Phase.RISE,
             Phase.APPROACH,
             Phase.DESCEND,
             Phase.CLOSE,
@@ -189,7 +207,8 @@ class SO101PickPlaceExpert(Policy):
         self._settle = 0
 
     def _retry_grasp(self) -> None:
-        self.phase = Phase.APPROACH
+        self.phase = Phase.RISE
+        self._rise_xy = None
         self._phase_steps = 0
         self._settle = 0
         self._grasp_xy = None
@@ -231,10 +250,16 @@ class SO101PickPlaceExpert(Policy):
             else self.cfg.approach_rate
         )
         self._limiter.max_delta = rate * self._dt
-        self._q_cmd = self._limiter(self._solve(target_xyz))
+        solution = self._solve(target_xyz)
+        self._q_cmd = self._limiter(solution)
 
         pinch = self.kin.pinch_center(self.env.data)
         reached = float(np.linalg.norm(pinch - target_xyz)) < self.cfg.pos_tol
+        if self.phase is Phase.APPROACH:
+            # The pinch point can reach the hover while the rate-limited wrist
+            # is still turning top-down (after RISE it starts almost there);
+            # descending then lands a jaw on the cube's top face.
+            reached = reached and float(np.abs(solution - self._q_cmd).max()) < 0.02
         grip_now = self.env.joint_to_gripper(
             observation.joint_state.position[self._gripper_index]
         )
