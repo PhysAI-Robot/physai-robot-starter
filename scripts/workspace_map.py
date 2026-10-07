@@ -7,6 +7,11 @@ will fail on cubes it physically cannot grasp — which looks like a bad policy.
 
     python scripts/workspace_map.py
     python scripts/workspace_map.py --hover 0.06 --z 0.034
+    python scripts/workspace_map.py --tilt 60 --hover 0.05
+
+`--tilt` is the gripper's angle below horizontal, pointing away from the base
+(90 = top-down, the default; 0 = flat). The hover point is `--hover` back
+along the approach direction. The IK check has no collision or contact test.
 """
 
 from __future__ import annotations
@@ -17,13 +22,18 @@ from _cli import new_parser
 import numpy as np
 
 from physai.robots.so101 import EnvConfig, SO101Env
-from physai.robots.so101.kinematics import TOP_DOWN
 
 
 def main() -> int:
     ap = new_parser(__doc__)
     ap.add_argument("--z", type=float, default=0.034, help="object centre height")
     ap.add_argument("--hover", type=float, default=0.045, help="pre-grasp clearance")
+    ap.add_argument(
+        "--tilt",
+        type=float,
+        default=90.0,
+        help="gripper angle below horizontal in degrees (90 = top-down)",
+    )
     ap.add_argument(
         "--x-range",
         type=float,
@@ -51,6 +61,14 @@ def main() -> int:
     env = SO101Env(EnvConfig(seed=0, render=False))
     q0 = env.reset().joint_state.position[:5]
 
+    tilt = np.radians(args.tilt)
+
+    def approach(x: float, y: float) -> np.ndarray:
+        phi = np.arctan2(y, x)
+        return np.array(
+            [np.cos(phi) * np.cos(tilt), np.sin(phi) * np.cos(tilt), -np.sin(tilt)]
+        )
+
     xs = np.arange(args.x_range[0], args.x_range[1] + 1e-9, args.step)
     ys = np.arange(args.y_range[0], args.y_range[1] + 1e-9, 0.02)
 
@@ -63,9 +81,11 @@ def main() -> int:
         cells = []
         n_ok = 0
         for y in ys:
-            grasp = env.kin.ik_pinch(np.array([x, y, args.z]), TOP_DOWN, q_init=q0)
+            direction = approach(x, y)
+            point = np.array([x, y, args.z])
+            grasp = env.kin.ik_pinch(point, direction, q_init=q0)
             hover = env.kin.ik_pinch(
-                np.array([x, y, args.z + args.hover]), TOP_DOWN, q_init=q0
+                point - args.hover * direction, direction, q_init=q0
             )
             if grasp.converged and hover.converged:
                 cells.append("o")

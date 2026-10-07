@@ -65,7 +65,14 @@ from .contracts import (
 )
 from .kinematics import ArmKinematics
 from .scene import scene_defaults
-from .layout import DEFAULT_CUBE_X_RANGE, DEFAULT_CUBE_Y_RANGE, draw_cube_xy
+from .layout import (
+    DEFAULT_CUBE_X_RANGE,
+    DEFAULT_CUBE_Y_RANGE,
+    DEFAULT_TARGET_X_RANGE,
+    DEFAULT_TARGET_Y_RANGE,
+    draw_cube_xy,
+    draw_target_xy,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 _DESCRIPTION_PATH = Path(__file__).resolve().parent / "description.yaml"
@@ -113,6 +120,13 @@ class IsaacEnvConfig:
     cube_x_range: tuple[float, float] = DEFAULT_CUBE_X_RANGE
     cube_y_range: tuple[float, float] = DEFAULT_CUBE_Y_RANGE
     randomize_target: bool = False
+    target_x_range: tuple[float, float] = DEFAULT_TARGET_X_RANGE
+    target_y_range: tuple[float, float] = DEFAULT_TARGET_Y_RANGE
+    # Study 1's reachable region: when set, cube and target are redrawn until
+    # their distance from the robot base lies in this range (metres), and the
+    # target until it is `min_cube_target_distance` from the cube.
+    spawn_radius_range: tuple[float, float] | None = None
+    min_cube_target_distance: float = 0.0
     # Difficulty knobs, named as in MuJoCo's `DomainRandomizationConfig`.
     # `lighting_scale` multiplies the dome and key light. `camera_position_jitter`
     # moves every camera by a uniform offset of up to this many metres per
@@ -124,8 +138,6 @@ class IsaacEnvConfig:
 
     def __post_init__(self) -> None:
         parse_camera_resolution(self.camera_resolution)
-        if self.randomize_target:
-            raise ValueError("SO101IsaacEnv does not support randomize_target yet")
         if self.lighting_scale <= 0:
             raise ValueError("lighting_scale must be positive")
         if self.camera_position_jitter < 0:
@@ -146,6 +158,10 @@ class IsaacEnvConfig:
             self.randomize_cube = self.scene is not None
         self.cube_x_range = tuple(self.cube_x_range)
         self.cube_y_range = tuple(self.cube_y_range)
+        self.target_x_range = tuple(self.target_x_range)
+        self.target_y_range = tuple(self.target_y_range)
+        if self.spawn_radius_range is not None:
+            self.spawn_radius_range = tuple(self.spawn_radius_range)
         self.cameras = tuple(self.cameras)
 
 
@@ -195,7 +211,9 @@ class SO101IsaacEnv:
 
         self._cube_path: str | None = None
         self._cube_body = None
+        self._target_pad_path: str | None = None
         if self.cfg.scene is not None:
+            self._target_pos = np.asarray(self.cfg.scene.target_pos, dtype=np.float64)
             prims = add_workspace(
                 self.stage,
                 self.cfg.scene,
@@ -204,6 +222,7 @@ class SO101IsaacEnv:
             )
             self._camera_prims["front"] = prims.front_camera
             self._cube_path = prims.cubes[0] if prims.cubes else None
+            self._target_pad_path = prims.target_pad
 
         self.kin = self._build_kinematics_oracle()
         # Display/telemetry mirror for `physai.web.Host` (`--serve`): never
@@ -326,7 +345,7 @@ class SO101IsaacEnv:
     def target_pos(self) -> np.ndarray:
         if self.cfg.scene is None:
             raise AttributeError("this SO101IsaacEnv has no target (it has no scene)")
-        return np.asarray(self.cfg.scene.target_pos, dtype=np.float64)
+        return self._target_pos.copy()
 
     def camera_calibration(self, name: str) -> tuple[CameraIntrinsics, Pose]:
         """This camera's pinhole intrinsics and its pose in the base frame.
@@ -478,7 +497,9 @@ class SO101IsaacEnv:
         if seed is not None:
             self.rng = np.random.default_rng(seed)
         self.core.reset_simulation()
-        self._reset_cube()
+        cube_xy = self._reset_cube()
+        if self.cfg.randomize_target:
+            self._reset_target(cube_xy)
         self._shift_cameras()
         target = np.zeros((1, len(self.dof_names)), dtype=np.float32)
         target[0, self._arm_indices] = HOME_QPOS
@@ -518,7 +539,21 @@ class SO101IsaacEnv:
             op, nominal = self._camera_mounts[name]
             op.Set(Gf.Vec3d(*(nominal + self.rng.uniform(-jitter, jitter, size=3))))
 
-    def _reset_cube(self) -> None:
+    def _reset_target(self, cube_xy: tuple[float, float] | None) -> None:
+        """Move the target pad to this episode's draw, as MuJoCo's layout does:
+        right after the cube, from the same rng, kept clear of the cube."""
+        from pxr import Gf, UsdGeom
+
+        self._target_pos = self._target_pos.copy()
+        self._target_pos[:2] = draw_target_xy(
+            self.rng, self.cfg, [cube_xy] if cube_xy is not None else []
+        )
+        op = UsdGeom.Xformable(
+            self.stage.GetPrimAtPath(self._target_pad_path)
+        ).GetOrderedXformOps()[0]
+        op.Set(Gf.Vec3d(*self._target_pos))
+
+    def _reset_cube(self) -> tuple[float, float] | None:
         """Put the cube at this episode's starting pose, at rest.
 
         `reset_simulation()` re-initializes physics but leaves a rigid body
@@ -528,18 +563,17 @@ class SO101IsaacEnv:
         (`layout.draw_cube_xy` on `self.rng`) at the configured height.
         """
         if self._cube_path is None:
-            return
+            return None
         position = list(self._cube_spec().position)
         if self.cfg.randomize_cube:
-            position[:2] = draw_cube_xy(
-                self.rng, self.cfg.cube_x_range, self.cfg.cube_y_range
-            )
+            position[:2] = draw_cube_xy(self.rng, self.cfg)
         self._cube_body.set_world_poses(
             positions=[position], orientations=[[1.0, 0.0, 0.0, 0.0]]
         )
         self._cube_body.set_velocities(
             linear_velocities=[[0.0, 0.0, 0.0]], angular_velocities=[[0.0, 0.0, 0.0]]
         )
+        return position[0], position[1]
 
     def _joint_state(self) -> JointState:
         positions = np.asarray(self.articulation.get_dof_positions())[0]

@@ -11,6 +11,7 @@ same scene (see `tests/acceptance/so101/test_object_layout.py`).
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import mujoco
@@ -18,6 +19,7 @@ import numpy as np
 
 if TYPE_CHECKING:
     from ...sim.mujoco.scenes import ManipulationSceneConfig
+    from .isaac_env import IsaacEnvConfig
     from .mujoco_env import EnvConfig
 
 XY = tuple[float, float]
@@ -27,19 +29,61 @@ _UPRIGHT = [1, 0, 0, 0]
 # Shared so every simulator's env config defaults to the same layout.
 DEFAULT_CUBE_X_RANGE: tuple[float, float] = (0.20, 0.24)
 DEFAULT_CUBE_Y_RANGE: tuple[float, float] = (0.05, 0.13)
+# Where the target pad may go when it is randomized.
+DEFAULT_TARGET_X_RANGE: tuple[float, float] = (0.16, 0.26)
+DEFAULT_TARGET_Y_RANGE: tuple[float, float] = (-0.13, -0.04)
+# Rejection sampling gives up after this many draws: the region is empty.
+_MAX_DRAWS = 1000
 
 
-def draw_cube_xy(
+def draw_xy(
     rng: np.random.Generator,
     x_range: tuple[float, float],
     y_range: tuple[float, float],
+    radius_range: tuple[float, float] | None = None,
+    avoid: Sequence[XY] = (),
+    min_distance: float = 0.0,
 ) -> XY:
-    """The cube's xy for one episode: x first, then y.
+    """One object's xy for one episode: x first, then y.
 
     The order of draws is what pins a seed to a layout, in every simulator
-    (`tests/core/acceptance/so101/golden_layouts.json`).
+    (`tests/core/acceptance/so101/golden_layouts.json`). With `radius_range`
+    (distance from the robot base) or `min_distance` (from every point in
+    `avoid`), draws repeat until the point satisfies them; without them this
+    is exactly one draw.
     """
-    return float(rng.uniform(*x_range)), float(rng.uniform(*y_range))
+    for _ in range(_MAX_DRAWS):
+        x, y = float(rng.uniform(*x_range)), float(rng.uniform(*y_range))
+        if radius_range is not None and not (
+            radius_range[0] <= np.hypot(x, y) <= radius_range[1]
+        ):
+            continue
+        if any(np.hypot(x - ax, y - ay) < min_distance for ax, ay in avoid):
+            continue
+        return x, y
+    raise ValueError(
+        f"no xy in x {x_range}, y {y_range}, radius {radius_range} at least "
+        f"{min_distance} m from {list(avoid)} after {_MAX_DRAWS} draws"
+    )
+
+
+def draw_cube_xy(rng: np.random.Generator, cfg: EnvConfig | IsaacEnvConfig) -> XY:
+    """The single cube's xy, from an env config of either simulator."""
+    return draw_xy(rng, cfg.cube_x_range, cfg.cube_y_range, cfg.spawn_radius_range)
+
+
+def draw_target_xy(
+    rng: np.random.Generator, cfg: EnvConfig | IsaacEnvConfig, cubes: Sequence[XY]
+) -> XY:
+    """The target pad's xy, kept `min_cube_target_distance` from every cube."""
+    return draw_xy(
+        rng,
+        cfg.target_x_range,
+        cfg.target_y_range,
+        cfg.spawn_radius_range,
+        cubes,
+        cfg.min_cube_target_distance,
+    )
 
 
 class ObjectLayout(ABC):
@@ -82,17 +126,26 @@ class ObjectLayout(ABC):
         """Place cubes, then the target pad; return the xy that clutter must avoid."""
         self._place_cubes(data, rng, cfg)
         if cfg.randomize_target:
-            self._randomize_target(rng, cfg)
+            self._randomize_target(rng, cfg, self._cube_xy(data))
         target_xy = tuple(float(v) for v in self._model.site_pos[self._target_site][:2])
         return (target_xy, *self._cube_xy(data))
 
-    def _randomize_target(self, rng: np.random.Generator, cfg: EnvConfig) -> None:
+    def _randomize_target(
+        self, rng: np.random.Generator, cfg: EnvConfig, cubes: list[XY]
+    ) -> None:
         target_pos = self._model.site_pos[self._target_site].copy()
-        target_pos[0] = rng.uniform(*cfg.target_x_range)
-        target_pos[1] = rng.uniform(*cfg.target_y_range)
+        target_pos[:2] = draw_target_xy(rng, cfg, cubes)
         self._model.site_pos[self._target_site] = target_pos
+
+    def show_target(self) -> None:
+        """Draw the target pad under the target site.
+
+        Domain randomization restores every geom position when it applies, so
+        this runs after it: moving the pad any earlier left it drawn at the
+        scene's default while the task scored the site.
+        """
         pad = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_GEOM, "target_pad")
-        self._model.geom_pos[pad] = target_pos
+        self._model.geom_pos[pad] = self._model.site_pos[self._target_site]
 
 
 class SingleCubeLayout(ObjectLayout):
@@ -117,7 +170,7 @@ class SingleCubeLayout(ObjectLayout):
     def _place_cubes(self, data, rng, cfg) -> None:
         cube_pos = np.array(self._scene.cube_pos, dtype=np.float64)
         if cfg.randomize_cube:
-            cube_pos[:2] = draw_cube_xy(rng, cfg.cube_x_range, cfg.cube_y_range)
+            cube_pos[:2] = draw_cube_xy(rng, cfg)
         data.qpos[self._qadr : self._qadr + 3] = cube_pos
         data.qpos[self._qadr + 3 : self._qadr + 7] = _UPRIGHT
 

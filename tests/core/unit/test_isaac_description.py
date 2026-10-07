@@ -125,11 +125,16 @@ def test_isaac_config_rejects_what_it_cannot_build():
         IsaacEnvConfig(
             scene=SingleCubeFixedPlaceSceneConfig(camera_resolution="640x480"),
         )
-    with pytest.raises(ValueError, match="randomize_target"):
-        IsaacEnvConfig(randomize_target=True)
 
 
-def test_the_single_cube_fixed_place_manifest_builds_a_config_for_either_simulator():
+@pytest.mark.parametrize(
+    "manifest_path",
+    [
+        "configs/manifests/so101_single_cube_fixed_place.yaml",
+        "configs/manifests/so101_randomized_pick_place.yaml",
+    ],
+)
+def test_single_cube_manifests_build_a_config_for_either_simulator(manifest_path):
     """One manifest describes the environment for both engines, so every robot
     config key it sets must be a field of each env config."""
     from dataclasses import fields
@@ -138,7 +143,7 @@ def test_the_single_cube_fixed_place_manifest_builds_a_config_for_either_simulat
     from physai.config.compat import with_overrides
     from physai.robots import create_env_config
 
-    manifest = load_manifest("configs/manifests/so101_single_cube_fixed_place.yaml")
+    manifest = load_manifest(manifest_path)
     isaac = with_overrides(manifest, simulator="isaac")
     assert isaac.simulator == "isaac"
     accepted = {f.name for f in fields(create_env_config("so101", simulator="isaac"))}
