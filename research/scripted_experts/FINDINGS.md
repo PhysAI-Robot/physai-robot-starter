@@ -84,6 +84,12 @@ Two causes, both found by tracing `pinch_center` and the cube's contacts per ste
 | randomized | 1000-1299 | 295/300 | 300/300 |
 | randomized | 0-299 | 299/300 (after fix 1) | 300/300 |
 | fixed target (regression) | 0-299 | 300/300 | 300/300 |
+| sorting (regression) | 0-299 | 299/300 (seed 95) | 300/300 |
+
+The `RISE` phase first broke sorting seed 95: a cube at r = 0.268 m has no top-down hover
+pose, so the old sequence timed out APPROACH and DESCEND swept in from HOME, and rising
+first changed where that sweep started. `RISE` is now skipped when the hover pose is out of
+top-down reach, which restores the old path for that cube.
 
 Expert efficiency reference on 1000-1299 (median over successes): 6.5 s, 0.40 m of
 gripper path, RMS jerk 105 m/s^3 (`completion_time_s`, `path_length_m`, `rms_jerk` in the

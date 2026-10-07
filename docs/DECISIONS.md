@@ -79,9 +79,9 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   overrides any manifest, so `so101_single_cube_fixed_place.yaml` is the one session both engines
   run.
 - **Same scene.** `IsaacEnvConfig.scene` takes the scene MuJoCo builds from; the per-seed cube
-  position comes from `layout.draw_cube_xy`, pinned by `golden_layouts.json`. Limits:
-  single-cube scenes, fixed target, no randomization beyond a lighting scale and camera jitter,
-  observation-only policies (`visual_servo`, `constant`, `lerobot`); `--viewer`, web recording
+  and target positions come from `layout.draw_xy`, pinned by `golden_layouts.json`. Limits:
+  single-cube scenes, no randomization beyond the cube and target spawn, a lighting scale and
+  camera jitter, observation-only policies (`visual_servo`, `constant`, `lerobot`); `--viewer`, web recording
   and playback, `SharedWorld`, the ROS2 bridge and `ArmKinematics` stay MuJoCo-only. Isaac
   `--serve` runs the `Host` on the main thread (Isaac must stay on the thread that created
   `SimulationApp`) with uvicorn on a worker thread, and shows a display mirror refreshed from

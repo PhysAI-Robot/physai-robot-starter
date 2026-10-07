@@ -107,7 +107,8 @@ Done when: the task above is runnable on both engines and the manifest is commit
 ### M1: scripted expert at 100% (gate for everything after it)
 
 - [x] 300/300 on seeds 0-299 and 300/300 on 1000-1299 on MuJoCo.
-- [ ] Run the expert on Isaac as well (it reads MuJoCo contact data; needs a port).
+- Not needed: the expert on Isaac. Demonstrations come from MuJoCo (the expert reads its
+  contact data); Isaac is only where trained policies are evaluated.
 - [x] Any failure is fixed at its root cause, or the region is shrunk and the limit
   documented in [FINDINGS](../scripted_experts/FINDINGS.md#randomized-pick-and-place-study-1-m1);
   no method is trained before this.
@@ -121,7 +122,8 @@ Done when: the task above is runnable on both engines and the manifest is commit
   is random.
 - [ ] Evaluate on the protocol below on both engines, with a success heatmap over the
   workspace. Done so far: MuJoCo 296/300 on seeds 1000-1299, Isaac Sim 88/100 on seeds
-  1000-1099 (seeds 1100-1299 on Isaac and the heatmap remain). No further grasp-recovery or robustness tuning: report it as it stands.
+  1000-1099 (seeds 1100-1299 on Isaac and the heatmap remain). No further grasp-recovery or
+  robustness tuning: report it as it stands.
 
 ### M3: ACT
 

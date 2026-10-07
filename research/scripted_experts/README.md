@@ -28,9 +28,9 @@ seeds: a 20-seed run could not resolve the pre-fix policy
 
 ## Results
 
-Deterministic scene, no randomization, `--max-steps 600`, seeds starting at 0, Wilson
-95% intervals. These are simulation results that depend on the calibrated jaw pads, not
-hardware or randomized results. This table is the one place the project's success rates
+The default task is a fixed target with the cube drawn from a small range; the
+randomized rows say so. `--max-steps 600`, Wilson 95% intervals. These are simulation
+results that depend on the calibrated jaw pads, not hardware results. This table is the one place the project's success rates
 are recorded; other documents link here.
 
 | Policy | Task | Simulator | Seeds | Success | 95% CI | Failures |
