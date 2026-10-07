@@ -96,15 +96,29 @@ class SO101PickPlaceExpert(Policy):
         goal: PoseStamped | None = None,
         instruction: str | None = None,
     ) -> None:
-        self.phase = Phase.RISE
         self._rise_xy = None
         self._phase_steps = 0
         self._settle = 0
         self._q_cmd = observation.joint_state.position[: self._joint_count].copy()
+        self.phase = self._first_phase()
         self._grip = self.cfg.gripper_open
         self._grasp_xy = None
         self._limiter = JointRateLimiter(self.cfg.max_joint_rate, self._dt)
         self._limiter.reset(self._q_cmd)
+
+    def _first_phase(self) -> Phase:
+        """RISE, unless the cube's hover pose is out of top-down reach.
+
+        A far-corner cube (sorting seed 95, r = 0.268 m) has no top-down hover
+        pose; the sequence then times out APPROACH and DESCEND sweeps in from
+        HOME. Rising first changes where that sweep starts and broke the grasp.
+        """
+        cube = self.env.cube_pos
+        hover = np.array([cube[0], cube[1], cube[2] + self.cfg.hover_height])
+        reachable = self.kin.ik_pinch(
+            hover, self.cfg.approach_dir, q_init=self._q_cmd
+        ).converged
+        return Phase.RISE if reachable else Phase.APPROACH
 
     @property
     def done(self) -> bool:
@@ -207,10 +221,10 @@ class SO101PickPlaceExpert(Policy):
         self._settle = 0
 
     def _retry_grasp(self) -> None:
-        self.phase = Phase.RISE
         self._rise_xy = None
         self._phase_steps = 0
         self._settle = 0
+        self.phase = self._first_phase()
         self._grasp_xy = None
         self._grip = self.cfg.gripper_open
 
