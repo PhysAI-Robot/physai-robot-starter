@@ -23,9 +23,9 @@ Simulation only for now; no hardware work is planned.
 
 - [x] Single-cube pick-and-place (fixed target) and three-cube sorting.
 - [x] Seeded domain randomization (lighting, camera shift, clutter, distractors).
-- [ ] Spawn sampling for cube and place target over the reachable workspace (the region `scripts/workspace_map.py` reports), shared by both engines.
-- [ ] Minimum cube-to-target distance option.
-- [ ] `randomize_target` on Isaac Sim (`SO101IsaacEnv` rejects it today).
+- [x] Spawn sampling for cube and place target over the reachable workspace (the region `scripts/workspace_map.py` reports), shared by both engines.
+- [x] Minimum cube-to-target distance option.
+- [x] `randomize_target` on Isaac Sim.
 - [ ] Object variation: size, shape, then multi-object scenes.
 - [ ] `scripts/capability_report.py`: reachable workspace, min/max graspable size, placement repeatability.
 
@@ -45,8 +45,8 @@ Simulation only for now; no hardware work is planned.
 ## Evaluation
 
 - [x] Shared evaluation reports with Wilson 95% intervals, sharded runs, difficulty sweeps (`scripts/eval_policy.py`, `run_sharded_eval.py`, `sweep_difficulty.py`).
-- [ ] Trajectory-quality metrics in the report: completion time, path length, jerk, joint-limit margin, peak speed.
-- [ ] Per-region success breakdown over the workspace.
+- [ ] Trajectory-quality metrics in the report: completion time, path length, jerk (done in `eval_policy.py`), joint-limit margin, peak speed.
+- [ ] Per-region success breakdown over the workspace (each result row now carries `cube_start` and `target_pos`).
 
 ## Transports and bridges
 
