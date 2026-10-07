@@ -4,6 +4,28 @@ What was measured behind `visual_servo`'s current behavior: causes, final number
 line per failed experiment. Commands and current results are in [README.md](README.md);
 the trace is in git history.
 
+## Place target from the camera
+
+The policy used to read the place target from `env.target_pos`, which is state and would
+break a camera-only claim once the target is random. It now finds the green target disc in
+the same front-camera frame that finds the cube (`TargetDiscDetector`, green above
+red and blue by at least 30) and projects it onto the table plane. The disc sits at 26 or
+more (median 88); the background is at 12 or less on MuJoCo but reaches 21 on Isaac (table
+edge, arm), where the first threshold of 20 added 156 stray pixels and put the place target
+10-43 mm off (51/100 on seeds 1000-1099, against 296/300 on MuJoCo). `place_from_camera=False` restores the old
+behavior. The fixed-target task stays 100/100 on seeds 0-99.
+
+On the randomized task (study 1, held-out seeds, no tuning after the detector fix): MuJoCo
+296/300 (1000-1299) and Isaac Sim 88/100 (1000-1099), 0 render glitches. The fixed-target task
+stays 100/100 on seeds 0-99. All 4 MuJoCo failures start with the cube on the centre line near
+the base (x 0.17-0.19 m, r < 0.20 m). The 12 Isaac failures also all start with the cube within
+0.22 m of the base, 10 of them within 0.19 m: two stop at APPROACH with `feature_not_found`,
+two end as `grasp_missed`, the rest finish without delivering the cube. That is the region
+where the scripted expert first failed because the jaw swept the cube from HOME
+([expert findings](../scripted_experts/FINDINGS.md#randomized-pick-and-place-study-1-m1)).
+The link is a likely cause, not a tested one: the visual servo has no rise phase, and the
+study rules out more robustness tuning for it.
+
 ## Isaac Sim parity: what was wrong
 
 `visual_servo` ran its full phase sequence on Isaac without delivering the cube. Four causes:

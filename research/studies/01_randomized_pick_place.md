@@ -116,10 +116,12 @@ Done when: the task above is runnable on both engines and the manifest is commit
 
 ### M2: visual servo on the randomized task
 
-- [ ] Detect the place target from the camera; it currently reads `env.target_pos`, which is
-  privileged and would break the camera-only claim once the target is random.
+- [x] Detect the place target from the camera (`TargetDiscDetector`); it used to read
+  `env.target_pos`, which is privileged and would break the camera-only claim once the target
+  is random.
 - [ ] Evaluate on the protocol below on both engines, with a success heatmap over the
-  workspace. No further grasp-recovery or robustness tuning: report it as it stands.
+  workspace. Done so far: MuJoCo 296/300 on seeds 1000-1299, Isaac Sim 88/100 on seeds
+  1000-1099 (seeds 1100-1299 on Isaac and the heatmap remain). No further grasp-recovery or robustness tuning: report it as it stands.
 
 ### M3: ACT
 
