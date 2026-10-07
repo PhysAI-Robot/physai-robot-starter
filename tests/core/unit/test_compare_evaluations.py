@@ -18,7 +18,7 @@ def evaluation(outcomes: dict[int, bool]) -> dict:
     return {
         "policy": "visual_servo",
         "robot": "so101",
-        "task": "single_cube_fixed_place",
+        "task": "single_cube_place",
         "summary": {
             "episodes": len(results),
             "success_count": successes,

@@ -7,7 +7,7 @@ from physai.config.compat import with_overrides
 def test_command_line_overrides_apply_to_a_manifest():
     arm = load_manifest("configs/manifests/so101_single_cube_fixed_place.yaml")
     base = load_manifest("configs/manifests/turtlebot4.yaml")
-    assert arm.task == "single_cube_fixed_place"
+    assert arm.task == "single_cube_place"
     assert base.task is None
 
     changed = with_overrides(arm, seed=9, max_steps=50, policy="constant")

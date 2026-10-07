@@ -5,21 +5,21 @@ pytestmark = [pytest.mark.acceptance, pytest.mark.assets, pytest.mark.slow]
 
 
 @requires_assets
-def test_visual_servo_single_cube_fixed_place_settles_from_a_seed():
+def test_visual_servo_single_cube_place_settles_from_a_seed():
     from physai.robots.so101 import EnvConfig, SO101Env
-    from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
+    from physai.sim.mujoco import SingleCubePlaceSceneConfig
     from physai.tasks import TaskRuntime, create_task
     from research.classical_control.so101_visual_servo import SO101VisualServoPolicy
 
     robot = SO101Env(
         EnvConfig(
-            scene=SingleCubeFixedPlaceSceneConfig(),
+            scene=SingleCubePlaceSceneConfig(),
             seed=0,
             render=True,
             max_steps=400,
         )
     )
-    env = TaskRuntime(robot, create_task("single_cube_fixed_place"))
+    env = TaskRuntime(robot, create_task("single_cube_place"))
     try:
         policy = SO101VisualServoPolicy(env)
         for seed in (0,):

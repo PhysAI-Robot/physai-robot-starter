@@ -5,7 +5,7 @@ scene to another tool:
 
     python scripts/export_scene.py
     python scripts/export_scene.py --scene sorting_minimal
-    python -m mujoco.viewer --mjcf=outputs/scene_single_cube_fixed_place.xml
+    python -m mujoco.viewer --mjcf=outputs/scene_single_cube_place.xml
 """
 
 from __future__ import annotations
@@ -24,13 +24,13 @@ def main() -> int:
     ap = new_parser(__doc__)
     add_out(
         ap,
-        default=Path("outputs/scene_single_cube_fixed_place.xml"),
+        default=Path("outputs/scene_single_cube_place.xml"),
         help="MJCF file to write",
     )
     add_robot(ap, default="so101")
     ap.add_argument(
         "--scene",
-        default="single_cube_fixed_place",
+        default="single_cube_place",
         choices=available_scenes(),
         help="registered scene to export",
     )

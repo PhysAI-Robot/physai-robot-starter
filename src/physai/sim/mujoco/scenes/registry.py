@@ -74,16 +74,16 @@ def _load_builtins() -> None:
     if _BUILTINS_LOADED:
         return
 
-    from .single_cube_fixed_place import SingleCubeFixedPlaceSceneConfig
+    from .single_cube_place import SingleCubePlaceSceneConfig
     from .sorting_minimal import SortingMinimalSceneConfig
 
     register_scene(
-        "single_cube_fixed_place",
+        "single_cube_place",
         SceneDefinition(
-            name="single_cube_fixed_place",
-            factory=SingleCubeFixedPlaceSceneConfig,
+            name="single_cube_place",
+            factory=SingleCubePlaceSceneConfig,
             robot_kinds=("fixed_base_manipulator",),
-            task_names=("single_cube_fixed_place",),
+            task_names=("single_cube_place",),
         ),
     )
     register_scene(

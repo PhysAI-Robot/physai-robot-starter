@@ -18,7 +18,7 @@ from _common_args import add_seed
 
 from physai.robots.so101 import EnvConfig, SO101Env
 from physai.robots.so101.kinematics import top_down_quat
-from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
+from physai.sim.mujoco import SingleCubePlaceSceneConfig
 
 TARGET_OFFSETS = (
     (0.00, -0.03, 0.01),
@@ -32,7 +32,7 @@ TARGET_OFFSETS = (
 def benchmark(args: argparse.Namespace) -> dict:
     env = SO101Env(
         EnvConfig(
-            scene=SingleCubeFixedPlaceSceneConfig(),
+            scene=SingleCubePlaceSceneConfig(),
             render=False,
             max_steps=1,
         )

@@ -8,7 +8,7 @@ from .domain_randomization import (
 )
 from .scenes import (
     ManipulationSceneConfig,
-    SingleCubeFixedPlaceSceneConfig,
+    SingleCubePlaceSceneConfig,
     SortingMinimalSceneConfig,
     WorldSceneConfig,
     available_scenes,
@@ -23,7 +23,7 @@ __all__ = [
     "DomainRandomizationEngine",
     "ManipulationSceneConfig",
     "MuJoCoSimulationCore",
-    "SingleCubeFixedPlaceSceneConfig",
+    "SingleCubePlaceSceneConfig",
     "RandomizationMetadata",
     "RobotBinding",
     "RobotInstanceConfig",

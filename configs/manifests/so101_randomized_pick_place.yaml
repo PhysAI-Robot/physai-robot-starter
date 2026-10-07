@@ -5,7 +5,7 @@
 schema_version: 1
 
 scene:
-  name: single_cube_fixed_place
+  name: single_cube_place
   overrides:
     robot_xml: assets/so101/so101_new_calib_camera.xml
     timestep: 0.002
@@ -19,7 +19,7 @@ scene:
     cube_mass: 0.03
     cube_rgba: [0.85, 0.25, 0.2, 1.0]
 
-task: single_cube_fixed_place
+task: single_cube_place
 task_kwargs:
   success_xy_tol: 0.04
 success_hold_steps: 10

@@ -6,17 +6,15 @@ from tests.core.support.fakes import FakeRobotPort
 
 def test_builtin_scene_registry_returns_typed_configs():
     from physai.sim.mujoco import (
-        SingleCubeFixedPlaceSceneConfig,
+        SingleCubePlaceSceneConfig,
         SortingMinimalSceneConfig,
         WorldSceneConfig,
         create_scene,
     )
     from physai.sim.mujoco.scenes import available_scenes
 
-    assert {"single_cube_fixed_place", "sorting_minimal"} <= set(available_scenes())
-    assert isinstance(
-        create_scene("single_cube_fixed_place"), SingleCubeFixedPlaceSceneConfig
-    )
+    assert {"single_cube_place", "sorting_minimal"} <= set(available_scenes())
+    assert isinstance(create_scene("single_cube_place"), SingleCubePlaceSceneConfig)
     assert isinstance(create_scene("sorting_minimal"), SortingMinimalSceneConfig)
     assert not hasattr(WorldSceneConfig(), "static_pad_body")
 
@@ -41,7 +39,7 @@ def test_runtime_rejects_task_scene_mismatch(monkeypatch):
         composition.create_runtime(
             "so101",
             scene_name="sorting_minimal",
-            task_name="single_cube_fixed_place",
+            task_name="single_cube_place",
         )
     assert fake.closed
 
@@ -80,14 +78,14 @@ def test_scenes_name_their_layout_and_reject_an_unknown_one():
 
     from physai.robots.so101.layout import create_layout
     from physai.sim.mujoco import (
-        SingleCubeFixedPlaceSceneConfig,
+        SingleCubePlaceSceneConfig,
         SortingMinimalSceneConfig,
     )
 
-    assert SingleCubeFixedPlaceSceneConfig.layout_kind == "single_cube"
+    assert SingleCubePlaceSceneConfig.layout_kind == "single_cube"
     assert SortingMinimalSceneConfig.layout_kind == "sorting"
     # a class-level hint, not a field, so dataset metadata is unchanged
-    assert "layout_kind" not in SingleCubeFixedPlaceSceneConfig().to_metadata()
+    assert "layout_kind" not in SingleCubePlaceSceneConfig().to_metadata()
     with pytest.raises(ValueError, match="supports: single_cube, sorting"):
         create_layout(None, SimpleNamespace(layout_kind="stacking"))
 
@@ -96,10 +94,10 @@ def test_the_robot_supplies_the_grasp_pad_fit_a_generic_scene_lacks():
     import pytest
 
     from physai.robots.registry import scene_defaults
-    from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
+    from physai.sim.mujoco import SingleCubePlaceSceneConfig
 
     with pytest.raises(ValueError, match="description"):
-        SingleCubeFixedPlaceSceneConfig().build_spec()
+        SingleCubePlaceSceneConfig().build_spec()
     defaults = scene_defaults("so101")
     description = defaults["description"]
     assert description.derivation["pad_align_gripper_q"] == 0.16

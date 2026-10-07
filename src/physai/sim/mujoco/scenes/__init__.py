@@ -6,7 +6,7 @@ from .common import (
     build_manipulation_spec,
     export_xml,
 )
-from .single_cube_fixed_place import SingleCubeFixedPlaceSceneConfig
+from .single_cube_place import SingleCubePlaceSceneConfig
 from .registry import (
     SceneDefinition,
     available_scenes,
@@ -19,7 +19,7 @@ from .sorting_minimal import SortingMinimalSceneConfig
 
 __all__ = [
     "ManipulationSceneConfig",
-    "SingleCubeFixedPlaceSceneConfig",
+    "SingleCubePlaceSceneConfig",
     "SceneDefinition",
     "SortingMinimalSceneConfig",
     "WorldSceneConfig",

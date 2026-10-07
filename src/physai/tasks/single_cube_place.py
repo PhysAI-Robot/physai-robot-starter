@@ -9,7 +9,7 @@ import numpy as np
 from .base import Task
 
 
-class SingleCubeFixedPlaceBackend(Protocol):
+class SingleCubePlaceBackend(Protocol):
     """Minimal geometry state required by pick-and-place evaluation."""
 
     cube_pos: np.ndarray
@@ -23,15 +23,15 @@ class SingleCubeFixedPlaceBackend(Protocol):
 DEFAULT_SUCCESS_XY_TOL = 0.04
 
 
-class SingleCubeFixedPlaceTask(Task):
-    name = "single_cube_fixed_place"
+class SingleCubePlaceTask(Task):
+    name = "single_cube_place"
     required_capabilities = ("arm_kinematics", "gripper")
     required_action_modes = ("joint_position",)
 
     def __init__(self, success_xy_tol: float = DEFAULT_SUCCESS_XY_TOL) -> None:
         self.success_xy_tol = success_xy_tol
 
-    def evaluate(self, backend: SingleCubeFixedPlaceBackend) -> dict:
+    def evaluate(self, backend: SingleCubePlaceBackend) -> dict:
         cube = np.asarray(backend.cube_pos)
         target = np.asarray(backend.target_pos)
         ee = np.asarray(backend.ee_pos)
@@ -52,7 +52,7 @@ class SingleCubeFixedPlaceTask(Task):
         }
 
     def reward(
-        self, backend: SingleCubeFixedPlaceBackend, info: dict | None = None
+        self, backend: SingleCubePlaceBackend, info: dict | None = None
     ) -> float:
         info = info or self.evaluate(backend)
         value = -0.02 * info["dist_ee_cube"] - 0.05 * info["dist_cube_target"]
@@ -64,5 +64,5 @@ class SingleCubeFixedPlaceTask(Task):
             value -= 1.0
         return float(value)
 
-    def terminated(self, backend: SingleCubeFixedPlaceBackend, info: dict) -> bool:
+    def terminated(self, backend: SingleCubePlaceBackend, info: dict) -> bool:
         return bool(info.get("success") or info.get("cube_dropped"))

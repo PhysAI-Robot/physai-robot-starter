@@ -2,12 +2,12 @@
 schema_version: 1
 
 scene:
-  name: single_cube_fixed_place
+  name: single_cube_place
 
 robots:
   - id: arm_1
     robot: so101
-    task: single_cube_fixed_place
+    task: single_cube_place
     policy: scripted
 
 viewer:

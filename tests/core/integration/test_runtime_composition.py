@@ -83,7 +83,7 @@ def test_runtime_rejects_incompatible_robot_task_before_episode(monkeypatch):
     monkeypatch.setattr(composition, "create_robot", lambda *args, **kwargs: fake)
 
     with pytest.raises(ValueError, match="does not support"):
-        composition.create_runtime("mobile", task_name="single_cube_fixed_place")
+        composition.create_runtime("mobile", task_name="single_cube_place")
     assert fake.closed
 
 
@@ -104,7 +104,7 @@ def test_runtime_validates_action_before_forwarding(monkeypatch):
     fake = FakeRobotPort(spec)
     adapter = DirectAdapter(fake)
     monkeypatch.setattr(composition, "create_robot", lambda *args, **kwargs: adapter)
-    runtime = composition.create_runtime("arm", task_name="single_cube_fixed_place")
+    runtime = composition.create_runtime("arm", task_name="single_cube_place")
     try:
         runtime.reset()
         with pytest.raises(ValueError, match="outside limits"):
@@ -128,9 +128,9 @@ def test_runtime_composes_task_around_robot(monkeypatch):
     fake = FakeRobotPort(spec)
     monkeypatch.setattr(composition, "create_robot", lambda *args, **kwargs: fake)
 
-    runtime = composition.create_runtime("arm", task_name="single_cube_fixed_place")
+    runtime = composition.create_runtime("arm", task_name="single_cube_place")
     try:
         assert isinstance(runtime.robot, TaskRuntime)
-        assert runtime.task.name == "single_cube_fixed_place"
+        assert runtime.task.name == "single_cube_place"
     finally:
         runtime.close()

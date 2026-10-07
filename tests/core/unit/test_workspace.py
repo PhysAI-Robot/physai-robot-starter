@@ -1,7 +1,7 @@
 import pytest
 
 from physai.robots.so101.scene import scene_defaults
-from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig, SortingMinimalSceneConfig
+from physai.sim.mujoco import SingleCubePlaceSceneConfig, SortingMinimalSceneConfig
 from physai.sim.workspace import (
     CUBE_FRICTION,
     FRONT_CAMERA_FOVY_DEG,
@@ -17,7 +17,7 @@ def test_a_bare_workspace_places_no_cubes():
 
 
 def test_the_single_cube_scene_places_one_cube_at_its_configured_pose():
-    scene = SingleCubeFixedPlaceSceneConfig()
+    scene = SingleCubePlaceSceneConfig()
     assert scene.cubes() == (
         CubeSpec(
             "cube", scene.cube_pos, scene.cube_half, scene.cube_mass, scene.cube_rgba
@@ -44,7 +44,7 @@ def test_mismatched_sorting_names_and_colors_are_rejected():
 def test_the_mujoco_scene_is_built_from_the_shared_constants():
     import mujoco
 
-    model, _ = SingleCubeFixedPlaceSceneConfig(**scene_defaults()).build_model()
+    model, _ = SingleCubePlaceSceneConfig(**scene_defaults()).build_model()
 
     def geom(name):
         return model.geom(name)
