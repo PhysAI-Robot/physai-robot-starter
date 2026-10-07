@@ -44,7 +44,7 @@ are recorded; other documents link here.
 | `visual_servo` | single cube, held out | MuJoCo | 100-149 | 50/50 (100%) | [92.9%, 100%] | none |
 | `visual_servo`, target from camera | single cube | MuJoCo | 0-99 | 100/100 (100%) | [96.3%, 100%] | none |
 | `visual_servo`, target from camera | randomized pick-place, held out | MuJoCo | 1000-1299 | 296/300 (98.7%) | [96.6%, 99.5%] | 4, cube near the base on the centre line |
-| `visual_servo`, target from camera | randomized pick-place, held out | Isaac Sim | 1000-1099 | 88/100 (88%) | [80.2%, 93.0%] | 12, cube within 0.22 m of the base (10 of them within 0.19 m) |
+| `visual_servo`, target from camera | randomized pick-place, held out | Isaac Sim | 1000-1299 | 271/300 (90.3%) | [86.5%, 93.2%] | 29, 26 with the cube within 0.19 m of the base |
 
 The scripted rows were measured on 2026-09-25 (commit `71b95ec`); the `visual_servo`
 rows on 2026-10-03 and later (the camera-target rows on 2026-10-07), after the pad refit and the timing and perception fixes

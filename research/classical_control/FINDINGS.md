@@ -15,13 +15,15 @@ edge, arm), where the first threshold of 20 added 156 stray pixels and put the p
 10-43 mm off (51/100 on seeds 1000-1099, against 296/300 on MuJoCo). `place_from_camera=False` restores the old
 behavior. The fixed-target task stays 100/100 on seeds 0-99.
 
-On the randomized task (study 1, held-out seeds, no tuning after the detector fix): MuJoCo
-296/300 (1000-1299) and Isaac Sim 88/100 (1000-1099), 0 render glitches. The fixed-target task
-stays 100/100 on seeds 0-99. All 4 MuJoCo failures start with the cube on the centre line near
-the base (x 0.17-0.19 m, r < 0.20 m). The 12 Isaac failures also all start with the cube within
-0.22 m of the base, 10 of them within 0.19 m: two stop at APPROACH with `feature_not_found`,
-two end as `grasp_missed`, the rest finish without delivering the cube. That is the region
-where the scripted expert first failed because the jaw swept the cube from HOME
+On the randomized task (study 1, held-out seeds 1000-1299, no tuning after the detector fix):
+MuJoCo 296/300 and Isaac Sim 271/300, 0 render glitches. The fixed-target task stays 100/100
+on seeds 0-99. Per seed, 269 pass on both, 27 only on MuJoCo, 2 only on Isaac, 2 on neither.
+All 4 MuJoCo failures start with the cube on the centre line near the base (x 0.17-0.19 m,
+r < 0.20 m). On Isaac, 26 of the 29 failures start with the cube within 0.19 m of the base:
+33% of the 78 episodes there fail, against 3 of the other 222. The failure mix is 16 that
+finish without delivering the cube, 6 `grasp_missed`, 4 `feature_not_found` at APPROACH and 3
+stopped in CLOSE. That is the region where the scripted expert first failed because the jaw
+swept the cube from HOME
 ([expert findings](../scripted_experts/FINDINGS.md#randomized-pick-and-place-study-1-m1)).
 The link is a likely cause, not a tested one: the visual servo has no rise phase, and the
 study rules out more robustness tuning for it.
