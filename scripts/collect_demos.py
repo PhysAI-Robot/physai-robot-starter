@@ -5,6 +5,7 @@ default — behaviour cloning on failures teaches failure.
 
     python scripts/collect_demos.py --episodes 50 --dataset data/pickplace_v1
     python scripts/collect_demos.py --episodes 50 --keep-failures   # for analysis
+    python scripts/collect_demos.py --manifest configs/manifests/so101_randomized_pick_place.yaml --episodes 200
 
 Runs the same session as `eval_policy.py` (configs/manifests/so101_*.yaml), so a
 policy trained on these demos is evaluated on the scene it learned.
@@ -42,6 +43,12 @@ def main() -> int:
         default=Path("data/pickplace_v1"),
         help="dataset folder to write (episode_NNNNN.npz + meta.json)",
     )
+    ap.add_argument(
+        "--manifest",
+        type=Path,
+        help=f"session manifest to collect from (default: {DEFAULT_MANIFEST}, or "
+        f"{SORTING_MANIFEST} with --sorting)",
+    )
     add_seed(ap)
     add_max_steps(ap, help="override the episode length (default: the manifest's)")
     add_camera_resolution(ap)
@@ -68,9 +75,15 @@ def main() -> int:
         "target color, e.g. 'put the blue cube on the green pad'.",
     )
     args = ap.parse_args()
+    if args.manifest and args.sorting:
+        ap.error(
+            "--sorting selects its own manifest; it cannot be used with --manifest"
+        )
 
     manifest = with_overrides(
-        load_manifest(SORTING_MANIFEST if args.sorting else DEFAULT_MANIFEST),
+        load_manifest(
+            args.manifest or (SORTING_MANIFEST if args.sorting else DEFAULT_MANIFEST)
+        ),
         seed=args.seed,
         max_steps=args.max_steps,
         camera_resolution=args.camera_resolution,
