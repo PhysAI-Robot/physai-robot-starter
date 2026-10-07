@@ -255,3 +255,16 @@ def test_a_retry_aims_at_the_wrist_estimate_and_gives_up_when_no_attempt_fits():
     assert policy._phase is VisualServoPhase.DONE
     assert policy._failure_reason == "grasp_missed"
     assert policy._grasp_retries == 1
+
+
+def test_target_disc_detector_finds_the_green_disc_and_ignores_the_rest():
+    from research.classical_control.so101_visual_servo import TargetDiscDetector
+
+    image = np.full((60, 80, 3), (190, 200, 195), dtype=np.uint8)
+    image[20:30, 40:50] = (68, 184, 100)
+    image[5:15, 5:15] = (220, 60, 45)
+    detector = TargetDiscDetector()
+    feature = detector.detect(image)
+    assert feature is not None
+    np.testing.assert_allclose(feature.pixel, [44.5, 24.5])
+    assert detector.detect(image[:18, :30]) is None

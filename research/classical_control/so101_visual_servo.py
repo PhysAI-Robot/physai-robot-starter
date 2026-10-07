@@ -148,6 +148,40 @@ class ColorBlobDetector:
         return VisualFeature(pixel=pixel, area=len(xs), confidence=confidence)
 
 
+class TargetDiscDetector:
+    """Detect the green place-target disc by how far green stands above red and blue.
+
+    The disc is the only large green object on the table: its pixels sit at
+    26 or more above the larger of red and blue (median 88), while the
+    background stays at 12 or less on MuJoCo and reaches 21 on Isaac Sim (the
+    table's far edge and the arm), so 30 keeps the disc and drops both. At 20
+    those strays pulled Isaac's centroid 10-43 mm off. A cube resting on the
+    disc hides part of it and biases the centroid, which is why a task keeps
+    them a minimum distance apart.
+    """
+
+    def __init__(self, min_chroma: float = 30.0, min_area: int = 20) -> None:
+        if min_chroma <= 0 or min_area < 1:
+            raise ValueError("invalid target disc detector configuration")
+        self.min_chroma = float(min_chroma)
+        self.min_area = int(min_area)
+
+    def detect(self, image: ImageFrame | np.ndarray) -> VisualFeature | None:
+        pixels = image.data if isinstance(image, ImageFrame) else np.asarray(image)
+        if pixels.dtype != np.uint8 or pixels.ndim != 3 or pixels.shape[2] != 3:
+            raise ValueError("visual detector expects an RGB uint8 image")
+        rgb = pixels.astype(np.float64)
+        chroma = rgb[..., 1] - np.maximum(rgb[..., 0], rgb[..., 2])
+        ys, xs = np.nonzero(chroma >= self.min_chroma)
+        if len(xs) < self.min_area:
+            return None
+        return VisualFeature(
+            pixel=np.array([xs.mean(), ys.mean()]),
+            area=len(xs),
+            confidence=float(np.clip(chroma[ys, xs].mean() / 90.0, 0.0, 1.0)),
+        )
+
+
 def draw_crosshair(
     image: np.ndarray,
     pixel: np.ndarray,
@@ -264,6 +298,8 @@ class SO101VisualServoPolicy(Policy):
         *,
         camera: str = "front",
         detector: ColorBlobDetector | None = None,
+        target_detector: TargetDiscDetector | None = None,
+        place_from_camera: bool = True,
         calibration: CameraCalibration | None = None,
         target_pixel: tuple[float, float] | None = None,
         target_plane_z: float = 0.035,
@@ -283,6 +319,12 @@ class SO101VisualServoPolicy(Policy):
         self.camera = camera
         self.final_camera = final_camera
         self.detector = detector or ColorBlobDetector()
+        # Where to place: the green disc seen by the same camera frame that
+        # finds the cube. False reads the simulator's `target_pos` instead
+        # (privileged), for a fixed target or to compare against it.
+        self.target_detector = target_detector or TargetDiscDetector()
+        self.place_from_camera = bool(place_from_camera)
+        self._place_xy: np.ndarray | None = None
         self.calibration = calibration
         self.target_pixel = target_pixel
         self.target_plane_z = float(target_plane_z)
@@ -387,6 +429,7 @@ class SO101VisualServoPolicy(Policy):
         self._settle_steps = 0
         self._stall_steps = 0
         self._target_xy = None
+        self._place_xy = None
         self._q_cmd = observation.joint_state.position[:5].copy()
         self._grip = 1.0
         self._elapsed_steps = 0
@@ -552,17 +595,21 @@ class SO101VisualServoPolicy(Policy):
             ), 1.0 if self._phase is VisualServoPhase.DESCEND else self.squeeze_grip
         if self._phase is VisualServoPhase.LIFT:
             return np.array([*pick_xy, rest_z + 0.035]), self.squeeze_grip
+        place_x, place_y = self._place()
         if self._phase is VisualServoPhase.TRANSFER:
-            return np.array(
-                [self.env.target_pos[0], self.env.target_pos[1], rest_z + 0.035]
-            ), self.squeeze_grip
+            return np.array([place_x, place_y, rest_z + 0.035]), self.squeeze_grip
         if self._phase in (VisualServoPhase.LOWER, VisualServoPhase.RELEASE):
             return np.array(
-                [self.env.target_pos[0], self.env.target_pos[1], rest_z + 0.016]
+                [place_x, place_y, rest_z + 0.016]
             ), self.squeeze_grip if self._phase is VisualServoPhase.LOWER else 1.0
-        return np.array(
-            [self.env.target_pos[0], self.env.target_pos[1], rest_z + 0.035]
-        ), 1.0
+        return np.array([place_x, place_y, rest_z + 0.035]), 1.0
+
+    def _place(self) -> np.ndarray:
+        if not self.place_from_camera:
+            return self.env.target_pos[:2]
+        if self._place_xy is None:
+            raise RuntimeError("place target is not initialized")
+        return self._place_xy
 
     def act(self, observation: Observation) -> Action:
         if self._target_xy is None:
@@ -614,6 +661,17 @@ class SO101VisualServoPolicy(Policy):
                 return Action(
                     joint_position=self._q_cmd, gripper=GripperCommand(position=1.0)
                 )
+            if self.place_from_camera and self._place_xy is None:
+                disc = self.target_detector.detect(frame)
+                if disc is None:
+                    self._target_xy = None
+                    self.metrics = VisualServoMetrics(failure_reason="target_not_found")
+                    return Action(
+                        joint_position=self._q_cmd, gripper=GripperCommand(position=1.0)
+                    )
+                self._place_xy = self.calibration.pixel_to_plane(
+                    disc.pixel, self.env.table_top
+                )[:2]
 
         if self._phase is VisualServoPhase.DESCEND:
             self._refine_from_final_camera(observation)
@@ -711,6 +769,7 @@ __all__ = [
     "CameraCalibration",
     "ColorBlobDetector",
     "SO101VisualServoPolicy",
+    "TargetDiscDetector",
     "VisualFeature",
     "VisualServoMetrics",
     "draw_crosshair",
