@@ -26,6 +26,9 @@ where the scripted expert first failed because the jaw swept the cube from HOME
 The link is a likely cause, not a tested one: the visual servo has no rise phase, and the
 study rules out more robustness tuning for it.
 
+The map of where episodes started and failed comes from the evaluation JSON:
+`python scripts/plot_workspace.py <mujoco.json> <isaac.json> --out outputs/workspace.png`.
+
 ## Isaac Sim parity: what was wrong
 
 `visual_servo` ran its full phase sequence on Isaac without delivering the cube. Four causes:
