@@ -60,6 +60,46 @@ tightly but cost `visual_servo` one seed in twelve.
 What remains (98% before the 300/300 re-measure) was believed to be a small task and
 physics floor; no retry-on-drop was added.
 
+## Randomized pick-and-place (study 1, M1)
+
+Cube and target both random over the reachable region (`configs/manifests/so101_randomized_pick_place.yaml`:
+x 0.14-0.27, |y| <= 0.14, 0.16-0.255 m from the base, at least 8 cm apart). The first
+run scored 295/300 on seeds 1000-1299, with 5 timeouts, no collisions and no refused actions.
+Two causes, both found by tracing `pinch_center` and the cube's contacts per step:
+
+1. **The jaw swept the cube out of reach from HOME.** HOME's static jaw sits at
+   x about 0.21 and low; a direct joint-space move to the hover pose dragged it through a
+   cube spawned at x 0.17-0.20 near the centre line, shoving the cube to x about 0.11,
+   where IK no longer converges. Fix: a `RISE` phase straight up to hover height first
+   (wrist left as it is: turning it top-down from HOME is itself the sweep), also after a
+   missed grasp. All 5 failing held-out seeds and both failures on 0-299 passed on rerun, but a full rerun still failed 4 of 300 held-out and 1 of 300 training seeds (cause 2).
+2. **DESCEND started before the wrist had turned top-down.** After `RISE` the pinch point
+   reaches the hover while the rate-limited wrist is still rotating, so the `reached`
+   test passed early and a jaw landed on the cube's top face (seeds 1047, 1055, 1209 and 1230
+   held out, 296 on 0-299). Fix: APPROACH also waits until the commanded joints are
+   within 0.02 rad of the IK solution.
+
+| Variant | Seeds | Before | After |
+| --- | --- | --- | --- |
+| randomized | 1000-1299 | 295/300 | 300/300 |
+| randomized | 0-299 | 299/300 (after fix 1) | 300/300 |
+| fixed target (regression) | 0-299 | 300/300 | 300/300 |
+
+Expert efficiency reference on 1000-1299 (median over successes): 6.5 s, 0.40 m of
+gripper path, RMS jerk 105 m/s^3 (`completion_time_s`, `path_length_m`, `rms_jerk` in the
+`eval_policy.py` JSON).
+
+The visible target disc did not move on MuJoCo before this check: domain randomization
+restored every geom position after the layout had moved the pad, so the task scored the
+site while cameras saw a disc at the scene default. State-based tests could not see it;
+`show_target()` now places the pad after randomization, with a test. The expert and its
+numbers are unaffected (the pad has no collision).
+
+Isaac Sim: the spawn is the same on both engines (targets identical, cubes within 3 mm
+over seeds 1000-1009; the difference is the jaw touching the cube during the one reset
+hold step). The expert itself is not evaluated on Isaac: it reads MuJoCo contact data
+directly, and `eval_policy.py --sim isaac` accepts only `visual_servo`, `constant` and `lerobot`.
+
 ## Why the protocol needs at least 100 seeds
 
 A 20-seed run cannot resolve a policy's reliability (the pre-fix expert scored 45% and

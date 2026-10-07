@@ -28,6 +28,9 @@ open, reproducible comparison with confidence intervals on two simulators.
    the [findings](../imitation_learning/FINDINGS.md#sim-to-sim-gap).
 4. **RL refinement:** does RL on top of ACT raise success and shorten, smooth the motion
    (completion time, path length, jerk)?
+5. **Cost of the top-down grasp:** how much of the table does the fixed top-down grasp leave
+   out, and how much would a tilted grasp add? Answered by the measurement under
+   [Task definition](#task-definition-frozen-at-m0-before-any-training), not by a method.
 
 ## Candidate contributions
 
@@ -51,7 +54,32 @@ what the results support:
   y within about ±0.14 m, with the far corners excluded (the map's `o` cells). Left,
   right and front are all covered. Today's task spawns the cube in x 0.20-0.24, y
   0.05-0.13 only, with a fixed target.
-- **Minimum cube-to-target distance** so that no episode is a near no-op (proposed 0.08 m).
+- **Grasp approach: top-down only, frozen.** Every method grasps with the gripper pointing
+  down. The region above is a limit of the SO-101 (5 DoF, no shoulder roll) with that grasp,
+  not of a method, and the paper says so. Side or tilted grasps are not part of this study;
+  they are a follow-up study (`studies/02_*.md`) if the results call for one.
+- **Sampler as frozen** (`configs/manifests/so101_randomized_pick_place.yaml`): x 0.14-0.27 m,
+  |y| <= 0.14 m, and 0.16-0.255 m from the base, for cube and target alike.
+- **What the top-down limit costs** (IK check, grasp at z = 0.034 m and a pre-grasp 5 cm back
+  along the approach direction, approach pointing away from the base, no collision or contact
+  test, 504 grid cells of 1 cm x 2 cm over x 0.10-0.33, |y| <= 0.20, of which 210 lie in the
+  region above; `scripts/workspace_map.py --tilt T --hover 0.05 --x-range 0.10 0.33
+  --y-range -0.20 0.20` prints each grid):
+
+  | Gripper tilt below horizontal | Reachable cells | In the region | Distance from base |
+  | --- | ---: | ---: | --- |
+  | 90 degrees (top-down, used) | 218 | 154 | 0.14-0.26 m |
+  | 75 | 86 | 33 | 0.16-0.35 m |
+  | 60 | 29 | 14 | 0.17-0.34 m |
+  | 45 | 18 | 6 | 0.23-0.33 m |
+  | 30 or less | 6 or fewer | 0 | 0.28 m and beyond |
+  | 0 (flat, "prone") | 0 | 0 | none |
+
+  A side grasp does not add coverage inside the region: top-down reaches the most cells near
+  the base, and a flat grasp reaches none at cube height. A tilt of 60-75 degrees only
+  extends the outer reach to about 0.33-0.35 m, in a narrow band. Reaching it would need a
+  new grasp geometry in the expert and in visual servo, and a repeat of M1.
+- **Minimum cube-to-target distance** so that no episode is a near no-op (0.08 m).
 - **Target is visible** in the front camera everywhere in the region, as the existing
   target disc; no method except the scripted expert reads its position from state.
 - **Success:** unchanged (`success_xy_tol` 0.04 m, held 10 steps).
@@ -62,19 +90,28 @@ what the results support:
 
 ### M0: freeze the task
 
-- [ ] Core features from [ROADMAP.md](../../ROADMAP.md#tasks-and-scenes):
-  reachability-shaped spawn sampling, a random target on Isaac, the minimum separation.
-- [ ] A manifest for the randomized task beside `so101_single_cube_fixed_place.yaml`.
-- [ ] Spawn parity: the same seed gives the same cube and target pose on both engines.
+- [x] Core features from [ROADMAP.md](../../ROADMAP.md#tasks-and-scenes):
+  reachability-shaped spawn sampling (a radius range from the base, 0.16-0.255 m), a random
+  target on Isaac, the minimum separation.
+- [x] A manifest for the randomized task beside `so101_single_cube_fixed_place.yaml`:
+  `so101_randomized_pick_place.yaml`.
+- [x] Spawn parity: the same seed gives the same target pose and a cube within 3 mm on both
+  engines (seeds 1000-1009).
+- [x] The target disc and the cube are visible in the front camera at episode start on all 300
+  held-out seeds (fewest pixels: cube 132, disc 485, counted by hiding the object and
+  diffing the render). The wrist camera at HOME sees them on only about two thirds of the
+  seeds, so a camera-only method must start from the front camera.
 
 Done when: the task above is runnable on both engines and the manifest is committed.
 
 ### M1: scripted expert at 100% (gate for everything after it)
 
-- [ ] 300/300 on seeds 0-299 and 300/300 on 1000-1299 on MuJoCo; run on Isaac as well.
-- [ ] Any failure is fixed at its root cause, or the region is shrunk and the limit
-  documented in [FINDINGS](../scripted_experts/FINDINGS.md); no method is trained before this.
-- [ ] Trajectory-quality numbers for the expert (time, path length, jerk) as the efficiency
+- [x] 300/300 on seeds 0-299 and 300/300 on 1000-1299 on MuJoCo.
+- [ ] Run the expert on Isaac as well (it reads MuJoCo contact data; needs a port).
+- [x] Any failure is fixed at its root cause, or the region is shrunk and the limit
+  documented in [FINDINGS](../scripted_experts/FINDINGS.md#randomized-pick-and-place-study-1-m1);
+  no method is trained before this.
+- [x] Trajectory-quality numbers for the expert (time, path length, jerk) as the efficiency
   reference.
 
 ### M2: visual servo on the randomized task

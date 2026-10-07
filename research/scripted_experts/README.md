@@ -37,6 +37,8 @@ are recorded; other documents link here.
 | --- | --- | --- | --- | --- | --- | --- |
 | `scripted` | single cube | MuJoCo | 0-299 | 300/300 (100%) | [98.7%, 100%] | none |
 | `scripted` | sorting (`--sorting`) | MuJoCo | 0-299 | 300/300 (100%) | [98.7%, 100%] | none |
+| `scripted` | [randomized pick-place](../studies/01_randomized_pick_place.md) | MuJoCo | 0-299 | 300/300 (100%) | [98.7%, 100%] | none |
+| `scripted` | randomized pick-place, held out | MuJoCo | 1000-1299 | 300/300 (100%) | [98.7%, 100%] | none |
 | `visual_servo` | single cube | MuJoCo | 0-99 | 100/100 (100%) | [96.3%, 100%] | none |
 | `visual_servo` | single cube | Isaac Sim | 0-99 | 100/100 (100%) | [96.3%, 100%] | none |
 | `visual_servo` | single cube, held out | MuJoCo | 100-149 | 50/50 (100%) | [92.9%, 100%] | none |
