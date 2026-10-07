@@ -68,7 +68,7 @@ and troubleshooting (including WSL2 and dual-GPU Windows).
 | `collect_demos.py` | make a dataset with the scripted expert |
 
 Every script documents its flags with `--help`. Other tools: `fetch_assets.py`,
-`workspace_map.py`, `show_ros2_contract.py`, `teleop_keyboard.py`, `export_scene.py`.
+`workspace_map.py`, `plot_workspace.py`, `show_ros2_contract.py`, `teleop_keyboard.py`, `export_scene.py`.
 
 ## Supported robots
 
