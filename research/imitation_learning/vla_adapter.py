@@ -26,6 +26,7 @@ from physai.policy.registry import register_policy
 from physai.policy.replay import VLAPolicy
 
 from .image_edits import ImageEditor
+from .state_edits import GripperStateEditor
 
 
 class LeRobotPolicy(VLAPolicy):
@@ -51,11 +52,14 @@ class LeRobotPolicy(VLAPolicy):
         postprocessor,
         image_size: int | None = None,
         image_editor=None,
+        state_editor=None,
         **kw,
     ) -> None:
         kw.setdefault("action_horizon", 1)
         super().__init__(env, **kw)
         self.image_editor = image_editor
+        self.state_editor = state_editor
+        self._last_gripper_command: float | None = None
         self.policy = policy
         self.preprocessor = preprocessor
         self.postprocessor = postprocessor
@@ -144,6 +148,7 @@ class LeRobotPolicy(VLAPolicy):
                 },
             )
 
+        state_edit = kw.pop("state_edit", None)
         image_edit = kw.pop("image_edit", None)
         editor = None
         if image_edit is not None:
@@ -156,6 +161,7 @@ class LeRobotPolicy(VLAPolicy):
             postprocessor,
             image_size=image_size,
             image_editor=editor,
+            state_editor=None if state_edit is None else GripperStateEditor(state_edit),
             **kw,
         )
 
@@ -166,7 +172,15 @@ class LeRobotPolicy(VLAPolicy):
                 batch[f"observation.images.{key}"] = self.image_editor(
                     key, observation.images[key]
                 )
+        if self.state_editor is not None:
+            batch["observation.state"] = self.state_editor(
+                batch["observation.state"], self._last_gripper_command
+            )
         return batch
+
+    def _decode_action(self, values: np.ndarray):
+        self._last_gripper_command = float(values[-1])
+        return super()._decode_action(values)
 
     def reset(
         self,
@@ -176,6 +190,9 @@ class LeRobotPolicy(VLAPolicy):
     ) -> None:
         super().reset(observation, goal, instruction)
         self.policy.reset()
+        self._last_gripper_command = None
+        if self.state_editor is not None:
+            self.state_editor.reset()
 
     def _resize(self, arr: np.ndarray):
         """Match training preprocessing: centre-crop to square, then resize.
