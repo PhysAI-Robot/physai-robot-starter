@@ -59,6 +59,20 @@ def test_blank_camera_edits_replace_the_whole_frame_and_other_edits_pass_through
     assert (ie.edit_wrist("blank_front", image) == image).all()
 
 
+def test_blur_softens_only_the_cameras_it_names():
+    image, table = _scene()
+    image[::2, ::2] = (255, 255, 255)  # high-frequency detail to remove
+    front = ie.edit_front("blur_front", image, table)
+    wrist = ie.edit_wrist("blur_wrist", image)
+
+    def detail(img):
+        return np.abs(np.diff(img.astype(int), axis=1)).mean()
+
+    assert detail(front) < detail(image) and detail(wrist) < detail(image)
+    assert (ie.edit_front("blur_wrist", image, table) == image).all()
+    assert (ie.edit_wrist("blur_front", image) == image).all()
+
+
 def test_an_unknown_edit_is_refused():
     with pytest.raises(ValueError, match="unknown image_edit"):
         ie.ImageEditor("nope", (0.3, 0.0, 0.01), (0.2, 0.25, 0.01))

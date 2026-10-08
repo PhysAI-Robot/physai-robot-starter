@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import numpy as np
 from PIL import Image, ImageDraw
+from scipy import ndimage
 
 GRAY = 128
 
@@ -26,6 +27,13 @@ FRONT_GAINS = {
     "arm": (1.03, 0.77, 0.48),  # Isaac renders the yellow arm orange
 }
 WRIST_GAIN = (0.81, 0.78, 0.75)
+# Gaussian sigma (pixels) that gives a MuJoCo frame Isaac Sim's Laplacian variance
+# (sharpness): Isaac renders the wrist camera far smoother, the front camera a little.
+BLUR_SIGMA = {"front": 0.5, "wrist": 1.0}
+
+
+def _blur(image: np.ndarray, sigma: float) -> np.ndarray:
+    return ndimage.gaussian_filter(image, sigma=(sigma, sigma, 0)).astype(np.uint8)
 
 
 def robot_mask(image: np.ndarray) -> np.ndarray:
@@ -100,6 +108,8 @@ def edit_front(name: str, image: np.ndarray, table: np.ndarray) -> np.ndarray:
     """`image` (H, W, 3 uint8) with the named edit applied; a new array."""
     if name == "blank_front":
         return np.full_like(image, GRAY)
+    if name in ("blur", "blur_front"):
+        return _blur(image, BLUR_SIGMA["front"])
     regions = front_regions(image, table)
     out = image.astype(np.float32)
     if name == "bg_dim":
@@ -127,6 +137,8 @@ def edit_front(name: str, image: np.ndarray, table: np.ndarray) -> np.ndarray:
 def edit_wrist(name: str, image: np.ndarray) -> np.ndarray:
     if name == "blank_wrist":
         return np.full_like(image, GRAY)
+    if name in ("blur", "blur_wrist"):
+        return _blur(image, BLUR_SIGMA["wrist"])
     if name == "arm_tint":
         out = image.astype(np.float32)
         _scaled(out, robot_mask(image), FRONT_GAINS["arm"])
@@ -148,6 +160,9 @@ EDITS = (
     "isaac_like",
     "blank_front",
     "blank_wrist",
+    "blur",
+    "blur_front",
+    "blur_wrist",
 )
 
 
