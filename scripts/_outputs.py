@@ -8,6 +8,7 @@ them, the file names, and writing them once the episode has run.
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 import numpy as np
 from _recording import RunRecorder
@@ -36,6 +37,8 @@ class RunOutputs:
         policy: str,
         task: str,
         fps: float,
+        dataset_dir: Path | None = None,
+        metadata: dict | None = None,
     ) -> None:
         self._runtime, self._args, self._fps = runtime, args, fps
         self._name = args.name or default_video_name(simulator, robot, policy)
@@ -46,9 +49,11 @@ class RunOutputs:
                 fps=fps,
                 name=self._name,
                 task=task,
+                dataset_dir=dataset_dir,
                 out_dir=args.out,
+                metadata=metadata,
             )
-            if args.record
+            if args.record or dataset_dir is not None
             else None
         )
 

@@ -45,6 +45,7 @@ import research.classical_control.so101_visual_servo  # noqa: E402,F401
 import research.imitation_learning.vla_adapter  # noqa: E402,F401
 import research.scripted_experts.so101_pick_place_expert  # noqa: E402,F401
 from _outputs import RunOutputs, wants_cameras
+from _recording import dataset_metadata
 from physai.config import DomainRandomizationConfig, load_manifest
 from physai.config.compat import with_overrides
 from physai.data import EvaluationReport, load_episode
@@ -148,6 +149,13 @@ def main() -> int:
         "requested difficulty axis varies",
     )
     ap.add_argument("--dataset", type=Path, help="required for --policy replay")
+    ap.add_argument(
+        "--save-dataset",
+        type=Path,
+        metavar="DIR",
+        help="also write every episode as a training dataset (episode_NNNNN.npz + "
+        "meta.json) into DIR, e.g. replayed demonstrations seen through another simulator",
+    )
     add_policy_args(ap)
     add_camera_resolution(ap)
     add_simulator(
@@ -254,7 +262,10 @@ def main() -> int:
     # from disk per episode would dominate wall-clock time for no reason.
     session = create_session(
         manifest,
-        render=simulator == "isaac" or needs_images or wants_cameras(args),
+        render=simulator == "isaac"
+        or needs_images
+        or wants_cameras(args)
+        or args.save_dataset is not None,
         policy_kwargs=policy_kwargs(args, args.policy),
     )
     runtime = session.runtime
@@ -268,6 +279,12 @@ def main() -> int:
         policy=args.policy,
         task=task_name,
         fps=fps,
+        dataset_dir=args.save_dataset,
+        metadata=(
+            dataset_metadata(runtime, manifest)
+            if args.save_dataset is not None
+            else None
+        ),
     )
 
     # Evaluating on seeds the policy trained on measures recall, not

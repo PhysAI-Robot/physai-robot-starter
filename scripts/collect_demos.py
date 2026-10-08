@@ -25,7 +25,7 @@ from _common_args import (
     add_max_steps,
     add_seed,
 )
-from _recording import RunRecorder
+from _recording import RunRecorder, dataset_metadata
 
 from physai.config import load_manifest
 from physai.config.compat import with_overrides
@@ -98,22 +98,7 @@ def main() -> int:
         name="demos",
         task=args.task,
         dataset_dir=args.dataset,
-        metadata={
-            "task_name": manifest.task_for(manifest.robots[0]),
-            "store_images": not args.no_images,
-            "simulator_config": {
-                "control_hz": env.cfg.control_hz,
-                "max_steps": env.cfg.max_steps,
-                "randomize_cube": env.cfg.randomize_cube,
-                "randomize_target": env.cfg.randomize_target,
-            },
-            "camera_config": {
-                name: {"width": width, "height": height, "encoding": "rgb8"}
-                for name in env.cfg.cameras
-            },
-            "scene_name": manifest.scene.name,
-            "scene_config": env.cfg.scene.to_metadata(),
-        },
+        metadata=dataset_metadata(runtime, manifest, store_images=not args.no_images),
     )
 
     attempted = kept = 0

@@ -12,6 +12,7 @@ from pathlib import Path
 
 from _video import next_video_stem
 
+from physai.contracts import parse_camera_resolution
 from physai.data import EpisodeRecorder
 from physai.data.extras import collect_extras
 from physai.runtime import EpisodeObserver
@@ -110,3 +111,25 @@ class RunRecorder(EpisodeObserver):
     def close(self) -> None:
         if self._dataset_dir is not None:
             self._rec.write_meta()
+
+
+def dataset_metadata(runtime, manifest, *, store_images: bool = True) -> dict:
+    """The `EpisodeRecorder` arguments that describe the session a dataset was recorded in."""
+    env = runtime.robot
+    width, height = parse_camera_resolution(manifest.simulation.camera_resolution)
+    return {
+        "task_name": manifest.task_for(manifest.robots[0]),
+        "store_images": store_images,
+        "simulator_config": {
+            "control_hz": env.cfg.control_hz,
+            "max_steps": env.cfg.max_steps,
+            "randomize_cube": env.cfg.randomize_cube,
+            "randomize_target": env.cfg.randomize_target,
+        },
+        "camera_config": {
+            name: {"width": width, "height": height, "encoding": "rgb8"}
+            for name in env.cfg.cameras
+        },
+        "scene_name": manifest.scene.name,
+        "scene_config": env.cfg.scene.to_metadata(),
+    }
