@@ -45,7 +45,10 @@ point links to where the numbers are:
   yet isolated:** on the same 100 seeds the move from MuJoCo to Isaac costs ACT 40 points
   (98 to 58) and the camera-only classical method 9 (97 to 88), with no extra demonstrations
   closing it ([findings](../imitation_learning/FINDINGS.md#randomized-pick-and-place-study-1-m3)).
-  M4 isolates colour, lighting and texture one change at a time.
+  M4 so far: physics is ruled out, the images differ by region and not by a global brightness,
+  and colour or lighting augmentation does not close it
+  ([findings](../imitation_learning/FINDINGS.md#sim-to-sim-gap-on-the-randomized-task-study-1-m4)).
+  Which image content ACT depends on, and whether renderer-side randomization closes it, are open.
 - **Teacher quality to student quality:** not started; needs a minimum-jerk expert, one demo set
   and one training run.
 - **RL refinement on a 6 GB GPU budget:** M5. ACT reaching 98% on MuJoCo leaves little success
@@ -79,7 +82,12 @@ point links to where the numbers are:
    only a regression run caught; the same expert scored 45% and 60% on two 20-50 seed ranges before its fix, so small evaluations cannot rank policies
    ([expert findings](../scripted_experts/FINDINGS.md)). Useful as a short reproducibility
    section.
-7. **Everything runs on a 6 GB laptop GPU:** the final ACT trains in about 2 hours, which
+7. **The gap is not physics and not colour.** Replaying the expert's actions on Isaac delivers
+   the cube 49 times in 50, ACT dimmed on MuJoCo stays at 96-98%, and training with colour
+   augmentation did not move Isaac (58 against 62). A policy that survives lighting and camera
+   shift but collapses with distractor boxes (60 / 46 / 23% for 1 / 2 / 4) is reading scene
+   content, which a camera-only detector (95 / 96 / 92%) ignores.
+8. **Everything runs on a 6 GB laptop GPU:** the final ACT trains in about 2 hours, which
    makes the benchmark reproducible without a cluster.
 
 ## Task definition (frozen at M0, before any training)
@@ -179,9 +187,15 @@ Done when: the task above is runnable on both engines and the manifest is commit
 
 ### M4: sim-to-sim gap
 
-- [ ] Colour and lighting augmentation, then visual randomization in the MuJoCo renderer;
-  retrain and measure the Isaac drop after each, one change at a time.
-- [ ] Run the difficulty sweep (lighting, camera shift) for visual servo and the best ACT.
+- [x] Diagnose the gap before changing training: physics ruled out by replaying the expert's
+  actions on Isaac, the images shown to differ by region and not by a global brightness, and
+  dimming MuJoCo shown not to reproduce it.
+- [x] Colour and lighting augmentation at training time, chosen on validation seeds: no gain
+  on Isaac (58 against 62 of 100), so not frozen
+  ([findings](../imitation_learning/FINDINGS.md#sim-to-sim-gap-on-the-randomized-task-study-1-m4)).
+- [ ] Visual randomization in the MuJoCo renderer (floor, textures, distractors), retrain and
+  measure the Isaac drop: deferred, now the leading candidate.
+- [x] Difficulty sweep (lighting, camera shift, clutter) for visual servo and the final ACT.
 
 ### M5: RL refinement
 
