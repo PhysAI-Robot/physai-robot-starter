@@ -57,6 +57,12 @@ and only the chosen one was run on 1000-1299:
   failed more. On Isaac the 200-demo model fails evenly (12 of 29 near-base cubes, 30 of 71
   far ones), unlike visual servo, whose Isaac failures cluster near the base.
 
+**Against visual servo, on the same seeds.** On MuJoCo (1000-1299) ACT-200 and visual servo
+differ on 10 of 300 seeds (4 only ACT, 6 only visual servo) and both fail 0, so they are
+close to interchangeable there. On the first 100 seeds the move from MuJoCo to Isaac costs
+visual servo 9 points (97 to 88) and ACT-200 40 (98 to 58); on Isaac 37 seeds pass only for
+visual servo and 7 only for ACT-200.
+
 Not done: 500 demonstrations (its policy-sized frames take about 11 GB of the 16 GB RAM),
 the wrist-camera ablation, and the equal-epoch demonstration ablation.
 
