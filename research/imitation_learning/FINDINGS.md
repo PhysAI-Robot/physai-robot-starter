@@ -136,7 +136,10 @@ More demos and more steps each lift 82% to 96-98% on 50 seeds; together they add
 nothing, and 50 episodes cannot separate 96% from 98%. The scripted expert and
 `visual_servo` rows are in the [results table](../scripted_experts/README.md#results).
 
-## Sim-to-sim gap
+## Sim-to-sim gap (earlier fixed-target task)
+
+Superseded in part by the [randomized-task diagnosis](#sim-to-sim-gap-on-the-randomized-task-study-1-m4):
+colour augmentation did not close the gap there, so the colour suspect below is not enough.
 
 Per seed, 45 pass on MuJoCo and fail on Isaac, 7 the reverse, 47 pass on both, 1 fails
 on both. Isaac failures are timeouts (46), with no collisions and no refused actions.
