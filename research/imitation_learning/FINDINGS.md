@@ -66,6 +66,57 @@ visual servo and 7 only for ACT-200.
 Not done: 500 demonstrations (its policy-sized frames take about 11 GB of the 16 GB RAM),
 the wrist-camera ablation, and the equal-epoch demonstration ablation.
 
+## Sim-to-sim gap on the randomized task (study 1, M4)
+
+The final ACT-200 scores 98% on MuJoCo and 58% on Isaac Sim over the same 100 seeds, a 40
+point gap (visual servo loses 9). What was tried to find and close it, on validation seeds
+900-999 unless stated:
+
+- **Not the physics.** Replaying the expert's recorded actions open loop (no images) on 50
+  demonstration seeds scored 50/50 on MuJoCo; on Isaac only 26/50 reached the success rule,
+  but 49/50 ended with the cube within 4 cm of the target and all 24 misses used exactly the
+  recorded number of steps, so they ran out of actions before the 10 step hold, not out of
+  reach. Isaac's contact physics deliver the cube.
+- **The ACT failures on Isaac are real misses.** None of the 42 failures on seeds 1000-1099
+  ended within 4 cm of the target and 35 ended 10 cm or more away (median 0.16 m); on MuJoCo
+  the same seeds have 2 failures.
+- **The images differ, but not by a global brightness.** At an identical pose the front
+  camera's background is 0.52x as bright on Isaac (100 against 192) while the table is 0.86x
+  (183 against 212) and the cube slightly brighter (105 against 91); the wrist camera's
+  background is 0.8x. The cube position and the colour detector's output agree to under 1 px.
+  Mean pixel difference outside the arm is 56 (front) and 47 (wrist) of 255.
+- **Dimming MuJoCo does not reproduce it.** ACT-200 on MuJoCo at lighting x1.0 / 0.7 / 0.5 / 1.4
+  scored 98 / 97 / 96 / 96 of 100, while the table also darkens to 133 (Isaac 183) so the
+  scene differs from Isaac's.
+- **Colour augmentation did not help.** Retraining with random brightness (0.4-1.4),
+  contrast, saturation, a slight hue shift and a vertical brightness ramp (to scale the
+  background apart from the table) gave the same loss (0.0317 against 0.0318), 96/100 on
+  MuJoCo (98 before) and 58/100 on Isaac (62 before). Per seed on Isaac the two models
+  differ on 36 of 100 seeds in both directions, so it is noise. The candidate was therefore not
+  frozen and not run on the test seeds.
+
+**Sensitivity sweep** (MuJoCo, test seeds 1000-1099, 100 episodes per cell, camera shift not
+told to the policy except where marked):
+
+| Cell | Visual servo | ACT-200 |
+| --- | --- | --- |
+| nominal | 97 | 98 |
+| lighting x0.5 / x0.7 / x1.3 / x1.6 | 99 / 99 / 99 / 99 | 95 / 98 / 99 / 95 |
+| camera shift 5 / 10 / 20 mm | 100 / 90 / 57 | 97 / 86 / 54 |
+| camera shift 20 mm, told | 87 | 53 (cannot use it) |
+| clutter 1 / 2 / 4 boxes | 95 / 96 / 92 | 60 / 46 / 23 |
+
+ACT is as robust as the classical method to lighting and camera shift, and far less robust to
+distractor boxes it never saw in training; visual servo ignores them because it detects only
+red. That fits a policy that conditions on the whole image and fails when something new
+appears, which Isaac's different floor, shadows and arm rendering also are. The cause on Isaac
+is therefore narrowed to image content beyond colour and brightness, not identified.
+
+Not done: visual randomization in the MuJoCo renderer (floor, textures, distractors) as the
+next training change, and a feature-level test (ACT on Isaac frames recoloured to MuJoCo's
+statistics). The jitter run trained at 5.7 steps/s against 8.3 without it (the augmentation
+runs on the CPU), about 3 hours.
+
 ## Results
 
 | Demos | Steps | Engine | Seeds | Success | 95% CI |
