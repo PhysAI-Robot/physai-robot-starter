@@ -215,8 +215,10 @@ def main() -> int:
                 "--sim isaac moves cameras without telling the policy: "
                 "add --camera-shift-unknown to --camera-jitter"
             )
-        if args.policy not in {"visual_servo", "constant", "lerobot"}:
-            ap.error("--sim isaac supports --policy visual_servo, constant or lerobot")
+        if args.policy not in {"visual_servo", "constant", "lerobot", "replay"}:
+            ap.error(
+                "--sim isaac supports --policy visual_servo, constant, lerobot or replay"
+            )
         if difficulty:
             overrides["robot_config"] = {
                 "lighting_scale": args.lighting_scale,
@@ -294,7 +296,7 @@ def main() -> int:
     results = []
     for ep in range(args.episodes):
         if args.policy == "replay":
-            entry = replay_episodes[ep % len(replay_episodes)]
+            entry = replay_episodes[(args.seed + ep) % len(replay_episodes)]
             data = load_episode(args.dataset / entry["file"])
             seed = entry.get("seed", episode_seeds[ep])
             runtime.policy = create_policy("replay", env=env, actions=data["action"])
