@@ -95,6 +95,38 @@ point gap (visual servo loses 9). What was tried to find and close it, on valida
   differ on 36 of 100 seeds in both directions, so it is noise. The candidate was therefore not
   frozen and not run on the test seeds.
 
+**Probes on one model, one change at a time** (ACT-200 on MuJoCo, validation seeds 900-999,
+unedited 98/100; `--policy-arg image_edit=` and `state_edit=`, regions segmented from the
+projected table top and from colour, gains measured per region on the two renders):
+
+| Edit to what the policy sees | Success |
+| --- | --- |
+| background x0.67, table x0.93, cube x1.16, arm tinted orange (Isaac's measured gains), each alone | 97 / 99 / 98 / 98 |
+| all four together (`isaac_like`, wrist camera x0.8 as well) | 96 |
+| Gaussian blur matching Isaac's sharpness (front 0.5 px, wrist 1.0 px), both / front / wrist | 98 / 97 / 98 |
+| background replaced by one flat colour / by grey (checker pattern removed) | 80 / 85 |
+| front camera blanked / wrist camera blanked | 1 / 47 |
+| gripper reading follows the command at once (Isaac-like) / ramps at 0.0142 per step (MuJoCo-like control) | 98 / 98 |
+| colour-jitter model: background x0.67 / flat / arm tint / all gains | 97 / 96 / 97 / 98 |
+
+Measured differences that turned out not to matter: Isaac renders the arm orange (red, green,
+blue gain 1.03, 0.77, 0.48), the background darker (0.67 by region; 0.52 when taken from the
+upper third) and the wrist image far smoother (Laplacian variance 0.06x); and Isaac's gripper
+reading reaches its command in a few steps while MuJoCo's ramps at a constant 0.0142 rad per
+step (the arm joints agree to 0.002 rad for the same actions). None of them moves the policy
+when applied alone, so the 40 point gap is not a colour, brightness, sharpness or gripper-lag
+effect. What the policy does need is the background pattern (it loses 13-18 points without
+it, and the colour-jitter model does not) and both cameras (front is indispensable).
+
+**How the final policy reads the world.** LeRobot's ACT only reads the observation when its
+action queue is empty, so with chunk 100 played in full it looks at the cameras and the joint
+state at steps 0, 100 and 200 only: it is close to an open-loop trajectory planned from the
+first frame. That explains why longer chunks were better, why edits applied at every frame
+move it so little, and the shape of the failures. Of the 42 Isaac failures on seeds
+1000-1099, 21 never moved the cube (the jaws missed it; the clearance is about 1 mm) and 21
+moved it somewhere else. Where the cube and the target are, as read from the first
+frame, is therefore what has to transfer.
+
 **Sensitivity sweep** (MuJoCo, test seeds 1000-1099, 100 episodes per cell, camera shift not
 told to the policy except where marked):
 
