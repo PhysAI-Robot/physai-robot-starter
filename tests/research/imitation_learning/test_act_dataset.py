@@ -32,6 +32,28 @@ def _write_dataset(root, episodes=3, steps=5, size=8):
     )
 
 
+def test_color_jitter_changes_training_images_only_when_asked(tmp_path):
+    import torch
+
+    from research.imitation_learning.act_dataset import ACTEpisodeDataset
+
+    _write_dataset(tmp_path)
+    # a mid-grey frame, so brightness changes in either direction stay in range
+    for index in range(3):
+        path = tmp_path / f"episode_{index:05d}.npz"
+        data = dict(np.load(path))
+        data["observation.images.front"][:] = 128
+        np.savez(path, **data)
+    plain = ACTEpisodeDataset(tmp_path, image_size=8)
+    jittered = ACTEpisodeDataset(tmp_path, image_size=8, color_jitter=True)
+    key = "observation.images.front"
+    torch.manual_seed(0)
+    changed = jittered[0][key]
+    assert not torch.allclose(changed, plain[0][key])
+    assert changed.min() >= 0.0 and changed.max() <= 1.0
+    assert torch.equal(plain[0][key], plain[1][key])
+
+
 def test_max_episodes_keeps_the_first_n_episodes(tmp_path):
     from research.imitation_learning.act_dataset import ACTEpisodeDataset
 

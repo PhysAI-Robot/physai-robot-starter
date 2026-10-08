@@ -41,6 +41,11 @@ def main() -> int:
         type=int,
         help="train on the first N episodes of the dataset (default: all)",
     )
+    ap.add_argument(
+        "--color-jitter",
+        action="store_true",
+        help="randomize brightness, contrast, saturation and hue of every training image",
+    )
     ap.add_argument("--out", type=Path, default=Path("outputs/act_ckpt"))
     ap.add_argument("--steps", type=int, default=4000)
     ap.add_argument("--batch-size", type=int, default=16)
@@ -69,6 +74,7 @@ def main() -> int:
         image_size=args.image_size,
         task=meta.get("task_name", task),
         max_episodes=args.episodes,
+        color_jitter=args.color_jitter,
     )
     print(
         f"{len(train_set.episodes)} episodes, {len(train_set)} (timestep) training samples"
@@ -101,6 +107,7 @@ def main() -> int:
             "batch_size": args.batch_size,
             "lr": args.lr,
             "device": args.device,
+            "color_jitter": args.color_jitter,
         },
         scene_name=meta.get("scene_name"),
         scene_config=meta.get("scene_config", {}),
@@ -163,6 +170,7 @@ def main() -> int:
                 "batch_size": args.batch_size,
                 "lr": args.lr,
                 "device": args.device,
+                "color_jitter": args.color_jitter,
                 "dataset": str(args.dataset),
                 "train_seeds": train_seeds,
             },

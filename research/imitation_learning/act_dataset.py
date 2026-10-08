@@ -22,6 +22,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+from torchvision.transforms import v2
 
 from physai.data.recorder import load_episode
 
@@ -57,10 +58,24 @@ class ACTEpisodeDataset(Dataset):
         image_size: int = 128,
         task: str | None = None,
         max_episodes: int | None = None,
+        color_jitter: bool = False,
     ) -> None:
         self.dataset_dir = Path(dataset_dir)
         self.chunk_size = chunk_size
         self.image_size = image_size
+        # Random brightness, contrast, saturation and a slight hue shift per camera
+        # and sample, training only. The brightness range covers the ~0.5x darker
+        # background Isaac Sim renders against MuJoCo (scripts/compare_cameras.py).
+        self._jitter = (
+            v2.ColorJitter(
+                brightness=(0.4, 1.4),
+                contrast=(0.7, 1.3),
+                saturation=(0.7, 1.3),
+                hue=(-0.03, 0.03),
+            )
+            if color_jitter
+            else None
+        )
 
         meta = json.loads((self.dataset_dir / "meta.json").read_text(encoding="utf-8"))
         if camera_keys is None:
@@ -147,7 +162,10 @@ class ACTEpisodeDataset(Dataset):
         }
         for cam in self.camera_keys:
             key = f"observation.images.{cam}"
-            sample[key] = torch.from_numpy(ep[key][t]).float() / 255.0
+            image = torch.from_numpy(ep[key][t]).float() / 255.0
+            if self._jitter is not None:
+                image = self._jitter(image).clamp(0.0, 1.0)
+            sample[key] = image
         return sample
 
     def compute_stats(self) -> DatasetStats:
