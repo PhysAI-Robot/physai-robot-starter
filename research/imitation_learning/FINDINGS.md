@@ -5,6 +5,61 @@ or 0-99), evaluated closed loop on held-out seeds 1000 and up with
 `scripts/eval_policy.py`. Success is out of the episodes shown, with the Wilson 95%
 interval.
 
+## Randomized pick-and-place (study 1, M3)
+
+ACT on the randomized task of [study 1](../studies/01_randomized_pick_place.md), trained on
+the scripted expert's demonstrations (seeds 0-199, all kept, one dataset) and scored on
+held-out seeds 1000-1299 on MuJoCo and 1000-1099 on Isaac Sim. The sections below this one
+are the earlier fixed-target task; their checkpoints no longer load (the task was renamed
+`single_cube_place`).
+
+**Final configuration:** chunk 100 played in full (`n_action_steps = 100`), 60k steps,
+batch 16, image 128, lr 1e-5, front and wrist cameras; about 2 hours on the 6 GB laptop GPU
+(8 steps/s).
+
+| Demos | Chunk | Steps | MuJoCo 1000-1299 | 95% CI | Isaac Sim 1000-1099 |
+| --- | --- | --- | --- | --- | --- |
+| 100 | 30 | 30k | 220/300 (73%) | 68-78% | 26/100 |
+| 200 | 30 | 30k | 206/300 (69%) | 63-74% | not run |
+| 100 | 100 | 60k | 275/300 (92%) | 88-94% | 55/100 |
+| **200** | **100** | **60k** | **294/300 (98%)** | **96-99%** | **58/100** |
+
+For comparison on the same seeds: expert 300/300, visual servo 296/300 on MuJoCo and
+271/300 on Isaac ([results table](../scripted_experts/README.md#results)). No run had a
+collision or a refused action; every failure is a timeout. On the 100 Isaac seeds the MuJoCo
+rate is 93/100 for the 100-demo and 98/100 for the 200-demo model, so the engine gap is about 40
+points for both.
+
+**What moved the number.** Settings were chosen on validation seeds 900-999 (ACT, 100 demos),
+and only the chosen one was run on 1000-1299:
+
+| Setting (100 demos) | Validation |
+| --- | --- |
+| chunk 30, 30 of 30 actions, 30k steps | 62/100 |
+| chunk 30, first 15 / 10 / 5 actions | 38 / 23 / 2 of 100 |
+| chunk 30, temporal ensembling 0.01 | 48/100 |
+| chunk 100, 30k steps, 100 / 50 actions | 82 / 65 of 100 |
+| chunk 100, 60k steps, 100 actions | 92/100 |
+
+- **Longer chunks played in full are better, and looking again sooner is worse.** Running fewer
+  actions per chunk or blending overlapping chunks lowered success monotonically (timeouts rose
+  with it), the opposite of what a more reactive policy would give. Chunk 100 (3.3 s) took
+  62% to 82%.
+- **More steps.** The chunk-100 loss halved from 0.064 to 0.031 between 30k and 60k steps, and
+  validation went 82% to 92%.
+- **More demonstrations only help once that holds.** At chunk 30 and 30k steps 200 demos
+  scored below 100 (206 against 220 of 300, intervals overlapping, final loss 0.042
+  against 0.035); at chunk 100 and 60k steps they scored 294 against 275, intervals apart.
+  The 200-demo runs saw half as many passes over the data at equal steps; an equal-epoch run
+  (120k steps) was not made.
+- **Where it fails.** At chunk 30 most failures ended 14 cm from the target (the cube was
+  not delivered; only 5% were near misses), and the cube at the sides or far from the base
+  failed more. On Isaac the 200-demo model fails evenly (12 of 29 near-base cubes, 30 of 71
+  far ones), unlike visual servo, whose Isaac failures cluster near the base.
+
+Not done: 500 demonstrations (its policy-sized frames take about 11 GB of the 16 GB RAM),
+the wrist-camera ablation, and the equal-epoch demonstration ablation.
+
 ## Results
 
 | Demos | Steps | Engine | Seeds | Success | 95% CI |

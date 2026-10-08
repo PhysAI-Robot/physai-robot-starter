@@ -36,6 +36,19 @@ failed episodes by default, since behavior cloning on failures teaches failure
 input size, and `act_dataset` and `LeRobotPolicy._resize()` both center-crop to a square
 before resizing, so keep them consistent.
 
+For the randomized task of study 1 (the configuration in
+[FINDINGS](FINDINGS.md#randomized-pick-and-place-study-1-m3)):
+
+```bash
+uv run python scripts/collect_demos.py --manifest configs/manifests/so101_randomized_pick_place.yaml --episodes 200 --seed 0 --dataset data/randomized_v1
+uv run python research/imitation_learning/train_act.py --dataset data/randomized_v1 --episodes 200 --steps 60000 --chunk-size 100 --num-workers 0 --out outputs/act_200
+uv run python scripts/eval_policy.py --manifest configs/manifests/so101_randomized_pick_place.yaml --policy lerobot --checkpoint outputs/act_200 --episodes 300 --seed 1000
+```
+
+`--episodes` trains on the first N recorded episodes; `--num-workers 0` keeps 200 demonstrations
+inside 16 GB of RAM. The whole chunk is played by default; `--policy-arg n_action_steps=N` or
+`temporal_ensemble_coeff=C` change that at evaluation time without retraining.
+
 The prototype supports ACT-shaped data and scripted, replay and ACT evaluation. It does
 not yet export the standard `LeRobotDataset` format or provide one training entry point
 across techniques.
