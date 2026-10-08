@@ -25,6 +25,8 @@ from physai.data.metadata import CheckpointMetadata, validate_checkpoint_compati
 from physai.policy.registry import register_policy
 from physai.policy.replay import VLAPolicy
 
+from .image_edits import ImageEditor
+
 
 class LeRobotPolicy(VLAPolicy):
     """Wraps a LeRobot `PreTrainedPolicy` plus its pre/post-processing pipeline.
@@ -48,10 +50,12 @@ class LeRobotPolicy(VLAPolicy):
         preprocessor,
         postprocessor,
         image_size: int | None = None,
+        image_editor=None,
         **kw,
     ) -> None:
         kw.setdefault("action_horizon", 1)
         super().__init__(env, **kw)
+        self.image_editor = image_editor
         self.policy = policy
         self.preprocessor = preprocessor
         self.postprocessor = postprocessor
@@ -140,9 +144,29 @@ class LeRobotPolicy(VLAPolicy):
                 },
             )
 
+        image_edit = kw.pop("image_edit", None)
+        editor = None
+        if image_edit is not None:
+            scene = env.cfg.scene
+            editor = ImageEditor(image_edit, scene.table_pos, scene.table_size)
         return cls(
-            env, policy, preprocessor, postprocessor, image_size=image_size, **kw
+            env,
+            policy,
+            preprocessor,
+            postprocessor,
+            image_size=image_size,
+            image_editor=editor,
+            **kw,
         )
+
+    def build_batch(self, observation: Observation) -> dict:
+        batch = super().build_batch(observation)
+        if self.image_editor is not None:
+            for key in self.image_keys:
+                batch[f"observation.images.{key}"] = self.image_editor(
+                    key, observation.images[key]
+                )
+        return batch
 
     def reset(
         self,
