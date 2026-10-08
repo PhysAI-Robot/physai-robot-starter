@@ -63,9 +63,12 @@ class ACTEpisodeDataset(Dataset):
         self.dataset_dir = Path(dataset_dir)
         self.chunk_size = chunk_size
         self.image_size = image_size
-        # Random brightness, contrast, saturation and a slight hue shift per camera
-        # and sample, training only. The brightness range covers the ~0.5x darker
-        # background Isaac Sim renders against MuJoCo (scripts/compare_cameras.py).
+        # Random brightness, contrast, saturation, a slight hue shift and a vertical
+        # brightness ramp per camera and sample, training only. Isaac Sim renders
+        # the front camera's background about 0.5x as bright as MuJoCo but its table
+        # only about 0.85x (scripts/compare_cameras.py), which a global brightness
+        # change cannot express; the ramp scales the top of the image apart from the
+        # bottom.
         self._jitter = (
             v2.ColorJitter(
                 brightness=(0.4, 1.4),
@@ -133,6 +136,14 @@ class ACTEpisodeDataset(Dataset):
             ).squeeze(0)
         return t
 
+    @staticmethod
+    def _brightness_ramp(image: torch.Tensor) -> torch.Tensor:
+        """Scale rows linearly from a random top gain to a random bottom gain."""
+        top = float(torch.empty(1).uniform_(0.45, 1.1))
+        bottom = float(torch.empty(1).uniform_(0.8, 1.15))
+        gain = torch.linspace(top, bottom, image.shape[-2]).view(1, -1, 1)
+        return image * gain
+
     def _shrink(self, frames: np.ndarray) -> np.ndarray:
         """(T, H, W, 3) uint8 -> (T, 3, image_size, image_size) uint8."""
         return np.stack(
@@ -164,7 +175,7 @@ class ACTEpisodeDataset(Dataset):
             key = f"observation.images.{cam}"
             image = torch.from_numpy(ep[key][t]).float() / 255.0
             if self._jitter is not None:
-                image = self._jitter(image).clamp(0.0, 1.0)
+                image = self._brightness_ramp(self._jitter(image)).clamp(0.0, 1.0)
             sample[key] = image
         return sample
 
