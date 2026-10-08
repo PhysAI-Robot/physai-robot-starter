@@ -34,18 +34,53 @@ open, reproducible comparison with confidence intervals on two simulators.
 
 ## Candidate contributions
 
-No new algorithm is claimed. The contribution is measured evidence, picked at M3 from
-what the results support:
+No new algorithm is claimed. The contribution is measured evidence. Status after M3; each
+point links to where the numbers are:
 
-- **Benchmark (baseline contribution):** an open, seeded SO-101 pick-and-place benchmark
-  on MuJoCo and Isaac Sim, four methods, one protocol, Wilson intervals on at least 300
-  held-out seeds.
-- **Engine gap as a proxy for visual domain shift (strongest candidate):** a controlled
-  ablation of why ACT loses on Isaac (colour, lighting, texture) and which training change
-  closes it, against a classical method that does not lose. Cheap to run, rarely measured.
-- **Teacher quality to student quality:** does a smoother scripted expert (minimum-jerk)
-  give a better or more efficient ACT student? One extra demo set and one extra training run.
-- **RL refinement on a 6 GB GPU budget:** residual RL on a frozen ACT on a low-cost arm.
+- **Benchmark (baseline contribution), supported:** an open, seeded SO-101 pick-and-place
+  benchmark on MuJoCo and Isaac Sim with one protocol (300 held-out seeds, Wilson intervals,
+  validation seeds kept apart from test seeds). Expert, visual servo and ACT are measured
+  ([results table](../scripted_experts/README.md#results)); ACT + RL is M5.
+- **Engine gap as a proxy for visual domain shift (strongest candidate), supported, cause not
+  yet isolated:** on the same 100 seeds the move from MuJoCo to Isaac costs ACT 40 points
+  (98 to 58) and the camera-only classical method 9 (97 to 88), with no extra demonstrations
+  closing it ([findings](../imitation_learning/FINDINGS.md#randomized-pick-and-place-study-1-m3)).
+  M4 isolates colour, lighting and texture one change at a time.
+- **Teacher quality to student quality:** not started; needs a minimum-jerk expert, one demo set
+  and one training run.
+- **RL refinement on a 6 GB GPU budget:** M5. ACT reaching 98% on MuJoCo leaves little success
+  to gain there, so the efficiency metrics (time, path, jerk) and the Isaac gap are where RL
+  has room.
+
+### Findings worth a section in the paper
+
+1. **Longer action chunks played in full beat reactive execution** for ACT on this task
+   (validation 62% to 82% to 92% with chunk 30, chunk 100, then 60k steps; fewer actions per
+   chunk or temporal ensembling lowered success monotonically). The opposite of the usual
+   advice to re-plan often. [Findings](../imitation_learning/FINDINGS.md#randomized-pick-and-place-study-1-m3).
+2. **Demonstration count only matters once the training setup is right:** at chunk 30 200
+   demonstrations were no better than 100 (206 against 220 of 300); at chunk 100 and 60k steps
+   they were (294 against 275). An ablation run at a fixed, weak configuration would have
+   concluded the opposite.
+3. **The classical method is also fragile across engines, until perception is fixed.** The
+   target-disc detector's first threshold scored 51/100 on Isaac and 296/300 on MuJoCo; a
+   threshold set from measured background chroma gave 271/300. Renderer differences hit
+   hand-built perception as well as learned vision
+   ([findings](../classical_control/FINDINGS.md#place-target-from-the-camera)).
+4. **Different failure geometry:** visual servo fails on cubes near the base on both engines
+   (a grasp and sweep problem), ACT on Isaac fails evenly across the workspace (likely a perception
+   problem, to be tested in M4). They are complementary, which supports using the classical method as a diagnostic
+   baseline and not only a competitor.
+5. **A coverage limit of the top-down grasp**, measured: flat or low-tilt grasps reach no cell
+   of the sampled region, and a 60-75 degree tilt only extends the outer reach (table under
+   [Task definition](#task-definition-frozen-at-m0-before-any-training)).
+6. **Benchmark hygiene, with examples.** State-based tests missed that the visible target
+   disc did not move in MuJoCo; an expert change fixed one region and broke a sorting seed that
+   only a regression run caught; the same expert scored 45% and 60% on two 20-50 seed ranges before its fix, so small evaluations cannot rank policies
+   ([expert findings](../scripted_experts/FINDINGS.md)). Useful as a short reproducibility
+   section.
+7. **Everything runs on a 6 GB laptop GPU:** the final ACT trains in about 2 hours, which
+   makes the benchmark reproducible without a cluster.
 
 ## Task definition (frozen at M0, before any training)
 
@@ -140,7 +175,7 @@ Done when: the task above is runnable on both engines and the manifest is commit
 - [x] Evaluate on both engines; ablation: number of demonstrations. MuJoCo 294/300 (200 demos)
   and 275/300 (100 demos); Isaac Sim 58/100 and 55/100. The wrist-camera ablation and the
   equal-epoch demonstration ablation are not done.
-- [ ] Choose the paper's contributions from the results so far.
+- [x] Choose the paper's contributions from the results so far (see Candidate contributions).
 
 ### M4: sim-to-sim gap
 
