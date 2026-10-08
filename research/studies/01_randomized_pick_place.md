@@ -133,16 +133,13 @@ Done when: the task above is runnable on both engines and the manifest is commit
 
 - [x] Demonstrations from the M1 expert: 100 and 200 episodes (seeds 0-199, all kept). 500 is
   deferred: its policy-sized frames are about 11 GB in RAM.
-- [x] Initial configuration (batch 16, chunk 30, image 128, lr 1e-5, 30k steps, front and
-  wrist cameras), with seeds and loss logged: MuJoCo 220/300 with 100 demos, 206/300 with 200
-  demos (seeds 1000-1299), Isaac Sim on 100 seeds for the 100-demo run.
-- [ ] Choose the final configuration on validation seeds 900-999, in this order: (1) how much
-  of each chunk to run (`--policy-arg n_action_steps=N`, or `temporal_ensemble_coeff`), an
-  evaluation-time change on the existing checkpoints; (2) more training steps; (3) the
-  demonstration-count ablation at an equal number of epochs, so it measures demonstrations and
-  not training time. Then freeze it and run it once on 1000-1299.
-- [ ] Evaluate the frozen configuration on both engines; ablation: number of demonstrations
-  (wrist camera on/off deferred).
+- [x] One fixed training configuration that fits the 6 GB GPU: chunk 100 played in full, 60k
+  steps, batch 16, image 128, lr 1e-5, front and wrist cameras, chosen on validation seeds
+  900-999 and frozen (settings tried and numbers:
+  [FINDINGS](../imitation_learning/FINDINGS.md#randomized-pick-and-place-study-1-m3)).
+- [x] Evaluate on both engines; ablation: number of demonstrations. MuJoCo 294/300 (200 demos)
+  and 275/300 (100 demos); Isaac Sim 58/100 and 55/100. The wrist-camera ablation and the
+  equal-epoch demonstration ablation are not done.
 - [ ] Choose the paper's contributions from the results so far.
 
 ### M4: sim-to-sim gap
