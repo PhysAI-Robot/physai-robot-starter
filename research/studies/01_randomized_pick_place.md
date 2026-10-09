@@ -208,8 +208,11 @@ Done when: the task above is runnable on both engines and the manifest is commit
 - [x] Colour and lighting augmentation at training time, chosen on validation seeds: no gain
   on Isaac (58 against 62 of 100), so not frozen
   ([findings](../imitation_learning/FINDINGS.md#sim-to-sim-gap-on-the-randomized-task-study-1-m4)).
+- [ ] Train one policy on both engines' images (200 MuJoCo demonstrations and the same 200 replayed
+  on Isaac Sim, 400 episodes, 120k steps) and evaluate it on both engines: in progress; criteria
+  fixed beforehand (at least about 90% on MuJoCo and 80% on Isaac means one policy covers both).
 - [ ] Visual randomization in the MuJoCo renderer (floor, textures, distractors), retrain and
-  measure the Isaac drop: deferred, now the leading candidate.
+  measure the Isaac drop: deferred.
 - [x] Difficulty sweep (lighting, camera shift, clutter) for visual servo and the final ACT.
 
 ### M5: RL refinement

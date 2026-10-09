@@ -49,6 +49,35 @@ uv run python scripts/eval_policy.py --manifest configs/manifests/so101_randomiz
 inside 16 GB of RAM. The whole chunk is played by default; `--policy-arg n_action_steps=N` or
 `temporal_ensemble_coeff=C` change that at evaluation time without retraining.
 
+### Diagnosing a gap between simulators
+
+The tools behind the [M4 findings](FINDINGS.md#sim-to-sim-gap-on-the-randomized-task-study-1-m4).
+All evaluation-time edits change only what the policy is shown, not the robot:
+
+```bash
+# one image region edited (bg_dim, bg_gray, bg_flat, table_dim, cube_gain, arm_tint,
+# isaac_like, blank_front, blank_wrist, blur, blur_front, blur_wrist), or the gripper reading
+# replaced by the other simulator's behaviour (gripper_track, gripper_lag)
+uv run python scripts/eval_policy.py --manifest configs/manifests/so101_randomized_pick_place.yaml --policy lerobot --checkpoint outputs/act_200 --seed 900 --policy-arg image_edit=bg_flat
+uv run python scripts/eval_policy.py ... --policy-arg state_edit=gripper_track
+
+# the same demonstration actions replayed on Isaac Sim, recording Isaac's frames as a
+# training dataset (the actions are identical, so only the pictures differ)
+OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/eval_policy.py --manifest configs/manifests/so101_randomized_pick_place.yaml --sim isaac --policy replay --dataset data/randomized_v1 --seed 0 --episodes 100 --save-dataset data/randomized_isaac_v1
+
+# train on frames from both simulators, or with random colour changes
+uv run python research/imitation_learning/train_act.py --dataset data/randomized_v1 data/randomized_isaac_v1 --chunk-size 100 --steps 120000 --num-workers 0 --out outputs/act_mixed
+uv run python research/imitation_learning/train_act.py --dataset data/randomized_v1 --color-jitter ...
+
+# sensitivity of any policy to lighting, camera shift and clutter
+uv run python scripts/sweep_difficulty.py --policy lerobot --checkpoint outputs/act_200 --manifest configs/manifests/so101_randomized_pick_place.yaml --seed 1000 --episodes 100
+```
+
+Several `--dataset` folders are joined; their policy-sized frames are cached once in
+`.act_cache_<image_size>/` beside each dataset and read memory-mapped, so 400 episodes need
+disk and page cache rather than 8 GB of RAM. Replays on Isaac Sim need `--sim isaac`; stop
+other GPU work first and use the project's own `.venv` python while it runs.
+
 The prototype supports ACT-shaped data and scripted, replay and ACT evaluation. It does
 not yet export the standard `LeRobotDataset` format or provide one training entry point
 across techniques.
