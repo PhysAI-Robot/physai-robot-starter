@@ -159,15 +159,20 @@ explains it.
 | --- | --- | --- |
 | MuJoCo images, 200 demos | 294/300 (98%) | 58/100 |
 | Isaac images, 100 demos | 229/300 (76%) | 85/100 |
+| Isaac images, 200 replays (control, 60k steps) | 229/300 (76%) | 91/100 (91%), CI 84-95% |
 | **both, 200 + 200** | **294/300 (98%)**, CI 96-99% | **94/100 (94%)**, CI 88-97% |
 
 One policy is as good as the MuJoCo-only one on MuJoCo and far better than either single-engine
 model on Isaac (6 failures, all timeouts, 5 of them 10 cm or more from the target, no
-collisions). On Isaac it passes 40 seeds the MuJoCo-only model fails and fails 4 that it passes;
-against the Isaac-only model, 13 and 4. Mixing therefore costs nothing in-domain and removes the
-gap. Not separated: the mixed model also has more data (400 episodes against 100 or 200) and
-twice the steps of the Isaac-only run, and a matched Isaac-only run on 200 replays was not made,
-so this does not show that mixing beats more Isaac data alone.
+collisions). The control, an Isaac-only model on the same 200 replays with the same Isaac
+exposure (60k steps), scores 91/100 on Isaac and 229/300 on MuJoCo: against the mixed model on
+Isaac that is 6 seeds only the mixed one passes, 3 only the control, 88 both, 3 neither, and the
+intervals overlap (84-95% against 88-97%). The MuJoCo images therefore add nothing measurable on
+Isaac. What improves Isaac is Isaac data (100 demonstrations 85%, 200 demonstrations 91%, with
+the mixed model's 94% in line), and what mixing buys is that the same policy keeps 98% on MuJoCo
+(76% for the Isaac-only models). Limits: the mixed model had twice the steps (120k against 60k,
+the same passes over its larger set), both models see the same 200 layouts, and an Isaac-only
+model on 400 different demonstrations was not made.
 
 **Sensitivity sweep** (MuJoCo, test seeds 1000-1099, 100 episodes per cell, camera shift not
 told to the policy except where marked):
@@ -187,8 +192,8 @@ appears, which Isaac's different floor, shadows and arm rendering also are. The 
 is therefore image content beyond colour, brightness and sharpness; training on Isaac's own
 images removes it (above), but which content it is stays unidentified.
 
-Not done: an Isaac-only model on the same 200 replays (to separate mixing from more data),
-visual randomization in the MuJoCo renderer (floor, textures, distractors), and finding which image
+Not done: an Isaac-only model on 400 different demonstrations (the strongest test of more
+target data against mixing), visual randomization in the MuJoCo renderer (floor, textures, distractors), and finding which image
 content carries the shift (for example by blending the two renders region by region). The jitter run trained at 5.7 steps/s against 8.3 without it (the augmentation
 runs on the CPU), about 3 hours.
 
