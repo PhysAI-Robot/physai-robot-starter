@@ -35,7 +35,13 @@ from research.imitation_learning.act_dataset import ACTEpisodeDataset
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dataset", type=Path, required=True)
+    ap.add_argument(
+        "--dataset",
+        type=Path,
+        nargs="+",
+        required=True,
+        help="one or more dataset folders; their episodes are trained on together",
+    )
     ap.add_argument(
         "--episodes",
         type=int,
@@ -61,10 +67,18 @@ def main() -> int:
     from lerobot.configs.types import FeatureType, PolicyFeature
     from lerobot.policies.act import ACTConfig, ACTPolicy, make_act_pre_post_processors
 
-    meta = json.loads((args.dataset / "meta.json").read_text(encoding="utf-8"))
+    metas = [
+        json.loads((folder / "meta.json").read_text(encoding="utf-8"))
+        for folder in args.dataset
+    ]
+    meta = metas[0]
     task = meta["task"]
+    names = {m.get("task_name", m["task"]) for m in metas}
+    if len(names) > 1:
+        raise SystemExit(f"datasets are for different tasks: {sorted(names)}")
     print(
-        f"dataset: {args.dataset}  episodes: {meta['num_episodes']}  "
+        f"dataset: {[str(d) for d in args.dataset]}  "
+        f"episodes: {sum(m['num_episodes'] for m in metas)}  "
         f"task: {task!r}  device: {args.device}"
     )
 
@@ -155,9 +169,12 @@ def main() -> int:
     # sorting run was evaluated on seeds 0-19 while training had consumed
     # 0-65, and the resulting 70% was mostly memorised layouts.
     train_seeds = sorted(
-        e["seed"]
-        for e in meta.get("episodes", [])[: args.episodes]
-        if e.get("seed") is not None
+        {
+            e["seed"]
+            for m in metas
+            for e in m.get("episodes", [])[: args.episodes]
+            if e.get("seed") is not None
+        }
     )
     with (args.out / "training_meta.json").open("w", encoding="utf-8") as f:
         json.dump(
@@ -171,7 +188,7 @@ def main() -> int:
                 "lr": args.lr,
                 "device": args.device,
                 "color_jitter": args.color_jitter,
-                "dataset": str(args.dataset),
+                "dataset": [str(d) for d in args.dataset],
                 "train_seeds": train_seeds,
             },
             f,

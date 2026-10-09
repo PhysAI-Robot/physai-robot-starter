@@ -16,6 +16,8 @@ never imports this module (see research/README.md).
 from __future__ import annotations
 
 import json
+import os
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -48,11 +50,17 @@ class ACTEpisodeDataset(Dataset):
     Padded chunk positions (past the end of an episode) are marked in
     `action_is_pad` and filled with the episode's final action, matching what
     `ACTPolicy.forward` expects (it masks padded positions out of the loss).
+
+    `dataset_dir` is one dataset folder or several (their episodes are joined, e.g.
+    the same demonstrations recorded in two simulators). The policy-sized frames are
+    resized once, saved next to each dataset in `.act_cache_<image_size>/` and read
+    back memory-mapped, so a dataset costs disk and page cache instead of RAM and
+    pickles to DataLoader workers as a handful of paths.
     """
 
     def __init__(
         self,
-        dataset_dir: str | Path,
+        dataset_dir: str | Path | Sequence[str | Path],
         camera_keys: tuple[str, ...] | None = None,
         chunk_size: int = 30,
         image_size: int = 128,
@@ -60,7 +68,10 @@ class ACTEpisodeDataset(Dataset):
         max_episodes: int | None = None,
         color_jitter: bool = False,
     ) -> None:
-        self.dataset_dir = Path(dataset_dir)
+        single = isinstance(dataset_dir, (str, Path))
+        dirs = [Path(d) for d in ([dataset_dir] if single else dataset_dir)]
+        self.dataset_dirs = dirs
+        self.dataset_dir = dirs[0]
         self.chunk_size = chunk_size
         self.image_size = image_size
         # Random brightness, contrast, saturation, a slight hue shift and a vertical
@@ -80,7 +91,10 @@ class ACTEpisodeDataset(Dataset):
             else None
         )
 
-        meta = json.loads((self.dataset_dir / "meta.json").read_text(encoding="utf-8"))
+        metas = [
+            json.loads((d / "meta.json").read_text(encoding="utf-8")) for d in dirs
+        ]
+        meta = metas[0]
         if camera_keys is None:
             camera_keys = tuple(
                 key.removeprefix("observation.images.")
@@ -89,26 +103,54 @@ class ACTEpisodeDataset(Dataset):
             )
         self.camera_keys = camera_keys
         self.task = task if task is not None else meta.get("task", "")
-        self.episodes: list[dict[str, np.ndarray]] = []
+        self.episodes: list[dict] = []
         self.index: list[tuple[int, int]] = []  # (episode_idx, timestep)
-        # The first `max_episodes` recorded episodes, so one dataset serves
-        # several demonstration counts.
-        for e in meta["episodes"][:max_episodes]:
-            data = load_episode(self.dataset_dir / e["file"])
-            data = {k: np.asarray(v) for k, v in data.items()}
-            # Keep only the policy-sized frames: full-resolution episodes are
-            # ~95 MB each, so 100 of them do not fit in memory (nor pickle
-            # into DataLoader workers on Windows).
-            for cam in self.camera_keys:
-                key = f"observation.images.{cam}"
-                data[key] = self._shrink(data[key])
-            self.episodes.append(data)
-            ep_idx = len(self.episodes) - 1
-            T = data["observation.state"].shape[0]
-            self.index.extend((ep_idx, t) for t in range(T))
+        self._frames: dict[tuple[int, str], np.ndarray] = {}
+        # The first `max_episodes` recorded episodes of each folder, so one dataset
+        # serves several demonstration counts.
+        for folder, folder_meta in zip(dirs, metas):
+            for e in folder_meta["episodes"][:max_episodes]:
+                self.episodes.append(self._episode(folder, e["file"]))
+                steps = self.episodes[-1]["observation.state"].shape[0]
+                ep_idx = len(self.episodes) - 1
+                self.index.extend((ep_idx, t) for t in range(steps))
 
         if not self.episodes:
-            raise ValueError(f"no episodes found under {self.dataset_dir}")
+            raise ValueError(f"no episodes found under {dirs}")
+
+    def _episode(self, folder: Path, file: str) -> dict:
+        """State, actions and the cached policy-sized frame files of one episode."""
+        cache = folder / f".act_cache_{self.image_size}"
+        stem = Path(file).stem
+        paths = {cam: cache / f"{stem}_{cam}.npy" for cam in self.camera_keys}
+        if not all(path.exists() for path in paths.values()):
+            cache.mkdir(exist_ok=True)
+            full = load_episode(folder / file)
+            for cam, path in paths.items():
+                if not path.exists():
+                    shrunk = self._shrink(np.asarray(full[f"observation.images.{cam}"]))
+                    tmp = path.with_name(path.name + ".tmp")
+                    with tmp.open("wb") as handle:
+                        np.save(handle, shrunk)
+                    os.replace(tmp, path)
+        data = load_episode(folder / file, keys=("observation.state", "action"))
+        episode = {k: np.asarray(v) for k, v in data.items()}
+        episode["frames"] = paths
+        return episode
+
+    def _image_at(self, ep_idx: int, cam: str, t: int) -> np.ndarray:
+        """One policy-sized frame, from the memory-mapped cache (opened on first use)."""
+        key = (ep_idx, cam)
+        if key not in self._frames:
+            path = self.episodes[ep_idx]["frames"][cam]
+            self._frames[key] = np.load(path, mmap_mode="r")
+        return self._frames[key][t]
+
+    def __getstate__(self) -> dict:
+        # memory maps are reopened in each DataLoader worker, not pickled
+        state = self.__dict__.copy()
+        state["_frames"] = {}
+        return state
 
     def __len__(self) -> int:
         return len(self.index)
@@ -173,7 +215,8 @@ class ACTEpisodeDataset(Dataset):
         }
         for cam in self.camera_keys:
             key = f"observation.images.{cam}"
-            image = torch.from_numpy(ep[key][t]).float() / 255.0
+            frame = np.array(self._image_at(ep_idx, cam, t))
+            image = torch.from_numpy(frame).float() / 255.0
             if self._jitter is not None:
                 image = self._brightness_ramp(self._jitter(image)).clamp(0.0, 1.0)
             sample[key] = image
@@ -198,12 +241,11 @@ class ACTEpisodeDataset(Dataset):
             # Sample frames rather than decoding every one at full res — image
             # normalization only needs a stable per-channel estimate.
             sample_frames = []
-            for e in self.episodes:
-                frames = e[key]
-                idx = np.linspace(
-                    0, frames.shape[0] - 1, num=min(8, frames.shape[0])
-                ).astype(int)
-                sample_frames.append(frames[idx].astype(np.float32) / 255.0)
+            for ep_idx, e in enumerate(self.episodes):
+                steps = e["observation.state"].shape[0]
+                idx = np.linspace(0, steps - 1, num=min(8, steps)).astype(int)
+                frames = np.stack([self._image_at(ep_idx, cam, t) for t in idx])
+                sample_frames.append(frames.astype(np.float32) / 255.0)
             stacked = np.concatenate(sample_frames, axis=0)  # (N, 3, S, S)
             mean = stacked.mean(axis=(0, 2, 3))
             std = stacked.std(axis=(0, 2, 3)) + 1e-6

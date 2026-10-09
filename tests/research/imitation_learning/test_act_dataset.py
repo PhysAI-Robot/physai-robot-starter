@@ -62,3 +62,32 @@ def test_max_episodes_keeps_the_first_n_episodes(tmp_path):
     first_two = ACTEpisodeDataset(tmp_path, image_size=8, max_episodes=2)
     assert len(everything.episodes) == 3 and len(everything) == 15
     assert len(first_two.episodes) == 2 and len(first_two) == 10
+
+
+def test_several_folders_are_joined_and_frames_are_cached_on_disk(tmp_path):
+    import pickle
+
+    import torch
+
+    from research.imitation_learning.act_dataset import ACTEpisodeDataset
+
+    first, second = tmp_path / "a", tmp_path / "b"
+    first.mkdir()
+    second.mkdir()
+    _write_dataset(first, episodes=2)
+    _write_dataset(second, episodes=3)
+    joined = ACTEpisodeDataset([first, second], image_size=8)
+    assert len(joined.episodes) == 5 and len(joined) == 25
+    # `max_episodes` counts per folder
+    assert (
+        len(ACTEpisodeDataset([first, second], image_size=8, max_episodes=1).episodes)
+        == 2
+    )
+    cache = first / ".act_cache_8"
+    assert len(list(cache.glob("*.npy"))) == 2  # one front-camera file per episode
+    # the cache is reused, and a pickled copy (a DataLoader worker) carries no frames
+    again = ACTEpisodeDataset(first, image_size=8)
+    assert torch.equal(
+        again[0]["observation.images.front"], joined[0]["observation.images.front"]
+    )
+    assert pickle.loads(pickle.dumps(joined))._frames == {}
