@@ -46,7 +46,7 @@ point links to where the numbers are:
   (98 to 58) and the camera-only classical method 9 (97 to 88), with no extra demonstrations
   closing it ([findings](../imitation_learning/FINDINGS.md#randomized-pick-and-place-study-1-m3)).
   M4: physics is ruled out, and training on Isaac's own images with the same actions recovers
-  most of the gap (55 to 85 of 100) while the same model loses 16-20 points on MuJoCo, so the
+  most of the gap (55 to 85 of 100) while the same model loses 15-20 points on MuJoCo, so the
   gap is a pure observation-domain shift
   ([findings](../imitation_learning/FINDINGS.md#sim-to-sim-gap-on-the-randomized-task-study-1-m4)).
   Colour, brightness, sharpness and gripper-reading differences each fail to explain it alone;

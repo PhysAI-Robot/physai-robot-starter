@@ -140,12 +140,13 @@ the test seeds:
 | Isaac images | 229/300 (76%), CI 71-81% | 85/100, CI 77-91% | 73/100 |
 
 Training on Isaac's pictures recovers 30 of the 38 points lost on Isaac, and the same model
-loses 16-20 on MuJoCo, so the gap is symmetric and comes from the images alone: an ACT
+loses 15-20 on MuJoCo, so the gap is symmetric and comes from the images alone: an ACT
 follows the renderer it was trained on. On Isaac the two models differ on 40 of 100 seeds
 (35 only the Isaac-trained one passes, 5 only the MuJoCo-trained one, 10 neither). The
-Isaac-trained model's own 85% against 93% in-domain on MuJoCo is the cost of the replayed
-actions (2 of 100 replayed demonstrations did not reach the target, and the cube arrives a
-little later than under MuJoCo's physics), not a rendering effect; its Isaac failures are 15
+Isaac-trained model's own 85% against 93% in-domain on MuJoCo is most likely the cost of
+the replayed actions (2 of 100 replayed demonstrations did not reach the target, and the cube
+arrives a little later than under MuJoCo's physics), not a rendering effect, though that was
+not tested; its Isaac failures are 15
 timeouts, 11 of them ending 10 cm or more from the target. Which image content carries the
 shift is still open: no single colour, brightness, sharpness or gripper-state edit above
 explains it.
