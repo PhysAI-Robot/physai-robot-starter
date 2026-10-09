@@ -174,6 +174,17 @@ the mixed model's 94% in line), and what mixing buys is that the same policy kee
 the same passes over its larger set), both models see the same 200 layouts, and an Isaac-only
 model on 400 different demonstrations was not made.
 
+**What the replay design does and does not show.** The scripted expert reads MuJoCo's contact
+data and only runs on MuJoCo; the "Isaac" demonstrations are its actions replayed open loop on
+Isaac Sim with Isaac's frames and joint states recorded (spawns agree: same target, cube within
+3 mm). That is the right design for the question asked, whether the gap comes from what the
+policy sees, because actions and physics are held fixed and only the observations change. It is
+not an Isaac expert: the actions are timed for MuJoCo's dynamics and are not corrected on Isaac
+(the cube arrives a little later, and 1-2 of 100 replays miss the target), so the Isaac-trained
+numbers are probably a lower bound on what native Isaac demonstrations would give, and no
+"expert on Isaac" success rate exists. Say "demonstrations replayed on Isaac (MuJoCo teacher)",
+not "Isaac demonstrations".
+
 **Sensitivity sweep** (MuJoCo, test seeds 1000-1099, 100 episodes per cell, camera shift not
 told to the policy except where marked):
 

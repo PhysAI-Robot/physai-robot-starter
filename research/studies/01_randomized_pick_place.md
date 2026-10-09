@@ -52,6 +52,10 @@ point links to where the numbers are:
   Colour, brightness, sharpness and gripper-reading differences each fail to explain it alone;
   which image content does is open, but training on both engines' images closes it (94/100 on
   Isaac with no loss on MuJoCo).
+- **Limit to state in the paper:** the scripted teacher only runs on MuJoCo, so the Isaac data are its
+  actions replayed on Isaac with Isaac's observations (see
+  [findings](../imitation_learning/FINDINGS.md#sim-to-sim-gap-on-the-randomized-task-study-1-m4));
+  that isolates the observation shift but is not an Isaac expert.
 - **Teacher quality to student quality:** not started; needs a minimum-jerk expert, one demo set
   and one training run.
 - **RL refinement on a 6 GB GPU budget:** M5. ACT reaching 98% on MuJoCo leaves little success
