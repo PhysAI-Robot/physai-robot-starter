@@ -46,6 +46,8 @@ are recorded; other documents link here.
 | `visual_servo`, target from camera | randomized pick-place, held out | MuJoCo | 1000-1299 | 296/300 (98.7%) | [96.6%, 99.5%] | 4, cube near the base on the centre line |
 | `lerobot` (ACT, 200 demos, chunk 100, 60k steps) | randomized pick-place, held out | MuJoCo | 1000-1299 | 294/300 (98.0%) | [95.7%, 99.1%] | 6 timeouts |
 | `lerobot` (ACT, 100 demos, chunk 100, 60k steps) | randomized pick-place, held out | MuJoCo | 1000-1299 | 275/300 (91.7%) | [88.0%, 94.3%] | 25 timeouts |
+| `lerobot` (ACT trained on Isaac images, 100 demos, chunk 100, 60k steps) | randomized pick-place, held out | MuJoCo | 1000-1299 | 229/300 (76.3%) | [71.2%, 80.8%] | 71 timeouts |
+| `lerobot` (ACT trained on Isaac images, 100 demos, chunk 100, 60k steps) | randomized pick-place, held out | Isaac Sim | 1000-1099 | 85/100 (85%) | [76.7%, 90.7%] | 15 timeouts |
 | `lerobot` (ACT, 200 demos, chunk 100, 60k steps) | randomized pick-place, held out | Isaac Sim | 1000-1099 | 58/100 (58%) | [48.2%, 67.2%] | 42 timeouts |
 | `lerobot` (ACT, 100 demos, chunk 100, 60k steps) | randomized pick-place, held out | Isaac Sim | 1000-1099 | 55/100 (55%) | [45.2%, 64.4%] | 45 timeouts |
 | `visual_servo`, target from camera | randomized pick-place, held out | Isaac Sim | 1000-1299 | 271/300 (90.3%) | [86.5%, 93.2%] | 29, 26 with the cube within 0.19 m of the base |

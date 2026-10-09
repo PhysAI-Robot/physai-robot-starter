@@ -127,6 +127,29 @@ move it so little, and the shape of the failures. Of the 42 Isaac failures on se
 moved it somewhere else. Where the cube and the target are, as read from the first
 frame, is therefore what has to transfer.
 
+**The causal test: train on the other engine's images.** The expert's recorded actions were
+replayed on Isaac Sim (49/50 reached the target there, 98/100 for the full set) while
+recording Isaac's camera frames and joint states, giving 100 demonstrations with the same
+actions, the same physics and different pictures. ACT trained on them with the final
+configuration (chunk 100, 60k steps, 100 demos; loss 0.0326 against 0.0314) and scored, on
+the test seeds:
+
+| Trained on | MuJoCo 1000-1299 | Isaac 1000-1099 | MuJoCo, same 100 seeds |
+| --- | --- | --- | --- |
+| MuJoCo images | 275/300 (92%) | 55/100 | 93/100 |
+| Isaac images | 229/300 (76%), CI 71-81% | 85/100, CI 77-91% | 73/100 |
+
+Training on Isaac's pictures recovers 30 of the 38 points lost on Isaac, and the same model
+loses 16-20 on MuJoCo, so the gap is symmetric and comes from the images alone: an ACT
+follows the renderer it was trained on. On Isaac the two models differ on 40 of 100 seeds
+(35 only the Isaac-trained one passes, 5 only the MuJoCo-trained one, 10 neither). The
+Isaac-trained model's own 85% against 93% in-domain on MuJoCo is the cost of the replayed
+actions (2 of 100 replayed demonstrations did not reach the target, and the cube arrives a
+little later than under MuJoCo's physics), not a rendering effect; its Isaac failures are 15
+timeouts, 11 of them ending 10 cm or more from the target. Which image content carries the
+shift is still open: no single colour, brightness, sharpness or gripper-state edit above
+explains it.
+
 **Sensitivity sweep** (MuJoCo, test seeds 1000-1099, 100 episodes per cell, camera shift not
 told to the policy except where marked):
 
@@ -142,11 +165,12 @@ ACT is as robust as the classical method to lighting and camera shift, and far l
 distractor boxes it never saw in training; visual servo ignores them because it detects only
 red. That fits a policy that conditions on the whole image and fails when something new
 appears, which Isaac's different floor, shadows and arm rendering also are. The cause on Isaac
-is therefore narrowed to image content beyond colour and brightness, not identified.
+is therefore image content beyond colour, brightness and sharpness; training on Isaac's own
+images removes it (above), but which content it is stays unidentified.
 
-Not done: visual randomization in the MuJoCo renderer (floor, textures, distractors) as the
-next training change, and a feature-level test (ACT on Isaac frames recoloured to MuJoCo's
-statistics). The jitter run trained at 5.7 steps/s against 8.3 without it (the augmentation
+Not done: training on frames from both engines (does one policy cover both?), visual
+randomization in the MuJoCo renderer (floor, textures, distractors), and finding which image
+content carries the shift (for example by blending the two renders region by region). The jitter run trained at 5.7 steps/s against 8.3 without it (the augmentation
 runs on the CPU), about 3 hours.
 
 ## Results

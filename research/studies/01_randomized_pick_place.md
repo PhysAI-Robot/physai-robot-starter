@@ -45,10 +45,13 @@ point links to where the numbers are:
   yet isolated:** on the same 100 seeds the move from MuJoCo to Isaac costs ACT 40 points
   (98 to 58) and the camera-only classical method 9 (97 to 88), with no extra demonstrations
   closing it ([findings](../imitation_learning/FINDINGS.md#randomized-pick-and-place-study-1-m3)).
-  M4 so far: physics is ruled out, the images differ by region and not by a global brightness,
-  and colour or lighting augmentation does not close it
+  M4: physics is ruled out, and training on Isaac's own images with the same actions recovers
+  most of the gap (55 to 85 of 100) while the same model loses 16-20 points on MuJoCo, so the
+  gap is a pure observation-domain shift
   ([findings](../imitation_learning/FINDINGS.md#sim-to-sim-gap-on-the-randomized-task-study-1-m4)).
-  Which image content ACT depends on, and whether renderer-side randomization closes it, are open.
+  Colour, brightness, sharpness and gripper-reading differences each fail to explain it alone;
+  which image content does, and whether mixed or randomized training closes it for both engines,
+  are open.
 - **Teacher quality to student quality:** not started; needs a minimum-jerk expert, one demo set
   and one training run.
 - **RL refinement on a 6 GB GPU budget:** M5. ACT reaching 98% on MuJoCo leaves little success
@@ -82,12 +85,18 @@ point links to where the numbers are:
    only a regression run caught; the same expert scored 45% and 60% on two 20-50 seed ranges before its fix, so small evaluations cannot rank policies
    ([expert findings](../scripted_experts/FINDINGS.md)). Useful as a short reproducibility
    section.
-7. **The gap is not physics and not colour.** Replaying the expert's actions on Isaac delivers
-   the cube 49 times in 50, ACT dimmed on MuJoCo stays at 96-98%, and training with colour
-   augmentation did not move Isaac (58 against 62). A policy that survives lighting and camera
+7. **The gap is a pure observation-domain shift, shown causally.** The same expert actions,
+   replayed on Isaac, deliver the cube 49 times in 50; ACT trained on Isaac's pictures of those
+   actions scores 85/100 on Isaac against 55/100 trained on MuJoCo's, and falls from 92% to 76%
+   on MuJoCo. It is not colour or brightness (every measured region gain applied together
+   leaves 96%), not sharpness, not the gripper-reading lag, and colour augmentation did not
+   move Isaac (58 against 62). A policy that survives lighting and camera
    shift but collapses with distractor boxes (60 / 46 / 23% for 1 / 2 / 4) is reading scene
    content, which a camera-only detector (95 / 96 / 92%) ignores.
-8. **Everything runs on a 6 GB laptop GPU:** the final ACT trains in about 2 hours, which
+8. **The final ACT is close to open loop.** With chunk 100 played in full it reads the cameras
+   and joint state at steps 0, 100 and 200 only, which explains why long chunks win, why
+   per-frame edits barely move it, and why half of its Isaac failures never touch the cube.
+9. **Everything runs on a 6 GB laptop GPU:** the final ACT trains in about 2 hours, which
    makes the benchmark reproducible without a cluster.
 
 ## Task definition (frozen at M0, before any training)
@@ -190,6 +199,12 @@ Done when: the task above is runnable on both engines and the manifest is commit
 - [x] Diagnose the gap before changing training: physics ruled out by replaying the expert's
   actions on Isaac, the images shown to differ by region and not by a global brightness, and
   dimming MuJoCo shown not to reproduce it.
+- [x] Causal test: replay the expert's actions on Isaac while recording Isaac's frames, train on
+  them and evaluate on both engines. Trained on Isaac's images ACT scores 85/100 on Isaac
+  (55/100 when trained on MuJoCo's) and 229/300 on MuJoCo (275/300), so the gap is symmetric
+  and comes from the images alone.
+- [x] Probes of what the policy relies on (region gains, blur, background, camera blanking,
+  gripper reading): no single measured difference explains the gap.
 - [x] Colour and lighting augmentation at training time, chosen on validation seeds: no gain
   on Isaac (58 against 62 of 100), so not frozen
   ([findings](../imitation_learning/FINDINGS.md#sim-to-sim-gap-on-the-randomized-task-study-1-m4)).
