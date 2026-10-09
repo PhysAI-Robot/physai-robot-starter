@@ -50,8 +50,8 @@ point links to where the numbers are:
   gap is a pure observation-domain shift
   ([findings](../imitation_learning/FINDINGS.md#sim-to-sim-gap-on-the-randomized-task-study-1-m4)).
   Colour, brightness, sharpness and gripper-reading differences each fail to explain it alone;
-  which image content does, and whether mixed or randomized training closes it for both engines,
-  are open.
+  which image content does is open, but training on both engines' images closes it (94/100 on
+  Isaac with no loss on MuJoCo).
 - **Teacher quality to student quality:** not started; needs a minimum-jerk expert, one demo set
   and one training run.
 - **RL refinement on a 6 GB GPU budget:** M5. ACT reaching 98% on MuJoCo leaves little success
@@ -90,7 +90,9 @@ point links to where the numbers are:
    actions scores 85/100 on Isaac against 55/100 trained on MuJoCo's, and falls from 92% to 76%
    on MuJoCo. It is not colour or brightness (every measured region gain applied together
    leaves 96%), not sharpness, not the gripper-reading lag, and colour augmentation did not
-   move Isaac (58 against 62). A policy that survives lighting and camera
+   move Isaac (58 against 62). One policy trained on both engines' images is 98% on MuJoCo and
+   94% on Isaac, so the shift is learnable from data of both renderers; whether that is mixing or
+   simply more data is not yet separated. A policy that survives lighting and camera
    shift but collapses with distractor boxes (60 / 46 / 23% for 1 / 2 / 4) is reading scene
    content, which a camera-only detector (95 / 96 / 92%) ignores.
 8. **The final ACT is close to open loop.** With chunk 100 played in full it reads the cameras
@@ -208,9 +210,10 @@ Done when: the task above is runnable on both engines and the manifest is commit
 - [x] Colour and lighting augmentation at training time, chosen on validation seeds: no gain
   on Isaac (58 against 62 of 100), so not frozen
   ([findings](../imitation_learning/FINDINGS.md#sim-to-sim-gap-on-the-randomized-task-study-1-m4)).
-- [ ] Train one policy on both engines' images (200 MuJoCo demonstrations and the same 200 replayed
-  on Isaac Sim, 400 episodes, 120k steps) and evaluate it on both engines: in progress; criteria
-  fixed beforehand (at least about 90% on MuJoCo and 80% on Isaac means one policy covers both).
+- [x] Train one policy on both engines' images (200 MuJoCo demonstrations and the same 200 replayed
+  on Isaac Sim, 400 episodes, 120k steps) and evaluate it on both engines. Criterion fixed
+  beforehand (about 90% on MuJoCo and 80% on Isaac means one policy covers both): met, 294/300
+  on MuJoCo and 94/100 on Isaac.
 - [ ] Visual randomization in the MuJoCo renderer (floor, textures, distractors), retrain and
   measure the Isaac drop: deferred.
 - [x] Difficulty sweep (lighting, camera shift, clutter) for visual servo and the final ACT.

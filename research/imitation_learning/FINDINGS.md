@@ -151,6 +151,24 @@ timeouts, 11 of them ending 10 cm or more from the target. Which image content c
 shift is still open: no single colour, brightness, sharpness or gripper-state edit above
 explains it.
 
+**Training on both engines' images.** One ACT on the 200 MuJoCo demonstrations plus the same
+200 replayed on Isaac Sim (400 episodes, 120k steps so the passes over the data match the
+200-demo model, same configuration otherwise; loss 0.0297) scored, on the test seeds:
+
+| Trained on | MuJoCo 1000-1299 | Isaac 1000-1099 |
+| --- | --- | --- |
+| MuJoCo images, 200 demos | 294/300 (98%) | 58/100 |
+| Isaac images, 100 demos | 229/300 (76%) | 85/100 |
+| **both, 200 + 200** | **294/300 (98%)**, CI 96-99% | **94/100 (94%)**, CI 88-97% |
+
+One policy is as good as the MuJoCo-only one on MuJoCo and far better than either single-engine
+model on Isaac (6 failures, all timeouts, 5 of them 10 cm or more from the target, no
+collisions). On Isaac it passes 40 seeds the MuJoCo-only model fails and fails 4 that it passes;
+against the Isaac-only model, 13 and 4. Mixing therefore costs nothing in-domain and removes the
+gap. Not separated: the mixed model also has more data (400 episodes against 100 or 200) and
+twice the steps of the Isaac-only run, and a matched Isaac-only run on 200 replays was not made,
+so this does not show that mixing beats more Isaac data alone.
+
 **Sensitivity sweep** (MuJoCo, test seeds 1000-1099, 100 episodes per cell, camera shift not
 told to the policy except where marked):
 
@@ -169,8 +187,8 @@ appears, which Isaac's different floor, shadows and arm rendering also are. The 
 is therefore image content beyond colour, brightness and sharpness; training on Isaac's own
 images removes it (above), but which content it is stays unidentified.
 
-Not done: training on frames from both engines (does one policy cover both?), visual
-randomization in the MuJoCo renderer (floor, textures, distractors), and finding which image
+Not done: an Isaac-only model on the same 200 replays (to separate mixing from more data),
+visual randomization in the MuJoCo renderer (floor, textures, distractors), and finding which image
 content carries the shift (for example by blending the two renders region by region). The jitter run trained at 5.7 steps/s against 8.3 without it (the augmentation
 runs on the CPU), about 3 hours.
 
