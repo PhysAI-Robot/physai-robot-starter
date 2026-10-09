@@ -48,7 +48,7 @@ are recorded; other documents link here.
 | `lerobot` (ACT, 100 demos, chunk 100, 60k steps) | randomized pick-place, held out | MuJoCo | 1000-1299 | 275/300 (91.7%) | [88.0%, 94.3%] | 25 timeouts |
 | `lerobot` (ACT trained on both engines' images, 200 + 200 demos, chunk 100, 120k steps) | randomized pick-place, held out | MuJoCo | 1000-1299 | 294/300 (98.0%) | [95.7%, 99.1%] | 6 timeouts |
 | `lerobot` (ACT trained on both engines' images, 200 + 200 demos, chunk 100, 120k steps) | randomized pick-place, held out | Isaac Sim | 1000-1099 | 94/100 (94%) | [87.5%, 97.2%] | 6 timeouts |
-| `lerobot` (ACT trained on Isaac images, 200 demos, chunk 100, 60k steps) | randomized pick-place, held out | MuJoCo | 1000-1299 | 229/300 (76.3%) | [71.2%, 80.8%] | timeouts |
+| `lerobot` (ACT trained on Isaac images, 200 demos, chunk 100, 60k steps) | randomized pick-place, held out | MuJoCo | 1000-1299 | 229/300 (76.3%) | [71.2%, 80.8%] | 71 timeouts |
 | `lerobot` (ACT trained on Isaac images, 200 demos, chunk 100, 60k steps) | randomized pick-place, held out | Isaac Sim | 1000-1099 | 91/100 (91%) | [83.8%, 95.2%] | 9 timeouts |
 | `lerobot` (ACT trained on Isaac images, 100 demos, chunk 100, 60k steps) | randomized pick-place, held out | MuJoCo | 1000-1299 | 229/300 (76.3%) | [71.2%, 80.8%] | 71 timeouts |
 | `lerobot` (ACT trained on Isaac images, 100 demos, chunk 100, 60k steps) | randomized pick-place, held out | Isaac Sim | 1000-1099 | 85/100 (85%) | [76.7%, 90.7%] | 15 timeouts |
