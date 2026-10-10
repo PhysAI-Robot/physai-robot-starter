@@ -62,7 +62,14 @@ def main() -> int:
     ap.add_argument("--save-every", type=int, default=1000)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--num-workers", type=int, default=2)
+    ap.add_argument(
+        "--seed",
+        type=int,
+        help="seed torch (weights, batch order) for a repeatable run; unset leaves it random",
+    )
     args = ap.parse_args()
+    if args.seed is not None:
+        torch.manual_seed(args.seed)
 
     from lerobot.configs.types import FeatureType, PolicyFeature
     from lerobot.policies.act import ACTConfig, ACTPolicy, make_act_pre_post_processors
@@ -190,6 +197,7 @@ def main() -> int:
                 "color_jitter": args.color_jitter,
                 "dataset": [str(d) for d in args.dataset],
                 "train_seeds": train_seeds,
+                "training_seed": args.seed,
             },
             f,
             indent=2,
