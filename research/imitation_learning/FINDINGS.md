@@ -231,6 +231,51 @@ reads at steps 100 and 200 (or in how Isaac executes the same actions), not in w
 sees the cube and target at the start. The criterion fixed beforehand (20 points or more) is
 not met, and the per-region swaps were not run since the whole frame costs less than 10.
 
+**Later reads and execution.** ACT-200 rolled out on MuJoCo seeds 900-999 (98/100), with
+the front and wrist frames and the full state kept at each read (steps 0, 100 and, on 37
+seeds that ran past 200 steps, 200). `read_probe.py render` put Isaac's arm and cube at each of
+those states (joints within 0.002 rad after the step; 4 of 237 reads moved more than 0.02 rad,
+a cube held in the jaws) and rendered both cameras; `compare` asked the model for the 100-step
+chunk from each render and measured the pinch-centre distance between the two chunks:
+
+| Isaac frames replace | read 0 | read 100 | read 200 |
+| --- | --- | --- | --- |
+| both cameras (median of the largest gap along the chunk) | 9.6 mm | 11.3 mm | 14.7 mm |
+| front camera only | 8.1 | 9.8 | 9.6 |
+| wrist camera only | 2.4 | 5.5 | 8.6 |
+| arm / cube and disc / table / background (front region) | 8.2 / 2.0 / 2.8 / 5.1 | 4.3 / 1.4 / 5.0 / 4.9 | 4.6 / 4.9 / 4.4 / 3.2 |
+| MuJoCo frames with every measured colour gain (no effect on success) | 7.1 | 5.7 | 5.2 |
+
+Later reads are 1.2-1.5 times the first read, not a different order of magnitude, and no one
+region stands out: the chunk moves by about a centimetre whatever part of the picture is
+Isaac's, and by 7 mm under colour gains that cost nothing, so this distance does not separate
+harmless from harmful edits (the wrist camera's share grows with the read, 2 mm to 9 mm, as
+the cube enters the jaws). Execution is not the cause: ACT's own MuJoCo actions replayed open
+loop on Isaac (seeds 900-999, `outputs/study01/m5/l5_videos/videos/`) leave the cube within
+4 cm of the target in 96 of 100 episodes (70 by the success rule, which the replay cuts short
+of the 10 step hold, as for the expert replays above), where ACT closed loop on Isaac scores
+58/100. The same actions that fail in Isaac when ACT chooses them from Isaac's pictures succeed
+when they were chosen from MuJoCo's, so the gap is in what the policy infers from the pictures.
+
+**Floor pattern (study 1, M5).** The same models on MuJoCo with the floor painted one colour
+(the mean of the two tile colours, `floor_style: plain`,
+`so101_randomized_pick_place_plainfloor.yaml`), 100 seeds each, paired against the checker floor:
+
+| Model | Validation 900-999 | Test 1000-1099 |
+| --- | --- | --- |
+| ACT-200 (MuJoCo images) | 98 to 72 (26 seeds only the checker passes, 0 the reverse) | 98 to 83 (15 and 0) |
+| ACT, Isaac images, 200 replays | 76 to 42 (40 and 6) | not run |
+| ACT, Isaac images, 400 replays | 78 to 17 (63 and 2) | 85 to 20 (65 and 0) |
+| ACT mixed, 200 + 200 | 99 to 95 (4 and 0, p 0.125) | 98 to 96 (2 and 0, p 0.5) |
+| Visual servo | 100 to 100 | 97 to 97 |
+
+Every single-renderer ACT reads the checker, and the more data of one renderer it has the more
+it does (400 Isaac replays: 17% without the pattern); the model trained on both renderers' checkers
+barely moves, and the colour-only classical method does not use the floor at all. So the checker
+floor is a position cue the benchmark gives learned vision and not a free background, and a
+policy that survives a change of renderer may still not survive a change of floor. The benchmark
+keeps the checker (frozen at M0); the plain floor is a test condition.
+
 Not done: a mixed model on 400 different layouts (to compare equal variety), visual
 randomization in the MuJoCo renderer (floor, textures, distractors), and finding which image
 content carries the shift (for example by blending the two renders region by region). The jitter run trained at 5.7 steps/s against 8.3 without it (the augmentation

@@ -245,18 +245,25 @@ are fixed here, before the runs.
   (validation) and 98 to 90/100 (test, paired p 0.02), under the 20 point bar, so the
   per-region swaps were skipped
   ([findings](../imitation_learning/FINDINGS.md#first-frame-swap-study-1-m5)).
-- [ ] **Later reads.** The first read carries little, so the gap sits in the reads at steps
+- [x] **Later reads.** The first read carries little, so the gap sits in the reads at steps
   100 and 200 (the arm in view, the cube about to be grasped) or in Isaac's execution of the
   same actions. Measure it without Isaac in the loop: record MuJoCo rollouts' state at the
   reads, render the same states on Isaac, and compare the chunk ACT predicts from each
   render (joint-space distance per read). The same state renderer is what the Newton
-  spike needs.
-- [ ] **Floor pattern.** The policy loses 13-18 points when the image edit flattens the
+  spike needs. Result: the chunk moves by about a centimetre at every read whichever region is
+  Isaac's (the first read 9.6 mm, the later ones 11-15 mm), and replaying ACT's own MuJoCo
+  actions on Isaac delivers the cube in 96 of 100 episodes, so the gap is perception, not
+  Isaac's execution, and not one region
+  ([findings](../imitation_learning/FINDINGS.md#first-frame-swap-study-1-m5)).
+- [x] **Floor pattern.** The policy loses 13-18 points when the image edit flattens the
   checker background (M4 probes), so the checker floor may be a position cue. Render a
   single-colour floor natively in MuJoCo (needs a floor-look option in the scene) and evaluate
   the final ACT, the Isaac-trained and the mixed ACT and visual servo on 1000-1099. A drop of
   10 points or more is a limit of the benchmark the paper states, and the floor joins the
-  randomization below. The benchmark's own floor stays the checker (frozen at M0).
+  randomization below. The benchmark's own floor stays the checker (frozen at M0). Result:
+  ACT-200 98 to 72 (validation) and 98 to 83 (test), Isaac-trained 400 replays 78 to 17 and
+  85 to 20, the mixed model 99 to 95 and 98 to 96, visual servo unchanged: a limit of the
+  benchmark, so the floor pattern is part of the randomization below.
 - [ ] **Visual randomization in MuJoCo** (floor, table texture, lighting, distractor boxes):
   demonstrations collected with randomized looks, the final configuration retrained, scored on
   both engines. 80% or more on Isaac means the gap closes without any target-renderer data.
