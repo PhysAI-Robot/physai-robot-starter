@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import ClassVar
 
 import mujoco
+import numpy as np
 
 from ....robots.description import RobotDescription
 from ...studio import STUDIO_FLOOR_RGB1, STUDIO_FLOOR_RGB2, STUDIO_SKY_RGB, TABLE_RGBA
@@ -91,6 +92,9 @@ class ManipulationSceneConfig(WorldSceneConfig):
     description: RobotDescription | None = None
     clutter_count: int = 0
     clutter_size: tuple[float, float, float] = (0.018, 0.018, 0.025)
+    # "checker" is the shared studio floor; "plain" paints it with the mean of the two
+    # tile colours, to test whether a policy reads the tile pattern. MuJoCo only.
+    floor_style: str = "checker"
 
     def build_spec(self) -> mujoco.MjSpec:
         """Build the MuJoCo spec for this scene, objects included."""
@@ -227,22 +231,30 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
     world = spec.worldbody
 
     add_studio_sky(spec)
-    spec.add_texture(
-        name="physai_grid",
-        type=mujoco.mjtTexture.mjTEXTURE_2D,
-        builtin=mujoco.mjtBuiltin.mjBUILTIN_CHECKER,
-        rgb1=list(STUDIO_FLOOR_RGB1),
-        rgb2=list(STUDIO_FLOOR_RGB2),
-        width=300,
-        height=300,
-    )
-    spec.add_material(
-        name="physai_grid",
-        textures=["", "physai_grid"],
-        texuniform=True,
-        texrepeat=[6, 6],
-        reflectance=0.1,
-    )
+    if cfg.floor_style == "checker":
+        spec.add_texture(
+            name="physai_grid",
+            type=mujoco.mjtTexture.mjTEXTURE_2D,
+            builtin=mujoco.mjtBuiltin.mjBUILTIN_CHECKER,
+            rgb1=list(STUDIO_FLOOR_RGB1),
+            rgb2=list(STUDIO_FLOOR_RGB2),
+            width=300,
+            height=300,
+        )
+        spec.add_material(
+            name="physai_grid",
+            textures=["", "physai_grid"],
+            texuniform=True,
+            texrepeat=[6, 6],
+            reflectance=0.1,
+        )
+    elif cfg.floor_style == "plain":
+        tiles = (np.asarray(STUDIO_FLOOR_RGB1) + np.asarray(STUDIO_FLOOR_RGB2)) / 2
+        spec.add_material(name="physai_grid", rgba=[*tiles, 1.0], reflectance=0.1)
+    else:
+        raise ValueError(
+            f"floor_style must be 'checker' or 'plain', not {cfg.floor_style!r}"
+        )
     world.add_light(
         pos=[0, 0, 2.0],
         dir=[0, 0, -1],
