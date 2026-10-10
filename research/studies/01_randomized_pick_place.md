@@ -267,12 +267,15 @@ are fixed here, before the runs.
 - [ ] **Visual randomization in MuJoCo** (floor, table texture, lighting, distractor boxes):
   demonstrations collected with randomized looks, the final configuration retrained, scored on
   both engines. 80% or more on Isaac means the gap closes without any target-renderer data.
-- [ ] **Newton as a third, held-out renderer:** a render-only spike first (MuJoCo physics,
+- [x] **Newton as a third, held-out renderer:** a render-only spike first (MuJoCo physics,
   Newton draws the front and wrist frames from the state). Go if the camera poses match MuJoCo
   within a few pixels, a frame takes under about 1 s at 320 x 240, memory stays under about
   4 GB, and visual servo still reaches 80% there. Then score the MuJoCo, Isaac-400, mixed and
   randomized models on Newton (1000-1099). No-go is documented and a second Isaac look
-  (lights, materials) stands in.
+  (lights, materials) stands in. Result: go. The MuJoCo-, Isaac-200- and Isaac-400-trained ACT
+  score 85, 32 and 54 of 100 on Newton against 98, 79 and 85 on MuJoCo, the both-renderers
+  model 95 against 98 (the randomized-MuJoCo model is scored once it is trained)
+  ([findings](../imitation_learning/FINDINGS.md#a-third-renderer-newton-study-1-m5)).
 - [ ] **Training-seed variance:** two more training seeds of the final ACT, scored on both
   engines, so the headline gap is not one run.
 - Not planned: shorter execution or temporal ensembling on Isaac. It lowered success in M3

@@ -276,6 +276,38 @@ floor is a position cue the benchmark gives learned vision and not a free backgr
 policy that survives a change of renderer may still not survive a change of floor. The benchmark
 keeps the checker (frozen at M0); the plain floor is a test condition.
 
+The floor cue is the pattern's presence, not its geometry: ACT-200 on MuJoCo with the tiles
+resized to 4, 5, 7 and 9 repeats (6 is nominal) scores 96, 96, 97 and 95 of 100 on validation
+seeds (98 at nominal), against 72 with no pattern.
+
+## A third renderer: Newton (study 1, M5)
+
+MuJoCo keeps the physics, the state and the camera poses; `newton_eval.py` sends the state to
+`newton_server.py` (Newton 1.6.1 on Warp, its own Python) and uses its pictures of the front and
+wrist cameras instead. Newton draws the arm, table, cube and target pad from the same MJCF
+and the floor as 1/6 m tiles in the studio's two colours, a directional light with shadows
+and the studio sky; the cube, the disc, the arm pose and the tile edges line up with MuJoCo's
+frames (`outputs/study01/m5/newton_probe_montage.png`). It is a different renderer (lighting,
+shading, no textures or blur of Isaac's kind), unseen by every model. A frame takes 3-5 ms. The go
+criteria set beforehand are met (poses line up, under 1 s per frame, memory a few hundred MB,
+visual servo 100/100 against the 80% bound), so the models were scored on it with no
+training on Newton.
+
+| Model | MuJoCo | Newton, validation 900-999 | Newton, test 1000-1099 (MuJoCo, same seeds) | Paired p |
+| --- | --- | --- | --- | --- |
+| ACT, MuJoCo images, 200 demos | 98 | 82 | 85 (98) | 0.002 |
+| ACT, Isaac images, 200 replays | 79 | 31 | 32 (79) | < 0.001 |
+| ACT, Isaac images, 400 replays | 85 | 58 | 54 (85) | < 0.001 |
+| **ACT, both renderers, 200 + 200** | **98** | **97** | **95 (98)** | **0.25** |
+| Visual servo | 97 | 100 | 100 (97) | 0.25 |
+
+The model trained on MuJoCo's and Isaac's pictures keeps its score on a renderer neither showed
+it, and every single-renderer model loses 13 to 47 points there, so training on two renderers
+learned something that carries to a third, which one renderer's data (even 400 episodes of
+it) does not. Limits: Newton's floor is also a checker (E2 shows the policies read it), the
+scene is Newton's reading of the same MJCF and not a photograph, and one third renderer is
+one sample of "unseen".
+
 Not done: a mixed model on 400 different layouts (to compare equal variety), visual
 randomization in the MuJoCo renderer (floor, textures, distractors), and finding which image
 content carries the shift (for example by blending the two renders region by region). The jitter run trained at 5.7 steps/s against 8.3 without it (the augmentation
