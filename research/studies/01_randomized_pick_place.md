@@ -6,16 +6,18 @@ record (status `done`); follow-up work is a new study file, not edits to this on
 `[ ]` marks planned, missing or partial work.
 
 **Question:** on one task, how far does each paradigm go, from a privileged scripted
-expert to a camera-only classical controller to imitation learning, and can RL make the
-learned policy both more reliable and more efficient? The output is a study paper: an
-open, reproducible comparison with confidence intervals on two simulators.
+expert to a camera-only classical controller to imitation learning, and why does the
+learned policy lose success when only the simulator's renderer changes? The output is a
+study paper: an open, reproducible comparison with confidence intervals on two simulators,
+and a controlled attribution of the renderer gap. RL refinement on top of ACT was planned
+here and moved to [study 02](02_act_rl_refinement.md): ACT is at 98% on MuJoCo, RL on Isaac
+does not fit the evaluation budget, and residual RL on ACT is a crowded area.
 
 | Method | Perception | Role in the study |
 | --- | --- | --- |
 | Scripted expert | Privileged simulator state | Ceiling and demonstration teacher; must reach 100% |
 | Visual servo (classical) | Camera only | How far hand-engineered perception and control go |
 | ACT (imitation learning) | Camera + proprioception | The learning baseline, trained on scripted demonstrations |
-| ACT + RL refinement | Camera + proprioception | Does RL lift success and motion efficiency over ACT? |
 
 ## Research questions
 
@@ -26,21 +28,22 @@ open, reproducible comparison with confidence intervals on two simulators.
 3. **Sim-to-sim:** how much does each method lose moving from MuJoCo to Isaac Sim without
    retraining, and what closes the gap? The gap already seen on the narrow task is in
    the [findings](../imitation_learning/FINDINGS.md#sim-to-sim-gap).
-4. **RL refinement:** does RL on top of ACT raise success and shorten, smooth the motion
-   (completion time, path length, jerk)?
+4. **Attribution:** which image content carries the renderer gap, and which training recipe
+   (one renderer, a randomized renderer, both renderers) holds on a renderer never seen in
+   training?
 5. **Cost of the top-down grasp:** how much of the table does the fixed top-down grasp leave
    out, and how much would a tilted grasp add? Answered by the measurement under
    [Task definition](#task-definition-frozen-at-m0-before-any-training), not by a method.
 
 ## Candidate contributions
 
-No new algorithm is claimed. The contribution is measured evidence. Status after M3; each
+No new algorithm is claimed. The contribution is measured evidence. Status after M4; each
 point links to where the numbers are:
 
 - **Benchmark (baseline contribution), supported:** an open, seeded SO-101 pick-and-place
   benchmark on MuJoCo and Isaac Sim with one protocol (300 held-out seeds, Wilson intervals,
   validation seeds kept apart from test seeds). Expert, visual servo and ACT are measured
-  ([results table](../scripted_experts/README.md#results)); ACT + RL is M5.
+  ([results table](../scripted_experts/README.md#results)).
 - **Engine gap as a proxy for visual domain shift (strongest candidate), supported, cause not
   yet isolated:** on the same 100 seeds the move from MuJoCo to Isaac costs ACT 40 points
   (98 to 58) and the camera-only classical method 9 (97 to 88), with no extra demonstrations
@@ -50,17 +53,16 @@ point links to where the numbers are:
   gap is a pure observation-domain shift
   ([findings](../imitation_learning/FINDINGS.md#sim-to-sim-gap-on-the-randomized-task-study-1-m4)).
   Colour, brightness, sharpness and gripper-reading differences each fail to explain it alone;
-  which image content does is open, but training on both engines' images closes it (94/100 on
-  Isaac with no loss on MuJoCo).
+  which image content does is open (M5), but training on both engines' images closes it
+  (94/100 on Isaac with no loss on MuJoCo). The transfer is asymmetric: MuJoCo-trained ACT
+  loses 40 points on Isaac, Isaac-trained ACT loses 12 on MuJoCo at 100, 200 and 400
+  demonstrations alike (paired, same 100 seeds).
 - **Limit to state in the paper:** the scripted teacher only runs on MuJoCo, so the Isaac data are its
   actions replayed on Isaac with Isaac's observations (see
   [findings](../imitation_learning/FINDINGS.md#sim-to-sim-gap-on-the-randomized-task-study-1-m4));
   that isolates the observation shift but is not an Isaac expert.
 - **Teacher quality to student quality:** not started; needs a minimum-jerk expert, one demo set
   and one training run.
-- **RL refinement on a 6 GB GPU budget:** M5. ACT reaching 98% on MuJoCo leaves little success
-  to gain there, so the efficiency metrics (time, path, jerk) and the Isaac gap are where RL
-  has room.
 
 ### Findings worth a section in the paper
 
@@ -78,8 +80,8 @@ point links to where the numbers are:
    hand-built perception as well as learned vision
    ([findings](../classical_control/FINDINGS.md#place-target-from-the-camera)).
 4. **Different failure geometry:** visual servo fails on cubes near the base on both engines
-   (a grasp and sweep problem), ACT on Isaac fails evenly across the workspace (likely a perception
-   problem, to be tested in M4). They are complementary, which supports using the classical method as a diagnostic
+   (a grasp and sweep problem), ACT on Isaac fails evenly across the workspace (a perception
+   problem: M4 ruled out physics). They are complementary, which supports using the classical method as a diagnostic
    baseline and not only a competitor.
 5. **A coverage limit of the top-down grasp**, measured: flat or low-tilt grasps reach no cell
    of the sampled region, and a 60-75 degree tilt only extends the outer reach (table under
@@ -97,8 +99,9 @@ point links to where the numbers are:
    move Isaac (58 against 62). One policy trained on both engines' images is 98% on MuJoCo and
    94% on Isaac, so the shift is learnable from data of both renderers. Isaac-only
    controls get 91% (200 replays) and 97% (400 different replays) on Isaac and 76% and 84% on
-   MuJoCo, so what improves Isaac is the amount and variety of Isaac data, and what mixing
-   adds is keeping MuJoCo at 98%. A policy that survives lighting and camera
+   MuJoCo, so what mixing adds is keeping MuJoCo at 98%; on Isaac the mixed model and both
+   controls are not distinguishable (paired p 0.38-0.51), and only 100 against 400 Isaac
+   replays is a significant rise (85 to 97, p 0.008). A policy that survives lighting and camera
    shift but collapses with distractor boxes (60 / 46 / 23% for 1 / 2 / 4) is reading scene
    content, which a camera-only detector (95 / 96 / 92%) ignores.
 8. **The final ACT is close to open loop.** With chunk 100 played in full it reads the cameras
@@ -117,7 +120,7 @@ point links to where the numbers are:
 - **Grasp approach: top-down only, frozen.** Every method grasps with the gripper pointing
   down. The region above is a limit of the SO-101 (5 DoF, no shoulder roll) with that grasp,
   not of a method, and the paper says so. Side or tilted grasps are not part of this study;
-  they are a follow-up study (`studies/02_*.md`) if the results call for one.
+  they are a later study if the results call for one.
 - **Sampler as frozen** (`configs/manifests/so101_randomized_pick_place.yaml`): x 0.14-0.27 m,
   |y| <= 0.14 m, and 0.16-0.255 m from the base, for cube and target alike.
 - **What the top-down limit costs** (IK check, grasp at z = 0.034 m and a pre-grasp 5 cm back
@@ -209,8 +212,8 @@ Done when: the task above is runnable on both engines and the manifest is commit
   dimming MuJoCo shown not to reproduce it.
 - [x] Causal test: replay the expert's actions on Isaac while recording Isaac's frames, train on
   them and evaluate on both engines. Trained on Isaac's images ACT scores 85/100 on Isaac
-  (55/100 when trained on MuJoCo's) and 229/300 on MuJoCo (275/300), so the gap is symmetric
-  and comes from the images alone.
+  (55/100 when trained on MuJoCo's) and 229/300 on MuJoCo (275/300), so the gap goes both
+  ways and comes from the images alone; it is not symmetric (40 points one way, 12 the other).
 - [x] Probes of what the policy relies on (region gains, blur, background, camera blanking,
   gripper reading): no single measured difference explains the gap.
 - [x] Colour and lighting augmentation at training time, chosen on validation seeds: no gain
@@ -221,28 +224,53 @@ Done when: the task above is runnable on both engines and the manifest is commit
   beforehand (about 90% on MuJoCo and 80% on Isaac means one policy covers both): met, 294/300
   on MuJoCo and 94/100 on Isaac. Control (Isaac-only, same 200 replays and Isaac exposure): 91/100
   on Isaac, 229/300 on MuJoCo; Isaac-only on 400 different replays: 97/100 on Isaac, 253/300 on
-  MuJoCo. So the MuJoCo images add nothing measurable on Isaac (more Isaac data does better); what
-  mixing buys is keeping MuJoCo at 98%.
-- [ ] Visual randomization in the MuJoCo renderer (floor, textures, distractors), retrain and
-  measure the Isaac drop: deferred.
+  MuJoCo. On Isaac the mixed model is not distinguishable from either control (paired p 0.51
+  and 0.38); what mixing buys is keeping MuJoCo at 98%.
+- Moved to M5: visual randomization in the MuJoCo renderer.
 - [x] Difficulty sweep (lighting, camera shift, clutter) for visual servo and the final ACT.
 
-### M5: RL refinement
+### M5: attribution and a held-out renderer
 
-- [ ] Residual policy on a frozen ACT: RL learns a small correction to ACT's action,
-  trained with PPO through the existing Gymnasium adapter and `task.reward` plus
-  efficiency terms (time, path length, jerk).
-- [ ] If image-based RL does not fit the GPU, train the critic on simulator state and the
-  actor on ACT's inputs (asymmetric actor-critic), and say so in the paper.
-- [ ] Report ACT against ACT + RL on success and on the efficiency metrics.
+Which image content carries the gap, and which training recipe holds on a renderer no model
+was trained on. Every comparison is paired on the same seeds (exact McNemar, discordant
+counts reported); a difference below p 0.05 is reported as "not distinguishable". Criteria
+are fixed here, before the runs.
 
-Done when: the RL row is in the results table, or the attempt is documented as negative
-with its cause (a negative result is still reportable).
+- [ ] **First-frame swap.** The final ACT reads the cameras at steps 0, 100 and 200 only, and
+  both engines spawn the same scene (M0), so run it closed loop on MuJoCo with only the step-0
+  frames replaced by Isaac's render of the same spawn (test seeds 1000-1099). A drop of 20
+  points or more (half the gap) means the first read carries the gap. Then swap one region of
+  that frame at a time (floor and sky, table, arm, cube and disc, wrist camera): a region
+  carries the gap if swapping it alone costs 10 points or more.
+- [ ] **Floor pattern.** The policy loses 13-18 points when the image edit flattens the
+  checker background (M4 probes), so the checker floor may be a position cue. Render a
+  single-colour floor natively in MuJoCo (needs a floor-look option in the scene) and evaluate
+  the final ACT, the Isaac-trained and the mixed ACT and visual servo on 1000-1099. A drop of
+  10 points or more is a limit of the benchmark the paper states, and the floor joins the
+  randomization below. The benchmark's own floor stays the checker (frozen at M0).
+- [ ] **Visual randomization in MuJoCo** (floor, table texture, lighting, distractor boxes):
+  demonstrations collected with randomized looks, the final configuration retrained, scored on
+  both engines. 80% or more on Isaac means the gap closes without any target-renderer data.
+- [ ] **Newton as a third, held-out renderer:** a render-only spike first (MuJoCo physics,
+  Newton draws the front and wrist frames from the state). Go if the camera poses match MuJoCo
+  within a few pixels, a frame takes under about 1 s at 320 x 240, memory stays under about
+  4 GB, and visual servo still reaches 80% there. Then score the MuJoCo, Isaac-400, mixed and
+  randomized models on Newton (1000-1099). No-go is documented and a second Isaac look
+  (lights, materials) stands in.
+- [ ] **Training-seed variance:** two more training seeds of the final ACT, scored on both
+  engines, so the headline gap is not one run.
+- Not planned: shorter execution or temporal ensembling on Isaac. It lowered success in M3
+  and the first-frame swap tests the same mechanism more cheaply.
+
+Done when: the training-recipe by renderer table (MuJoCo, randomized MuJoCo, Isaac, both;
+scored on MuJoCo, Isaac, Newton or its stand-in) is filled and the region that carries the gap
+is named, or each missing part is documented with its cause.
 
 ### M6: paper and release
 
-- [ ] Paper: setup, task, four-method comparison, workspace heatmaps, sim-to-sim gap,
-  ablations, RL refinement, failure analysis, limitations (simulation only).
+- [ ] Paper: setup, task, three-method comparison, workspace heatmaps, sim-to-sim gap and its
+  attribution, held-out renderer, ablations, failure analysis, limitations (simulation only,
+  demonstrations on Isaac are MuJoCo actions replayed).
 - [ ] Tag a release with the exact configs, seeds and checkpoint download links that
   reproduce every reported number.
 
@@ -261,8 +289,10 @@ by cause.
   300-episode Isaac runs per method before M3.
 - **Related work to read and cite:** ACT (Zhao et al., 2023), LeRobot (Cadene et al.,
   2024), Diffusion Policy (Chi et al., 2023), domain randomization (Tobin et al., 2017),
-  residual RL (Silver et al., 2018; Johannink et al., 2019; Ankile et al., 2024), and
-  manipulation benchmarks (robosuite, ManiSkill, RLBench) for positioning.
+  manipulation benchmarks (robosuite, ManiSkill, RLBench) for positioning, cross-engine
+  evaluation (ROBOGATE, arXiv 2603.22126; GS-Playground, 2604.25459), open-loop chunk
+  execution (2608.15938) and rigorous policy comparison (TRI, 2405.05439; Badithela et al.,
+  2510.04354).
 - **Venue:** a robotics workshop paper or an arXiv report first; pick the venue before M6
   so its page limit shapes the figures.
 - **Record as you go:** causes and final numbers in each topic's `FINDINGS.md`, so the

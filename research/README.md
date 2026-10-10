@@ -27,11 +27,12 @@ owns its README (setup and runbook) and, where it has measurement history, a
 ## Studies
 
 One plan per paper, in `studies/`; a topic directory appears when its first module exists
-(RL lands with study 1).
+(RL lands with study 2).
 
 | Study | Status | Question |
 | --- | --- | --- |
-| [01 randomized pick-and-place](studies/01_randomized_pick_place.md) | active | How far do scripted, classical, ACT and ACT + RL go on a randomized SO-101 pick-and-place, on MuJoCo and Isaac Sim? |
+| [01 randomized pick-and-place](studies/01_randomized_pick_place.md) | active | How far do scripted, classical and ACT go on a randomized SO-101 pick-and-place, on MuJoCo and Isaac Sim, and what carries ACT's renderer gap? |
+| [02 RL refinement of ACT](studies/02_act_rl_refinement.md) | planned | Does RL on a frozen ACT raise success and motion efficiency? |
 
 See
 [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md#research-boundary) for the dependency rule
