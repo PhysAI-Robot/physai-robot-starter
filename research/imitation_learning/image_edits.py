@@ -11,6 +11,8 @@ Research module: nothing in `src/physai` imports it.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 from PIL import Image, ImageDraw
 from scipy import ndimage
@@ -189,3 +191,139 @@ class ImageEditor:
                 )
             return edit_front(self.name, frame.data, self._table)
         return edit_wrist(self.name, frame.data)
+
+
+# First-frame swap: ACT reads the cameras only when its action queue is empty (steps 0,
+# 100, 200 with chunk 100), and both engines spawn the same scene with the arm at HOME,
+# so the first frame can be swapped for Isaac's render of the same seed while every later
+# read stays the running simulator's. `first_all` swaps both cameras; the others swap one
+# camera or one region of the front frame (regions found on the MuJoCo frame).
+FIRST_EDITS = (
+    "first_all",
+    "first_front",
+    "first_wrist",
+    "first_arm",
+    "first_cubedisc",
+    "first_table",
+    "first_background",
+)
+# A cube that Isaac knocked or dropped at reset (spawn parity is within 3 mm otherwise)
+# makes the two first frames different scenes, so those seeds are left unswapped.
+SPAWN_TOLERANCE_M = 0.01
+
+
+def swap_front(
+    name: str, mujoco: np.ndarray, isaac: np.ndarray, table: np.ndarray
+) -> np.ndarray:
+    """The MuJoCo front frame with the named part replaced by Isaac's pixels."""
+    if name in ("first_all", "first_front"):
+        return isaac.copy()
+    if name == "first_arm":
+        mask = robot_mask(mujoco) | robot_mask(isaac)
+    elif name in FIRST_EDITS:
+        regions = front_regions(mujoco, table)
+        mask = {
+            "first_cubedisc": regions["cube"] | regions["disc"],
+            "first_table": regions["table"],
+            "first_background": regions["background"],
+        }.get(name)
+        if mask is None:
+            return mujoco.copy()
+    else:
+        raise ValueError(
+            f"unknown first-frame edit {name!r}; choose from {FIRST_EDITS}"
+        )
+    out = mujoco.copy()
+    out[mask] = isaac[mask]
+    return out
+
+
+class FirstFrameSwap(ImageEditor):
+    """Swaps each episode's first frame for Isaac's, from a folder of two captures.
+
+    `frames_dir` holds `mujoco/` and `isaac/` datasets (`eval_policy.py --policy constant
+    --max-steps 2 --save-dataset`) over the same consecutive seeds starting at
+    `first_seed`. Episode n of the run is seed `first_seed + n`, as `eval_policy.py` numbers
+    them. The incoming MuJoCo frame must equal the captured one, so a mismatched seed
+    range fails instead of scoring a wrong swap.
+    """
+
+    def __init__(
+        self, name: str, table_pos, table_size, frames_dir, first_seed: int
+    ) -> None:
+        if name not in FIRST_EDITS:
+            raise ValueError(f"unknown image_edit {name!r}; choose from {FIRST_EDITS}")
+        super().__init__("blur_front", table_pos, table_size)  # base state only
+        self.name = name
+        self.frames = _load_first_frames(Path(frames_dir))
+        self._episode = first_seed - 1
+        self._seen: set[str] = set()
+
+    def reset(self) -> None:
+        self._episode += 1
+        self._seen = set()
+
+    def __call__(self, camera: str, frame) -> np.ndarray:
+        if camera in self._seen:
+            return frame.data
+        self._seen.add(camera)
+        seed = self._episode
+        if seed not in self.frames:
+            raise KeyError(f"no captured first frame for seed {seed}")
+        entry = self.frames[seed]
+        if np.abs(entry["mujoco"][camera].astype(int) - frame.data).mean() > 1.0:
+            raise ValueError(
+                f"seed {seed}: the running frame is not the captured MuJoCo frame; "
+                "check --seed against first_seed"
+            )
+        if not entry["valid"]:
+            return frame.data
+        isaac = entry["isaac"][camera]
+        if camera == "wrist":
+            return (
+                isaac.copy()
+                if self.name in ("first_all", "first_wrist")
+                else frame.data
+            )
+        if self.name == "first_wrist":
+            return frame.data
+        if self._table is None:
+            self._table = table_polygon_mask(
+                frame.data.shape[:2],
+                frame.intrinsics,
+                frame.extrinsics,
+                self.table_pos,
+                self.table_size,
+            )
+        return swap_front(self.name, frame.data, isaac, self._table)
+
+
+def _load_first_frames(frames_dir: Path) -> dict[int, dict]:
+    import json
+
+    from physai.data import load_episode
+
+    keys = (
+        "observation.images.front",
+        "observation.images.wrist",
+        "observation.environment_state",
+    )
+    episodes = {}
+    for engine in ("mujoco", "isaac"):
+        meta = json.loads((frames_dir / engine / "meta.json").read_text("utf-8"))
+        for entry in meta["episodes"]:
+            data = load_episode(frames_dir / engine / entry["file"], keys)
+            episodes.setdefault(entry["seed"], {})[engine] = {
+                "front": data[keys[0]][0],
+                "wrist": data[keys[1]][0],
+                "cube": data[keys[2]][0][6:8],
+            }
+    out = {}
+    for seed, pair in episodes.items():
+        gap = np.hypot(*(pair["mujoco"]["cube"] - pair["isaac"]["cube"]))
+        out[seed] = {
+            "mujoco": pair["mujoco"],
+            "isaac": pair["isaac"],
+            "valid": bool(gap <= SPAWN_TOLERANCE_M),
+        }
+    return out

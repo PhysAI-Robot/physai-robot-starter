@@ -211,6 +211,26 @@ appears, which Isaac's different floor, shadows and arm rendering also are. The 
 is therefore image content beyond colour, brightness and sharpness; training on Isaac's own
 images removes it (above), but which content it is stays unidentified.
 
+## First-frame swap (study 1, M5)
+
+ACT-200 closed loop on MuJoCo, with only the first read of the cameras (step 0, the arm at HOME)
+replaced by Isaac's render of the same seed; the reads at steps 100 and 200 stay MuJoCo's
+(`--policy-arg image_edit=first_all first_frames=data/m5_first first_seed=...`, frames
+captured with `eval_policy.py --policy constant --max-steps 2 --save-dataset`, 200 seeds
+900-1099 on each engine). The two first frames are the same scene (cube within 3 mm for 196
+of 200 seeds; the other 4, where Isaac knocked the cube at reset, are left unswapped). The
+swap is live: the step count changed on 85 of 100 seeds.
+
+| Seeds | Unedited | First frame from Isaac | Paired p |
+| --- | --- | --- | --- |
+| 900-999 (validation) | 98/100 | 95/100 | not tested |
+| 1000-1099 (test) | 98/100 | 90/100 | 0.02 (9 seeds only unedited, 1 only swapped) |
+
+So the first read carries 3-8 points of the 40 point gap on Isaac: most of the gap sits in the
+reads at steps 100 and 200 (or in how Isaac executes the same actions), not in where ACT
+sees the cube and target at the start. The criterion fixed beforehand (20 points or more) is
+not met, and the per-region swaps were not run since the whole frame costs less than 10.
+
 Not done: a mixed model on 400 different layouts (to compare equal variety), visual
 randomization in the MuJoCo renderer (floor, textures, distractors), and finding which image
 content carries the shift (for example by blending the two renders region by region). The jitter run trained at 5.7 steps/s against 8.3 without it (the augmentation

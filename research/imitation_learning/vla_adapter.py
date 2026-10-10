@@ -25,7 +25,7 @@ from physai.data.metadata import CheckpointMetadata, validate_checkpoint_compati
 from physai.policy.registry import register_policy
 from physai.policy.replay import VLAPolicy
 
-from .image_edits import ImageEditor
+from .image_edits import FIRST_EDITS, FirstFrameSwap, ImageEditor
 from .state_edits import GripperStateEditor
 
 
@@ -153,7 +153,16 @@ class LeRobotPolicy(VLAPolicy):
         editor = None
         if image_edit is not None:
             scene = env.cfg.scene
-            editor = ImageEditor(image_edit, scene.table_pos, scene.table_size)
+            if image_edit in FIRST_EDITS:
+                editor = FirstFrameSwap(
+                    image_edit,
+                    scene.table_pos,
+                    scene.table_size,
+                    kw.pop("first_frames"),
+                    kw.pop("first_seed"),
+                )
+            else:
+                editor = ImageEditor(image_edit, scene.table_pos, scene.table_size)
         return cls(
             env,
             policy,
@@ -191,6 +200,8 @@ class LeRobotPolicy(VLAPolicy):
         super().reset(observation, goal, instruction)
         self.policy.reset()
         self._last_gripper_command = None
+        if hasattr(self.image_editor, "reset"):
+            self.image_editor.reset()
         if self.state_editor is not None:
             self.state_editor.reset()
 

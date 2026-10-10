@@ -61,6 +61,12 @@ All evaluation-time edits change only what the policy is shown, not the robot:
 uv run python scripts/eval_policy.py --manifest configs/manifests/so101_randomized_pick_place.yaml --policy lerobot --checkpoint outputs/act_200 --seed 900 --policy-arg image_edit=bg_flat
 uv run python scripts/eval_policy.py ... --policy-arg state_edit=gripper_track
 
+# first-frame swap: the step-0 camera frames replaced by Isaac's render of the same seed
+# (first_all, first_front, first_wrist, first_arm, first_cubedisc, first_table, first_background).
+# data/m5_first/{mujoco,isaac} come from running eval_policy.py --policy constant --max-steps 2
+# --save-dataset once per simulator over the same seeds
+uv run python scripts/eval_policy.py ... --policy-arg image_edit=first_all --policy-arg first_frames=data/m5_first --policy-arg first_seed=900
+
 # the same demonstration actions replayed on Isaac Sim, recording Isaac's frames as a
 # training dataset (the actions are identical, so only the pictures differ)
 OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/eval_policy.py --manifest configs/manifests/so101_randomized_pick_place.yaml --sim isaac --policy replay --dataset data/randomized_v1 --seed 0 --episodes 100 --save-dataset data/randomized_isaac_v1

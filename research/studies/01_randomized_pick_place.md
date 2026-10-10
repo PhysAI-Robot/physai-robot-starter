@@ -236,12 +236,21 @@ was trained on. Every comparison is paired on the same seeds (exact McNemar, dis
 counts reported); a difference below p 0.05 is reported as "not distinguishable". Criteria
 are fixed here, before the runs.
 
-- [ ] **First-frame swap.** The final ACT reads the cameras at steps 0, 100 and 200 only, and
+- [x] **First-frame swap.** The final ACT reads the cameras at steps 0, 100 and 200 only, and
   both engines spawn the same scene (M0), so run it closed loop on MuJoCo with only the step-0
   frames replaced by Isaac's render of the same spawn (test seeds 1000-1099). A drop of 20
   points or more (half the gap) means the first read carries the gap. Then swap one region of
   that frame at a time (floor and sky, table, arm, cube and disc, wrist camera): a region
-  carries the gap if swapping it alone costs 10 points or more.
+  carries the gap if swapping it alone costs 10 points or more. Result: 98 to 95/100
+  (validation) and 98 to 90/100 (test, paired p 0.02), under the 20 point bar, so the
+  per-region swaps were skipped
+  ([findings](../imitation_learning/FINDINGS.md#first-frame-swap-study-1-m5)).
+- [ ] **Later reads.** The first read carries little, so the gap sits in the reads at steps
+  100 and 200 (the arm in view, the cube about to be grasped) or in Isaac's execution of the
+  same actions. Measure it without Isaac in the loop: record MuJoCo rollouts' state at the
+  reads, render the same states on Isaac, and compare the chunk ACT predicts from each
+  render (joint-space distance per read). The same state renderer is what the Newton
+  spike needs.
 - [ ] **Floor pattern.** The policy loses 13-18 points when the image edit flattens the
   checker background (M4 probes), so the checker floor may be a position cue. Render a
   single-colour floor natively in MuJoCo (needs a floor-look option in the scene) and evaluate
