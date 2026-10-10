@@ -95,9 +95,10 @@ point links to where the numbers are:
    on MuJoCo. It is not colour or brightness (every measured region gain applied together
    leaves 96%), not sharpness, not the gripper-reading lag, and colour augmentation did not
    move Isaac (58 against 62). One policy trained on both engines' images is 98% on MuJoCo and
-   94% on Isaac, so the shift is learnable from data of both renderers. An Isaac-only control with
-   the same Isaac exposure gets 91% on Isaac (intervals overlap) and 76% on MuJoCo, so what
-   improves Isaac is Isaac data and what mixing adds is keeping MuJoCo at 98%. A policy that survives lighting and camera
+   94% on Isaac, so the shift is learnable from data of both renderers. Isaac-only
+   controls get 91% (200 replays) and 97% (400 different replays) on Isaac and 76% and 84% on
+   MuJoCo, so what improves Isaac is the amount and variety of Isaac data, and what mixing
+   adds is keeping MuJoCo at 98%. A policy that survives lighting and camera
    shift but collapses with distractor boxes (60 / 46 / 23% for 1 / 2 / 4) is reading scene
    content, which a camera-only detector (95 / 96 / 92%) ignores.
 8. **The final ACT is close to open loop.** With chunk 100 played in full it reads the cameras
@@ -219,7 +220,9 @@ Done when: the task above is runnable on both engines and the manifest is commit
   on Isaac Sim, 400 episodes, 120k steps) and evaluate it on both engines. Criterion fixed
   beforehand (about 90% on MuJoCo and 80% on Isaac means one policy covers both): met, 294/300
   on MuJoCo and 94/100 on Isaac. Control (Isaac-only, same 200 replays and Isaac exposure): 91/100
-  on Isaac, 229/300 on MuJoCo, so mixing keeps MuJoCo but adds nothing measurable on Isaac.
+  on Isaac, 229/300 on MuJoCo; Isaac-only on 400 different replays: 97/100 on Isaac, 253/300 on
+  MuJoCo. So the MuJoCo images add nothing measurable on Isaac (more Isaac data does better); what
+  mixing buys is keeping MuJoCo at 98%.
 - [ ] Visual randomization in the MuJoCo renderer (floor, textures, distractors), retrain and
   measure the Isaac drop: deferred.
 - [x] Difficulty sweep (lighting, camera shift, clutter) for visual servo and the final ACT.

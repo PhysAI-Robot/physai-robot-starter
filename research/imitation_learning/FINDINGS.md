@@ -160,19 +160,24 @@ explains it.
 | MuJoCo images, 200 demos | 294/300 (98%) | 58/100 |
 | Isaac images, 100 demos | 229/300 (76%) | 85/100 |
 | Isaac images, 200 replays (control, 60k steps) | 229/300 (76%) | 91/100 (91%), CI 84-95% |
+| Isaac images, 400 different replays (control, 120k steps) | 253/300 (84%), CI 80-88% | 97/100 (97%), CI 92-99% |
 | **both, 200 + 200** | **294/300 (98%)**, CI 96-99% | **94/100 (94%)**, CI 88-97% |
 
 One policy is as good as the MuJoCo-only one on MuJoCo and far better than either single-engine
 model on Isaac (6 failures, all timeouts, 5 of them 10 cm or more from the target, no
-collisions). The control, an Isaac-only model on the same 200 replays with the same Isaac
-exposure (60k steps), scores 91/100 on Isaac and 229/300 on MuJoCo: against the mixed model on
-Isaac that is 6 seeds only the mixed one passes, 3 only the control, 88 both, 3 neither, and the
-intervals overlap (84-95% against 88-97%). The MuJoCo images therefore add nothing measurable on
-Isaac. What improves Isaac is Isaac data (100 demonstrations 85%, 200 demonstrations 91%, with
-the mixed model's 94% in line), and what mixing buys is that the same policy keeps 98% on MuJoCo
-(76% for the Isaac-only models). Limits: the mixed model had twice the steps (120k against 60k,
-the same passes over its larger set), both models see the same 200 layouts, and an Isaac-only
-model on 400 different demonstrations was not made.
+collisions). Two Isaac-only controls separate mixing from more data. On the same 200 replays and the same
+Isaac exposure (60k steps) the model scores 91/100 on Isaac, against 94/100 mixed (6 seeds only
+the mixed one passes, 3 only the control; the intervals overlap). On 400 different replays
+(spawns 0-399, 120k steps, so more layouts than the mixed model's 200) it scores 97/100 on
+Isaac (CI 92-99%; 4 seeds only it passes, 1 only the mixed one) and 253/300 on MuJoCo (84%). So
+what improves Isaac is the amount and variety of Isaac data (100, 200, 400 demonstrations: 85,
+91, 97%), and the MuJoCo images add nothing measurable on Isaac: the more Isaac-only data
+reaches the mixed model's Isaac score and beyond. What mixing buys is the other engine: the same
+policy keeps 98% on MuJoCo, where the Isaac-only models reach 76% (100 and 200 demonstrations)
+and 84% (400). More Isaac data raises MuJoCo too, but not to the MuJoCo-trained level. Limits:
+the mixed model sees 200 layouts, each in both renderers, against 400 for the longest control
+(equal episode count, half the variety), and the steps differ between runs (the passes over
+each model's data are about equal).
 
 **What the replay design does and does not show.** The scripted expert reads MuJoCo's contact
 data and only runs on MuJoCo; the "Isaac" demonstrations are its actions replayed open loop on
@@ -203,8 +208,8 @@ appears, which Isaac's different floor, shadows and arm rendering also are. The 
 is therefore image content beyond colour, brightness and sharpness; training on Isaac's own
 images removes it (above), but which content it is stays unidentified.
 
-Not done: an Isaac-only model on 400 different demonstrations (the strongest test of more
-target data against mixing), visual randomization in the MuJoCo renderer (floor, textures, distractors), and finding which image
+Not done: a mixed model on 400 different layouts (to compare equal variety), visual
+randomization in the MuJoCo renderer (floor, textures, distractors), and finding which image
 content carries the shift (for example by blending the two renders region by region). The jitter run trained at 5.7 steps/s against 8.3 without it (the augmentation
 runs on the CPU), about 3 hours.
 
