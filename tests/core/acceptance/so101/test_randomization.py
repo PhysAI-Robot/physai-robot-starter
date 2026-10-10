@@ -119,3 +119,51 @@ def test_a_shifted_camera_is_reported_at_its_nominal_pose_unless_calibrated(came
     np.testing.assert_allclose(known, actual_known)
     np.testing.assert_allclose(unknown, nominal, atol=1e-9)
     np.testing.assert_allclose(actual_unknown, actual_known)
+
+
+@requires_assets
+def test_appearance_randomization_tints_within_bounds_restores_and_keeps_old_seeds():
+    import mujoco
+
+    from physai.robots.registry import scene_defaults
+    from physai.sim.mujoco import (
+        DomainRandomizationConfig,
+        DomainRandomizationEngine,
+        SingleCubePlaceSceneConfig,
+    )
+
+    model, _ = SingleCubePlaceSceneConfig(**scene_defaults("so101")).build_model()
+    base_rgba, base_geom = model.mat_rgba.copy(), model.geom_rgba.copy()
+    base_repeat = model.mat_texrepeat.copy()
+    floor = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_MATERIAL, "physai_grid")
+    cube = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "cube_geom")
+
+    plain = DomainRandomizationEngine(model, DomainRandomizationConfig(enabled=True))
+    assert plain.apply(np.random.default_rng(3), seed=3).appearance == {}
+    assert np.array_equal(model.mat_rgba, base_rgba)  # default ranges change nothing
+
+    config = DomainRandomizationConfig(
+        enabled=True,
+        arm_tint=(0.5, 1.2),
+        table_tint=(0.7, 1.1),
+        floor_tint=(0.5, 1.0),
+        floor_tile_repeat=(3.0, 12.0),
+    )
+    engine = DomainRandomizationEngine(model, config)
+    meta = engine.apply(np.random.default_rng(3), seed=3)
+    assert set(meta.appearance) == {
+        "arm_tint",
+        "table_tint",
+        "floor_tint",
+        "floor_tile_repeat",
+    }
+    assert all(0.5 <= v <= 1.2 for v in meta.appearance["arm_tint"])
+    assert 3.0 <= model.mat_texrepeat[floor][0] <= 12.0
+    assert (model.mat_rgba[floor, :3] <= 1.0).all()
+    assert np.array_equal(model.geom_rgba[cube], base_geom[cube])  # the task's colours
+    assert engine.apply(np.random.default_rng(3), seed=3).appearance == meta.appearance
+    engine.config = DomainRandomizationConfig(enabled=False)
+    engine.apply(np.random.default_rng(3), seed=3)
+    assert np.array_equal(model.mat_rgba, base_rgba)
+    assert np.array_equal(model.mat_texrepeat, base_repeat)
+    assert np.array_equal(model.geom_rgba, base_geom)

@@ -144,6 +144,10 @@ def _parse_simulation_config(
         "lighting_scale",
         "clutter_x_range",
         "clutter_y_range",
+        "arm_tint",
+        "table_tint",
+        "floor_tint",
+        "floor_tile_repeat",
     ):
         if key in randomization_data:
             value = randomization_data[key]

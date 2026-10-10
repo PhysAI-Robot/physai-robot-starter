@@ -1,0 +1,45 @@
+# Study 1's randomized task with a one-colour floor instead of the checker, to test whether
+# a camera policy reads the tile pattern (research/studies/01_randomized_pick_place.md, M5).
+# MuJoCo only; the benchmark itself keeps the checker (so101_randomized_pick_place.yaml).
+schema_version: 1
+
+scene:
+  name: single_cube_place
+  overrides:
+    robot_xml: assets/so101/so101_new_calib_camera.xml
+    floor_style: plain
+    timestep: 0.002
+    table_pos: [0.30, 0.0, 0.01]
+    table_size: [0.20, 0.25, 0.01]
+    target_pos: [0.20, -0.10, 0.021]
+    target_radius: 0.035
+    cube_names: [cube]
+    cube_half: 0.014
+    cube_pos: [0.20, 0.08, 0.036]
+    cube_mass: 0.03
+    cube_rgba: [0.85, 0.25, 0.2, 1.0]
+
+task: single_cube_place
+task_kwargs:
+  success_xy_tol: 0.04
+success_hold_steps: 10
+
+robots:
+  - id: so101
+    robot: so101
+    config:
+      control_hz: 30
+      cameras: [front, wrist]
+      max_steps: 600
+      randomize_cube: true
+      cube_x_range: [0.14, 0.27]
+      cube_y_range: [-0.14, 0.14]
+      randomize_target: true
+      target_x_range: [0.14, 0.27]
+      target_y_range: [-0.14, 0.14]
+      # Distance from the base: drops the near-base hole and the far corners.
+      spawn_radius_range: [0.16, 0.255]
+      min_cube_target_distance: 0.08
+
+viewer:
+  mode: none
