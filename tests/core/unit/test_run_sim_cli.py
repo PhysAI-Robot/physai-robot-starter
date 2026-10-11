@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from tests.conftest import requires_assets
+from tests.conftest import requires_assets, requires_research
 
 SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"
 WORLD = "configs/manifests/heterogeneous_world.yaml"
@@ -96,6 +96,7 @@ def test_incompatible_flags_are_rejected(run_sim, monkeypatch, capsys):
 
 
 @requires_assets
+@requires_research
 def test_headless_episodes_run_from_a_manifest_and_name_their_video(
     run_sim, monkeypatch, tmp_path, capsys
 ):

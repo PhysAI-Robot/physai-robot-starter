@@ -6,13 +6,14 @@ import sys
 from pathlib import Path
 
 import pytest
-from tests.conftest import requires_assets
+from tests.conftest import requires_assets, requires_research
 
 pytestmark = [pytest.mark.acceptance, requires_assets]
 
 ROOT = Path(__file__).resolve().parents[4]
 
 
+@requires_research
 def test_eval_policy_saves_a_training_dataset(tmp_path):
     result = subprocess.run(
         [
