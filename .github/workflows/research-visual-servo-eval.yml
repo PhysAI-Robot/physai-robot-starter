@@ -142,7 +142,7 @@ jobs:
   report:
     name: Merge shards and enforce the result
     needs: evaluate
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && needs.evaluate.result != 'skipped' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
 
