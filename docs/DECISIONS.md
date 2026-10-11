@@ -120,8 +120,9 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   stays `research/`: `import research...` and the run commands do not change.
 - **The core works without it.** Scripts load research modules through
   `_bootstrap.import_research`, tests that need it use `requires_research` or
-  `pytest.importorskip`, and CI checks the submodule out only for the research jobs (secret
-  `RESEARCH_TOKEN`; fork and Dependabot runs skip those jobs).
+  `pytest.importorskip`. This repository's CI never checks the submodule out and holds no
+  credential for it: the research tests and the visual servo evaluation run in `physai-research`
+  against this repository's `dev` branch.
 - **One public repo per paper.** When a paper is out, publish a fresh single-commit snapshot of
   just that study (topic modules, `studies/NN_*.md`, FINDINGS, tests, manifests) as
   `PhysAI-Robot/physai-study-NN`, pinned to a tagged core version, with checkpoints and data on

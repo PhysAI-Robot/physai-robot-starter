@@ -92,67 +92,6 @@ jobs:
           os._exit(exit_code)
           PY
 
-  test-research:
-    name: Python 3.12 research tests
-    if: ${{ github.event.pull_request.head.repo.fork != true && github.actor != 'dependabot[bot]' }}
-    runs-on: ubuntu-24.04
-    env:
-      MUJOCO_GL: osmesa
-      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
-
-    steps:
-      - name: Check out repository and the private research submodule
-        uses: actions/checkout@v5
-        with:
-          submodules: recursive
-          token: ${{ secrets.RESEARCH_TOKEN }}
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-
-      - name: Install headless rendering support
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends libosmesa6-dev
-
-      - name: Cache robot assets
-        uses: actions/cache@v5
-        with:
-          path: assets
-          key: robot-assets-${{ runner.os }}-${{ hashFiles('scripts/fetch_assets.py') }}
-
-      - name: Fetch robot assets
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: uv run python scripts/fetch_assets.py --robot so101
-
-      - name: Install project and test dependencies
-        run: uv sync --locked --extra training
-
-      - name: Run research test suite
-        run: |
-          uv run python - <<'PY'
-          import os
-          import sys
-
-          import pytest
-
-          # mujoco.Renderer under MUJOCO_GL=osmesa segfaults during CPython's
-          # normal interpreter shutdown on this runner, after pytest has
-          # already reported its result. os._exit() reports pytest's real
-          # exit code while skipping that unsafe native-library teardown.
-          exit_code = pytest.main(["research/tests/", "-q", "-rf"])
-          sys.stdout.flush()  # os._exit() would drop pytest's buffered report
-          os._exit(exit_code)
-          PY
-
   ros2-acceptance:
     name: ROS2 Jazzy robot acceptance
     runs-on: ubuntu-24.04
