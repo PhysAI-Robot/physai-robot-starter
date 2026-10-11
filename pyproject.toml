@@ -42,6 +42,7 @@ training = [
     "torch>=2.7,<2.12",
     "torchvision>=0.22,<0.27",
     "lerobot>=0.6.1",
+    "scipy>=1.11",  # research/imitation_learning/image_edits.py
 ]
 # httpx2 is only used by tests/core/unit/test_web_app_streaming.py (guarded
 # by pytest.importorskip("httpx2"), so it skips cleanly without this extra).
