@@ -32,7 +32,7 @@ import threading
 import time
 from pathlib import Path
 
-import _bootstrap  # noqa: F401
+from _bootstrap import import_research
 from _cli import new_parser
 from _common_args import (
     add_camera_resolution,
@@ -47,12 +47,6 @@ from _common_args import (
     policy_kwargs,
 )
 
-# Registers so101's "scripted"/"visual_servo" policies and the checkpoint-
-# backed "lerobot" policy with their registries; --policy may select any of
-# them, so all load eagerly (none import torch/lerobot at module scope).
-import research.classical_control.so101_visual_servo
-import research.imitation_learning.vla_adapter
-import research.scripted_experts.so101_pick_place_expert  # noqa: F401
 from _outputs import RunOutputs, wants_cameras
 from physai.config import SessionManifest, load_manifest
 from physai.config.compat import with_overrides
@@ -60,6 +54,16 @@ from physai.policy import available_policies
 from physai.robots import has_robot_policy
 from physai.runtime import RenderGlitch, Session, create_session, run_episode
 from physai.web.host import Host
+
+# Registers so101's "scripted"/"visual_servo" policies and the checkpoint-
+# backed "lerobot" policy with their registries (skipped when the private
+# `research/` submodule is absent); --policy may select any of them, so all
+# load eagerly (none import torch/lerobot at module scope).
+import_research(
+    "research.classical_control.so101_visual_servo",
+    "research.imitation_learning.vla_adapter",
+    "research.scripted_experts.so101_pick_place_expert",
+)
 
 
 # What a headless episode runs when neither --policy nor the manifest names one:

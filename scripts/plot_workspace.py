@@ -18,7 +18,7 @@ import _bootstrap  # noqa: F401
 from _cli import new_parser
 from _common_args import add_out
 
-# The sampled region of configs/manifests/so101_randomized_pick_place.yaml.
+# The sampled region of research/configs/so101_randomized_pick_place.yaml.
 RADIUS_RANGE = (0.16, 0.255)
 Y_LIMIT = 0.14
 ROWS = (("cube_start", "cube start"), ("target_pos", "target pad"))

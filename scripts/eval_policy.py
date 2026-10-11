@@ -21,7 +21,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-import _bootstrap  # noqa: F401
+from _bootstrap import import_research
 import numpy as np
 from _cli import new_parser
 from _common_args import (
@@ -38,12 +38,6 @@ from _common_args import (
     policy_kwargs,
 )
 
-# Registers so101's "scripted"/"visual_servo" policies and the checkpoint-
-# backed "lerobot" policy with their registries; --policy may select any of
-# them, so all load eagerly (none import torch/lerobot at module scope).
-import research.classical_control.so101_visual_servo  # noqa: E402,F401
-import research.imitation_learning.vla_adapter  # noqa: E402,F401
-import research.scripted_experts.so101_pick_place_expert  # noqa: E402,F401
 from _outputs import RunOutputs, wants_cameras
 from _recording import dataset_metadata
 from physai.config import DomainRandomizationConfig, load_manifest
@@ -56,6 +50,16 @@ from physai.runtime import (
     RenderGlitch,
     create_session,
     run_episode,
+)
+
+# Registers so101's "scripted"/"visual_servo" policies and the checkpoint-
+# backed "lerobot" policy with their registries (skipped when the private
+# `research/` submodule is absent); --policy may select any of them, so all
+# load eagerly (none import torch/lerobot at module scope).
+import_research(
+    "research.classical_control.so101_visual_servo",
+    "research.imitation_learning.vla_adapter",
+    "research.scripted_experts.so101_pick_place_expert",
 )
 
 

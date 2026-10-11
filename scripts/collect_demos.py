@@ -5,7 +5,7 @@ default — behaviour cloning on failures teaches failure.
 
     python scripts/collect_demos.py --episodes 50 --dataset data/pickplace_v1
     python scripts/collect_demos.py --episodes 50 --keep-failures   # for analysis
-    python scripts/collect_demos.py --manifest configs/manifests/so101_randomized_pick_place.yaml --episodes 200
+    python scripts/collect_demos.py --manifest research/configs/so101_randomized_pick_place.yaml --episodes 200
 
 Runs the same session as `eval_policy.py` (configs/manifests/so101_*.yaml), so a
 policy trained on these demos is evaluated on the scene it learned.
@@ -31,7 +31,6 @@ from physai.config import load_manifest
 from physai.config.compat import with_overrides
 from physai.contracts import parse_camera_resolution
 from physai.runtime import create_session, run_episode
-from research.scripted_experts.so101_pick_place_expert import SO101PickPlaceExpert
 
 
 def main() -> int:
@@ -100,6 +99,8 @@ def main() -> int:
         dataset_dir=args.dataset,
         metadata=dataset_metadata(runtime, manifest, store_images=not args.no_images),
     )
+
+    from research.scripted_experts.so101_pick_place_expert import SO101PickPlaceExpert
 
     attempted = kept = 0
     while kept < args.episodes:

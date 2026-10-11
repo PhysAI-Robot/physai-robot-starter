@@ -1,8 +1,11 @@
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
-from research.imitation_learning.vla_adapter import LeRobotPolicy
+LeRobotPolicy = pytest.importorskip(
+    "research.imitation_learning.vla_adapter"
+).LeRobotPolicy
 
 
 def _policy() -> LeRobotPolicy:

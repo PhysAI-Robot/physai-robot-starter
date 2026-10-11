@@ -4,7 +4,7 @@
     uv run python scripts/sweep_difficulty.py --axis lighting --seed 100 --episodes 50
     uv run python scripts/sweep_difficulty.py --table-only --out outputs/difficulty
     uv run python scripts/sweep_difficulty.py --policy lerobot --checkpoint outputs/act_200 \
-        --manifest configs/manifests/so101_randomized_pick_place.yaml --seed 1000 --episodes 100
+        --manifest research/configs/so101_randomized_pick_place.yaml --seed 1000 --episodes 100
 
 Each cell is one `eval_policy.py` run (own process, own JSON in `--out`)
 with only that axis changed and friction and mass left nominal. The default

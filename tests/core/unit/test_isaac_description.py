@@ -3,9 +3,12 @@ so these run in the normal test suite (see the import-linter contract
 confining those to physai.sim.isaac and robots.so101.isaac_env)."""
 
 import math
+from pathlib import Path
 
 import pytest
 from tests.conftest import requires_assets
+
+RANDOMIZED_MANIFEST = "research/configs/so101_randomized_pick_place.yaml"
 
 
 def test_urdf_link_name_suffixes_the_mjcf_body_name():
@@ -131,7 +134,13 @@ def test_isaac_config_rejects_what_it_cannot_build():
     "manifest_path",
     [
         "configs/manifests/so101_single_cube_fixed_place.yaml",
-        "configs/manifests/so101_randomized_pick_place.yaml",
+        pytest.param(
+            RANDOMIZED_MANIFEST,
+            marks=pytest.mark.skipif(
+                not Path(RANDOMIZED_MANIFEST).exists(),
+                reason="research/ is a private submodule: `git submodule update --init research`",
+            ),
+        ),
     ],
 )
 def test_single_cube_manifests_build_a_config_for_either_simulator(manifest_path):

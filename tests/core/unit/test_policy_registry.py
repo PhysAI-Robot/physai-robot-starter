@@ -4,22 +4,23 @@ import numpy as np
 import pytest
 
 from physai.contracts import JointState, Observation
+from tests.conftest import requires_research
 
 
-def test_policies_are_discovered_and_research_ones_register_on_import():
-    import research.imitation_learning.vla_adapter  # noqa: F401
+def test_policies_are_discovered():
     from physai.policy import available_policies, create_policy
 
-    assert {
-        "constant",
-        "constant_twist",
-        "scripted",
-        "visual_servo",
-        "replay",
-    } <= set(available_policies())
-    assert "lerobot" in available_policies()  # its research module registered it
+    assert {"constant", "constant_twist", "replay"} <= set(available_policies())
     with pytest.raises(ValueError, match="constant"):
         create_policy("does-not-exist")  # the error lists what is available
+
+
+@requires_research
+def test_research_policies_register_on_import():
+    import research.imitation_learning.vla_adapter  # noqa: F401
+    from physai.policy import available_policies
+
+    assert {"scripted", "visual_servo", "lerobot"} <= set(available_policies())
 
 
 def test_hold_policies_are_shaped_for_the_robots_action_space():

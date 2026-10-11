@@ -16,6 +16,13 @@ requires_assets = pytest.mark.skipif(
     reason="run `python scripts/fetch_assets.py` to download the SO-101 description",
 )
 
+RESEARCH = Path(__file__).resolve().parents[1] / "research" / "__init__.py"
+
+requires_research = pytest.mark.skipif(
+    not RESEARCH.exists(),
+    reason="research/ is a private submodule: `git submodule update --init research`",
+)
+
 TURTLEBOT_ASSETS = (
     Path(__file__).resolve().parents[1] / "assets" / "turtlebot4" / "turtlebot4.xml"
 )

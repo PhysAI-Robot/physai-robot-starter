@@ -102,7 +102,7 @@ index-strategy = "unsafe-best-match"
 unresolved-attribute = "ignore"
 
 [tool.importlinter]
-root_packages = ["physai", "research"]
+root_packages = ["physai"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
@@ -123,12 +123,6 @@ forbidden_modules = ["mujoco"]
 # policy.registry never inspects. That path is accepted, not a violation of
 # "policy depends on ports, not MuJoCo" — policy never sees a MuJoCo type.
 ignore_imports = ["physai.policy.registry -> physai.robots.registry"]
-
-[[tool.importlinter.contracts]]
-name = "core never imports research"
-type = "forbidden"
-source_modules = ["physai"]
-forbidden_modules = ["research"]
 
 [[tool.importlinter.contracts]]
 name = "the robot description schema stays simulator-agnostic"
