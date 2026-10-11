@@ -79,6 +79,7 @@ jobs:
         run: |
           uv run python - <<'PY'
           import os
+          import sys
 
           import pytest
 
@@ -86,7 +87,9 @@ jobs:
           # normal interpreter shutdown on this runner, after pytest has
           # already reported its result. os._exit() reports pytest's real
           # exit code while skipping that unsafe native-library teardown.
-          os._exit(pytest.main(["tests/core/", "-q"]))
+          exit_code = pytest.main(["tests/core/", "-q", "-rf"])
+          sys.stdout.flush()  # os._exit() would drop pytest's buffered report
+          os._exit(exit_code)
           PY
 
   test-research:
@@ -137,6 +140,7 @@ jobs:
         run: |
           uv run python - <<'PY'
           import os
+          import sys
 
           import pytest
 
@@ -144,7 +148,9 @@ jobs:
           # normal interpreter shutdown on this runner, after pytest has
           # already reported its result. os._exit() reports pytest's real
           # exit code while skipping that unsafe native-library teardown.
-          os._exit(pytest.main(["research/tests/", "-q"]))
+          exit_code = pytest.main(["research/tests/", "-q", "-rf"])
+          sys.stdout.flush()  # os._exit() would drop pytest's buffered report
+          os._exit(exit_code)
           PY
 
   ros2-acceptance:
