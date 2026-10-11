@@ -14,11 +14,12 @@ visual servo, ACT, VLA adapter, VLM planner) lives in `research/<topic>/` and re
 with a core registry (`policy.registry`, `planner.registry`, `robots.registry`) on import. A
 new technique needs a package and a registration call, never a core change.
 
-Core never imports `research/`, and the other dependency rules (`sim` must not import ROS2,
-`policy`/`tasks`/`planner` must not import MuJoCo, the engines must not import each other) are
-declared in `pyproject.toml`'s `[tool.importlinter]` and checked by `uv run lint-imports` and
-`tests/core/boundaries/test_import_boundaries.py`, so `pytest tests/ -q` fails on a violation.
-import-linter is a declarative tool, not a hand-written import walker.
+Core never imports `research/` (an AST scan in `tests/core/boundaries/test_import_boundaries.py`,
+because `research/` may be absent and import-linter cannot check a missing package). The other
+dependency rules (`sim` must not import ROS2, `policy`/`tasks`/`planner` must not import MuJoCo,
+the engines must not import each other) are declared in `pyproject.toml`'s
+`[tool.importlinter]` and checked by `uv run lint-imports` and the same test file, so
+`pytest tests/ -q` fails on a violation.
 
 ## B. The manifest is the only run description
 
@@ -111,3 +112,18 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   resets and recording meanwhile. Episodes may carry `observation.environment_state` (full
   `qpos`, float64), which `collect_demos.py` sets; older datasets cannot be played back, and a
   different `nq` is rejected. Both are single-instance only.
+
+## F. `research/` is a private submodule; each paper ships as a clean snapshot
+
+- **Private until the paper.** `research/` is the git submodule `PhysAI-Robot/physai-research`
+  (private, holds every study), so the core stays public while results are unpublished. The path
+  stays `research/`: `import research...` and the run commands do not change.
+- **The core works without it.** Scripts load research modules through
+  `_bootstrap.import_research`, tests that need it use `requires_research` or
+  `pytest.importorskip`, and CI checks the submodule out only for the research jobs (secret
+  `RESEARCH_TOKEN`; fork and Dependabot runs skip those jobs).
+- **One public repo per paper.** When a paper is out, publish a fresh single-commit snapshot of
+  just that study (topic modules, `studies/NN_*.md`, FINDINGS, tests, manifests) as
+  `PhysAI-Robot/physai-study-NN`, pinned to a tagged core version, with checkpoints and data on
+  Hugging Face or Zenodo. `physai-research` itself never goes public, and its mount point in
+  this repo never receives public content.

@@ -67,7 +67,14 @@ boundaries merely to make a local test pass.
   — a research module registers itself with the relevant core registry
   (`physai.robots.registry`, `physai.policy.registry`,
   `physai.planner.registry`) on import instead. This is checked by
-  `uv run lint-imports` and by `tests/core/boundaries/test_import_boundaries.py`.
+  `tests/core/boundaries/test_import_boundaries.py` (an AST scan for the research
+  rule, import-linter via `uv run lint-imports` for the other rules).
+- `research/` is the private git submodule `PhysAI-Robot/physai-research`
+  ([DECISIONS.md F](docs/DECISIONS.md#f-research-is-a-private-submodule-each-paper-ships-as-a-clean-snapshot)).
+  Commit inside `research/` first and update the pointer here (`git add research`)
+  only to pin a milestone. Scripts, `tests/core` and CI must keep working when it
+  is absent: load research modules with `_bootstrap.import_research`, and mark
+  tests that need it with `requires_research` or `pytest.importorskip`.
 - Prefer the smallest compatible change and avoid unrelated refactors.
 - Do not commit downloaded assets, model snapshots, demonstrations, videos, or
   generated plans.

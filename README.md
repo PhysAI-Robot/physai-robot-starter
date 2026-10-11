@@ -26,7 +26,8 @@ one file and one registration call.
   demonstration collection and video recording share one episode loop.
 - **Research stays outside the core.** Scripted experts, visual servoing and ACT imitation
   learning live in [`research/`](research/README.md) and register themselves; core never
-  imports them.
+  imports them. `research/` is a private submodule until each study's paper is out
+  ([DECISIONS.md F](docs/DECISIONS.md#f-research-is-a-private-submodule-each-paper-ships-as-a-clean-snapshot)).
 
 <p align="center">
   <img src="docs/media/viewer_multi_robot.png" width="560"
@@ -45,6 +46,11 @@ includes ROS2). The direct simulator runs without ROS2, and CUDA is optional. In
 uv sync --extra training      # base: MuJoCo, viewer, tests; training adds PyTorch + LeRobot
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 ```
+
+The core, its scripts and `tests/` run without `research/`. With access to the private
+research repo, clone with `git clone --recurse-submodules` (or run
+`git submodule update --init research`) to get it; its tests run with
+`pytest research/tests -q`.
 
 ## Quick start
 

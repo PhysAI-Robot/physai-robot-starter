@@ -72,7 +72,7 @@ Declared in `pyproject.toml`'s `[tool.importlinter]`, checked by `uv run lint-im
 | --- | --- |
 | `physai.sim` must not import `physai.bridge` or `rclpy` | ROS2 stays optional for simulator-only workflows |
 | `physai.policy`, `tasks`, `planner` must not import `mujoco` | They depend on ports. One accepted indirect path: `policy.registry` calls `robots.registry.create_robot_policy()` |
-| `physai` must not import `research` | Research registers itself into a core registry on import |
+| `physai` must not import `research` | Research registers itself into a core registry on import; checked by an AST test, since `research/` may be absent |
 | `physai.robots.description` and `physai.sim.workspace` must not import `mujoco` or Isaac | Every engine's builder reads them ([DECISIONS.md C](DECISIONS.md#c-sim-neutral-data)) |
 | Only `physai.sim.isaac` and `physai.robots.so101.isaac_env` may import `isaacsim`, `omni`, `pxr` | Isaac is optional and GPU-only ([D](DECISIONS.md#d-isaac-sim-is-an-optional-peer-engine)) |
 | `physai.sim.mujoco` and `physai.sim.isaac` must not import each other; Isaac must not import `mujoco` | Peer engines |
@@ -251,7 +251,7 @@ registers itself on import ([DECISIONS.md A](DECISIONS.md#a-research-code-lives-
 `PlanRunner`, `ReplayPolicy`/`VLAPolicy`, `SortingTask`, `GymnasiumAdapter`, TurtleBot4
 navigation); the scripted expert, visual servo, ACT/LeRobot pipeline and the sorting planner
 are research. ACT is a low-level policy checkpoint format behind the policy boundary
-(`LeRobotPolicy`), never a planner. `tests/core/` and `tests/research/<topic>/` run in
+(`LeRobotPolicy`), never a planner. `tests/core/` and `research/tests/<topic>/` run in
 separate CI jobs so research dependencies (torch, LeRobot) stay isolated.
 
 ## Demonstration data
