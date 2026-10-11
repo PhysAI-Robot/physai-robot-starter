@@ -1,0 +1,4 @@
+[submodule "research"]
+	path = research
+	url = https://github.com/PhysAI-Robot/physai-research.git
+	branch = research/study-01-randomized-pick-place
