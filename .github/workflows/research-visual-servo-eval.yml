@@ -18,7 +18,7 @@ on:
   pull_request:
     paths:
       - "src/physai/robots/so101/**"
-      - "research/classical_control/**"
+      - "research"
       - "src/physai/sim/**"
       - "src/physai/control/**"
       - "configs/**"
@@ -40,6 +40,7 @@ env:
 jobs:
   evaluate:
     name: Evaluate seeds, shard ${{ matrix.shard }} of 4
+    if: ${{ github.event.pull_request.head.repo.fork != true && github.actor != 'dependabot[bot]' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:
@@ -53,8 +54,11 @@ jobs:
       SHARDS: "4"
 
     steps:
-      - name: Check out repository
+      - name: Check out repository and the private research submodule
         uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          token: ${{ secrets.RESEARCH_TOKEN }}
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6

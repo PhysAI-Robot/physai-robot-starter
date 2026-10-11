@@ -91,14 +91,18 @@ jobs:
 
   test-research:
     name: Python 3.12 research tests
+    if: ${{ github.event.pull_request.head.repo.fork != true && github.actor != 'dependabot[bot]' }}
     runs-on: ubuntu-24.04
     env:
       MUJOCO_GL: osmesa
       PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
 
     steps:
-      - name: Check out repository
+      - name: Check out repository and the private research submodule
         uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          token: ${{ secrets.RESEARCH_TOKEN }}
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -140,7 +144,7 @@ jobs:
           # normal interpreter shutdown on this runner, after pytest has
           # already reported its result. os._exit() reports pytest's real
           # exit code while skipping that unsafe native-library teardown.
-          os._exit(pytest.main(["tests/research/", "-q"]))
+          os._exit(pytest.main(["research/tests/", "-q"]))
           PY
 
   ros2-acceptance:
