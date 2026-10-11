@@ -28,7 +28,7 @@ dependencies = [
     # dependency, so there is no audience that wants physai without the
     # ability to run its own test suite.
     "pytest>=9.1.1",
-    "ruff>=0.16.9",
+    "ruff>=0.16.10",
     "import-linter>=2.1",
 ]
 
@@ -38,7 +38,7 @@ dependencies = [
 # `[tool.uv] override-dependencies` below forces numpy<2.3 for both (isaac
 # runs on 2.2.x); see docs/DECISIONS.md, D.
 training = [
-    "gymnasium>=1.3.0,<2.0",
+    "gymnasium>=1.4.0,<2.0",
     "torch>=2.7,<2.12",
     "torchvision>=0.22,<0.27",
     "lerobot>=0.6.1",
