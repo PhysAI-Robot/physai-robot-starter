@@ -292,10 +292,9 @@ def main() -> int:
     )
 
     # Evaluating on seeds the policy trained on measures recall, not
-    # generalisation, and the two can differ by a lot: a sorting checkpoint
-    # scored 70% on seeds that were 80% training layouts and 10% on held-out
-    # ones. Checkpoints written before train_seeds was recorded simply skip
-    # this check.
+    # generalisation, and the two can differ by a lot: a checkpoint can do well
+    # on seeds it trained on and fail on held-out ones. Checkpoints written
+    # before train_seeds was recorded simply skip this check.
     train_seeds: set[int] = set()
     if args.policy == "lerobot":
         meta_path = args.checkpoint / "training_meta.json"
