@@ -62,6 +62,22 @@ def _format_distance(distance: float | None) -> str:
     return "n/a" if distance is None else f"{distance:.3f}"
 
 
+def _seed_overlap_warning(
+    train_seeds: set[int], episode_seeds: list[int]
+) -> str | None:
+    """A warning when the evaluation reuses seeds the policy was trained on, else None."""
+    overlap = sorted(train_seeds & set(episode_seeds))
+    if not overlap:
+        return None
+    shown = f"{overlap[:8]}{'...' if len(overlap) > 8 else ''}"
+    return (
+        f"WARNING: {len(overlap)}/{len(episode_seeds)} evaluation seeds were in "
+        f"this policy's training set {shown}\n"
+        f"         This measures memorisation, not generalisation. "
+        f"Pick a --seed beyond {max(train_seeds)}."
+    )
+
+
 def _policy_metrics(policy: Any, violation: str | None) -> dict[str, Any]:
     """The policy's own per-episode fields; a safety violation is its failure reason."""
     metrics = dict(policy.episode_metrics())
@@ -306,15 +322,9 @@ def main() -> int:
     # on seeds it trained on and fail on held-out ones. Checkpoints written
     # before train_seeds was recorded simply skip this check.
     train_seeds = set(getattr(runtime.policy, "training_seeds", None) or ())
-    overlap = sorted(train_seeds & set(episode_seeds))
-    if overlap:
-        print(
-            f"WARNING: {len(overlap)}/{args.episodes} evaluation seeds were in "
-            f"this policy's training set {overlap[:8]}"
-            f"{'...' if len(overlap) > 8 else ''}\n"
-            f"         This measures memorisation, not generalisation. "
-            f"Pick a --seed beyond {max(train_seeds)}."
-        )
+    warning = _seed_overlap_warning(train_seeds, episode_seeds)
+    if warning:
+        print(warning)
 
     results = []
     for ep in range(args.episodes):

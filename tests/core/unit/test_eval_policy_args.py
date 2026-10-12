@@ -47,6 +47,19 @@ def test_policy_kwargs_merge_policy_args_and_pass_a_checkpoint_when_given():
     assert _common_args.policy_kwargs(args) == {"kp": 2, "checkpoint": Path("ckpt")}
 
 
+def test_seed_overlap_warns_with_the_count_the_first_seeds_and_a_safe_start():
+    assert eval_policy._seed_overlap_warning(set(), [0, 1, 2]) is None
+    assert eval_policy._seed_overlap_warning({10, 11}, [0, 1, 2]) is None
+
+    warning = eval_policy._seed_overlap_warning({1, 2, 99}, [0, 1, 2, 3])
+    assert "2/4 evaluation seeds" in warning
+    assert "[1, 2]" in warning and "..." not in warning
+    assert "Pick a --seed beyond 99." in warning
+
+    many = eval_policy._seed_overlap_warning(set(range(20)), list(range(20)))
+    assert "20/20" in many and "[0, 1, 2, 3, 4, 5, 6, 7]..." in many
+
+
 def test_a_policys_episode_metrics_join_the_row_and_a_violation_replaces_its_reason():
     class WithMetrics:
         def episode_metrics(self):
