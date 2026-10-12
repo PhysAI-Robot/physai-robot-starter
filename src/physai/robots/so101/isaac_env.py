@@ -170,8 +170,16 @@ class SO101IsaacEnv:
 
     def __init__(self, cfg: IsaacEnvConfig | None = None) -> None:
         self.cfg = cfg or IsaacEnvConfig()
-        if getattr(self.cfg.scene, "floor_style", "checker") != "checker":
-            raise ValueError("Isaac Sim only draws the checker floor (floor_style)")
+        scene = self.cfg.scene
+        if (
+            getattr(scene, "floor_style", "checker") != "checker"
+            or any(getattr(scene, "floor_offset", (0.0, 0.0)))
+            or getattr(scene, "floor_yaw_deg", 0.0)
+        ):
+            raise ValueError(
+                "Isaac Sim only draws the unmoved checker floor "
+                "(floor_style, floor_offset, floor_yaw_deg)"
+            )
         self.description = self.cfg.description or load_robot_description(
             _DESCRIPTION_PATH
         )

@@ -32,3 +32,16 @@ def test_an_unknown_floor_style_is_refused():
         SingleCubePlaceSceneConfig(
             floor_style="mud", **scene_defaults("so101")
         ).build_model()
+
+
+@requires_assets
+def test_the_floor_follows_its_offset_and_yaw():
+    from physai.robots.registry import scene_defaults
+    from physai.sim.mujoco import SingleCubePlaceSceneConfig
+
+    model, _ = SingleCubePlaceSceneConfig(
+        floor_offset=(0.04, -0.02), floor_yaw_deg=90.0, **scene_defaults("so101")
+    ).build_model()
+    floor = model.geom("physai_floor")
+    assert np.allclose(floor.pos, [0.04, -0.02, 0.0])
+    assert np.allclose(floor.quat, [np.sqrt(0.5), 0, 0, np.sqrt(0.5)])

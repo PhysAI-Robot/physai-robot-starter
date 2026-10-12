@@ -95,6 +95,10 @@ class ManipulationSceneConfig(WorldSceneConfig):
     # "checker" is the shared studio floor; "plain" paints it with the mean of the two
     # tile colours, to test whether a policy reads the tile pattern. MuJoCo only.
     floor_style: str = "checker"
+    # Shifts (metres) and turns (degrees about z) the floor plane, and with it the tile
+    # pattern, to test whether a policy reads the pattern's absolute position. MuJoCo only.
+    floor_offset: tuple[float, float] = (0.0, 0.0)
+    floor_yaw_deg: float = 0.0
 
     def build_spec(self) -> mujoco.MjSpec:
         """Build the MuJoCo spec for this scene, objects included."""
@@ -269,11 +273,13 @@ def build_manipulation_spec(cfg: ManipulationSceneConfig) -> mujoco.MjSpec:
         exponent=10,
         diffuse=[0.3, 0.3, 0.3],
     )
+    yaw = np.radians(cfg.floor_yaw_deg)
     world.add_geom(
         name="physai_floor",
         type=mujoco.mjtGeom.mjGEOM_PLANE,
         size=[0, 0, 0.05],
-        pos=[0, 0, 0],
+        pos=[*cfg.floor_offset, 0],
+        quat=[np.cos(yaw / 2), 0, 0, np.sin(yaw / 2)],
         material="physai_grid",
     )
 
