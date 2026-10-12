@@ -105,7 +105,7 @@ Every seam is one new file plus one registration call.
 | Scene | `sim/mujoco/scenes/<name>.py` | `register_scene(name, SceneDefinition(...))` in `sim/mujoco/scenes/registry.py:_load_builtins()` (declares supported robot kinds and tasks) |
 | Task | `tasks/<name>.py` | `register_task(name, factory)` in `tasks/registry.py:_load_builtins()` |
 | Policy (core baseline) | `policy/<name>.py` | `register_policy(name, factory)` in `policy/registry.py:_load_builtins()` |
-| Policy (robot-owned or plugin) | `robots/<robot>/<name>.py` or a plugin module | `register_robot_policy(robot, name, factory)` or `register_policy(name, factory)`; a plugin calls it on import |
+| Policy (robot-owned or plugin) | `robots/<robot>/<name>.py` or a plugin module | `register_robot_policy(robot, name, factory, traits=PolicyTraits(...))` or `register_policy(name, factory, traits=...)`; a plugin calls it on import. `traits` declares `needs_images` and the `simulators` it runs on |
 | Planner | `planner/base.py` (core) or a plugin module | `register_planner(name, factory)` in `planner/registry.py:_load_builtins()`, or on import for a plugin |
 | Transport adapter | `robots/adapters.py` (a builder function) | `register_adapter(name, builder)` in `robots/adapters.py:_load_builtins()` |
 | Simulator engine | `sim/<engine>/` package | Add the engine to a `RobotDescriptor.simulators` tuple; the robot's factory branches on `simulator=` |

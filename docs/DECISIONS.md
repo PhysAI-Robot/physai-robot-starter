@@ -150,5 +150,13 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   object poses, open-loop) is the minimal proof that a policy drives the arm and the default of
   `run_sim.py` and `eval_policy.py`. It is a demo, not a baseline to beat; a researcher's
   expert, visual servo or ACT checkpoint comes from their plugin.
+- **A policy declares its own traits.** `register_policy` and `register_robot_policy` take
+  `PolicyTraits` (`needs_images`, `simulators`); manifest validation rejects a policy on an
+  engine it does not list, and `eval_policy.py` renders cameras from `needs_images`. A policy
+  may also override `episode_metrics()` (extra columns in an evaluation row) and set
+  `training_seeds` (evaluation warns when seeds overlap). No core script branches on a
+  policy's name, so a plugin's policy is treated like a built-in one.
+  `run_sim.py --list-policies` and `eval_policy.py --list-policies` print what is available
+  for the manifest's robot once its `plugins:` have loaded.
 - **Research-only tools live with the research.** Data collection, difficulty sweeps and sharded
   evaluation for a study are scripts in that study's repo; they reuse core's `scripts/` helpers.

@@ -79,6 +79,8 @@ robots: [{id: arm, robot: so101, policy: my_policy}]
 ```
 
 Run it with `uv run python scripts/run_sim.py --manifest my_lab/configs/exp1.yaml`.
+`--list-policies` (on `run_sim.py` and `eval_policy.py`) prints what `--policy` accepts for
+the manifest's robot, after its `plugins:` have loaded.
 Scene variants need no code: change `scene.overrides` in your manifest.
 
 ## Quick start
