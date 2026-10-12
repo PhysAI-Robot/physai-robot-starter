@@ -38,7 +38,9 @@ from _common_args import (
     add_run_outputs,
     add_seed,
     add_simulator,
+    add_list_policies,
     policy_kwargs,
+    print_policies,
 )
 
 from _outputs import RunOutputs, wants_cameras
@@ -47,7 +49,7 @@ from physai.config import DomainRandomizationConfig, load_manifest
 from physai.config.compat import with_overrides
 from physai.data import EvaluationReport, load_episode
 from physai.data.evaluation import trajectory_metrics
-from physai.policy import create_policy
+from physai.policy import create_policy, policy_traits
 from physai.runtime import (
     EpisodeObserver,
     RenderGlitch,
@@ -58,6 +60,14 @@ from physai.runtime import (
 
 def _format_distance(distance: float | None) -> str:
     return "n/a" if distance is None else f"{distance:.3f}"
+
+
+def _policy_metrics(policy: Any, violation: str | None) -> dict[str, Any]:
+    """The policy's own per-episode fields; a safety violation is its failure reason."""
+    metrics = dict(policy.episode_metrics())
+    if violation and "failure_reason" in metrics:
+        metrics["failure_reason"] = violation
+    return metrics
 
 
 def _parse_seed_list(text: str) -> list[int]:
@@ -160,9 +170,10 @@ def main() -> int:
     add_simulator(
         ap,
         help="simulator engine (default: the manifest's, mujoco); isaac runs the same "
-        "scene, seeds and task on Isaac Sim (visual_servo, constant or lerobot; "
-        "single-cube scenes only)",
+        "scene, seeds and task on Isaac Sim (policies that support it; "
+        "--list-policies shows which; single-cube scenes only)",
     )
+    add_list_policies(ap)
     ap.add_argument(
         "--seeds",
         type=_parse_seed_list,
@@ -180,6 +191,10 @@ def main() -> int:
         "--json", type=Path, help="write the full per-episode results to this JSON file"
     )
     args = ap.parse_args()
+    if args.list_policies:
+        return print_policies(
+            args.manifest or (SORTING_MANIFEST if args.sorting else DEFAULT_MANIFEST)
+        )
     if args.seeds is not None:
         args.episodes = len(args.seeds)
     episode_seeds = args.seeds or [args.seed + ep for ep in range(args.episodes)]
@@ -201,8 +216,6 @@ def main() -> int:
         replay_episodes = meta["episodes"]
         if not replay_episodes:
             ap.error(f"no episodes in {args.dataset}")
-    if args.policy == "lerobot" and not args.checkpoint:
-        ap.error("--policy lerobot needs --checkpoint")
 
     manifest = load_manifest(
         args.manifest or (SORTING_MANIFEST if args.sorting else DEFAULT_MANIFEST)
@@ -221,10 +234,6 @@ def main() -> int:
             ap.error(
                 "--sim isaac moves cameras without telling the policy: "
                 "add --camera-shift-unknown to --camera-jitter"
-            )
-        if args.policy not in {"visual_servo", "constant", "lerobot", "replay"}:
-            ap.error(
-                "--sim isaac supports --policy visual_servo, constant, lerobot or replay"
             )
         if difficulty:
             overrides["robot_config"] = {
@@ -259,17 +268,20 @@ def main() -> int:
     task_name = manifest.task_for(manifest.robots[0])
 
     # An image-conditioned policy cannot run without rendered cameras.
-    needs_images = args.policy in {"lerobot", "visual_servo"}
+    needs_images = policy_traits(args.policy, robot_name).needs_images
     # Built once outside the loop where possible — reloading the checkpoint
     # from disk per episode would dominate wall-clock time for no reason.
-    session = create_session(
-        manifest,
-        render=simulator == "isaac"
-        or needs_images
-        or wants_cameras(args)
-        or args.save_dataset is not None,
-        policy_kwargs=policy_kwargs(args, args.policy),
-    )
+    try:
+        session = create_session(
+            manifest,
+            render=simulator == "isaac"
+            or needs_images
+            or wants_cameras(args)
+            or args.save_dataset is not None,
+            policy_kwargs=policy_kwargs(args),
+        )
+    except ValueError as exc:
+        ap.error(str(exc))
     runtime = session.runtime
     env = runtime.robot
     fps = getattr(env.cfg, "control_hz", 30)
@@ -293,23 +305,16 @@ def main() -> int:
     # generalisation, and the two can differ by a lot: a checkpoint can do well
     # on seeds it trained on and fail on held-out ones. Checkpoints written
     # before train_seeds was recorded simply skip this check.
-    train_seeds: set[int] = set()
-    if args.policy == "lerobot":
-        meta_path = args.checkpoint / "training_meta.json"
-        if meta_path.exists():
-            train_seeds = set(
-                json.loads(meta_path.read_text(encoding="utf-8")).get("train_seeds")
-                or []
-            )
-        overlap = sorted(train_seeds & set(episode_seeds))
-        if overlap:
-            print(
-                f"WARNING: {len(overlap)}/{args.episodes} evaluation seeds were in "
-                f"this checkpoint's training set {overlap[:8]}"
-                f"{'...' if len(overlap) > 8 else ''}\n"
-                f"         This measures memorisation, not generalisation. "
-                f"Pick a --seed beyond {max(train_seeds)}."
-            )
+    train_seeds = set(getattr(runtime.policy, "training_seeds", None) or ())
+    overlap = sorted(train_seeds & set(episode_seeds))
+    if overlap:
+        print(
+            f"WARNING: {len(overlap)}/{args.episodes} evaluation seeds were in "
+            f"this policy's training set {overlap[:8]}"
+            f"{'...' if len(overlap) > 8 else ''}\n"
+            f"         This measures memorisation, not generalisation. "
+            f"Pick a --seed beyond {max(train_seeds)}."
+        )
 
     results = []
     for ep in range(args.episodes):
@@ -352,18 +357,7 @@ def main() -> int:
                 # Where the episode started, for failures by workspace region.
                 **trace.pose,
                 **trace.metrics(),
-                **(
-                    {
-                        "visual_error_px": policy.metrics.visual_error_px,
-                        "ee_error_m": policy.metrics.ee_error_m,
-                        "phase": policy.metrics.phase,
-                        "settling_time_s": policy.metrics.settling_time_s,
-                        "grasp_retries": policy.metrics.grasp_retries,
-                        "failure_reason": violation or policy.metrics.failure_reason,
-                    }
-                    if args.policy == "visual_servo"
-                    else {}
-                ),
+                **_policy_metrics(policy, violation),
                 # Which cube the episode asked for, so a per-color breakdown is
                 # possible after the fact. ACT never receives this.
                 **(

@@ -144,3 +144,43 @@ def test_a_robot_without_a_demo_policy_runs_headless_on_the_constant_policy(
     monkeypatch.setattr(sys, "argv", [*argv, "--max-steps", "3"])
     assert run_sim.main() == 0
     assert "episode 0:" in capsys.readouterr().out
+
+
+def test_list_policies_reads_the_manifest_and_names_its_plugins(
+    run_sim, monkeypatch, capsys, tmp_path
+):
+    import yaml
+
+    monkeypatch.setattr(sys, "argv", ["run_sim.py", "--list-policies"])
+    assert run_sim.main() == 0
+    out = capsys.readouterr().out
+    assert "policies for robot so101" in out and "plugins: none" in out
+    assert "demo" in out and "constant" in out and "replay" not in out
+
+    (tmp_path / "physai_listed_plugin.py").write_text(
+        "from physai.contracts import PolicyTraits\n"
+        "from physai.policy import ConstantPolicy\n"
+        "from physai.robots.registry import register_robot_policy\n"
+        "register_robot_policy('so101', 'physai_listed', lambda **_: ConstantPolicy(),"
+        " traits=PolicyTraits(needs_images=True))\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    manifest = tmp_path / "m.yaml"
+    manifest.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 1,
+                "plugins": ["physai_listed_plugin"],
+                "robots": [{"id": "a", "robot": "so101"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        sys, "argv", ["run_sim.py", "--manifest", str(manifest), "--list-policies"]
+    )
+    assert run_sim.main() == 0
+    out = capsys.readouterr().out
+    assert "plugins: physai_listed_plugin" in out
+    assert "physai_listed" in out and "needs images" in out

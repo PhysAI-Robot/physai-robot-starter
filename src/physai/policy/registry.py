@@ -10,19 +10,36 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from ..contracts import PolicyTraits
 from .base import Policy
 
 PolicyFactory = Callable[..., Policy]
 _FACTORIES: dict[str, PolicyFactory] = {}
+_TRAITS: dict[str, PolicyTraits] = {}
 _BUILTINS_LOADED = False
 
 
-def register_policy(name: str, factory: PolicyFactory) -> PolicyFactory:
+def register_policy(
+    name: str, factory: PolicyFactory, *, traits: PolicyTraits = PolicyTraits()
+) -> PolicyFactory:
     """Register a policy factory under a stable configuration name."""
     if name in _FACTORIES:
         raise ValueError(f"policy {name!r} is already registered")
     _FACTORIES[name] = factory
+    _TRAITS[name] = traits
     return factory
+
+
+def policy_traits(name: str, robot: str | None = None) -> PolicyTraits:
+    """The traits `name` registered with: a generic policy, else `robot`'s own."""
+    from ..robots.registry import has_robot_policy, robot_policy_traits
+
+    _load_builtins()
+    if name in _TRAITS:
+        return _TRAITS[name]
+    if robot is not None and has_robot_policy(robot, name):
+        return robot_policy_traits(robot, name)
+    raise ValueError(f"unknown policy {name!r}")
 
 
 def available_policies(robot: str | None = None) -> tuple[str, ...]:
@@ -62,9 +79,10 @@ def _load_builtins() -> None:
     if _BUILTINS_LOADED:
         return
 
-    register_policy("constant", _make_constant)
+    both_engines = PolicyTraits(simulators=("mujoco", "isaac"))
+    register_policy("constant", _make_constant, traits=both_engines)
     register_policy("constant_twist", _make_constant_twist)
-    register_policy("replay", _make_replay)
+    register_policy("replay", _make_replay, traits=both_engines)
     # Any other policy comes from a plugin module the manifest names; it
     # registers itself on import (see physai.plugins).
     _BUILTINS_LOADED = True

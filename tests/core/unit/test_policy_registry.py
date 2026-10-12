@@ -53,3 +53,27 @@ def test_hold_policies_are_shaped_for_the_robots_action_space():
     )
     policy = create_policy("constant", env=SimpleNamespace(robot_spec=spec))
     assert isinstance(policy, ConstantTwistPolicy)
+
+
+def test_traits_come_from_the_registration_generic_or_robot_owned():
+    from physai.contracts import PolicyTraits
+    from physai.policy import policy_traits
+
+    assert policy_traits("constant").simulators == ("mujoco", "isaac")
+    assert policy_traits("demo", "so101") == PolicyTraits()
+    with pytest.raises(ValueError, match="unknown policy"):
+        policy_traits("demo")  # robot-owned: needs the robot to resolve
+
+
+def test_a_plugin_policy_declares_its_traits_and_a_policy_has_no_extra_metrics():
+    from physai.contracts import PolicyTraits
+    from physai.policy import ConstantPolicy, policy_traits
+    from physai.robots.registry import register_robot_policy
+
+    traits = PolicyTraits(needs_images=True, simulators=("mujoco", "isaac"))
+    register_robot_policy(
+        "so101", "physai_test_traits", lambda **_: ConstantPolicy(), traits=traits
+    )
+    assert policy_traits("physai_test_traits", "so101") == traits
+    assert ConstantPolicy().episode_metrics() == {}
+    assert ConstantPolicy().training_seeds is None

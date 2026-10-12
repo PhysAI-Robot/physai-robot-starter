@@ -44,14 +44,17 @@ from _common_args import (
     add_run_outputs,
     add_seed,
     add_simulator,
+    add_list_policies,
     policy_kwargs,
+    print_policies,
 )
 
 from _outputs import RunOutputs, wants_cameras
 from physai.config import SessionManifest, load_manifest
 from physai.config.compat import with_overrides
 from physai.robots import has_robot_policy
-from physai.runtime import RenderGlitch, Session, create_session, run_episode
+from physai.runtime import RenderGlitch, Session, run_episode
+from physai.runtime import create_session as _create_session
 from physai.web.host import Host
 
 
@@ -59,6 +62,14 @@ from physai.web.host import Host
 # the robot's demo policy if it has one, otherwise the do-nothing policy.
 def default_headless_policy(robot: str) -> str:
     return "demo" if has_robot_policy(robot, "demo") else "constant"
+
+
+def create_session(manifest: SessionManifest, **kwargs) -> Session:
+    """`physai.runtime.create_session`, with a bad policy input reported as a CLI error."""
+    try:
+        return _create_session(manifest, **kwargs)
+    except ValueError as exc:
+        raise SystemExit(f"run_sim.py: error: {exc}") from exc
 
 
 def parse_args(
@@ -84,6 +95,7 @@ def parse_args(
     add_seed(ap, default=None, help="override the seed (default: the manifest's, or 0)")
     add_max_steps(ap, help="override the episode length")
     add_policy_args(ap)
+    add_list_policies(ap)
     add_camera_resolution(ap)
     add_run_outputs(ap)
     ap.add_argument(
@@ -133,6 +145,8 @@ def build_manifest(
 
 def main(argv: list[str] | None = None) -> int:
     ap, args = parse_args(argv)
+    if args.list_policies:
+        return print_policies(args.manifest, exclude=("replay",))
     if args.record and args.serve:
         ap.error("--record writes per-episode files; with --serve use --dataset")
     if args.dataset and not args.serve:
@@ -173,7 +187,7 @@ def run_episodes(args: argparse.Namespace, manifest: SessionManifest) -> int:
     session = create_session(
         manifest,
         render=wants_cameras(args),
-        policy_kwargs=policy_kwargs(args, policy_name),
+        policy_kwargs=policy_kwargs(args),
     )
     runtime = session.runtime
     env = runtime.robot
@@ -243,11 +257,7 @@ def build_host(
         manifest,
         render=True,
         host_driven=True,
-        policy_kwargs=(
-            {}
-            if manifest.world is not None
-            else policy_kwargs(args, manifest.policy_for(manifest.robots[0]))
-        ),
+        policy_kwargs=({} if manifest.world is not None else policy_kwargs(args)),
     )
     if session.world is not None:
         return Host.for_world(session.world, session.instances), session

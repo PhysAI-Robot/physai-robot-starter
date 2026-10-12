@@ -74,7 +74,8 @@ Validation performed at load time (see `load_manifest`):
 4. Every resolved ``task`` name (per-instance or global) must resolve
    through the task registry.
 5. Every resolved ``policy`` name (per-instance or global, unless "idle")
-   must resolve through the policy registry, generic or owned by that robot.
+   must resolve through the policy registry, generic or owned by that robot,
+   and the policy's registered ``traits.simulators`` must include ``simulator``.
 6. If ``scene.name`` is given, it must be compatible with every instance's
    registered embodiment kind and resolved task (checked without
    constructing any robot, via the scene and robot registries).
@@ -106,7 +107,7 @@ import yaml
 
 from ..contracts import DEFAULT_CAMERA_RESOLUTION, parse_camera_resolution
 from ..plugins import load_plugins
-from ..policy.registry import available_policies
+from ..policy.registry import available_policies, policy_traits
 from ..robots.registry import available_robots, available_simulators, robot_kind
 from ..sim.mujoco.domain_randomization import DomainRandomizationConfig
 from ..sim.mujoco.scenes.common import REPO_ROOT
@@ -467,6 +468,13 @@ def _validate_names_and_compatibility(manifest: SessionManifest, source: Path) -
                 f"available: {', '.join((*known_policies, 'idle'))}. A policy from "
                 "your own module needs that module in the manifest's `plugins:` list"
             )
+        if policy_name != "idle":
+            engines = policy_traits(policy_name, instance.robot).simulators
+            if manifest.simulator not in engines:
+                raise ValueError(
+                    f"{source}: policy {policy_name!r} does not support simulator "
+                    f"{manifest.simulator!r}; it supports: {', '.join(engines)}"
+                )
         if scene_definition is not None:
             kind = robot_kind(instance.robot)
             if not scene_definition.supports(kind, task_name):

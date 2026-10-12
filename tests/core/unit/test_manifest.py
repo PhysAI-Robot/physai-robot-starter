@@ -221,3 +221,14 @@ def test_robot_env_config_matches_the_environment_a_session_builds():
             assert getattr(built, item.name) == getattr(expected, item.name), item.name
     finally:
         session.close()
+
+
+def test_a_policy_must_support_the_manifests_simulator(tmp_path):
+    from physai.config import load_manifest
+
+    data = _base_manifest(simulator="isaac", policy="demo")
+    with pytest.raises(ValueError, match="does not support simulator 'isaac'"):
+        load_manifest(_write(tmp_path, data))
+
+    data["policy"] = "constant"  # registered for both engines
+    assert load_manifest(_write(tmp_path, data)).simulator == "isaac"

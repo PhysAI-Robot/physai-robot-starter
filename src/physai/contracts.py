@@ -549,3 +549,15 @@ class ActionSpec:
             "fields": [spec.to_dict() for spec in self.fields],
             "metadata": dict(self.metadata),
         }
+
+
+@dataclass(frozen=True)
+class PolicyTraits:
+    """What a policy needs from a run, declared when it registers.
+
+    Scripts and manifest validation read these instead of branching on a policy's
+    name, so a plugin's policy is treated exactly like a built-in one.
+    """
+
+    needs_images: bool = False  # the run must render the cameras
+    simulators: tuple[str, ...] = ("mujoco",)  # engines it can run on

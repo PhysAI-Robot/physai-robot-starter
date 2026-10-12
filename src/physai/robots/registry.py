@@ -13,6 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from ..contracts import PolicyTraits
 from .base import RobotPort
 
 RobotFactory = Callable[..., RobotPort]
@@ -45,6 +46,7 @@ class RobotDescriptor:
 
 _ROBOTS: dict[str, RobotDescriptor] = {}
 _POLICY_FACTORIES: dict[tuple[str, str], RobotPolicyFactory] = {}
+_POLICY_TRAITS: dict[tuple[str, str], PolicyTraits] = {}
 
 
 def register_embodiment(name: str, descriptor: RobotDescriptor) -> RobotDescriptor:
@@ -60,7 +62,11 @@ def register_embodiment(name: str, descriptor: RobotDescriptor) -> RobotDescript
 
 
 def register_robot_policy(
-    robot_name: str, policy_name: str, factory: RobotPolicyFactory
+    robot_name: str,
+    policy_name: str,
+    factory: RobotPolicyFactory,
+    *,
+    traits: PolicyTraits = PolicyTraits(),
 ) -> RobotPolicyFactory:
     """Register a policy implementation owned by one robot adapter."""
     key = (robot_name, policy_name)
@@ -69,6 +75,7 @@ def register_robot_policy(
             f"policy {policy_name!r} for robot {robot_name!r} is already registered"
         )
     _POLICY_FACTORIES[key] = factory
+    _POLICY_TRAITS[key] = traits
     return factory
 
 
@@ -143,6 +150,12 @@ def has_robot_policy(robot_name: str, policy_name: str) -> bool:
     """Whether a robot owns a policy of this name (plugin policies register on import)."""
     _load_builtins()
     return (robot_name, policy_name) in _POLICY_FACTORIES
+
+
+def robot_policy_traits(robot_name: str, policy_name: str) -> PolicyTraits:
+    """The traits a robot-owned policy registered with."""
+    _load_builtins()
+    return _POLICY_TRAITS[(robot_name, policy_name)]
 
 
 def robot_policies(robot_name: str | None = None) -> tuple[str, ...]:
