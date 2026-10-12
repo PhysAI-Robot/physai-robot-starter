@@ -16,9 +16,11 @@ The fetch includes the upstream `so101_new_calib_camera.xml` variant and its wri
 meshes; the simulator selects that file when present. The first command opens an idle robot in
 the browser, the second the checked-in pick-and-place scene, the third runs it headless
 (`--video` writes frames under `outputs/`). MuJoCo's own desktop viewer (`--viewer`, needs a
-display) is a fallback. The scripted pick-and-place policy is a privileged expert; its
-evaluation workflow and numbers are in
-[research/scripted_experts](../research/scripted_experts/README.md).
+display) is a fallback. The default `demo` policy is a privileged open-loop pick-and-place
+(true object poses, `ScriptedPlanner` + `PlanRunner`): a proof that a policy drives the arm, not
+a baseline. Your own policies and scenes come from a plugin named in the manifest
+([README](../README.md#bring-your-own-research)); this project's own expert, visual servo and
+ACT workflows are in `research/` in [`physai-research`](https://github.com/PhysAI-Robot/physai-research).
 
 Validate the contracts (the second check covers the ROS2 transport and needs no ROS2):
 
@@ -40,9 +42,8 @@ uv run python scripts/show_ros2_contract.py    # prints every shared endpoint
 
 Other entry points: FK/Jacobian/IK benchmark `uv run python scripts/benchmark_ik.py --targets 20
 --seed 0`; planner contract `uv run python scripts/plan_task.py --help` (only the scripted
-planner ships); learning and vision baselines in
-[research/imitation_learning](../research/imitation_learning/README.md) and
-[research/classical_control](../research/classical_control/README.md).
+planner ships); this project's learning and vision baselines are plugins in
+[`physai-research`](https://github.com/PhysAI-Robot/physai-research).
 
 ## TurtleBot4
 

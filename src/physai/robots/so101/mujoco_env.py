@@ -85,7 +85,7 @@ class EnvConfig:
     # 20-50x a cube's weight and makes the contact chatter. visual_servo's
     # shallow grip needs the cap; the scripted expert's deeper squeeze does not,
     # but the shared default stays for its other callers. Measurements are in
-    # research/scripted_experts/FINDINGS.md.
+    # the private `physai-research` repo.
     gripper_force_limit: float = 0.3
 
 
@@ -362,7 +362,7 @@ class SO101Env(MuJoCoSimulationCore):
         The pose is converted from MuJoCo's camera-axis convention (x right,
         y up, z backward) to the ROS optical-frame convention `ImageFrame
         .extrinsics` documents (x right, y down, z forward), so a policy
-        (`research/classical_control/so101_visual_servo.py`) never has to
+        never has to
         know a simulator's own axis convention.
         """
         camera_id = self.model.camera(name).id

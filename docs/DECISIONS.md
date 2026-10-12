@@ -9,13 +9,15 @@ existing one in place when it no longer holds (git history keeps the old text).
 
 `src/physai` holds the frozen infrastructure (contracts, ports, registries) and
 technique-agnostic baselines (`ScriptedPlanner`, `PlanRunner`, `SortingTask`, `ReplayPolicy`,
-the Gymnasium adapter, TurtleBot4 navigation). Approach-specific code (scripted expert,
-visual servo, ACT, VLA adapter, VLM planner) lives in `research/<topic>/` and registers itself
-with a core registry (`policy.registry`, `planner.registry`, `robots.registry`) on import. A
-new technique needs a package and a registration call, never a core change.
+the Gymnasium adapter, TurtleBot4 navigation, the SO-101 `demo` policy). Approach-specific code
+(scripted expert, visual servo, ACT, VLA adapter, VLM planner) lives in a plugin module, for
+this project in `research/<topic>/`, and registers itself with a core registry
+(`policy.registry`, `planner.registry`, `robots.registry`, scenes, tasks) on import. A new
+technique needs a package and a registration call, never a core change.
 
-Core never imports `research/` (an AST scan in `tests/core/boundaries/test_import_boundaries.py`,
-because `research/` may be absent and import-linter cannot check a missing package). The other
+Core never imports `research/`: not `src/physai`, not `scripts/`, not `tests/core/` (an AST scan
+in `tests/core/boundaries/test_import_boundaries.py`, because `research/` may be absent and
+import-linter cannot check a missing package). The other
 dependency rules (`sim` must not import ROS2, `policy`/`tasks`/`planner` must not import MuJoCo,
 the engines must not import each other) are declared in `pyproject.toml`'s
 `[tool.importlinter]` and checked by `uv run lint-imports` and the same test file, so
@@ -118,9 +120,9 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
 - **Private until the paper.** `research/` is the git submodule `PhysAI-Robot/physai-research`
   (private, holds every study), so the core stays public while results are unpublished. The path
   stays `research/`: `import research...` and the run commands do not change.
-- **The core works without it.** Scripts load research modules through
-  `_bootstrap.import_research`, tests that need it use `requires_research` or
-  `pytest.importorskip`. This repository's CI never checks the submodule out and holds no
+- **The core works without it.** Research loads as a plugin named in a manifest
+  ([G](#g-plugins-load-by-name-from-the-manifest-core-ships-a-demo-policy)); the research-only
+  scripts and tests live in `research/`. This repository's CI never checks the submodule out and holds no
   credential for it: the research tests and the visual servo evaluation run in `physai-research`
   against this repository's `dev` branch.
 - **One public repo per paper.** When a paper is out, publish a fresh single-commit snapshot of
@@ -128,3 +130,25 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   `PhysAI-Robot/physai-study-NN`, pinned to a tagged core version, with checkpoints and data on
   Hugging Face or Zenodo. `physai-research` itself never goes public, and its mount point in
   this repo never receives public content.
+
+
+## G. Plugins load by name from the manifest; core ships a demo policy
+
+- **Physai is the framework; research is a plugin.** Anyone researches in their own folder with
+  their own scenes, tasks and policies. `physai-research` is one such folder, not a special
+  one: core has no code path that names it.
+- **The manifest is the loader.** An optional `plugins: [module, ...]` list is imported by
+  `physai.plugins.load_plugins` before any name is validated, so one manifest is self-contained
+  and a run's plugins are recorded with it. There is no `--plugin` flag and no environment
+  variable. `--policy` and the other content flags only override what the manifest says, and
+  `--policy` is checked against the registries after the manifest has loaded its plugins.
+- **A scene variant is data.** A different layout, range or cube is `scene.name` plus
+  `scene.overrides` in the researcher's manifest. A genuinely new scene registers itself with
+  `register_scene`. Scenes are `ManipulationSceneConfig` today; anything else needs a seam
+  extension in core first.
+- **Core still moves a robot.** `so101`'s `demo` policy (`ScriptedPlanner` + `PlanRunner`, true
+  object poses, open-loop) is the minimal proof that a policy drives the arm and the default of
+  `run_sim.py` and `eval_policy.py`. It is a demo, not a baseline to beat; a researcher's
+  expert, visual servo or ACT checkpoint comes from their plugin.
+- **Research-only tools live with the research.** Data collection, difficulty sweeps and sharded
+  evaluation for a study are scripts in that study's repo; they reuse core's `scripts/` helpers.

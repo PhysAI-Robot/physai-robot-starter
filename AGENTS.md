@@ -62,19 +62,21 @@ boundaries merely to make a local test pass.
 - Add an explicit adapter when a model or embodiment needs a different space;
   do not silently reshape shared arrays.
 - Keep approach-specific implementations (scripted experts, visual servo,
-  ACT/LeRobot, VLA checkpoints, VLM planners) under `research/<topic>/`, not
-  under `src/physai`. Code in `src/physai` must never import from `research/`
-  — a research module registers itself with the relevant core registry
-  (`physai.robots.registry`, `physai.policy.registry`,
-  `physai.planner.registry`) on import instead. This is checked by
-  `tests/core/boundaries/test_import_boundaries.py` (an AST scan for the research
-  rule, import-linter via `uv run lint-imports` for the other rules).
+  ACT/LeRobot, VLA checkpoints, VLM planners, study scenes and tasks) in a
+  plugin module, for this project under `research/<topic>/`, not under
+  `src/physai`. Code in `src/physai`, `scripts/` and `tests/core/` must never
+  import from `research/` — a plugin registers itself with the relevant core
+  registry (`physai.robots.registry`, `physai.policy.registry`,
+  `physai.planner.registry`, scenes, tasks) on import, and a manifest loads it
+  by name under `plugins:` ([DECISIONS.md G](docs/DECISIONS.md#g-plugins-load-by-name-from-the-manifest-core-ships-a-demo-policy)).
+  This is checked by `tests/core/boundaries/test_import_boundaries.py` (an AST
+  scan for the research rule, import-linter via `uv run lint-imports` for the
+  other rules). Research-only scripts and tests live in `research/`, not here.
 - `research/` is the private git submodule `PhysAI-Robot/physai-research`
   ([DECISIONS.md F](docs/DECISIONS.md#f-research-is-a-private-submodule-each-paper-ships-as-a-clean-snapshot)).
   Commit inside `research/` first and update the pointer here (`git add research`)
   only to pin a milestone. Scripts, `tests/core` and CI must keep working when it
-  is absent: load research modules with `_bootstrap.import_research`, and mark
-  tests that need it with `requires_research` or `pytest.importorskip`.
+  is absent; core tests use the core `demo` policy, never a research one.
 - Prefer the smallest compatible change and avoid unrelated refactors.
 - Do not commit downloaded assets, model snapshots, demonstrations, videos, or
   generated plans.

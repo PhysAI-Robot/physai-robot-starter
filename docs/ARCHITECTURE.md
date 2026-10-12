@@ -1,7 +1,7 @@
 # Architecture
 
 The internal design reference: design shape, module ownership, dependency rules, stable
-contracts, the session manifest, the host API, extension seams and the research/core
+contracts, the session manifest, the host API, extension seams and the plugin/core
 boundary. Setup and commands are in [README.md](../README.md), agent workflow rules in
 [AGENTS.md](../AGENTS.md), and the reasons behind the frozen shape in
 [DECISIONS.md](DECISIONS.md).
@@ -18,9 +18,8 @@ instruction + camera images -> Planner -> Plan (sub-goals, optional waypoints)
         -> robot environment and task evaluation
 ```
 
-The runnable baselines are the scripted planner/policy path with `PlanRunner` and the SO-101
-visual-servo policy; model-backed planners and VLA policies plug into the same boundaries
-from `research/`.
+The runnable baseline is the SO-101 `demo` policy (the scripted planner with `PlanRunner`);
+your own planners, VLA policies and scenes plug into the same boundaries as plugins.
 
 ## Execution modes
 
@@ -59,7 +58,7 @@ transports are registry-driven (`robots.adapters.register_adapter()`).
 | `physai.bridge` | ROS2 transport, topic and message mapping, timing, ROS2-backed adapters | Physics, task semantics or model inference |
 | `physai.runtime` | Composition (`create_runtime`, `create_session`), compatibility checks, the episode rollout (`run_episode`) | Robot-specific physics, task reward or model inference |
 | `physai.web` | The one `Host`, the FastAPI client surface, telemetry, the static browser client | Simulator selection or robot construction |
-| `research/<topic>/` | Approach-specific implementations that self-register on import | Anything a core module imports |
+| A plugin module (for example `research/<topic>/`) | Approach-specific scenes, tasks, policies and planners that self-register on import | Anything a core module imports |
 | `scripts/` | CLI argument parsing and runtime composition | IK, reward calculation or SDK-specific code |
 | `launch/` | Generic ROS2 launch composition | Robot physics, transport callbacks or task rules |
 
@@ -72,7 +71,7 @@ Declared in `pyproject.toml`'s `[tool.importlinter]`, checked by `uv run lint-im
 | --- | --- |
 | `physai.sim` must not import `physai.bridge` or `rclpy` | ROS2 stays optional for simulator-only workflows |
 | `physai.policy`, `tasks`, `planner` must not import `mujoco` | They depend on ports. One accepted indirect path: `policy.registry` calls `robots.registry.create_robot_policy()` |
-| `physai` must not import `research` | Research registers itself into a core registry on import; checked by an AST test, since `research/` may be absent |
+| `physai`, `scripts/` and `tests/core/` must not import `research` | A plugin registers itself into a core registry on import, loaded by name from the manifest's `plugins:`; checked by an AST test, since `research/` may be absent |
 | `physai.robots.description` and `physai.sim.workspace` must not import `mujoco` or Isaac | Every engine's builder reads them ([DECISIONS.md C](DECISIONS.md#c-sim-neutral-data)) |
 | Only `physai.sim.isaac` and `physai.robots.so101.isaac_env` may import `isaacsim`, `omni`, `pxr` | Isaac is optional and GPU-only ([D](DECISIONS.md#d-isaac-sim-is-an-optional-peer-engine)) |
 | `physai.sim.mujoco` and `physai.sim.isaac` must not import each other; Isaac must not import `mujoco` | Peer engines |
@@ -84,9 +83,9 @@ Declared in `pyproject.toml`'s `[tool.importlinter]`, checked by `uv run lint-im
   are ports; simulators, ROS2 transport, model SDKs and concrete robots are adapters.
 - **Registry plus factory.** Robot, scene, task, policy, planner and backend registries map
   stable names to factories. `register_embodiment()` registers everything one robot owns from
-  one `RobotDescriptor`. Builtins load lazily; a research module registers itself on import.
+  one `RobotDescriptor`. Builtins load lazily; a plugin module registers itself on import.
 - **Composition root.** `physai.runtime.create_runtime()` (and `create_session()` for a
-  manifest). `run_sim.py`, `eval_policy.py` and `collect_demos.py` use it; the other scripts
+  manifest). `run_sim.py` and `eval_policy.py` use it; the other scripts
   hand-assemble an `EnvConfig` and stay safety-gated, since the gate lives in the adapter.
 - **Safety gate.** `SafetyController` validates action mode, joint order, finite values,
   timestamps, joint limits and per-joint step limits immediately before a robot port receives
@@ -106,8 +105,8 @@ Every seam is one new file plus one registration call.
 | Scene | `sim/mujoco/scenes/<name>.py` | `register_scene(name, SceneDefinition(...))` in `sim/mujoco/scenes/registry.py:_load_builtins()` (declares supported robot kinds and tasks) |
 | Task | `tasks/<name>.py` | `register_task(name, factory)` in `tasks/registry.py:_load_builtins()` |
 | Policy (core baseline) | `policy/<name>.py` | `register_policy(name, factory)` in `policy/registry.py:_load_builtins()` |
-| Policy (robot-owned or research) | `robots/<robot>/<name>.py` or `research/<topic>/<name>.py` | `register_robot_policy(robot, name, factory)` or `register_policy(name, factory)`; research calls it on import |
-| Planner | `planner/base.py` (core) or `research/<topic>/<name>.py` | `register_planner(name, factory)` in `planner/registry.py:_load_builtins()`, or on import for research |
+| Policy (robot-owned or plugin) | `robots/<robot>/<name>.py` or a plugin module | `register_robot_policy(robot, name, factory)` or `register_policy(name, factory)`; a plugin calls it on import |
+| Planner | `planner/base.py` (core) or a plugin module | `register_planner(name, factory)` in `planner/registry.py:_load_builtins()`, or on import for a plugin |
 | Transport adapter | `robots/adapters.py` (a builder function) | `register_adapter(name, builder)` in `robots/adapters.py:_load_builtins()` |
 | Simulator engine | `sim/<engine>/` package | Add the engine to a `RobotDescriptor.simulators` tuple; the robot's factory branches on `simulator=` |
 | Client capability control | `web/static/js/controls.js` / `ui.js` | None: capabilities are declarative data (`RobotSpec.action_modes`/`capabilities`) |
@@ -149,12 +148,12 @@ combination fails during composition.
 `SO101Env` is a robot-owned backend and creates no task; `TaskRuntime` wraps a robot port with
 a registered task and owns reset, metrics, reward, success hold and termination.
 `physai.policy.replay.VLAPolicy` (chunked-action shape) stays in core because the model-free
-`ReplayPolicy` needs it; checkpoint-backed subclasses (`LeRobotPolicy`) are research.
+`ReplayPolicy` needs it; checkpoint-backed subclasses (`LeRobotPolicy`) belong to plugins.
 `create_runtime` validates the task's required capabilities against the `RobotSpec`, resolves
 the scene and wraps the robot with `TaskRuntime`; safety is the adapter's job, not its.
 
 Registered compositions: `so101` + `single_cube_place` (or `sorting`) with the
-scripted, visual-servo or Planner + `PlanRunner` policies, and `turtlebot4` with a constant
+`demo` (Planner + `PlanRunner`) or plugin policies, and `turtlebot4` with a constant
 twist policy. TurtleBot4 proves the capability abstraction generalizes beyond an arm; it is
 maintained, not a development focus ([ROADMAP.md](../ROADMAP.md)).
 
@@ -172,6 +171,7 @@ shared MuJoCo world.
 
 ```yaml
 schema_version: 1
+plugins: [my_lab.plugin]         # optional; modules that register scenes, tasks, policies
 simulation: {seed: 0}            # the one source of seed and randomization
 scene:
   name: single_cube_place
@@ -185,11 +185,11 @@ robots:
     robot: so101
     config: {max_steps: 400}     # robot env fields
     pose: {position: [0.0, 0.0, 0.0]}
-    policy: scripted             # optional; "idle" if omitted
+    policy: demo                 # optional; "idle" if omitted
 viewer: {mode: none}             # none | native | web | both
 ```
 
-Validation resolves every `robot`, `task` and `policy` name through the registries and checks
+Validation first imports every `plugins` module, then resolves every `robot`, `task` and `policy` name through the registries and checks
 scene, robot-kind and task compatibility without constructing a robot or model.
 `create_session()` supports `backend: direct`. A non-MuJoCo engine rejects a `world` block,
 several robots, `backend: ros2_sim` and any `viewer.mode` other than `none`;
@@ -200,8 +200,7 @@ several robots, `backend: ros2_sim` and any `viewer.mode` other than `none`;
 ### Scripts
 
 `run_sim.py` (run and look: viewer, web host, video, recording), `eval_policy.py` (measure a
-policy over N seeds, `--json`, difficulty flags) and `collect_demos.py` (scripted-expert
-dataset) share the session and `physai.runtime.run_episode`, and differ only in what they
+policy over N seeds, `--json`, difficulty flags) share the session and `physai.runtime.run_episode`, and differ only in what they
 output. A script parses flags, builds a manifest with overrides, calls the rollout and prints
 or saves the result; the output flags (`--video`, `--camera`, `--record`, `--out`, `--name`)
 are defined once in `scripts/_common_args.py` and written by `scripts/_outputs.py`. Flag
@@ -242,17 +241,22 @@ hook so a robot can inject shared-world-only MJCF. Jogging is a capability a rob
 (`RobotDescriptor.jog`, resolved by `create_jog_resolver()`), and the web client hides
 controls a robot's capabilities do not support.
 
-## Research boundary
+## Plugin boundary
 
-Research plugs in through the existing contracts only (`Planner`, `Policy`, `Task`,
-`Observation`/`Action`, `RobotTrainingContract`, `physai.data`, the Gymnasium adapter) and
-registers itself on import ([DECISIONS.md A](DECISIONS.md#a-research-code-lives-outside-the-core-package),
-[research/README.md](../research/README.md)). Core keeps minimal baselines (`ScriptedPlanner`,
-`PlanRunner`, `ReplayPolicy`/`VLAPolicy`, `SortingTask`, `GymnasiumAdapter`, TurtleBot4
-navigation); the scripted expert, visual servo, ACT/LeRobot pipeline and the sorting planner
-are research. ACT is a low-level policy checkpoint format behind the policy boundary
-(`LeRobotPolicy`), never a planner. `tests/core/` and `research/tests/<topic>/` run in
-separate CI jobs so research dependencies (torch, LeRobot) stay isolated.
+Anyone's research plugs in through the existing contracts only (`Planner`, `Policy`, `Task`,
+scenes, `Observation`/`Action`, `RobotTrainingContract`, `physai.data`, the Gymnasium adapter)
+and registers itself on import ([DECISIONS.md A](DECISIONS.md#a-research-code-lives-outside-the-core-package),
+[G](DECISIONS.md#g-plugins-load-by-name-from-the-manifest-core-ships-a-demo-policy)).
+`physai.plugins.load_plugins` imports the modules a manifest lists under `plugins:` before it
+validates scene, task and policy names; it is the only way a plugin gets loaded, so a run's
+manifest records everything it depends on. A scene variant needs no plugin: it is a registered
+scene plus `scene.overrides`. A scene that is not a `ManipulationSceneConfig` needs a core seam
+extension first. Core keeps minimal baselines (`ScriptedPlanner`, `PlanRunner`, the SO-101
+`demo` policy, `ReplayPolicy`/`VLAPolicy`, `SortingTask`, `GymnasiumAdapter`, TurtleBot4
+navigation). ACT is a low-level policy checkpoint format behind the policy boundary, never a
+planner. This repository's CI runs only `tests/core/`; this project's own studies are a plugin
+in the private `physai-research` repo, which runs its tests itself so torch and LeRobot stay
+isolated.
 
 ## Demonstration data
 
@@ -266,7 +270,7 @@ records and loads them without importing a concrete robot; the canonical schemas
 The recorder writes a compact `.npz` with LeRobot-shaped keys (a future `LeRobotDataset`
 exporter must reuse the same metadata). A recording may add `observation.environment_state`
 (`(T, nq)` float64, the full simulator `qpos`), declared in `meta.json`'s `features`; the web
-recorder and `collect_demos.py` write it. Metadata also records the scene name and
+recorder and a plugin's data-collection script write it. Metadata also records the scene name and
 configuration snapshot.
 
 ## ROS2 boundary
@@ -299,5 +303,5 @@ rechecking pad geometry, joint limits, contact behavior and reachable area.
   policies yet.
 - Isaac is single-cube and observation-only ([DECISIONS.md D](DECISIONS.md#d-isaac-sim-is-an-optional-peer-engine));
   a manifest combining `simulator: isaac` with an unsupported feature is rejected at load.
-  `collect_demos.py` takes no `--sim`.
+  Data-collection scripts built on the session take no `--sim`.
 - `SO101ROS2Node.handle_cartesian_target()` exists but is not bound to a ROS2 service.

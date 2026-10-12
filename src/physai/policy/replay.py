@@ -6,8 +6,8 @@ checkpoint-backed policy and a no-model replay policy share. It stays in
 core because `ReplayPolicy` — the integration test for this whole seam —
 needs it and core must not import research code.
 
-Checkpoint-backed subclasses (`LeRobotPolicy`) are research content: see
-`research/imitation_learning/vla_adapter.py`.
+Checkpoint-backed subclasses (`LeRobotPolicy`) are research content, kept in the
+private `physai-research` repo.
 
 Observation keys follow the LeRobot convention so a checkpoint fine-tuned on a
 dataset recorded from a robot contract needs no remapping:

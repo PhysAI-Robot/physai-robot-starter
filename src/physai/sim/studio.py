@@ -28,12 +28,12 @@ STUDIO_FLOOR_RGB2: tuple[float, float, float] = (0.6235, 0.6902, 0.6588)
 # MuJoCo's floor is an infinite plane whose checker squares are 1/6 m wide, with
 # their edges at multiples of 1/6 m from the origin; the square containing the
 # origin is the dark one (`STUDIO_FLOOR_RGB2`). Measured from a front-camera
-# render (scripts/compare_cameras.py), so another simulator can draw the same.
+# render (a camera comparison script), so another simulator can draw the same.
 FLOOR_TILE_M: float = 1.0 / 6.0
 
 # Isaac Sim light intensities (with linear, gamma-free output; see
 # `sim.isaac.core.configure_render_output`), fitted against MuJoCo renders
-# with scripts/compare_cameras.py on what a camera policy sees: the table
+# with that camera comparison on what a camera policy sees: the table
 # colour (224, 216, 197 against MuJoCo's 226, 217, 199) and the cube's faces
 # (wrist-camera cube mean 100, 30, 24, the same as MuJoCo's). Table brightness
 # is about linear in dome + key (a sum near 1400 matches; much above it the

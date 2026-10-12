@@ -1,7 +1,7 @@
 """Browser-driven episode recording on top of `physai.data.EpisodeRecorder`.
 
 `SessionRecorder` owns no episode format: it feeds the same recorder,
-`.npz` layout and `meta.json` that `scripts/collect_demos.py` uses, plus the
+`.npz` layout and `meta.json` that the dataset-writing scripts use, plus the
 optional `observation.environment_state` key (full simulator qpos) that lets
 the viewer restore a recorded frame exactly. See docs/DECISIONS.md, E.
 

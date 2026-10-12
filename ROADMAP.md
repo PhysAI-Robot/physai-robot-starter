@@ -2,7 +2,7 @@
 
 `physai-robot-starter` is an open-source starter kit for embodied AI and robotics research. It provides stable robot, task, observation and action contracts so the same policy can be evaluated across transports (direct, ROS2, and in the future real robots) and simulator engines (MuJoCo, Isaac Sim).
 
-This roadmap lists framework features. Research studies built on the framework are listed in [research/README.md](research/README.md#studies). `[x]` is shipped, `[ ]` is planned or partial. Design rationale is in [DECISIONS.md](docs/DECISIONS.md).
+This roadmap lists framework features. Research studies built on the framework are listed in the private [`physai-research`](https://github.com/PhysAI-Robot/physai-research) repo (`research/README.md#studies`). `[x]` is shipped, `[ ]` is planned or partial. Design rationale is in [DECISIONS.md](docs/DECISIONS.md).
 
 Simulation only for now; no hardware work is planned.
 
@@ -32,21 +32,21 @@ Simulation only for now; no hardware work is planned.
 ## Contracts, policies and planners
 
 - [x] Capability-aware robot, task, observation and action contracts.
-- [x] Policy, planner and robot registries; research code plugs in without core importing it.
+- [x] Policy, planner, scene, task and robot registries; plugins load by name from a manifest's `plugins:` without core importing them. A core `demo` policy drives the SO-101.
 - [x] Planner contract with a scripted backend (`physai.planner`, `scripts/plan_task.py`).
 - [ ] Model-backed planners and VLA policies, only through the existing `Planner` and `Policy` contracts.
 
 ## Data and training bridge
 
 - [x] Observation/action specs, Gymnasium adapter, versioned datasets and checkpoints.
-- [ ] `collect_demos.py` exports the standard `LeRobotDataset` format (currently a LeRobot-shaped `.npz`).
+- [ ] Dataset collection exports the standard `LeRobotDataset` format (currently a LeRobot-shaped `.npz`).
 - [ ] Reward and observation hooks sufficient for RL training through the Gymnasium adapter.
 
 ## Evaluation
 
-- [x] Shared evaluation reports with Wilson 95% intervals, sharded runs, difficulty sweeps (`scripts/eval_policy.py`, `run_sharded_eval.py`, `sweep_difficulty.py`).
+- [x] Shared evaluation reports with Wilson 95% intervals, sharded runs, difficulty sweeps (`scripts/eval_policy.py`; sharded runs and sweeps are in the research plugin).
 - [ ] Trajectory-quality metrics in the report: completion time, path length, jerk (done in `eval_policy.py`), joint-limit margin, peak speed.
-- [x] Per-region success breakdown over the workspace (`scripts/plot_workspace.py`, from `cube_start` and `target_pos` in each result row).
+- [x] Per-region success breakdown over the workspace (a plot script in the research plugin, from `cube_start` and `target_pos` in each result row).
 
 ## Transports and bridges
 
