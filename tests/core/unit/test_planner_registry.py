@@ -1,7 +1,5 @@
 import pytest
 
-from tests.conftest import requires_research
-
 
 def test_planners_are_discovered():
     from physai.planner import available_planners, create_planner
@@ -13,11 +11,3 @@ def test_planners_are_discovered():
     assert planner.name == "scripted_planner"
     with pytest.raises(ValueError, match="scripted_planner"):
         create_planner("does-not-exist")  # the error lists what is available
-
-
-@requires_research
-def test_research_planners_register_on_import():
-    import research.vlm_planners.sorting_planner  # noqa: F401
-    from physai.planner import available_planners
-
-    assert "sorting_planner" in available_planners()

@@ -4,7 +4,6 @@ import numpy as np
 import pytest
 
 from physai.contracts import JointState, Observation
-from tests.conftest import requires_research
 
 
 def test_policies_are_discovered():
@@ -15,12 +14,18 @@ def test_policies_are_discovered():
         create_policy("does-not-exist")  # the error lists what is available
 
 
-@requires_research
-def test_research_policies_register_on_import():
-    import research.imitation_learning.vla_adapter  # noqa: F401
+def test_a_robot_owned_policy_is_listed_for_its_robot_and_created_by_name():
     from physai.policy import available_policies
 
-    assert {"scripted", "visual_servo", "lerobot"} <= set(available_policies())
+    assert "demo" in available_policies("so101")
+    assert "demo" not in available_policies("turtlebot4")
+
+
+def test_an_unknown_policy_error_points_at_the_manifests_plugins():
+    from physai.policy import create_policy
+
+    with pytest.raises(ValueError, match="plugins"):
+        create_policy("scripted")
 
 
 def test_hold_policies_are_shaped_for_the_robots_action_space():

@@ -2,8 +2,8 @@
 
 Adding a robot is one call: build a `RobotDescriptor` bundling its factories
 and pass it to `register_embodiment()`, which stores that one descriptor. A
-robot-owned policy (e.g. a research module self-registering "scripted" for
-so101) calls `register_robot_policy()` directly, since it registers
+robot-owned policy (so101's core "demo", or a plugin's own policy) calls
+`register_robot_policy()` directly, since it registers
 independently of — and often after — the embodiment itself.
 """
 
@@ -140,9 +140,23 @@ def create_robot(
 
 
 def has_robot_policy(robot_name: str, policy_name: str) -> bool:
-    """Whether a robot owns a policy of this name (research policies register on import)."""
+    """Whether a robot owns a policy of this name (plugin policies register on import)."""
     _load_builtins()
     return (robot_name, policy_name) in _POLICY_FACTORIES
+
+
+def robot_policies(robot_name: str | None = None) -> tuple[str, ...]:
+    """Names of robot-owned policies, for one robot or for any robot."""
+    _load_builtins()
+    return tuple(
+        sorted(
+            {
+                policy
+                for robot, policy in _POLICY_FACTORIES
+                if robot_name is None or robot == robot_name
+            }
+        )
+    )
 
 
 def create_robot_policy(robot_name: str, policy_name: str, **kwargs: Any) -> Any:
@@ -232,10 +246,13 @@ def create_shared_instance(name: str, world: Any, config: Any) -> Any:
 
 
 def _load_builtins() -> None:
-    # so101's "scripted" and "visual_servo" policies are research modules
-    # (research/scripted_experts, research/classical_control); they register
-    # themselves with register_robot_policy() on import. This registry never
-    # imports them directly (core must not import research/).
+    # Core ships one robot-owned policy, so101's "demo". Every other robot
+    # policy comes from a plugin a manifest names (see physai.plugins); it
+    # registers itself with register_robot_policy() on import.
+    if ("so101", "demo") not in _POLICY_FACTORIES:
+        from .so101.demo_policy import make_demo_policy
+
+        register_robot_policy("so101", "demo", make_demo_policy)
     if "so101" not in _ROBOTS:
         from .so101.factory import make_so101, so101_env_config
         from .so101.jog import so101_jog_resolver

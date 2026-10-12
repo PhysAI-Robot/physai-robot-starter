@@ -28,7 +28,7 @@ def test_example_manifests_load_and_validate():
     manifest = load_manifest("configs/manifests/example_single_so101.yaml")
     assert manifest.robots[0].id == "arm_1"
     assert manifest.task_for(manifest.robots[0]) == "single_cube_place"
-    assert manifest.policy_for(manifest.robots[0]) == "scripted"
+    assert manifest.policy_for(manifest.robots[0]) == "demo"
 
     heterogeneous = load_manifest("configs/manifests/example_heterogeneous.yaml")
     assert [r.robot for r in heterogeneous.robots] == ["so101", "turtlebot4"]
@@ -60,11 +60,11 @@ def test_global_task_and_policy_apply_when_instance_omits_them(tmp_path):
     data = _base_manifest(
         robots=[{"id": "a", "robot": "so101"}],
         task="single_cube_place",
-        policy="scripted",
+        policy="demo",
     )
     manifest = load_manifest(_write(tmp_path, data))
     assert manifest.task_for(manifest.robots[0]) == "single_cube_place"
-    assert manifest.policy_for(manifest.robots[0]) == "scripted"
+    assert manifest.policy_for(manifest.robots[0]) == "demo"
 
 
 def test_robot_config_and_scene_overrides_become_typed_values(tmp_path):

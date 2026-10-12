@@ -207,8 +207,9 @@ def test_the_registry_validates_simulator_support_before_building():
     assert create_env_config("turtlebot4").max_steps > 0
 
 
-def test_has_robot_policy_tells_a_robot_with_an_expert_from_one_without():
+def test_has_robot_policy_tells_a_robot_with_a_demo_from_one_without():
     from physai.robots import has_robot_policy
 
-    assert not has_robot_policy("turtlebot4", "scripted")
+    assert has_robot_policy("so101", "demo")
+    assert not has_robot_policy("turtlebot4", "demo")
     assert not has_robot_policy("so101", "no_such_policy")

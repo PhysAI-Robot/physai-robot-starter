@@ -25,21 +25,36 @@ def register_policy(name: str, factory: PolicyFactory) -> PolicyFactory:
     return factory
 
 
-def available_policies() -> tuple[str, ...]:
-    """Return policy names available to the current runtime."""
+def available_policies(robot: str | None = None) -> tuple[str, ...]:
+    """Policy names available to the current runtime: the generic ones plus the
+    robot-owned ones (of `robot`, or of any robot when it is None)."""
+    from ..robots.registry import robot_policies
+
     _load_builtins()
-    return tuple(sorted(_FACTORIES))
+    return tuple(sorted({*_FACTORIES, *robot_policies(robot)}))
 
 
 def create_policy(name: str, **kwargs: Any) -> Policy:
-    """Create a policy without exposing its concrete implementation."""
+    """Create a policy without exposing its concrete implementation.
+
+    A name that is not a generic policy falls back to the policy the `env`
+    robot owns under that name (so101's "demo", or one a plugin registered).
+    """
+    from ..robots.registry import create_robot_policy, has_robot_policy
+
     _load_builtins()
-    try:
-        factory = _FACTORIES[name]
-    except KeyError as exc:
-        choices = ", ".join(available_policies())
-        raise ValueError(f"unknown policy {name!r}; available: {choices}") from exc
-    return factory(**kwargs)
+    factory = _FACTORIES.get(name)
+    if factory is not None:
+        return factory(**kwargs)
+    env = kwargs.get("env")
+    robot = None if env is None else env.robot_spec.name
+    if robot is not None and has_robot_policy(robot, name):
+        return create_robot_policy(robot, name, **kwargs)
+    choices = ", ".join(available_policies(robot))
+    raise ValueError(
+        f"unknown policy {name!r}; available: {choices}. A policy from your own "
+        "module needs that module in the manifest's `plugins:` list"
+    )
 
 
 def _load_builtins() -> None:
@@ -49,12 +64,9 @@ def _load_builtins() -> None:
 
     register_policy("constant", _make_constant)
     register_policy("constant_twist", _make_constant_twist)
-    register_policy("scripted", _make_scripted)
-    register_policy("visual_servo", _make_visual_servo)
     register_policy("replay", _make_replay)
-    # "lerobot" is a research module (research/imitation_learning/vla_adapter.py);
-    # it registers itself on import instead of being listed here, so this
-    # registry never imports research code.
+    # Any other policy comes from a plugin module the manifest names; it
+    # registers itself on import (see physai.plugins).
     _BUILTINS_LOADED = True
 
 
@@ -71,29 +83,6 @@ def _make_constant_twist(**_: Any) -> Policy:
     from .base import ConstantTwistPolicy
 
     return ConstantTwistPolicy()
-
-
-def _make_scripted(*, env, **kwargs: Any) -> Policy:
-    from ..robots.registry import create_robot_policy
-
-    return create_robot_policy(
-        env.robot_spec.name,
-        "scripted",
-        env=env,
-        cfg=kwargs.get("cfg"),
-    )
-
-
-def _make_visual_servo(*, env, **kwargs: Any) -> Policy:
-    from ..robots.registry import create_robot_policy
-
-    return create_robot_policy(
-        env.robot_spec.name,
-        "visual_servo",
-        env=env,
-        cfg=kwargs.get("cfg"),
-        **{key: value for key, value in kwargs.items() if key != "cfg"},
-    )
 
 
 def _make_replay(*, env, actions, **kwargs: Any) -> Policy:
