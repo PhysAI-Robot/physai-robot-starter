@@ -1,6 +1,6 @@
 """Measure a Policy: run it over N seeds of one session and report a success rate.
 
-    python scripts/eval_policy.py --policy scripted --episodes 20
+    python scripts/eval_policy.py --episodes 20              # the robot's demo policy
     python scripts/eval_policy.py --policy replay --dataset data/pickplace_v1
 
 For looking at a run (viewer, web host, one quick episode) use `run_sim.py`;
@@ -12,6 +12,9 @@ knobs, so MuJoCo and Isaac Sim evaluate the same scene, seeds and task.
 `replay` re-runs recorded actions through the sim. If replay succeeds but your
 VLA does not, the problem is the model. If replay itself fails, the problem is
 your action space, units, or control rate — check that before blaming training.
+
+A policy from your own module is named with `--policy` (or in the manifest)
+and needs that module in the manifest's `plugins:` list.
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from _bootstrap import import_research
+import _bootstrap  # noqa: F401
 import numpy as np
 from _cli import new_parser
 from _common_args import (
@@ -44,22 +47,12 @@ from physai.config import DomainRandomizationConfig, load_manifest
 from physai.config.compat import with_overrides
 from physai.data import EvaluationReport, load_episode
 from physai.data.evaluation import trajectory_metrics
-from physai.policy import available_policies, create_policy
+from physai.policy import create_policy
 from physai.runtime import (
     EpisodeObserver,
     RenderGlitch,
     create_session,
     run_episode,
-)
-
-# Registers so101's "scripted"/"visual_servo" policies and the checkpoint-
-# backed "lerobot" policy with their registries (skipped when the private
-# `research/` submodule is absent); --policy may select any of them, so all
-# load eagerly (none import torch/lerobot at module scope).
-import_research(
-    "research.classical_control.so101_visual_servo",
-    "research.imitation_learning.vla_adapter",
-    "research.scripted_experts.so101_pick_place_expert",
 )
 
 
@@ -118,7 +111,9 @@ def main() -> int:
         help=f"session manifest to evaluate (default: {DEFAULT_MANIFEST}, or "
         f"{SORTING_MANIFEST} with --sorting)",
     )
-    add_policy(ap, default="scripted", choices=available_policies())
+    # No `choices`: a plugin the manifest loads can add policies, so the name
+    # is checked after the manifest is loaded (physai.config.compat).
+    add_policy(ap, default="demo")
     add_episodes(ap, default=20)
     add_seed(ap)
     add_max_steps(ap, help="override the episode length (default: the manifest's)")
@@ -179,7 +174,7 @@ def main() -> int:
         "--sorting",
         action="store_true",
         help="evaluate the three-cube sorting task instead of pick-and-place, "
-        "matching `collect_demos.py --sorting`",
+        "matching the sorting data-collection scripts",
     )
     ap.add_argument(
         "--json", type=Path, help="write the full per-episode results to this JSON file"
@@ -247,16 +242,19 @@ def main() -> int:
         )
         if args.clutter_count:
             overrides["scene_overrides"] = {"clutter_count": args.clutter_count}
-    manifest = with_overrides(
-        manifest,
-        seed=args.seed,
-        max_steps=args.max_steps,
-        camera_resolution=args.camera_resolution,
-        # replay builds its policy per episode, from that episode's actions
-        policy="idle" if args.policy == "replay" else args.policy,
-        simulator=args.simulator,
-        **overrides,
-    )
+    try:
+        manifest = with_overrides(
+            manifest,
+            seed=args.seed,
+            max_steps=args.max_steps,
+            camera_resolution=args.camera_resolution,
+            # replay builds its policy per episode, from that episode's actions
+            policy="idle" if args.policy == "replay" else args.policy,
+            simulator=args.simulator,
+            **overrides,
+        )
+    except ValueError as exc:
+        ap.error(str(exc))
     robot_name = manifest.robots[0].robot
     task_name = manifest.task_for(manifest.robots[0])
 

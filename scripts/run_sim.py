@@ -3,17 +3,16 @@
 For numbers you compare across policies use `eval_policy.py`; both run the session in
 a manifest and stop an episode the same way.
 
-python scripts/run_sim.py                      # scripted expert, 1 episode
+python scripts/run_sim.py                      # the robot's demo policy, 1 episode
 python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml
 python scripts/run_sim.py --episodes 5 --seed 0
 python scripts/run_sim.py --video --episodes 5 --seed 0
 python scripts/run_sim.py --record --video     # also save every input as data (outputs/)
 python scripts/run_sim.py --policy constant    # baseline: do nothing
-python scripts/run_sim.py --policy lerobot --checkpoint outputs/act_ckpt
 python scripts/run_sim.py --viewer             # native MuJoCo viewer
 python scripts/run_sim.py --viewer --serve     # native viewer plus shared web host
 python scripts/run_sim.py --serve              # web host only, no desktop window
-python scripts/run_sim.py --sim isaac --manifest configs/manifests/so101_single_cube_fixed_place.yaml --policy visual_servo
+python scripts/run_sim.py --sim isaac --manifest configs/manifests/so101_single_cube_fixed_place.yaml --policy constant
                                                 # the same manifest on Isaac Sim; --video, --record
                                                 # and --serve (web viewer) work as on MuJoCo
                                                 # (no --viewer/--dataset with --serve; needs
@@ -21,7 +20,8 @@ python scripts/run_sim.py --sim isaac --manifest configs/manifests/so101_single_
                                                 # by this repo's own CI)
 
 A run is described by a session manifest (`--manifest`, default: the SO-101
-single-cube pick-and-place).
+single-cube pick-and-place). A policy from your own module is named in the
+manifest together with that module in its `plugins:` list.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ import threading
 import time
 from pathlib import Path
 
-from _bootstrap import import_research
+import _bootstrap  # noqa: F401
 from _cli import new_parser
 from _common_args import (
     add_camera_resolution,
@@ -50,26 +50,15 @@ from _common_args import (
 from _outputs import RunOutputs, wants_cameras
 from physai.config import SessionManifest, load_manifest
 from physai.config.compat import with_overrides
-from physai.policy import available_policies
 from physai.robots import has_robot_policy
 from physai.runtime import RenderGlitch, Session, create_session, run_episode
 from physai.web.host import Host
 
-# Registers so101's "scripted"/"visual_servo" policies and the checkpoint-
-# backed "lerobot" policy with their registries (skipped when the private
-# `research/` submodule is absent); --policy may select any of them, so all
-# load eagerly (none import torch/lerobot at module scope).
-import_research(
-    "research.classical_control.so101_visual_servo",
-    "research.imitation_learning.vla_adapter",
-    "research.scripted_experts.so101_pick_place_expert",
-)
-
 
 # What a headless episode runs when neither --policy nor the manifest names one:
-# the robot's scripted expert if it has one, otherwise the do-nothing policy.
+# the robot's demo policy if it has one, otherwise the do-nothing policy.
 def default_headless_policy(robot: str) -> str:
-    return "scripted" if has_robot_policy(robot, "scripted") else "constant"
+    return "demo" if has_robot_policy(robot, "demo") else "constant"
 
 
 def parse_args(
@@ -84,13 +73,12 @@ def parse_args(
         "configs/manifests/turtlebot4.yaml or heterogeneous_world.yaml)",
     )
     add_simulator(ap)
-    # "lerobot" belongs here: main() handles it and the module docstring
-    # documents it, but dropping it from choices made argparse reject the
-    # documented command before it ever got there.
+    # No `choices`: a plugin the manifest loads can add policies, so the name
+    # is checked after the manifest is loaded (physai.config.compat).
     add_policy(
         ap,
-        choices=[name for name in available_policies() if name != "replay"],
-        help="policy to run; viewer/serve stays idle unless this is specified",
+        help="override the manifest's policy; viewer/serve stays idle unless "
+        "this or the manifest names one",
     )
     add_episodes(ap, default=1)
     add_seed(ap, default=None, help="override the seed (default: the manifest's, or 0)")
@@ -128,14 +116,19 @@ def build_manifest(
 
     if manifest.world is not None and args.policy:
         ap.error("--policy cannot be used with a shared world")
-    return with_overrides(
-        manifest,
-        seed=args.seed,
-        max_steps=args.max_steps,
-        camera_resolution=args.camera_resolution,
-        policy=args.policy,
-        simulator=args.simulator,
-    )
+    if args.policy == "replay":
+        ap.error("--policy replay needs recorded actions: use eval_policy.py --dataset")
+    try:
+        return with_overrides(
+            manifest,
+            seed=args.seed,
+            max_steps=args.max_steps,
+            camera_resolution=args.camera_resolution,
+            policy=args.policy,
+            simulator=args.simulator,
+        )
+    except ValueError as exc:
+        ap.error(str(exc))
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -8,7 +8,7 @@ robots:
   - id: arm_1
     robot: so101
     task: single_cube_place
-    policy: scripted
+    policy: demo
 
 viewer:
   mode: none

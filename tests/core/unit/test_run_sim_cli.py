@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from tests.conftest import requires_assets, requires_research
+from tests.conftest import requires_assets
 
 SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"
 WORLD = "configs/manifests/heterogeneous_world.yaml"
@@ -96,7 +96,6 @@ def test_incompatible_flags_are_rejected(run_sim, monkeypatch, capsys):
 
 
 @requires_assets
-@requires_research
 def test_headless_episodes_run_from_a_manifest_and_name_their_video(
     run_sim, monkeypatch, tmp_path, capsys
 ):
@@ -122,12 +121,12 @@ def test_headless_episodes_run_from_a_manifest_and_name_their_video(
     monkeypatch.setattr(sys, "argv", [*video_run, "--out", str(out)])
     assert run_sim.main() == 0
     assert [path.stem for path in (out / "videos").iterdir()] == [
-        "mujoco_so101_scripted_seed0000"
+        "mujoco_so101_demo_seed0000"
     ]
     # the recording is named like the video, with its meta next to it
     assert sorted(path.name for path in (out / "recordings").iterdir()) == [
-        "mujoco_so101_scripted_seed0000.json",
-        "mujoco_so101_scripted_seed0000.npz",
+        "mujoco_so101_demo_seed0000.json",
+        "mujoco_so101_demo_seed0000.npz",
     ]
 
     # --name replaces the automatic prefix for both
@@ -138,7 +137,7 @@ def test_headless_episodes_run_from_a_manifest_and_name_their_video(
 
 
 @requires_assets
-def test_a_robot_without_a_scripted_expert_runs_headless_on_the_constant_policy(
+def test_a_robot_without_a_demo_policy_runs_headless_on_the_constant_policy(
     run_sim, monkeypatch, capsys
 ):
     argv = ["run_sim.py", "--manifest", "configs/manifests/turtlebot4.yaml"]

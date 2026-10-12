@@ -8,8 +8,6 @@ from pathlib import Path
 import pytest
 from tests.conftest import requires_assets
 
-RANDOMIZED_MANIFEST = "research/configs/so101_randomized_pick_place.yaml"
-
 
 def test_urdf_link_name_suffixes_the_mjcf_body_name():
     from physai.sim.isaac.description import urdf_link_name
@@ -132,16 +130,7 @@ def test_isaac_config_rejects_what_it_cannot_build():
 
 @pytest.mark.parametrize(
     "manifest_path",
-    [
-        "configs/manifests/so101_single_cube_fixed_place.yaml",
-        pytest.param(
-            RANDOMIZED_MANIFEST,
-            marks=pytest.mark.skipif(
-                not Path(RANDOMIZED_MANIFEST).exists(),
-                reason="research/ is a private submodule: `git submodule update --init research`",
-            ),
-        ),
-    ],
+    ["configs/manifests/so101_single_cube_fixed_place.yaml"],
 )
 def test_single_cube_manifests_build_a_config_for_either_simulator(manifest_path):
     """One manifest describes the environment for both engines, so every robot

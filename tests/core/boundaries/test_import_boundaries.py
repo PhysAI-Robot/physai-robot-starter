@@ -37,8 +37,15 @@ def test_dependency_direction_contracts_hold():
 
 
 def test_core_never_imports_research():
+    """Neither the package, the scripts nor the core tests may import `research`:
+    a plugin is loaded by name from a manifest's `plugins:`, never by core code."""
     offenders = []
-    for path in (REPO_ROOT / "src" / "physai").rglob("*.py"):
+    core_files = [
+        *(REPO_ROOT / "src" / "physai").rglob("*.py"),
+        *(REPO_ROOT / "scripts").glob("*.py"),
+        *(REPO_ROOT / "tests" / "core").rglob("*.py"),
+    ]
+    for path in core_files:
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Import):
                 names = [alias.name for alias in node.names]
@@ -48,4 +55,4 @@ def test_core_never_imports_research():
                 continue
             if any(name.split(".")[0] == "research" for name in names):
                 offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
-    assert not offenders, f"src/physai must not import research: {offenders}"
+    assert not offenders, f"core must not import research: {offenders}"

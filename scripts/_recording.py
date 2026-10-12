@@ -1,8 +1,8 @@
-"""`--record` for headless runs, and the dataset `collect_demos.py` writes.
+"""`--record` for headless runs, and the dataset a collection script writes.
 
 Flat mode (`--record`) writes one `<name>_seed<seed>.npz` + `.json` per episode
 under `<out>/recordings/`, next to each other like videos. Dataset mode (a
-`dataset_dir`, used by `collect_demos.py`) feeds one `EpisodeRecorder` in the
+`dataset_dir`, used by `eval_policy.py --save-dataset` and by plugin collection scripts) feeds one `EpisodeRecorder` in the
 layout training, replay and the web viewer read.
 """
 

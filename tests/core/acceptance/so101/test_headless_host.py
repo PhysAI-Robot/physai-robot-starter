@@ -9,7 +9,6 @@ import urllib.request
 from pathlib import Path
 
 import pytest
-from tests.conftest import requires_research
 
 pytest.importorskip(
     "fastapi", reason="fastapi is a base dependency; reinstall with uv sync"
@@ -57,7 +56,6 @@ def wait_until_serving(base: str, process: subprocess.Popen, timeout: float) -> 
     raise AssertionError(f"host did not start serving within {timeout:.0f}s")
 
 
-@requires_research
 def test_headless_host_serves_the_web_viewer_without_a_desktop_window():
     port = free_port()
     base = f"http://127.0.0.1:{port}"
@@ -67,7 +65,7 @@ def test_headless_host_serves_the_web_viewer_without_a_desktop_window():
         "--manifest",
         "configs/manifests/so101_single_cube_fixed_place.yaml",
         "--policy",
-        "visual_servo",
+        "demo",
         "--serve",
         "--port",
         str(port),
