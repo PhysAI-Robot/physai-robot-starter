@@ -102,6 +102,8 @@ and troubleshooting (including WSL2 and dual-GPU Windows).
 | --- | --- |
 | `run_sim.py` | run and look at one session: headless check, desktop `--viewer`, browser `--serve`, `--video`, `--record` |
 | `eval_policy.py` | measure a policy over N seeds (`--json`, difficulty flags); use at least 100 seeds |
+| `eval_policy_sharded.py` | run `eval_policy.py` in shards, each in its own process, and merge them; repeats a shard that hit Isaac Sim's startup render glitch |
+| `sweep_difficulty.py` | measure a policy over lighting, camera shift and clutter levels and tabulate each cell |
 
 A policy checkpoint is a folder, or a Hugging Face reference that downloads one:
 `--checkpoint hf:<owner>/<repo>/<subfolder>[@<revision>]` fetches only that subfolder into
