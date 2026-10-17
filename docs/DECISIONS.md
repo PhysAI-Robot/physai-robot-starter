@@ -37,8 +37,8 @@ validation rules are in the module docstring.
 - One source per default: the `simulation` block owns seed and randomization (a robot `config`
   repeating them is rejected), the task owns success defaults, the robot registry owns a
   robot's default task. `max_steps` is the manifest's (`--max-steps` overrides it).
-- `run_sim.py` (run and look), `eval_policy.py` (measure) and `collect_demos.py` share the
-  session and `physai.runtime.run_episode`, which ends an episode on termination, truncation,
+- `run_sim.py` (run and look) and `eval_policy.py` (measure, and record episodes with `--save-dataset`)
+  share the session and `physai.runtime.run_episode`, which ends an episode on termination, truncation,
   `policy.done` or a `SafetyViolation` and raises `RenderGlitch` when Isaac stops drawing the
   robot. Video and recording are `EpisodeObserver`s. Difficulty flags become manifest overrides
   through `config.compat.with_overrides`, which re-validates the result.
@@ -119,7 +119,7 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   reset or a policy ending its episode discards the take. Playback exists only while paused: it
   restores recorded state and calls `mj_forward`, with no re-simulation, and refuses commands,
   resets and recording meanwhile. Episodes may carry `observation.environment_state` (full
-  `qpos`, float64), which `collect_demos.py` sets; older datasets cannot be played back, and a
+  `qpos`, float64), which `eval_policy.py --save-dataset` sets; older datasets cannot be played back, and a
   different `nq` is rejected. Both are single-instance only.
 
 ## F. `research/` is a folder you fill with a plugin repo; a paper ships as its own repo
@@ -168,8 +168,10 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   policy's name, so a plugin's policy is treated like a built-in one.
   `run_sim.py --list-policies` and `eval_policy.py --list-policies` print what is available
   for the manifest's robot once its `plugins:` have loaded.
-- **Research-only tools live with the research.** Data collection, difficulty sweeps and sharded
-  evaluation for a study are scripts in that study's repo; they reuse core's `scripts/` helpers.
+- **Generic tools live in core, study-specific ones with the study.** Evaluation, recording
+  (`--save-dataset`), difficulty sweeps and sharded evaluation (`eval_policy_sharded.py`) work on any
+  registered policy and are core scripts. A script that depends on one study's cameras, probes or
+  plots stays in that study's repo and reuses core's `scripts/` helpers.
 
 ## H. Core does not ship weights; `--checkpoint` takes a path or a Hugging Face reference
 

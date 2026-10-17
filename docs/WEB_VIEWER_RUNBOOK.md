@@ -115,8 +115,8 @@ Reset, Resume and Record are refused while an episode is loaded. Episodes withou
 `observation.environment_state` are listed but not playable, and a dataset from a different
 scene (for example `--sorting`) has a different state width and is refused.
 
-To debug scripted demonstrations, collect them with `--keep-failures` using your plugin's
-collection script (this project's is `research/scripts/collect_demos.py`) and open the dataset
+To debug scripted demonstrations, record them with `eval_policy.py --save-dataset` (it keeps
+failed episodes, flagged in `meta.json`) and open the dataset
 (do not press **Record** in that session, it would append your own take):
 
 ```bash

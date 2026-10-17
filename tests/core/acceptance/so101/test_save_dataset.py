@@ -1,4 +1,4 @@
-"""`eval_policy.py --save-dataset` writes the same dataset layout `collect_demos.py` does."""
+"""`eval_policy.py --save-dataset` writes the dataset layout that training, replay and the web viewer read."""
 
 import json
 import subprocess
