@@ -122,21 +122,24 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   `qpos`, float64), which `collect_demos.py` sets; older datasets cannot be played back, and a
   different `nq` is rejected. Both are single-instance only.
 
-## F. `research/` is a private submodule; each paper ships as a clean snapshot
+## F. `research/` is a folder you fill with a plugin repo; a paper ships as its own repo
 
-- **Private until the paper.** `research/` is the git submodule `PhysAI-Robot/physai-research`
-  (private, holds every study), so the core stays public while results are unpublished. The path
-  stays `research/`: `import research...` and the run commands do not change.
+- **Not a submodule.** `research/` is git-ignored, like `assets/` and `checkpoints/`. Whatever repository
+  you clone into it is the plugin: `physai-study-NN` for a published study, your own lab's repo, or the
+  private `PhysAI-Robot/physai-research` that holds every unpublished study. The folder name stays
+  `research/` because the plugins import themselves as `research...` (`plugins: [research.plugin]` in a
+  manifest), so the run commands do not change from one repo to the next. A submodule pointer to a private
+  repository would show every public user a URL they cannot clone and fail `--recurse-submodules` for them.
 - **The core works without it.** Research loads as a plugin named in a manifest
-  ([G](#g-plugins-load-by-name-from-the-manifest-core-ships-a-demo-policy)); the research-only
-  scripts and tests live in `research/`. This repository's CI never checks the submodule out and holds no
-  credential for it: the research tests and the visual servo evaluation run in `physai-research`
-  against this repository's `dev` branch.
-- **One public repo per paper.** When a paper is out, publish a fresh single-commit snapshot of
-  just that study (topic modules, `studies/NN_*.md`, FINDINGS, tests, manifests) as
-  `PhysAI-Robot/physai-study-NN`, pinned to a tagged core version, with checkpoints and data on
-  Hugging Face or Zenodo. `physai-research` itself never goes public, and its mount point in
-  this repo never receives public content.
+  ([G](#g-plugins-load-by-name-from-the-manifest-core-ships-a-demo-policy)); the research-only scripts and
+  tests live in the plugin repo. This repository's CI has no checkout of it and holds no credential for it:
+  the plugin's own tests run in its repository against a tagged or `dev` core.
+- **One public repo per paper.** When a paper is out, publish just that study's runnable code (topic modules,
+  manifests, tests; no findings or plans) as `PhysAI-Robot/physai-study-NN`, with checkpoints and data on
+  Hugging Face. It is tagged like the core (`study-NN-v1` on both), and its README says to clone the core
+  at that tag and the study into `research/`. `physai-research` itself never goes public.
+- **Pinning.** A plugin version is a tag in the plugin repo; the matching core version is the same tag
+  here. There is no pointer in this repository to update.
 
 
 ## G. Plugins load by name from the manifest; core ships a demo policy
@@ -171,7 +174,7 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
 ## H. Core does not ship weights; `--checkpoint` takes a path or a Hugging Face reference
 
 - **No weights in the repository.** Model snapshots stay out of git (`AGENTS.md`); a paper's checkpoints
-  live on Hugging Face (see [F](#f-research-is-a-private-submodule-each-paper-ships-as-a-clean-snapshot)),
+  live on Hugging Face (see [F](#f-research-is-a-folder-you-fill-with-a-plugin-repo-a-paper-ships-as-its-own-repo)),
   one repository with one subfolder per checkpoint.
 - **One flag, two forms.** `--checkpoint` is a folder, as before, or `hf:<owner>/<repo>/<subfolder>[@<revision>]`.
   `physai.policy.checkpoints.resolve_checkpoint` downloads only that subfolder into `checkpoints/<owner>/<repo>/<subfolder>`

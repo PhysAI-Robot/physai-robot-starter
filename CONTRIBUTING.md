@@ -76,7 +76,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest -m assets -q
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest -m ros2 -q
 ```
 
-With the private `research/` submodule checked out, `pytest research/tests -q` runs its tests
+With a plugin repository cloned into `research/`, `pytest research/tests -q` runs its tests
 locally; this repository's CI does not. Core tests never depend on it.
 
 ## Repository hygiene

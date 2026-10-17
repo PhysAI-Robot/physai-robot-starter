@@ -28,9 +28,9 @@ one file and one registration call.
   live here; your own scenes, tasks and policies live in your own folder and register themselves
   when a manifest lists that module under `plugins:`. Core never imports a plugin by name
   ([DECISIONS.md G](docs/DECISIONS.md#g-plugins-load-by-name-from-the-manifest-core-ships-a-demo-policy)).
-  This project's own studies are such a plugin, in the private
-  [`physai-research`](https://github.com/PhysAI-Robot/physai-research) repo mounted at `research/`
-  ([DECISIONS.md F](docs/DECISIONS.md#f-research-is-a-private-submodule-each-paper-ships-as-a-clean-snapshot)).
+  This project's studies are such a plugin: a separate repository cloned into the git-ignored
+  `research/` folder, for example `physai-study-01`
+  ([DECISIONS.md F](docs/DECISIONS.md#f-research-is-a-folder-you-fill-with-a-plugin-repo-a-paper-ships-as-its-own-repo)).
 
 <p align="center">
   <img src="docs/media/viewer_multi_robot.png" width="560"
@@ -50,10 +50,9 @@ uv sync --extra training      # base: MuJoCo, viewer, tests; training adds PyTor
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 ```
 
-The core, its scripts and `tests/` run without `research/`. With access to the private
-[`physai-research`](https://github.com/PhysAI-Robot/physai-research) repo, clone with
-`git clone --recurse-submodules` (or run `git submodule update --init research`) to get it.
-Its tests run with `pytest research/tests -q`, and CI for them lives in that repo.
+The core, its scripts and `tests/` run without `research/`. To use a plugin repository such as
+[`physai-study-01`](https://github.com/PhysAI-Robot/physai-study-01), clone it into `research/`
+(`git clone <repo> research`); its tests run with `pytest research/tests -q`, and its CI lives in that repo.
 
 ### Bring your own research
 

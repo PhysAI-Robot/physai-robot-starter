@@ -72,11 +72,12 @@ boundaries merely to make a local test pass.
   This is checked by `tests/core/boundaries/test_import_boundaries.py` (an AST
   scan for the research rule, import-linter via `uv run lint-imports` for the
   other rules). Research-only scripts and tests live in `research/`, not here.
-- `research/` is the private git submodule `PhysAI-Robot/physai-research`
-  ([DECISIONS.md F](docs/DECISIONS.md#f-research-is-a-private-submodule-each-paper-ships-as-a-clean-snapshot)).
-  Commit inside `research/` first and update the pointer here (`git add research`)
-  only to pin a milestone. Scripts, `tests/core` and CI must keep working when it
-  is absent; core tests use the core `demo` policy, never a research one.
+- `research/` is a git-ignored folder holding a separate plugin repository: the private
+  `PhysAI-Robot/physai-research` here, `physai-study-NN` for a published study
+  ([DECISIONS.md F](docs/DECISIONS.md#f-research-is-a-folder-you-fill-with-a-plugin-repo-a-paper-ships-as-its-own-repo)).
+  It has its own git history; commit there, not in this repository, and pin a milestone with a
+  tag in both. Scripts, `tests/core` and CI must keep working when it is absent; core tests use
+  the core `demo` policy, never a research one.
 - Prefer the smallest compatible change and avoid unrelated refactors.
 - Do not commit downloaded assets, model snapshots, demonstrations, videos, or
   generated plans.

@@ -1,8 +1,8 @@
 """Enforce the dependency-direction rules in pyproject.toml's
 [tool.importlinter] section: sim stays out of the ROS2 boundary, policy/
 tasks/planner depend on ports (not MuJoCo). "Core never imports research" is
-checked by an AST scan instead: `research/` is a private submodule that a plain
-checkout may not have, and import-linter cannot check a package that is missing.
+checked by an AST scan instead: `research/` is a separate repository that a plain
+checkout does not have, and import-linter cannot check a package that is missing.
 
 Calls import-linter's own `lint_imports()` (the function backing the
 `lint-imports` CLI) in-process, so a plain `pytest tests/ -q` fails on a
