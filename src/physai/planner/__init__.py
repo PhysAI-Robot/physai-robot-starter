@@ -1,7 +1,7 @@
 """Instruction-to-plan implementations.
 
-``SortingPlanner`` is a research module (see
-``research/vlm_planners/sorting_planner.py``) and is not exported here;
+``SortingPlanner`` is a research module (in the private
+``physai-research`` repo) and is not exported here;
 core must not import research code. It registers itself with
 ``planner.registry`` on import instead.
 """

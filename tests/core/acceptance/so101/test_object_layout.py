@@ -25,14 +25,12 @@ def _build(case: str):
     from physai.robots.registry import scene_defaults
     from physai.sim.mujoco import (
         DomainRandomizationConfig,
-        SingleCubeFixedPlaceSceneConfig,
+        SingleCubePlaceSceneConfig,
         SortingMinimalSceneConfig,
     )
 
     sorting = case.startswith("sorting")
-    scene_type = (
-        SortingMinimalSceneConfig if sorting else SingleCubeFixedPlaceSceneConfig
-    )
+    scene_type = SortingMinimalSceneConfig if sorting else SingleCubePlaceSceneConfig
     fields = {}
     if case.endswith("fixed_cube_random_target"):
         fields = {"randomize_cube": False, "randomize_target": True}
@@ -86,3 +84,20 @@ def test_reset_places_objects_where_it_used_to():
                 _assert_matches(_snapshot(env, int(seed)), expected, f"{case}/{seed}")
         finally:
             env.close()
+
+
+def test_the_target_pad_is_drawn_where_the_task_scores_the_target():
+    """Domain randomization once reset the pad to the scene default after the
+    layout moved it, so cameras saw a disc nowhere near the real target."""
+    import mujoco
+
+    env = _build("single_cube_fixed_cube_random_target")
+    try:
+        pad = mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_GEOM, "target_pad")
+        for seed in (1, 2, 3):
+            env.reset(seed=seed)
+            np.testing.assert_allclose(
+                env.data.geom_xpos[pad], env.target_pos, atol=1e-9
+            )
+    finally:
+        env.close()

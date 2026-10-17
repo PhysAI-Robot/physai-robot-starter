@@ -3,6 +3,7 @@ so these run in the normal test suite (see the import-linter contract
 confining those to physai.sim.isaac and robots.so101.isaac_env)."""
 
 import math
+from pathlib import Path
 
 import pytest
 from tests.conftest import requires_assets
@@ -95,9 +96,9 @@ def test_the_isaac_camera_orientation_matches_mujoco_for_the_front_camera():
     import numpy as np
 
     from physai.sim.isaac.scene import xyaxes_to_quat_wxyz
-    from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
+    from physai.sim.mujoco import SingleCubePlaceSceneConfig
 
-    xyaxes = SingleCubeFixedPlaceSceneConfig().front_cam_xyaxes
+    xyaxes = SingleCubePlaceSceneConfig().front_cam_xyaxes
     x_axis, y_axis = np.asarray(xyaxes[:3]), np.asarray(xyaxes[3:])
     x_axis, y_axis = x_axis / np.linalg.norm(x_axis), y_axis / np.linalg.norm(y_axis)
     rotation = np.stack([x_axis, y_axis, np.cross(x_axis, y_axis)], axis=1)
@@ -115,7 +116,7 @@ def test_isaac_config_rejects_what_it_cannot_build():
 
     from physai.robots.so101.isaac_env import IsaacEnvConfig
     from physai.sim.mujoco import (
-        SingleCubeFixedPlaceSceneConfig,
+        SingleCubePlaceSceneConfig,
         SortingMinimalSceneConfig,
     )
 
@@ -123,13 +124,15 @@ def test_isaac_config_rejects_what_it_cannot_build():
         IsaacEnvConfig(scene=SortingMinimalSceneConfig())
     with pytest.raises(ValueError, match="camera_resolution"):
         IsaacEnvConfig(
-            scene=SingleCubeFixedPlaceSceneConfig(camera_resolution="640x480"),
+            scene=SingleCubePlaceSceneConfig(camera_resolution="640x480"),
         )
-    with pytest.raises(ValueError, match="randomize_target"):
-        IsaacEnvConfig(randomize_target=True)
 
 
-def test_the_single_cube_fixed_place_manifest_builds_a_config_for_either_simulator():
+@pytest.mark.parametrize(
+    "manifest_path",
+    ["configs/manifests/so101_single_cube_fixed_place.yaml"],
+)
+def test_single_cube_manifests_build_a_config_for_either_simulator(manifest_path):
     """One manifest describes the environment for both engines, so every robot
     config key it sets must be a field of each env config."""
     from dataclasses import fields
@@ -138,7 +141,7 @@ def test_the_single_cube_fixed_place_manifest_builds_a_config_for_either_simulat
     from physai.config.compat import with_overrides
     from physai.robots import create_env_config
 
-    manifest = load_manifest("configs/manifests/so101_single_cube_fixed_place.yaml")
+    manifest = load_manifest(manifest_path)
     isaac = with_overrides(manifest, simulator="isaac")
     assert isaac.simulator == "isaac"
     accepted = {f.name for f in fields(create_env_config("so101", simulator="isaac"))}

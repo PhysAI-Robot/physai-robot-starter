@@ -70,7 +70,7 @@ class RclpyTransport:
 
 
 class MuJoCoROSBridge:
-    """Run a synchronous MuJoCo robot behind the Phase 1 ROS2 boundary."""
+    """Run a synchronous MuJoCo robot behind the ROS2 boundary."""
 
     def __init__(
         self,

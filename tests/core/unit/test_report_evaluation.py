@@ -24,7 +24,7 @@ def evaluation(*, failed_seeds=(), collisions=0, timeouts=0, unsafe=0) -> dict:
         "schema_version": "physai.evaluation.v1",
         "policy": "visual_servo",
         "robot": "so101",
-        "task": "single_cube_fixed_place",
+        "task": "single_cube_place",
         "summary": {
             "episodes": 4,
             "success_count": successes,
@@ -103,9 +103,7 @@ def shard(
         }
         for seed in range(first_seed, first_seed + count)
     )
-    return EvaluationReport(
-        policy, "so101", "single_cube_fixed_place", results
-    ).to_dict()
+    return EvaluationReport(policy, "so101", "single_cube_place", results).to_dict()
 
 
 def run_merge(monkeypatch, capsys, tmp_path, shards: list[dict], *flags: str):
@@ -231,3 +229,16 @@ def report_module(monkeypatch):
 )
 def test_failure_category(report_module, result, expected):
     assert report_module.failure_category(result) == expected
+
+
+def test_trajectory_metrics_on_a_straight_constant_speed_line():
+    import numpy as np
+
+    from physai.data.evaluation import trajectory_metrics
+
+    positions = np.zeros((31, 3))
+    positions[:, 0] = np.linspace(0.0, 0.3, 31)
+    metrics = trajectory_metrics(positions, dt=0.1)
+    assert metrics["completion_time_s"] == pytest.approx(3.0)
+    assert metrics["path_length_m"] == pytest.approx(0.3)
+    assert metrics["rms_jerk"] == pytest.approx(0.0, abs=1e-9)

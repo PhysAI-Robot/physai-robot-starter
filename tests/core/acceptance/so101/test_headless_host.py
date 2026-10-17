@@ -65,7 +65,7 @@ def test_headless_host_serves_the_web_viewer_without_a_desktop_window():
         "--manifest",
         "configs/manifests/so101_single_cube_fixed_place.yaml",
         "--policy",
-        "visual_servo",
+        "demo",
         "--serve",
         "--port",
         str(port),

@@ -9,13 +9,18 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from ..contracts import Action, Observation, PoseStamped, Twist
+from typing import Any
+
+from ..contracts import Action, Observation, PolicyTraits, Twist, PoseStamped
 
 
 class Policy(ABC):
     """Base class. Stateful policies (action chunking, RNNs) reset in `reset`."""
 
     name: str = "policy"
+    # Seeds a trained policy was fitted on, when it knows them; `eval_policy.py`
+    # warns when an evaluation reuses them (that measures recall, not generalisation).
+    training_seeds: frozenset[int] | None = None
 
     def reset(
         self,
@@ -32,6 +37,10 @@ class Policy(ABC):
     def done(self) -> bool:
         """True when a scripted/finite policy considers its job finished."""
         return False
+
+    def episode_metrics(self) -> dict[str, Any]:
+        """Extra per-episode fields for an evaluation row; read after the episode."""
+        return {}
 
 
 class ConstantPolicy(Policy):

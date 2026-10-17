@@ -32,7 +32,7 @@ upstream terms.
 
 ## Model checkpoints
 
-Checkpoints (for example an ACT policy trained with `research/imitation_learning`, or a
+Checkpoints (for example an ACT policy you trained yourself, or a
 Hugging Face model you download yourself) are never committed and carry their own licenses.
 Check the license of every repository and revision before redistribution.
 

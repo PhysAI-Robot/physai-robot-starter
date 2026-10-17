@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import mujoco
@@ -26,6 +26,14 @@ class DomainRandomizationConfig:
     clutter_x_range: tuple[float, float] = (0.14, 0.28)
     clutter_y_range: tuple[float, float] = (-0.16, 0.16)
     clutter_clearance: float = 0.05
+    # Appearance: per-channel colour multipliers (low, high) sampled each episode for the
+    # robot's materials, the table top and the floor, and the floor's tile repeat. The
+    # default (1, 1) draws nothing, so existing seeds keep their samples. The cube and the
+    # target keep their colours: the task is defined by them.
+    arm_tint: tuple[float, float] = (1.0, 1.0)
+    table_tint: tuple[float, float] = (1.0, 1.0)
+    floor_tint: tuple[float, float] = (1.0, 1.0)
+    floor_tile_repeat: tuple[float, float] = (6.0, 6.0)
 
     def __post_init__(self) -> None:
         if not isinstance(self.enabled, bool):
@@ -37,6 +45,12 @@ class DomainRandomizationConfig:
                 "domain_randomization.camera_shift_calibrated must be a boolean"
             )
         for name in ("friction_scale", "mass_scale", "lighting_scale"):
+            bounds = getattr(self, name)
+            if len(bounds) != 2 or not all(np.isfinite(bounds)):
+                raise ValueError(f"{name} must contain two finite values")
+            if bounds[0] <= 0 or bounds[0] > bounds[1]:
+                raise ValueError(f"{name} must satisfy 0 < low <= high")
+        for name in ("arm_tint", "table_tint", "floor_tint", "floor_tile_repeat"):
             bounds = getattr(self, name)
             if len(bounds) != 2 or not all(np.isfinite(bounds)):
                 raise ValueError(f"{name} must contain two finite values")
@@ -68,6 +82,7 @@ class RandomizationMetadata:
     lighting_scale: float
     camera_position_offset: dict[str, tuple[float, float, float]]
     clutter_position: dict[str, tuple[float, float]]
+    appearance: dict[str, tuple[float, ...]] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -83,6 +98,7 @@ class RandomizationMetadata:
             "clutter_position": {
                 name: list(position) for name, position in self.clutter_position.items()
             },
+            "appearance": {name: list(v) for name, v in self.appearance.items()},
         }
 
 
@@ -101,6 +117,11 @@ class DomainRandomizationEngine:
         self._base_light_diffuse = model.light_diffuse.copy()
         self._base_cam_pos = model.cam_pos.copy()
         self._base_geom_pos = model.geom_pos.copy()
+        self._base_mat_rgba = model.mat_rgba.copy()
+        self._base_mat_texrepeat = model.mat_texrepeat.copy()
+        self._base_geom_rgba = model.geom_rgba.copy()
+        self._floor_mat = _id(model, mujoco.mjtObj.mjOBJ_MATERIAL, "physai_grid")
+        self._table_geom = _id(model, mujoco.mjtObj.mjOBJ_GEOM, "table_top")
 
     def camera_shift(self, camera_id: int) -> np.ndarray:
         """How far this episode moved a camera from its nominal mount (parent frame)."""
@@ -112,6 +133,9 @@ class DomainRandomizationEngine:
         self.model.light_diffuse[:] = self._base_light_diffuse
         self.model.cam_pos[:] = self._base_cam_pos
         self.model.geom_pos[:] = self._base_geom_pos
+        self.model.mat_rgba[:] = self._base_mat_rgba
+        self.model.mat_texrepeat[:] = self._base_mat_texrepeat
+        self.model.geom_rgba[:] = self._base_geom_rgba
 
     def apply(
         self,
@@ -184,7 +208,44 @@ class DomainRandomizationEngine:
             lighting_scale=lighting_scale,
             camera_position_offset=offsets,
             clutter_position=clutter_positions,
+            appearance=self._randomize_appearance(rng),
         )
+
+    def _randomize_appearance(self, rng: np.random.Generator) -> dict:
+        """Tint the robot, table and floor and rescale the floor tiles; what was drawn."""
+        config, model, drawn = self.config, self.model, {}
+
+        def tint(name: str) -> np.ndarray | None:
+            low, high = getattr(config, name)
+            if low == high == 1.0:
+                return None  # nothing to draw: keep the rng sequence as it was
+            drawn[name] = tuple(float(v) for v in rng.uniform(low, high, size=3))
+            return np.asarray(drawn[name])
+
+        if (factor := tint("arm_tint")) is not None:
+            for index in range(model.nmat):
+                if index != self._floor_mat:
+                    model.mat_rgba[index, :3] = np.clip(
+                        model.mat_rgba[index, :3] * factor, 0.0, 1.0
+                    )
+        if (factor := tint("table_tint")) is not None and self._table_geom >= 0:
+            model.geom_rgba[self._table_geom, :3] = np.clip(
+                model.geom_rgba[self._table_geom, :3] * factor, 0.0, 1.0
+            )
+        if (factor := tint("floor_tint")) is not None and self._floor_mat >= 0:
+            model.mat_rgba[self._floor_mat, :3] = np.clip(
+                model.mat_rgba[self._floor_mat, :3] * factor, 0.0, 1.0
+            )
+        low, high = config.floor_tile_repeat
+        if low != high and self._floor_mat >= 0:
+            repeat = float(rng.uniform(low, high))
+            model.mat_texrepeat[self._floor_mat] = repeat
+            drawn["floor_tile_repeat"] = (repeat,)
+        return drawn
+
+
+def _id(model: mujoco.MjModel, kind, name: str) -> int:
+    return mujoco.mj_name2id(model, kind, name)
 
 
 __all__ = [

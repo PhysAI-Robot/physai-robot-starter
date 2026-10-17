@@ -60,3 +60,22 @@ class EvaluationReport:
 
 
 __all__ = ["EvaluationReport"]
+
+
+def trajectory_metrics(positions: np.ndarray, dt: float) -> dict[str, float]:
+    """Motion efficiency of one episode from its end-effector positions.
+
+    `positions` is (steps + 1, 3) in metres, one row per control tick from
+    reset, `dt` the control period. Jerk is the RMS third difference of
+    position (m/s^3), so a smoother motion scores lower.
+    """
+    positions = np.asarray(positions, dtype=np.float64).reshape(-1, 3)
+    steps = len(positions) - 1
+    jerk = np.diff(positions, n=3, axis=0) / dt**3
+    return {
+        "completion_time_s": steps * dt,
+        "path_length_m": float(
+            np.linalg.norm(np.diff(positions, axis=0), axis=1).sum()
+        ),
+        "rms_jerk": float(np.sqrt((jerk**2).sum(axis=1).mean())) if len(jerk) else 0.0,
+    }

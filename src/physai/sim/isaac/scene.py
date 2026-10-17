@@ -257,6 +257,7 @@ class WorkspacePrims:
 
     front_camera: str
     cubes: tuple[str, ...]
+    target_pad: str
 
 
 def add_workspace(
@@ -286,7 +287,7 @@ def add_workspace(
         friction=TABLE_FRICTION[0],
         rgba=TABLE_RGBA,
     )
-    add_target_pad(
+    target_pad = add_target_pad(
         stage,
         "/World_target_pad",
         position=cfg.target_pos,
@@ -305,4 +306,4 @@ def add_workspace(
         )
         for cube in cfg.cubes()
     )
-    return WorkspacePrims(front_camera=front_camera, cubes=cubes)
+    return WorkspacePrims(front_camera=front_camera, cubes=cubes, target_pad=target_pad)

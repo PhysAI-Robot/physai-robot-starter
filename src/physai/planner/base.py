@@ -21,7 +21,7 @@ class SubGoal:
 
     `skill` names the low-level behaviour the VLA policy should run; `waypoint`
     is the grounded 3-D goal in the robot base frame (the PoseStamped that
-    would go to Nav2 / MoveIt in Phase 1). `target_description` keeps the
+    would go to Nav2 / MoveIt on a ROS2 robot). `target_description` keeps the
     language grounding around for the VLA's text conditioning.
     """
 
@@ -83,6 +83,12 @@ class ScriptedPlanner(Planner):
 
     name = "scripted_planner"
 
+    # The gripper is position-controlled, so the squeeze force comes from how far
+    # past first contact the target sits: 0.2 (barely closed on the cube) leaves
+    # it slipping and the cube is pushed, 0.06 holds it through the transfer.
+    GRIP_OPEN = 0.55
+    GRIP_HOLD = 0.06
+
     def __init__(self, pick_xyz, place_xyz) -> None:
         self.pick_xyz = np.asarray(pick_xyz, dtype=np.float64)
         self.place_xyz = np.asarray(place_xyz, dtype=np.float64)
@@ -96,29 +102,32 @@ class ScriptedPlanner(Planner):
                     "move_above",
                     self.pick_xyz + np.array([0, 0, 0.045]),
                     target_description="cube",
-                    gripper=0.55,
+                    gripper=self.GRIP_OPEN,
                 ),
                 SubGoal.from_xyz(
-                    "grasp", self.pick_xyz, target_description="cube", gripper=0.2
+                    "grasp",
+                    self.pick_xyz,
+                    target_description="cube",
+                    gripper=self.GRIP_HOLD,
                 ),
                 SubGoal.from_xyz(
                     "move_above",
                     self.place_xyz + np.array([0, 0, 0.055]),
                     target_description="target pad",
-                    gripper=0.2,
+                    gripper=self.GRIP_HOLD,
                 ),
                 SubGoal.from_xyz(
                     "release",
                     self.place_xyz,
                     target_description="target pad",
-                    gripper=0.55,
+                    gripper=self.GRIP_OPEN,
                 ),
             ],
         )
 
 
 # SortingPlanner (a task-coupled VLM stand-in that parses instruction text)
-# is research content: see research/vlm_planners/sorting_planner.py. It is
+# is research content, kept in the private `physai-research` repo. It is
 # not defined here because core must not own task-specific language
 # grounding — only the Planner contract and the generic ScriptedPlanner
 # baseline above do.

@@ -8,7 +8,7 @@ import pytest
 
 from physai.robots import create_robot
 from physai.robots.so101 import EnvConfig
-from physai.sim.mujoco import SingleCubeFixedPlaceSceneConfig
+from physai.sim.mujoco import SingleCubePlaceSceneConfig
 
 MODEL = (
     Path(__file__).resolve().parents[3]
@@ -30,7 +30,7 @@ MM = 1e-3
 
 @pytest.fixture(scope="module")
 def robot():
-    scene = SingleCubeFixedPlaceSceneConfig()
+    scene = SingleCubePlaceSceneConfig()
     env = create_robot("so101", config=EnvConfig(scene=scene, render=False))
     env.reset(seed=0)
     return env

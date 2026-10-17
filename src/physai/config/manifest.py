@@ -10,13 +10,17 @@ Schema (YAML)::
 
     schema_version: 1                # required; unknown versions fail loudly
 
+    plugins: [my_lab.plugin]         # optional; modules imported first so they
+                                      # can register scenes, tasks, policies
+                                      # (see physai.plugins)
+
     simulation:                      # optional, defaults as SimulationConfig
       seed: 0
       domain_randomization:
         enabled: false
 
     scene:
-      name: single_cube_fixed_place       # optional; must be a registered scene
+      name: single_cube_place       # optional; must be a registered scene
       overrides: {}                  # optional kwargs to the scene factory
 
     simulator: mujoco                # optional; default "mujoco". Which
@@ -44,12 +48,12 @@ Schema (YAML)::
         pose:
           position: [0.0, 0.0, 0.0]
           quaternion: [1.0, 0.0, 0.0, 0.0]
-        task: single_cube_fixed_place             # optional per-instance override
+        task: single_cube_place             # optional per-instance override
         task_kwargs: {}
         policy: scripted             # optional; default is "idle" if omitted
         policy_kwargs: {}
 
-    task: single_cube_fixed_place                 # optional global default task
+    task: single_cube_place                 # optional global default task
     task_kwargs: {}
     success_hold_steps: 10           # optional; steps a success must hold
     policy: idle                     # optional global default policy
@@ -61,6 +65,8 @@ Schema (YAML)::
 
 Validation performed at load time (see `load_manifest`):
 
+0. Every ``plugins`` entry is imported before anything below is checked, so
+   the names a plugin registers resolve like built-in ones.
 1. ``schema_version`` must be present and equal to a version this build
    understands.
 2. ``robots`` must be non-empty; every ``id`` must be unique.
@@ -68,7 +74,8 @@ Validation performed at load time (see `load_manifest`):
 4. Every resolved ``task`` name (per-instance or global) must resolve
    through the task registry.
 5. Every resolved ``policy`` name (per-instance or global, unless "idle")
-   must resolve through the policy registry.
+   must resolve through the policy registry, generic or owned by that robot,
+   and the policy's registered ``traits.simulators`` must include ``simulator``.
 6. If ``scene.name`` is given, it must be compatible with every instance's
    registered embodiment kind and resolved task (checked without
    constructing any robot, via the scene and robot registries).
@@ -99,7 +106,8 @@ from typing import Any
 import yaml
 
 from ..contracts import DEFAULT_CAMERA_RESOLUTION, parse_camera_resolution
-from ..policy.registry import available_policies
+from ..plugins import load_plugins
+from ..policy.registry import available_policies, policy_traits
 from ..robots.registry import available_robots, available_simulators, robot_kind
 from ..sim.mujoco.domain_randomization import DomainRandomizationConfig
 from ..sim.mujoco.scenes.common import REPO_ROOT
@@ -144,6 +152,10 @@ def _parse_simulation_config(
         "lighting_scale",
         "clutter_x_range",
         "clutter_y_range",
+        "arm_tint",
+        "table_tint",
+        "floor_tint",
+        "floor_tile_repeat",
     ):
         if key in randomization_data:
             value = randomization_data[key]
@@ -219,6 +231,7 @@ class SessionManifest:
 
     schema_version: int
     robots: tuple[SessionRobotConfig, ...]
+    plugins: tuple[str, ...] = ()
     backend: str = "direct"
     simulator: str = "mujoco"
     scene: SessionSceneConfig = field(default_factory=SessionSceneConfig)
@@ -258,6 +271,15 @@ def parse_manifest(data: Any, config_path: Path) -> SessionManifest:
             f"{config_path}: unsupported schema_version {schema_version!r}; "
             f"this build understands {SCHEMA_VERSION}"
         )
+
+    plugins = data.get("plugins", [])
+    if not isinstance(plugins, list) or not all(
+        isinstance(name, str) and name for name in plugins
+    ):
+        raise ValueError(
+            f"{config_path}: manifest field 'plugins' must be a list of module names"
+        )
+    load_plugins(plugins)
 
     simulation = _parse_simulation_config(data.get("simulation", {}), config_path)
     backend = data.get("backend", "direct")
@@ -371,6 +393,7 @@ def parse_manifest(data: Any, config_path: Path) -> SessionManifest:
     manifest = SessionManifest(
         schema_version=schema_version,
         robots=tuple(robots),
+        plugins=tuple(plugins),
         backend=backend,
         simulator=simulator,
         scene=scene,
@@ -420,7 +443,6 @@ def _validate_simulator_support(manifest: SessionManifest, source: Path) -> None
 
 def _validate_names_and_compatibility(manifest: SessionManifest, source: Path) -> None:
     known_tasks = available_tasks()
-    known_policies = available_policies()
     scene_definition = (
         get_scene_definition(manifest.scene.name) if manifest.scene.name else None
     )
@@ -439,11 +461,20 @@ def _validate_names_and_compatibility(manifest: SessionManifest, source: Path) -
                 f"available: {', '.join(known_tasks)}"
             )
         policy_name = manifest.policy_for(instance)
+        known_policies = available_policies(instance.robot)
         if policy_name not in known_policies and policy_name != "idle":
             raise ValueError(
                 f"{source}: robot {instance.id!r} has unknown policy {policy_name!r}; "
-                f"available: {', '.join((*known_policies, 'idle'))}"
+                f"available: {', '.join((*known_policies, 'idle'))}. A policy from "
+                "your own module needs that module in the manifest's `plugins:` list"
             )
+        if policy_name != "idle":
+            engines = policy_traits(policy_name, instance.robot).simulators
+            if manifest.simulator not in engines:
+                raise ValueError(
+                    f"{source}: policy {policy_name!r} does not support simulator "
+                    f"{manifest.simulator!r}; it supports: {', '.join(engines)}"
+                )
         if scene_definition is not None:
             kind = robot_kind(instance.robot)
             if not scene_definition.supports(kind, task_name):

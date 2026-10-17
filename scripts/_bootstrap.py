@@ -1,9 +1,10 @@
-"""Make `physai` and `research` importable when running scripts from a
-source checkout.
+"""Make `physai` and your own plugin folders importable when running scripts
+from a source checkout.
 
-Avoids forcing `uv sync` before the first run. `research/` is a sibling of
-`src/`, not part of the installed package, so it needs the repository root
-on `sys.path` the same way `physai` needs `src/`.
+Avoids forcing `uv sync` before the first run. A plugin folder such as
+`my_lab/` placed next to `src/` is not part of the installed package, so the
+repository root goes on `sys.path` the same way `src/` does for `physai`; a
+manifest then names its module in `plugins:` (see physai.plugins).
 """
 
 import sys

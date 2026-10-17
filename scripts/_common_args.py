@@ -58,7 +58,9 @@ def add_max_steps(
 
 def add_checkpoint(parser: argparse.ArgumentParser, *, help: str | None = None) -> None:
     parser.add_argument(
-        "--checkpoint", type=Path, help=help or "policy checkpoint directory"
+        "--checkpoint",
+        help=(help or "policy checkpoint directory")
+        + ", or hf:<owner>/<repo>/<subfolder>[@<revision>] to download one from Hugging Face",
     )
 
 
@@ -75,7 +77,9 @@ def parse_policy_arg(text: str) -> tuple[str, Any]:
 
 def add_policy_args(parser: argparse.ArgumentParser) -> None:
     """`--checkpoint` and `--policy-arg`: the run-time inputs of a policy."""
-    add_checkpoint(parser, help="required for --policy lerobot")
+    add_checkpoint(
+        parser, help="policy checkpoint directory, for policies that load one"
+    )
     parser.add_argument(
         "--policy-arg",
         action="append",
@@ -88,14 +92,43 @@ def add_policy_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def policy_kwargs(args: argparse.Namespace, policy: str) -> dict[str, Any]:
-    """The constructor arguments `--policy-arg` and `--checkpoint` give `policy`."""
+def policy_kwargs(args: argparse.Namespace) -> dict[str, Any]:
+    """The constructor arguments `--policy-arg` and `--checkpoint` give the policy."""
+    from physai.policy.checkpoints import resolve_checkpoint
+
     kwargs = dict(args.policy_arg)
-    if policy == "lerobot":
-        if args.checkpoint is None:
-            raise ValueError("--policy lerobot needs --checkpoint")
-        kwargs["checkpoint"] = args.checkpoint
+    if args.checkpoint is not None:
+        kwargs["checkpoint"] = resolve_checkpoint(args.checkpoint)
     return kwargs
+
+
+def add_list_policies(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--list-policies",
+        action="store_true",
+        help="print the policies available for the manifest's robot (after its "
+        "`plugins:` load) and exit",
+    )
+
+
+def print_policies(manifest_path: Path, *, exclude: tuple[str, ...] = ()) -> int:
+    """List what `--policy` accepts for the robot in `manifest_path`, with its traits."""
+    from physai.config import load_manifest
+    from physai.policy import available_policies, policy_traits
+
+    manifest = load_manifest(manifest_path)
+    robot = manifest.robots[0].robot
+    plugins = ", ".join(manifest.plugins) or "none"
+    print(f"policies for robot {robot} (manifest: {manifest_path}, plugins: {plugins})")
+    for name in available_policies(robot):
+        if name in exclude:
+            continue
+        traits = policy_traits(name, robot)
+        notes = f"simulators: {', '.join(traits.simulators)}"
+        if traits.needs_images:
+            notes += "; needs images"
+        print(f"  {name:<16} {notes}")
+    return 0
 
 
 def add_out(

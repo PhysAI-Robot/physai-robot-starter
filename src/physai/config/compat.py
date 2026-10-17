@@ -60,12 +60,13 @@ def with_overrides(
     if simulator is not None:
         changes["simulator"] = simulator
     updated = replace(manifest, **changes)
-    if simulator is not None:
+    if simulator is not None or policy is not None:
         # A bare `replace()` skips registry/cross-field checks; --sim can
         # select a simulator a robot does not support or that conflicts with
-        # world/backend/viewer, so the override is re-validated the same way
+        # world/backend/viewer, and --policy a name no registry (or plugin the
+        # manifest loaded) knows, so the override is re-validated the same way
         # the manifest itself was at load time.
-        validate_manifest(updated, Path("<--sim override>"))
+        validate_manifest(updated, Path("<command-line override>"))
     return updated
 
 

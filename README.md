@@ -24,9 +24,13 @@ one file and one registration call.
   in-process calls for speed, ROS2 Jazzy topics for integration.
 - **Reproducible runs.** Seeds, scenes and settings live in a session manifest; evaluation,
   demonstration collection and video recording share one episode loop.
-- **Research stays outside the core.** Scripted experts, visual servoing and ACT imitation
-  learning live in [`research/`](research/README.md) and register themselves; core never
-  imports them.
+- **Your research stays outside the core.** Robots, the contracts and a minimal `demo` policy
+  live here; your own scenes, tasks and policies live in your own folder and register themselves
+  when a manifest lists that module under `plugins:`. Core never imports a plugin by name
+  ([DECISIONS.md G](docs/DECISIONS.md#g-plugins-load-by-name-from-the-manifest-core-ships-a-demo-policy)).
+  This project's studies are such a plugin: a separate repository cloned into the git-ignored
+  `research/` folder, for example `physai-study-01`
+  ([DECISIONS.md F](docs/DECISIONS.md#f-research-is-a-folder-you-fill-with-a-plugin-repo-a-paper-ships-as-its-own-repo)).
 
 <p align="center">
   <img src="docs/media/viewer_multi_robot.png" width="560"
@@ -46,12 +50,44 @@ uv sync --extra training      # base: MuJoCo, viewer, tests; training adds PyTor
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 ```
 
+The core, its scripts and `tests/` run without `research/`. To use a plugin repository such as
+[`physai-study-01`](https://github.com/PhysAI-Robot/physai-study-01), clone it into `research/`
+(`git clone <repo> research`); its tests run with `pytest research/tests -q`, and its CI lives in that repo.
+
+### Bring your own research
+
+Put a module next to `src/` (for example `my_lab/plugin.py`) that registers what you add,
+then name it in a manifest. Nothing else changes: no CLI flag, no core edit.
+
+```python
+# my_lab/plugin.py
+from physai.robots.registry import register_robot_policy
+
+register_robot_policy(
+    "so101", "my_policy", make_my_policy
+)  # also register_scene / register_task
+```
+
+```yaml
+# my_lab/configs/exp1.yaml: a core scene, your policy
+schema_version: 1
+plugins: [my_lab.plugin]
+scene: {name: single_cube_place}
+task: single_cube_place
+robots: [{id: arm, robot: so101, policy: my_policy}]
+```
+
+Run it with `uv run python scripts/run_sim.py --manifest my_lab/configs/exp1.yaml`.
+`--list-policies` (on `run_sim.py` and `eval_policy.py`) prints what `--policy` accepts for
+the manifest's robot, after its `plugins:` have loaded.
+Scene variants need no code: change `scene.overrides` in your manifest.
+
 ## Quick start
 
 ```bash
 uv run python scripts/fetch_assets.py --robot so101
-uv run python scripts/run_sim.py                                 # headless scripted pick-and-place; add --video
-MUJOCO_GL=egl uv run python scripts/run_sim.py --serve --policy scripted   # then open http://127.0.0.1:8000
+uv run python scripts/run_sim.py                                 # headless run of the demo policy; add --video
+MUJOCO_GL=egl uv run python scripts/run_sim.py --serve --policy demo   # then open http://127.0.0.1:8000
 MUJOCO_GL=egl uv run python scripts/run_sim.py --manifest configs/manifests/heterogeneous_world.yaml --serve
 ```
 
@@ -65,16 +101,24 @@ and troubleshooting (including WSL2 and dual-GPU Windows).
 | --- | --- |
 | `run_sim.py` | run and look at one session: headless check, desktop `--viewer`, browser `--serve`, `--video`, `--record` |
 | `eval_policy.py` | measure a policy over N seeds (`--json`, difficulty flags); use at least 100 seeds |
-| `collect_demos.py` | make a dataset with the scripted expert |
+| `eval_policy_sharded.py` | run `eval_policy.py` in shards, each in its own process, and merge them; repeats a shard that hit Isaac Sim's startup render glitch |
+| `sweep_difficulty.py` | measure a policy over lighting, camera shift and clutter levels and tabulate each cell |
 
-Every script documents its flags with `--help`. Other tools: `fetch_assets.py`,
+A policy checkpoint is a folder, or a Hugging Face reference that downloads one:
+`--checkpoint hf:<owner>/<repo>/<subfolder>[@<revision>]` fetches only that subfolder into
+`checkpoints/<owner>/<repo>/<subfolder>` (ignored by git, like `assets/`) and uses it; the
+`scripts/fetch_checkpoints.py` downloads the same folder ahead of time (for offline use). Name a revision
+for a published result; without one `main` is used. The `training` extra brings the download library
+(`huggingface-hub`).
+
+Every script documents its flags with `--help`. Other tools: `fetch_assets.py`, `fetch_checkpoints.py`,
 `workspace_map.py`, `show_ros2_contract.py`, `teleop_keyboard.py`, `export_scene.py`.
 
 ## Supported robots
 
 | Robot | Action space | What it has |
 | --- | --- | --- |
-| SO-101 arm | joint positions | IK safety validation, front and wrist cameras, scripted/visual-servo/ACT policies, ROS2 joint/gripper/camera/TF bridge. The development focus. |
+| SO-101 arm | joint positions | IK safety validation, front and wrist cameras, a core `demo` policy (your own come as plugins), ROS2 joint/gripper/camera/TF bridge. The development focus. |
 | TurtleBot4 base | twist | Deterministic navigation, obstacle detection, ROS2/Nav2 acceptance path. Maintained, not extended. |
 
 Both run in one world, as in the screenshot above. Robot workflows are in the
@@ -85,7 +129,7 @@ Both run in one world, as in the screenshot above. Robot workflows are in the
 ```python
 from physai.runtime import create_runtime
 
-runtime = create_runtime("so101", task_name="single_cube_fixed_place")
+runtime = create_runtime("so101", task_name="single_cube_place")
 observation = runtime.reset(seed=0)
 try:
     ...  # pass actions from a policy here
@@ -102,7 +146,7 @@ finally:
   `OMNI_KIT_ACCEPT_EULA=YES` yourself, then add `--sim isaac` to `run_sim.py` or
   `eval_policy.py` (observation-only policies, single-cube scene). Constraints and results:
   [decision D](docs/DECISIONS.md#d-isaac-sim-is-an-optional-peer-engine) and
-  [classical control](research/classical_control/README.md#isaac-sim).
+  `research/classical_control` in [`physai-research`](https://github.com/PhysAI-Robot/physai-research).
 - **Docker.** `python docker/container.py build --cpu` (or `--gpu`), then `start`, `shell`,
   `stop`.
 
@@ -111,8 +155,8 @@ finally:
 - [Architecture](docs/ARCHITECTURE.md): module ownership, contracts, extension seams.
 - [Design decisions](docs/DECISIONS.md): why the frozen design is shaped this way.
 - Runbooks: [robots](docs/ROBOT_RUNBOOKS.md) and [web viewer](docs/WEB_VIEWER_RUNBOOK.md).
-- [Research](research/README.md): scripted experts, classical control and imitation learning,
-  with results.
+- [Research](https://github.com/PhysAI-Robot/physai-research) (private): scripted experts,
+  classical control and imitation learning, with results, and the plan for each study.
 - [Contributing](CONTRIBUTING.md), [agent guide](AGENTS.md), [roadmap](ROADMAP.md) and
   [third-party notices](THIRD_PARTY_NOTICES.md).
 

@@ -10,7 +10,7 @@ from .common import ManipulationSceneConfig
 
 
 @dataclass
-class SingleCubeFixedPlaceSceneConfig(ManipulationSceneConfig):
+class SingleCubePlaceSceneConfig(ManipulationSceneConfig):
     layout_kind: ClassVar[str] = "single_cube"
     cube_names: tuple[str, ...] = ("cube",)
     cube_half: float = 0.014

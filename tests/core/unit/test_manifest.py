@@ -16,9 +16,7 @@ def _base_manifest(**overrides) -> dict:
     data = {
         "schema_version": 1,
         "backend": "direct",
-        "robots": [
-            {"id": "arm_1", "robot": "so101", "task": "single_cube_fixed_place"}
-        ],
+        "robots": [{"id": "arm_1", "robot": "so101", "task": "single_cube_place"}],
     }
     data.update(overrides)
     return data
@@ -29,8 +27,8 @@ def test_example_manifests_load_and_validate():
 
     manifest = load_manifest("configs/manifests/example_single_so101.yaml")
     assert manifest.robots[0].id == "arm_1"
-    assert manifest.task_for(manifest.robots[0]) == "single_cube_fixed_place"
-    assert manifest.policy_for(manifest.robots[0]) == "scripted"
+    assert manifest.task_for(manifest.robots[0]) == "single_cube_place"
+    assert manifest.policy_for(manifest.robots[0]) == "demo"
 
     heterogeneous = load_manifest("configs/manifests/example_heterogeneous.yaml")
     assert [r.robot for r in heterogeneous.robots] == ["so101", "turtlebot4"]
@@ -61,12 +59,12 @@ def test_global_task_and_policy_apply_when_instance_omits_them(tmp_path):
 
     data = _base_manifest(
         robots=[{"id": "a", "robot": "so101"}],
-        task="single_cube_fixed_place",
-        policy="scripted",
+        task="single_cube_place",
+        policy="demo",
     )
     manifest = load_manifest(_write(tmp_path, data))
-    assert manifest.task_for(manifest.robots[0]) == "single_cube_fixed_place"
-    assert manifest.policy_for(manifest.robots[0]) == "scripted"
+    assert manifest.task_for(manifest.robots[0]) == "single_cube_place"
+    assert manifest.policy_for(manifest.robots[0]) == "demo"
 
 
 def test_robot_config_and_scene_overrides_become_typed_values(tmp_path):
@@ -74,7 +72,7 @@ def test_robot_config_and_scene_overrides_become_typed_values(tmp_path):
 
     data = _base_manifest(
         scene={
-            "name": "single_cube_fixed_place",
+            "name": "single_cube_place",
             "overrides": {
                 "robot_xml": "assets/so101/so101_new_calib_camera.xml",
                 "table_pos": [0.3, 0.0, 0.01],
@@ -145,7 +143,7 @@ INVALID = [
     (
         "scene incompatible with the robot kind",
         _base_manifest(
-            scene={"name": "single_cube_fixed_place"},
+            scene={"name": "single_cube_place"},
             robots=[{"id": "base_1", "robot": "turtlebot4"}],
         ),
         "incompatible",
@@ -223,3 +221,14 @@ def test_robot_env_config_matches_the_environment_a_session_builds():
             assert getattr(built, item.name) == getattr(expected, item.name), item.name
     finally:
         session.close()
+
+
+def test_a_policy_must_support_the_manifests_simulator(tmp_path):
+    from physai.config import load_manifest
+
+    data = _base_manifest(simulator="isaac", policy="demo")
+    with pytest.raises(ValueError, match="does not support simulator 'isaac'"):
+        load_manifest(_write(tmp_path, data))
+
+    data["policy"] = "constant"  # registered for both engines
+    assert load_manifest(_write(tmp_path, data)).simulator == "isaac"

@@ -38,9 +38,9 @@ def _load_builtins() -> None:
     global _BUILTINS_LOADED
     if _BUILTINS_LOADED:
         return
-    from .single_cube_fixed_place import SingleCubeFixedPlaceTask
+    from .single_cube_place import SingleCubePlaceTask
     from .sorting_minimal import SortingTask
 
-    register_task("single_cube_fixed_place", SingleCubeFixedPlaceTask)
+    register_task("single_cube_place", SingleCubePlaceTask)
     register_task("sorting", SortingTask)
     _BUILTINS_LOADED = True

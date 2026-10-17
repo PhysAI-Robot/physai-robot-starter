@@ -117,8 +117,8 @@ def test_the_scripted_baselines_are_available():
 
     plan = ScriptedPlanner((0.2, 0.08, 0.036), (0.2, -0.1, 0.021)).plan("", None)
     assert [subgoal.skill for subgoal in plan.subgoals]
-    assert "single_cube_fixed_place" in available_tasks()
-    assert create_task("single_cube_fixed_place").name == "single_cube_fixed_place"
+    assert "single_cube_place" in available_tasks()
+    assert create_task("single_cube_place").name == "single_cube_place"
 
 
 def test_registering_an_embodiment_wires_every_factory_and_can_be_extended_once():
@@ -207,8 +207,9 @@ def test_the_registry_validates_simulator_support_before_building():
     assert create_env_config("turtlebot4").max_steps > 0
 
 
-def test_has_robot_policy_tells_a_robot_with_an_expert_from_one_without():
+def test_has_robot_policy_tells_a_robot_with_a_demo_from_one_without():
     from physai.robots import has_robot_policy
 
-    assert not has_robot_policy("turtlebot4", "scripted")
+    assert has_robot_policy("so101", "demo")
+    assert not has_robot_policy("turtlebot4", "demo")
     assert not has_robot_policy("so101", "no_such_policy")

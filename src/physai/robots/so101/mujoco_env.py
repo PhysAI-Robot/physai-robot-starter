@@ -31,7 +31,7 @@ from ...sim.mujoco.domain_randomization import (
 )
 from ...sim.mujoco.scenes import (
     ManipulationSceneConfig,
-    SingleCubeFixedPlaceSceneConfig,
+    SingleCubePlaceSceneConfig,
 )
 from .contracts import (
     ALL_JOINT_NAMES,
@@ -41,7 +41,13 @@ from .contracts import (
 )
 from .jog import resolve_jog
 from .kinematics import ArmKinematics
-from .layout import DEFAULT_CUBE_X_RANGE, DEFAULT_CUBE_Y_RANGE, create_layout
+from .layout import (
+    DEFAULT_CUBE_X_RANGE,
+    DEFAULT_CUBE_Y_RANGE,
+    DEFAULT_TARGET_X_RANGE,
+    DEFAULT_TARGET_Y_RANGE,
+    create_layout,
+)
 from .scene import scene_defaults
 
 HOME_QPOS = np.array([0.0, -1.05, 1.25, 0.75, 0.0], dtype=np.float64)
@@ -52,7 +58,7 @@ class EnvConfig:
     """SO-101-specific simulation and observation settings."""
 
     scene: ManipulationSceneConfig = field(
-        default_factory=lambda: SingleCubeFixedPlaceSceneConfig(**scene_defaults())
+        default_factory=lambda: SingleCubePlaceSceneConfig(**scene_defaults())
     )
     control_hz: float = 30.0
     render: bool = True
@@ -63,8 +69,13 @@ class EnvConfig:
     cube_x_range: tuple[float, float] = DEFAULT_CUBE_X_RANGE
     cube_y_range: tuple[float, float] = DEFAULT_CUBE_Y_RANGE
     randomize_target: bool = False
-    target_x_range: tuple[float, float] = (0.16, 0.26)
-    target_y_range: tuple[float, float] = (-0.13, -0.04)
+    target_x_range: tuple[float, float] = DEFAULT_TARGET_X_RANGE
+    target_y_range: tuple[float, float] = DEFAULT_TARGET_Y_RANGE
+    # Reachable region: when set, cube and target are redrawn until
+    # their distance from the robot base lies in this range (metres), and the
+    # target until it is `min_cube_target_distance` from the cube.
+    spawn_radius_range: tuple[float, float] | None = None
+    min_cube_target_distance: float = 0.0
     seed: int | None = None
     domain_randomization: DomainRandomizationConfig = field(
         default_factory=DomainRandomizationConfig
@@ -74,7 +85,7 @@ class EnvConfig:
     # 20-50x a cube's weight and makes the contact chatter. visual_servo's
     # shallow grip needs the cap; the scripted expert's deeper squeeze does not,
     # but the shared default stays for its other callers. Measurements are in
-    # research/scripted_experts/FINDINGS.md.
+    # the private `physai-research` repo.
     gripper_force_limit: float = 0.3
 
 
@@ -255,6 +266,7 @@ class SO101Env(MuJoCoSimulationCore):
             seed=seed if seed is not None else self.cfg.seed,
             protected_xy=protected_xy,
         )
+        self.layout.show_target()
 
         self.data.ctrl[self.arm_act_ids] = HOME_QPOS
         self.data.ctrl[self.grip_act_id] = self.gripper_to_joint(1.0)
@@ -350,7 +362,7 @@ class SO101Env(MuJoCoSimulationCore):
         The pose is converted from MuJoCo's camera-axis convention (x right,
         y up, z backward) to the ROS optical-frame convention `ImageFrame
         .extrinsics` documents (x right, y down, z forward), so a policy
-        (`research/classical_control/so101_visual_servo.py`) never has to
+        never has to
         know a simulator's own axis convention.
         """
         camera_id = self.model.camera(name).id

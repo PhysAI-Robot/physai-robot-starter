@@ -28,8 +28,11 @@ Keep each document focused on one audience:
   commit message conventions.
 - `AGENTS.md` is the agent-facing workflow, validation, and repository hygiene
   guide.
-- `ROADMAP.md` records planned work and should not be treated as current
-  behavior.
+- `ROADMAP.md` records planned framework features and should not be treated as
+  current behavior.
+- `research/studies/<NN>_<name>.md` is one study's plan (question, frozen task,
+  milestones, paper). Results stay in the topic `FINDINGS.md`/README. A finished
+  study is not reopened; follow-up work is a new study file.
 
 Do not copy detailed architecture, setup commands, or agent instructions into
 the other documents. Link to the owning document instead, and when a fact
@@ -59,12 +62,22 @@ boundaries merely to make a local test pass.
 - Add an explicit adapter when a model or embodiment needs a different space;
   do not silently reshape shared arrays.
 - Keep approach-specific implementations (scripted experts, visual servo,
-  ACT/LeRobot, VLA checkpoints, VLM planners) under `research/<topic>/`, not
-  under `src/physai`. Code in `src/physai` must never import from `research/`
-  — a research module registers itself with the relevant core registry
-  (`physai.robots.registry`, `physai.policy.registry`,
-  `physai.planner.registry`) on import instead. This is checked by
-  `uv run lint-imports` and by `tests/core/boundaries/test_import_boundaries.py`.
+  ACT/LeRobot, VLA checkpoints, VLM planners, study scenes and tasks) in a
+  plugin module, for this project under `research/<topic>/`, not under
+  `src/physai`. Code in `src/physai`, `scripts/` and `tests/core/` must never
+  import from `research/` — a plugin registers itself with the relevant core
+  registry (`physai.robots.registry`, `physai.policy.registry`,
+  `physai.planner.registry`, scenes, tasks) on import, and a manifest loads it
+  by name under `plugins:` ([DECISIONS.md G](docs/DECISIONS.md#g-plugins-load-by-name-from-the-manifest-core-ships-a-demo-policy)).
+  This is checked by `tests/core/boundaries/test_import_boundaries.py` (an AST
+  scan for the research rule, import-linter via `uv run lint-imports` for the
+  other rules). Research-only scripts and tests live in `research/`, not here.
+- `research/` is a git-ignored folder holding a separate plugin repository: the private
+  `PhysAI-Robot/physai-research` here, `physai-study-NN` for a published study
+  ([DECISIONS.md F](docs/DECISIONS.md#f-research-is-a-folder-you-fill-with-a-plugin-repo-a-paper-ships-as-its-own-repo)).
+  It has its own git history; commit there, not in this repository, and pin a milestone with a
+  tag in both. Scripts, `tests/core` and CI must keep working when it is absent; core tests use
+  the core `demo` policy, never a research one.
 - Prefer the smallest compatible change and avoid unrelated refactors.
 - Do not commit downloaded assets, model snapshots, demonstrations, videos, or
   generated plans.

@@ -16,7 +16,7 @@ With no `--policy`, the host holds its current pose and waits for browser jog co
 
 ```bash
 MUJOCO_GL=egl uv run python scripts/run_sim.py --serve --seed 0
-MUJOCO_GL=egl uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --policy scripted --serve --seed 0
+MUJOCO_GL=egl uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --policy demo --serve --seed 0
 MUJOCO_GL=egl uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --viewer --serve --host 0.0.0.0 --port 8004
 ```
 
@@ -47,7 +47,7 @@ which simulator runs the session.
 
 **GitHub Codespaces.** `.devcontainer/devcontainer.json` installs the OSMesa libraries, runs
 the locked `uv sync`, fetches the SO-101 assets and sets `MUJOCO_GL=osmesa`; port 8000 is
-forwarded (keep it `Private`). Start the host with `--policy visual_servo --serve`. This
+forwarded (keep it `Private`). Start the host with `--policy demo --serve`. This
 container has not been run in a live Codespace; the headless host is covered by an acceptance
 test.
 
@@ -86,7 +86,7 @@ fingers (`ManipulationSceneConfig.pad_rgba`).
 of every camera `/api/robots` reports for the selected robot, "+ Camera" adds one, and the
 layout persists per robot in `localStorage`. Frames stream from
 `/api/camera/<name>/stream`; `/api/camera/<name>.jpg` is a snapshot for scripts. A policy may
-publish extra debug feeds (`visual_servo`: `front:detections`, `wrist:detections`, the camera
+publish extra debug feeds (for example a vision policy's `front:detections`, the camera
 frame with a crosshair at the last detection). The theme follows `prefers-color-scheme` and
 can be overridden with the header button.
 
@@ -101,7 +101,7 @@ MUJOCO_GL=egl uv run python scripts/run_sim.py --serve --dataset data/web_sessio
 
 A Recording panel appears. **Record** starts a take; **Save ✓ success** or **Save ✗ fail** ends
 it and writes `episode_XXXXX.npz` plus an updated `meta.json` with the success tag;
-**Discard** writes nothing. The format is the one `collect_demos.py` writes
+**Discard** writes nothing. The format is the one a data-collection script writes
 ([Demonstration data](ARCHITECTURE.md#demonstration-data)) plus `observation.environment_state`
 and `extras.*` arrays (`src/physai/data/extras.py`); jog input is recorded as resolved joint
 targets. Frames begin once every camera has produced an image, and a world reset or a policy
@@ -115,11 +115,11 @@ Reset, Resume and Record are refused while an episode is loaded. Episodes withou
 `observation.environment_state` are listed but not playable, and a dataset from a different
 scene (for example `--sorting`) has a different state width and is refused.
 
-To debug scripted demonstrations, collect with `--keep-failures` and open the dataset (do not
-press **Record** in that session, it would append your own take):
+To debug scripted demonstrations, record them with `eval_policy.py --save-dataset` (it keeps
+failed episodes, flagged in `meta.json`) and open the dataset
+(do not press **Record** in that session, it would append your own take):
 
 ```bash
-uv run python scripts/collect_demos.py --episodes 5 --keep-failures --dataset data/debug_v1
 MUJOCO_GL=egl uv run python scripts/run_sim.py --serve --dataset data/debug_v1
 ```
 

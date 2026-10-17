@@ -2,6 +2,9 @@
 assets/
 models/
 
+# downloaded policy checkpoints (fetched by scripts/fetch_checkpoints.py or `--checkpoint hf:...`)
+checkpoints/
+
 # Isaac Sim's own USD output (physai.sim.isaac.description.import_robot()'s
 # usd_out_dir default); regenerated on demand, never committed
 .isaac_cache/
@@ -42,3 +45,6 @@ MUJOCO_LOG.TXT
 
 # container mode recorded by docker/container.py
 docker/.mode
+
+# plugin checkout (any repo cloned here: physai-study-01, your own, or physai-research)
+research/

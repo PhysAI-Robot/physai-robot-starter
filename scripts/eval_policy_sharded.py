@@ -1,11 +1,12 @@
 """Run `eval_policy.py` in small shards, each in its own process, and merge them.
 
-    OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/run_sharded_eval.py \\
+    OMNI_KIT_ACCEPT_EULA=YES uv run python scripts/eval_policy_sharded.py \\
         --out outputs/eval/isaac_rerun --seed 0 --episodes 100 --shard-size 10 \\
-        -- --sim isaac --policy visual_servo --max-steps 600
+        -- --manifest configs/manifests/so101_single_cube_fixed_place.yaml \\
+        --sim isaac --policy visual_servo --max-steps 600
 
 Everything after `--` goes to `eval_policy.py`. Isaac Sim sometimes stops
-drawing the robot for a whole process (see `research/classical_control/FINDINGS.md`),
+drawing the robot for a whole process (the Isaac render glitch, `RenderGlitch` in `eval_policy.py`),
 and `eval_policy.py` then exits without a result; a shard that fails is retried
 up to `--retries` times in a fresh process. Every attempt is appended to
 `attempts.jsonl` (start time, duration, exit code, whether it was the render
@@ -29,7 +30,7 @@ from _cli import new_parser
 from report_evaluation import merge_evaluations
 
 GLITCH_MARKER = "not drawing the robot"
-EVAL_SCRIPT = Path(__file__).resolve().parent / "eval_policy.py"
+EVAL_SCRIPT = Path(__file__).with_name("eval_policy.py")
 
 
 def shard_ranges(seed: int, episodes: int, shard_size: int) -> list[tuple[int, int]]:

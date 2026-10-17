@@ -1,8 +1,10 @@
-"""Run `visual_servo` over difficulty levels in MuJoCo and tabulate each cell.
+"""Run a policy (default `visual_servo`) over difficulty levels and tabulate each cell.
 
     uv run python scripts/sweep_difficulty.py --out outputs/difficulty
     uv run python scripts/sweep_difficulty.py --axis lighting --seed 100 --episodes 50
     uv run python scripts/sweep_difficulty.py --table-only --out outputs/difficulty
+    uv run python scripts/sweep_difficulty.py --policy lerobot --checkpoint outputs/act_200 \
+        --manifest <manifest.yaml> --seed 1000 --episodes 100
 
 Each cell is one `eval_policy.py` run (own process, own JSON in `--out`)
 with only that axis changed and friction and mass left nominal. The default
@@ -23,6 +25,7 @@ from pathlib import Path
 
 import _bootstrap  # noqa: F401
 from _cli import new_parser
+from _common_args import DEFAULT_MANIFEST
 from report_evaluation import (
     failure_histogram,
     load_evaluation,
@@ -30,7 +33,7 @@ from report_evaluation import (
     wilson_interval,
 )
 
-EVAL_SCRIPT = Path(__file__).resolve().parent / "eval_policy.py"
+EVAL_SCRIPT = Path(__file__).with_name("eval_policy.py")
 
 
 @dataclass(frozen=True)
@@ -91,20 +94,20 @@ def select_cells(axis: str | None) -> list[Cell]:
     return chosen
 
 
-def run_cell(
+def eval_command(
     cell: Cell,
-    out_dir: Path,
+    out: Path,
     seed: int,
     episodes: int,
     max_steps: int | None,
     sim: str | None = None,
-):
-    out = out_dir / f"{cell.name}.json"
-    command = [
+    policy_flags: tuple[str, ...] = ("--policy", "visual_servo"),
+) -> list[str]:
+    """The `eval_policy.py` command for one cell; `policy_flags` name the policy under test."""
+    return [
         sys.executable,
         str(EVAL_SCRIPT),
-        "--policy",
-        "visual_servo",
+        *policy_flags,
         "--seed",
         str(seed),
         "--episodes",
@@ -116,6 +119,19 @@ def run_cell(
         str(out),
         *cell.flags,
     ]
+
+
+def run_cell(
+    cell: Cell,
+    out_dir: Path,
+    seed: int,
+    episodes: int,
+    max_steps: int | None,
+    sim: str | None = None,
+    policy_flags: tuple[str, ...] = ("--policy", "visual_servo"),
+):
+    out = out_dir / f"{cell.name}.json"
+    command = eval_command(cell, out, seed, episodes, max_steps, sim, policy_flags)
     completed = subprocess.run(
         command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
     )
@@ -170,6 +186,25 @@ def main() -> int:
         "cells eval_policy.py supports there",
     )
     ap.add_argument(
+        "--policy",
+        default="visual_servo",
+        help="policy to sweep (eval_policy.py --policy)",
+    )
+    ap.add_argument(
+        "--manifest",
+        type=Path,
+        default=DEFAULT_MANIFEST,
+        help="session manifest to sweep on (one that names a plugin loads it)",
+    )
+    ap.add_argument("--checkpoint", type=Path, help="checkpoint, for --policy lerobot")
+    ap.add_argument(
+        "--policy-arg",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="policy option passed through to eval_policy.py; repeatable",
+    )
+    ap.add_argument(
         "--axis",
         choices=("lighting", "camera", "clutter"),
         help="run only this axis plus the baseline (default: all axes)",
@@ -193,13 +228,29 @@ def main() -> int:
         help="skip running and tabulate the JSON already in --out",
     )
     args = ap.parse_args()
+    policy_flags = (
+        "--policy",
+        args.policy,
+        "--manifest",
+        str(args.manifest),
+        *(("--checkpoint", str(args.checkpoint)) if args.checkpoint else ()),
+        *(arg for item in args.policy_arg for arg in ("--policy-arg", item)),
+    )
     cells = select_cells(args.axis)
     cells = supported_cells(cells, args.sim)
     args.out.mkdir(parents=True, exist_ok=True)
     if not args.table_only:
         for cell in cells:
             print(f"running {cell.name} ...", flush=True)
-            run_cell(cell, args.out, args.seed, args.episodes, args.max_steps, args.sim)
+            run_cell(
+                cell,
+                args.out,
+                args.seed,
+                args.episodes,
+                args.max_steps,
+                args.sim,
+                policy_flags,
+            )
     table = render_table(cells, args.out)
     (args.out / "table.md").write_text(table, encoding="utf-8")
     print(table)

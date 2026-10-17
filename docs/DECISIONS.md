@@ -9,16 +9,19 @@ existing one in place when it no longer holds (git history keeps the old text).
 
 `src/physai` holds the frozen infrastructure (contracts, ports, registries) and
 technique-agnostic baselines (`ScriptedPlanner`, `PlanRunner`, `SortingTask`, `ReplayPolicy`,
-the Gymnasium adapter, TurtleBot4 navigation). Approach-specific code (scripted expert,
-visual servo, ACT, VLA adapter, VLM planner) lives in `research/<topic>/` and registers itself
-with a core registry (`policy.registry`, `planner.registry`, `robots.registry`) on import. A
-new technique needs a package and a registration call, never a core change.
+the Gymnasium adapter, TurtleBot4 navigation, the SO-101 `demo` policy). Approach-specific code
+(scripted expert, visual servo, ACT, VLA adapter, VLM planner) lives in a plugin module, for
+this project in `research/<topic>/`, and registers itself with a core registry
+(`policy.registry`, `planner.registry`, `robots.registry`, scenes, tasks) on import. A new
+technique needs a package and a registration call, never a core change.
 
-Core never imports `research/`, and the other dependency rules (`sim` must not import ROS2,
-`policy`/`tasks`/`planner` must not import MuJoCo, the engines must not import each other) are
-declared in `pyproject.toml`'s `[tool.importlinter]` and checked by `uv run lint-imports` and
-`tests/core/boundaries/test_import_boundaries.py`, so `pytest tests/ -q` fails on a violation.
-import-linter is a declarative tool, not a hand-written import walker.
+Core never imports `research/`: not `src/physai`, not `scripts/`, not `tests/core/` (an AST scan
+in `tests/core/boundaries/test_import_boundaries.py`, because `research/` may be absent and
+import-linter cannot check a missing package). The other
+dependency rules (`sim` must not import ROS2, `policy`/`tasks`/`planner` must not import MuJoCo,
+the engines must not import each other) are declared in `pyproject.toml`'s
+`[tool.importlinter]` and checked by `uv run lint-imports` and the same test file, so
+`pytest tests/ -q` fails on a violation.
 
 ## B. The manifest is the only run description
 
@@ -34,8 +37,8 @@ validation rules are in the module docstring.
 - One source per default: the `simulation` block owns seed and randomization (a robot `config`
   repeating them is rejected), the task owns success defaults, the robot registry owns a
   robot's default task. `max_steps` is the manifest's (`--max-steps` overrides it).
-- `run_sim.py` (run and look), `eval_policy.py` (measure) and `collect_demos.py` share the
-  session and `physai.runtime.run_episode`, which ends an episode on termination, truncation,
+- `run_sim.py` (run and look) and `eval_policy.py` (measure, and record episodes with `--save-dataset`)
+  share the session and `physai.runtime.run_episode`, which ends an episode on termination, truncation,
   `policy.done` or a `SafetyViolation` and raises `RenderGlitch` when Isaac stops drawing the
   robot. Video and recording are `EpisodeObserver`s. Difficulty flags become manifest overrides
   through `config.compat.with_overrides`, which re-validates the result.
@@ -79,9 +82,9 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   overrides any manifest, so `so101_single_cube_fixed_place.yaml` is the one session both engines
   run.
 - **Same scene.** `IsaacEnvConfig.scene` takes the scene MuJoCo builds from; the per-seed cube
-  position comes from `layout.draw_cube_xy`, pinned by `golden_layouts.json`. Limits:
-  single-cube scenes, fixed target, no randomization beyond a lighting scale and camera jitter,
-  observation-only policies (`visual_servo`, `constant`, `lerobot`); `--viewer`, web recording
+  and target positions come from `layout.draw_xy`, pinned by `golden_layouts.json`. Limits:
+  single-cube scenes, no randomization beyond the cube and target spawn, a lighting scale and
+  camera jitter, observation-only policies (`visual_servo`, `constant`, `lerobot`); `--viewer`, web recording
   and playback, `SharedWorld`, the ROS2 bridge and `ArmKinematics` stay MuJoCo-only. Isaac
   `--serve` runs the `Host` on the main thread (Isaac must stay on the thread that created
   `SimulationApp`) with uvicorn on a worker thread, and shows a display mirror refreshed from
@@ -92,6 +95,13 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   `lerobot` wants `numpy<2.3`/`packaging<26` and Isaac pins `numpy==2.3.1`/`packaging==26.0`,
   `[tool.uv] override-dependencies` forces `numpy>=2.0,<2.3` and `packaging>=24.2,<26.0`;
   `uv pip check` lists the broken pins. When a release needs `numpy` 2.3 the overrides go.
+  Fifteen more packages are pinned in the same list to the versions every Isaac Sim evaluation of
+  study 1 ran with (`uvicorn` 0.53.0, `httptools` 0.8.0, `websockets` 17.1, `fastapi` 0.141.1,
+  `gymnasium` 1.3.0, `mujoco` 3.13.0, `click`, `anyio`, and a few more, plus `huggingface-hub` so one
+  resolution remains): `isaacsim-kernel` pins older versions of most of them, one pin pulls the next
+  (`uvicorn` 0.53 needs `httptools>=0.8`, which Isaac holds at 0.6.1), and a lock that followed them
+  would not be the environment the results came from. Isaac Sim ran headless on these versions;
+  its livestream and web extensions were not exercised.
   `webtest` (`httpx2`) conflicts with `isaac` (`idna`). On Windows `torch` comes from the `cu128`
   index. `OMNI_KIT_ACCEPT_EULA=YES` is set by the person running Isaac, never by this repo.
   `lerobot`'s `draccus` installs a top-level `tests` package, hence `tests/__init__.py`.
@@ -109,5 +119,73 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   reset or a policy ending its episode discards the take. Playback exists only while paused: it
   restores recorded state and calls `mj_forward`, with no re-simulation, and refuses commands,
   resets and recording meanwhile. Episodes may carry `observation.environment_state` (full
-  `qpos`, float64), which `collect_demos.py` sets; older datasets cannot be played back, and a
+  `qpos`, float64), which `eval_policy.py --save-dataset` sets; older datasets cannot be played back, and a
   different `nq` is rejected. Both are single-instance only.
+
+## F. `research/` is a folder you fill with a plugin repo; a paper ships as its own repo
+
+- **Not a submodule.** `research/` is git-ignored, like `assets/` and `checkpoints/`. Whatever repository
+  you clone into it is the plugin: `physai-study-NN` for a published study, your own lab's repo, or the
+  private `PhysAI-Robot/physai-research` that holds every unpublished study. The folder name stays
+  `research/` because the plugins import themselves as `research...` (`plugins: [research.plugin]` in a
+  manifest), so the run commands do not change from one repo to the next. A submodule pointer to a private
+  repository would show every public user a URL they cannot clone and fail `--recurse-submodules` for them.
+- **The core works without it.** Research loads as a plugin named in a manifest
+  ([G](#g-plugins-load-by-name-from-the-manifest-core-ships-a-demo-policy)); the research-only scripts and
+  tests live in the plugin repo. This repository's CI has no checkout of it and holds no credential for it:
+  the plugin's own tests run in its repository against a tagged or `dev` core.
+- **One public repo per paper.** When a paper is out, publish just that study's runnable code (topic modules,
+  manifests, tests; no findings or plans) as `PhysAI-Robot/physai-study-NN`, with checkpoints and data on
+  Hugging Face. It is tagged like the core (`study-NN-v1` on both), and its README says to clone the core
+  at that tag and the study into `research/`. `physai-research` itself never goes public.
+- **Pinning.** A plugin version is a tag in the plugin repo; the matching core version is the same tag
+  here. There is no pointer in this repository to update.
+
+
+## G. Plugins load by name from the manifest; core ships a demo policy
+
+- **Physai is the framework; research is a plugin.** Anyone researches in their own folder with
+  their own scenes, tasks and policies. `physai-research` is one such folder, not a special
+  one: core has no code path that names it.
+- **The manifest is the loader.** An optional `plugins: [module, ...]` list is imported by
+  `physai.plugins.load_plugins` before any name is validated, so one manifest is self-contained
+  and a run's plugins are recorded with it. There is no `--plugin` flag and no environment
+  variable. `--policy` and the other content flags only override what the manifest says, and
+  `--policy` is checked against the registries after the manifest has loaded its plugins.
+- **A scene variant is data.** A different layout, range or cube is `scene.name` plus
+  `scene.overrides` in the researcher's manifest. A genuinely new scene registers itself with
+  `register_scene`. Scenes are `ManipulationSceneConfig` today; anything else needs a seam
+  extension in core first.
+- **Core still moves a robot.** `so101`'s `demo` policy (`ScriptedPlanner` + `PlanRunner`, true
+  object poses, open-loop) is the minimal proof that a policy drives the arm and the default of
+  `run_sim.py` and `eval_policy.py`. It is a demo, not a baseline to beat; a researcher's
+  expert, visual servo or ACT checkpoint comes from their plugin.
+- **A policy declares its own traits.** `register_policy` and `register_robot_policy` take
+  `PolicyTraits` (`needs_images`, `simulators`); manifest validation rejects a policy on an
+  engine it does not list, and `eval_policy.py` renders cameras from `needs_images`. A policy
+  may also override `episode_metrics()` (extra columns in an evaluation row) and set
+  `training_seeds` (evaluation warns when seeds overlap). No core script branches on a
+  policy's name, so a plugin's policy is treated like a built-in one.
+  `run_sim.py --list-policies` and `eval_policy.py --list-policies` print what is available
+  for the manifest's robot once its `plugins:` have loaded.
+- **Generic tools live in core, study-specific ones with the study.** Evaluation, recording
+  (`--save-dataset`), difficulty sweeps and sharded evaluation (`eval_policy_sharded.py`) work on any
+  registered policy and are core scripts. A script that depends on one study's cameras, probes or
+  plots stays in that study's repo and reuses core's `scripts/` helpers.
+
+## H. Core does not ship weights; `--checkpoint` takes a path or a Hugging Face reference
+
+- **No weights in the repository.** Model snapshots stay out of git (`AGENTS.md`); a paper's checkpoints
+  live on Hugging Face (see [F](#f-research-is-a-folder-you-fill-with-a-plugin-repo-a-paper-ships-as-its-own-repo)),
+  one repository with one subfolder per checkpoint.
+- **One flag, two forms.** `--checkpoint` is a folder, as before, or `hf:<owner>/<repo>/<subfolder>[@<revision>]`.
+  `physai.policy.checkpoints.resolve_checkpoint` downloads only that subfolder into `checkpoints/<owner>/<repo>/<subfolder>`
+  at the repository root (git-ignored, like `assets/`, so a checkout shows where its weights are and an
+  offline machine can be prepared with `scripts/fetch_checkpoints.py`) and hands the policy the local folder,
+  so a policy still receives a path and no plugin changes. It lives in core because `--checkpoint` does, and
+  any plugin's policy gets it. Unchanged files are not downloaded again; changing the revision of a folder
+  replaces its files in place.
+- **Optional dependency, lazy import.** `huggingface-hub` is imported only when a reference is used
+  (the `training` extra installs it through lerobot); without it the error says what to install.
+- **A revision pins a result.** Without one, `main` is used, which can change; a published number should
+  name a commit. The evaluation JSON records the reference as given.

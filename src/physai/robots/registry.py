@@ -2,8 +2,8 @@
 
 Adding a robot is one call: build a `RobotDescriptor` bundling its factories
 and pass it to `register_embodiment()`, which stores that one descriptor. A
-robot-owned policy (e.g. a research module self-registering "scripted" for
-so101) calls `register_robot_policy()` directly, since it registers
+robot-owned policy (so101's core "demo", or a plugin's own policy) calls
+`register_robot_policy()` directly, since it registers
 independently of — and often after — the embodiment itself.
 """
 
@@ -13,6 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from ..contracts import PolicyTraits
 from .base import RobotPort
 
 RobotFactory = Callable[..., RobotPort]
@@ -45,6 +46,7 @@ class RobotDescriptor:
 
 _ROBOTS: dict[str, RobotDescriptor] = {}
 _POLICY_FACTORIES: dict[tuple[str, str], RobotPolicyFactory] = {}
+_POLICY_TRAITS: dict[tuple[str, str], PolicyTraits] = {}
 
 
 def register_embodiment(name: str, descriptor: RobotDescriptor) -> RobotDescriptor:
@@ -60,7 +62,11 @@ def register_embodiment(name: str, descriptor: RobotDescriptor) -> RobotDescript
 
 
 def register_robot_policy(
-    robot_name: str, policy_name: str, factory: RobotPolicyFactory
+    robot_name: str,
+    policy_name: str,
+    factory: RobotPolicyFactory,
+    *,
+    traits: PolicyTraits = PolicyTraits(),
 ) -> RobotPolicyFactory:
     """Register a policy implementation owned by one robot adapter."""
     key = (robot_name, policy_name)
@@ -69,6 +75,7 @@ def register_robot_policy(
             f"policy {policy_name!r} for robot {robot_name!r} is already registered"
         )
     _POLICY_FACTORIES[key] = factory
+    _POLICY_TRAITS[key] = traits
     return factory
 
 
@@ -140,9 +147,29 @@ def create_robot(
 
 
 def has_robot_policy(robot_name: str, policy_name: str) -> bool:
-    """Whether a robot owns a policy of this name (research policies register on import)."""
+    """Whether a robot owns a policy of this name (plugin policies register on import)."""
     _load_builtins()
     return (robot_name, policy_name) in _POLICY_FACTORIES
+
+
+def robot_policy_traits(robot_name: str, policy_name: str) -> PolicyTraits:
+    """The traits a robot-owned policy registered with."""
+    _load_builtins()
+    return _POLICY_TRAITS[(robot_name, policy_name)]
+
+
+def robot_policies(robot_name: str | None = None) -> tuple[str, ...]:
+    """Names of robot-owned policies, for one robot or for any robot."""
+    _load_builtins()
+    return tuple(
+        sorted(
+            {
+                policy
+                for robot, policy in _POLICY_FACTORIES
+                if robot_name is None or robot == robot_name
+            }
+        )
+    )
 
 
 def create_robot_policy(robot_name: str, policy_name: str, **kwargs: Any) -> Any:
@@ -232,10 +259,13 @@ def create_shared_instance(name: str, world: Any, config: Any) -> Any:
 
 
 def _load_builtins() -> None:
-    # so101's "scripted" and "visual_servo" policies are research modules
-    # (research/scripted_experts, research/classical_control); they register
-    # themselves with register_robot_policy() on import. This registry never
-    # imports them directly (core must not import research/).
+    # Core ships one robot-owned policy, so101's "demo". Every other robot
+    # policy comes from a plugin a manifest names (see physai.plugins); it
+    # registers itself with register_robot_policy() on import.
+    if ("so101", "demo") not in _POLICY_FACTORIES:
+        from .so101.demo_policy import make_demo_policy
+
+        register_robot_policy("so101", "demo", make_demo_policy)
     if "so101" not in _ROBOTS:
         from .so101.factory import make_so101, so101_env_config
         from .so101.jog import so101_jog_resolver
@@ -250,7 +280,7 @@ def _load_builtins() -> None:
                 kind="fixed_base_manipulator",
                 simulators=("mujoco", "isaac"),
                 scene_defaults=so101_scene_defaults,
-                default_task="single_cube_fixed_place",
+                default_task="single_cube_place",
                 env_config=so101_env_config,
                 ros2_node=SO101ROS2Node,
                 shared_attach=so101_shared_attach,

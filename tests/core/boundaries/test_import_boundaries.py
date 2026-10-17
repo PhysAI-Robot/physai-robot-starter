@@ -1,6 +1,8 @@
 """Enforce the dependency-direction rules in pyproject.toml's
 [tool.importlinter] section: sim stays out of the ROS2 boundary, policy/
-tasks/planner depend on ports (not MuJoCo), and core never imports research.
+tasks/planner depend on ports (not MuJoCo). "Core never imports research" is
+checked by an AST scan instead: `research/` is a separate repository that a plain
+checkout does not have, and import-linter cannot check a package that is missing.
 
 Calls import-linter's own `lint_imports()` (the function backing the
 `lint-imports` CLI) in-process, so a plain `pytest tests/ -q` fails on a
@@ -9,6 +11,7 @@ boundary violation the same way `uv run lint-imports` would.
 
 from __future__ import annotations
 
+import ast
 import os
 from pathlib import Path
 
@@ -31,3 +34,25 @@ def test_dependency_direction_contracts_hold():
         "run `uv run lint-imports` for the report "
         "(see pyproject.toml's [tool.importlinter] section)"
     )
+
+
+def test_core_never_imports_research():
+    """Neither the package, the scripts nor the core tests may import `research`:
+    a plugin is loaded by name from a manifest's `plugins:`, never by core code."""
+    offenders = []
+    core_files = [
+        *(REPO_ROOT / "src" / "physai").rglob("*.py"),
+        *(REPO_ROOT / "scripts").glob("*.py"),
+        *(REPO_ROOT / "tests" / "core").rglob("*.py"),
+    ]
+    for path in core_files:
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                names = [node.module or ""]
+            else:
+                continue
+            if any(name.split(".")[0] == "research" for name in names):
+                offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
+    assert not offenders, f"core must not import research: {offenders}"
