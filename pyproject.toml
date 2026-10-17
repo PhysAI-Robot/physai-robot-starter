@@ -34,16 +34,15 @@ dependencies = [
 
 [project.optional-dependencies]
 # gymnasium for the GymnasiumAdapter; torch + lerobot for ACT training and
-# inference, diffusers for LeRobot's Diffusion Policy (the version range lerobot
-# asks for, its `diffusion` extra). lerobot pins numpy<2.3.0 and isaacsim-kernel pins numpy==2.3.1, so
+# inference (lerobot's `diffusion` extra brings diffusers, in the range lerobot asks
+# for, for Diffusion Policy). lerobot pins numpy<2.3.0 and isaacsim-kernel pins numpy==2.3.1, so
 # `[tool.uv] override-dependencies` below forces numpy<2.3 for both (isaac
 # runs on 2.2.x); see docs/DECISIONS.md, D.
 training = [
     "gymnasium>=1.4.0,<2.0",
     "torch>=2.7,<2.12",
     "torchvision>=0.22,<0.27",
-    "lerobot>=0.6.1",
-    "diffusers>=0.38,<0.40",
+    "lerobot[diffusion]>=0.6.1",
     "scipy>=1.11",  # used by the research plugin's image edits
 ]
 # httpx2 is only used by tests/core/unit/test_web_app_streaming.py (guarded

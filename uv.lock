@@ -1873,6 +1873,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/58/c0/8b17580cfae9d970edc1b9138a2231fb5416eb2e8e03e3c79f4355f978c2/lerobot-0.6.1-py3-none-any.whl", hash = "sha256:1894516040c65f80a45bd9741f8174aae90ed5d93da0627ab4f1a85fd8d75e90", size = 1728105, upload-time = "2026-08-03T14:19:54.439Z" },
 ]
 
+[package.optional-dependencies]
+diffusion = [
+    { name = "diffusers" },
+]
+
 [[package]]
 name = "llvmlite"
 version = "0.46.0"
@@ -2456,9 +2461,8 @@ isaac = [
     { name = "isaacsim", extra = ["all", "extscache"], marker = "extra == 'extra-6-physai-isaac'" },
 ]
 training = [
-    { name = "diffusers" },
     { name = "gymnasium" },
-    { name = "lerobot" },
+    { name = "lerobot", extra = ["diffusion"] },
     { name = "scipy" },
     { name = "torch", version = "2.11.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32' or (extra == 'extra-6-physai-isaac' and extra == 'extra-6-physai-webtest')" },
     { name = "torch", version = "2.11.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "sys_platform == 'win32' or (extra == 'extra-6-physai-isaac' and extra == 'extra-6-physai-webtest')" },
@@ -2471,7 +2475,6 @@ webtest = [
 
 [package.metadata]
 requires-dist = [
-    { name = "diffusers", marker = "extra == 'training'", specifier = ">=0.38,<0.40" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "gymnasium", marker = "extra == 'training'", specifier = ">=1.4.0,<2.0" },
     { name = "httpx2", marker = "extra == 'webtest'", specifier = ">=2.13.1" },
@@ -2479,7 +2482,7 @@ requires-dist = [
     { name = "imageio-ffmpeg", specifier = ">=0.6.0" },
     { name = "import-linter", specifier = ">=2.1" },
     { name = "isaacsim", extras = ["all", "extscache"], marker = "extra == 'isaac'", specifier = "==6.1.0.0" },
-    { name = "lerobot", marker = "extra == 'training'", specifier = ">=0.6.1" },
+    { name = "lerobot", extras = ["diffusion"], marker = "extra == 'training'", specifier = ">=0.6.1" },
     { name = "mujoco", specifier = ">=3.2" },
     { name = "numpy", specifier = ">=2.0" },
     { name = "pytest", specifier = ">=9.1.1" },
