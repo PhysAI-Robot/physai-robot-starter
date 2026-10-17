@@ -1,11 +1,12 @@
 """Resolve a `--checkpoint` value to a local folder.
 
 A value is either a path, used as given, or a Hugging Face reference
-`hf:<owner>/<repo>/<subfolder>[@<revision>]`, which downloads only that subfolder of the repository
-into the Hugging Face cache (never into this repository) and returns the local folder. A revision pins
-a commit or tag; without one the repository's `main` is used, so a published result should name one.
-`huggingface_hub` is imported only when a reference is used (the `training` extra installs it through
-lerobot). Weights are not part of this repository; see docs/DECISIONS.md.
+`hf:<owner>/<repo>/<subfolder>[@<revision>]`, which downloads only that subfolder of the repository into
+`checkpoints/<owner>/<repo>/<subfolder>` at the repository root (ignored by git, like `assets/`) and returns
+that folder. A revision pins a commit or tag; without one the repository's `main` is used, so a published
+result should name one. `scripts/fetch_checkpoints.py` does the same download ahead of time. `huggingface_hub`
+is imported only when a reference is used (the `training` extra installs it through lerobot). Weights are not
+part of this repository; see docs/DECISIONS.md.
 """
 
 from __future__ import annotations
@@ -13,6 +14,8 @@ from __future__ import annotations
 from pathlib import Path
 
 HF_PREFIX = "hf:"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+CHECKPOINT_DIR = REPO_ROOT / "checkpoints"
 
 
 def parse_hf_reference(spec: str) -> tuple[str, str, str | None]:
@@ -27,11 +30,17 @@ def parse_hf_reference(spec: str) -> tuple[str, str, str | None]:
     return "/".join(parts[:2]), "/".join(parts[2:]), revision or None
 
 
-def resolve_checkpoint(spec: str | Path) -> Path:
-    """The local checkpoint folder for a path or an `hf:` reference."""
-    if not str(spec).startswith(HF_PREFIX):
-        return Path(spec)
-    repo_id, subfolder, revision = parse_hf_reference(str(spec))
+def fetch_checkpoint(
+    repo_id: str,
+    subfolder: str,
+    revision: str | None = None,
+    root: Path | None = None,
+) -> Path:
+    """Download one subfolder of a Hugging Face repository into `<root>/<repo_id>/<subfolder>`.
+
+    Files that are already there and unchanged are not downloaded again. `root` defaults to
+    `checkpoints/` at the repository root.
+    """
     try:
         from huggingface_hub import snapshot_download
     except ImportError as exc:
@@ -39,15 +48,25 @@ def resolve_checkpoint(spec: str | Path) -> Path:
             "downloading a checkpoint needs huggingface-hub "
             "(uv sync --extra training installs it)"
         ) from exc
-    root = Path(
-        snapshot_download(
-            repo_id=repo_id, revision=revision, allow_patterns=[f"{subfolder}/*"]
-        )
+    repo_dir = (Path(root) if root is not None else CHECKPOINT_DIR) / repo_id
+    snapshot_download(
+        repo_id=repo_id,
+        revision=revision,
+        allow_patterns=[f"{subfolder}/*"],
+        local_dir=str(repo_dir),
     )
-    folder = root / subfolder
+    folder = repo_dir / subfolder
     if not folder.is_dir():
         raise FileNotFoundError(
             f"{repo_id} has no folder {subfolder!r}"
             + (f" at revision {revision!r}" if revision else "")
         )
     return folder
+
+
+def resolve_checkpoint(spec: str | Path, root: Path | None = None) -> Path:
+    """The local checkpoint folder for a path or an `hf:` reference."""
+    if not str(spec).startswith(HF_PREFIX):
+        return Path(spec)
+    repo_id, subfolder, revision = parse_hf_reference(str(spec))
+    return fetch_checkpoint(repo_id, subfolder, revision, root)
