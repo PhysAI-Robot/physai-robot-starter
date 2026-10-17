@@ -160,3 +160,17 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   for the manifest's robot once its `plugins:` have loaded.
 - **Research-only tools live with the research.** Data collection, difficulty sweeps and sharded
   evaluation for a study are scripts in that study's repo; they reuse core's `scripts/` helpers.
+
+## H. Core does not ship weights; `--checkpoint` takes a path or a Hugging Face reference
+
+- **No weights in the repository.** Model snapshots stay out of git (`AGENTS.md`); a paper's checkpoints
+  live on Hugging Face (see [F](#f-research-is-a-private-submodule-each-paper-ships-as-a-clean-snapshot)),
+  one repository with one subfolder per checkpoint.
+- **One flag, two forms.** `--checkpoint` is a folder, as before, or `hf:<owner>/<repo>/<subfolder>[@<revision>]`.
+  `physai.policy.checkpoints.resolve_checkpoint` downloads only that subfolder into the Hugging Face cache
+  (never into the repository) and hands the policy the local folder, so a policy still receives a path and
+  no plugin changes. It lives in core because `--checkpoint` does, and any plugin's policy gets it.
+- **Optional dependency, lazy import.** `huggingface-hub` is imported only when a reference is used
+  (the `training` extra installs it through lerobot); without it the error says what to install.
+- **A revision pins a result.** Without one, `main` is used, which can change; a published number should
+  name a commit. The evaluation JSON records the reference as given.

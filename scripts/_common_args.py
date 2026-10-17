@@ -58,7 +58,9 @@ def add_max_steps(
 
 def add_checkpoint(parser: argparse.ArgumentParser, *, help: str | None = None) -> None:
     parser.add_argument(
-        "--checkpoint", type=Path, help=help or "policy checkpoint directory"
+        "--checkpoint",
+        help=(help or "policy checkpoint directory")
+        + ", or hf:<owner>/<repo>/<subfolder>[@<revision>] to download one from Hugging Face",
     )
 
 
@@ -92,9 +94,11 @@ def add_policy_args(parser: argparse.ArgumentParser) -> None:
 
 def policy_kwargs(args: argparse.Namespace) -> dict[str, Any]:
     """The constructor arguments `--policy-arg` and `--checkpoint` give the policy."""
+    from physai.policy.checkpoints import resolve_checkpoint
+
     kwargs = dict(args.policy_arg)
     if args.checkpoint is not None:
-        kwargs["checkpoint"] = args.checkpoint
+        kwargs["checkpoint"] = resolve_checkpoint(args.checkpoint)
     return kwargs
 
 

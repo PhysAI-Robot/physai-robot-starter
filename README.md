@@ -103,6 +103,11 @@ and troubleshooting (including WSL2 and dual-GPU Windows).
 | `run_sim.py` | run and look at one session: headless check, desktop `--viewer`, browser `--serve`, `--video`, `--record` |
 | `eval_policy.py` | measure a policy over N seeds (`--json`, difficulty flags); use at least 100 seeds |
 
+A policy checkpoint is a folder, or a Hugging Face reference that downloads one:
+`--checkpoint hf:<owner>/<repo>/<subfolder>[@<revision>]` fetches only that subfolder into the
+Hugging Face cache and uses it. Name a revision for a published result; without one `main` is used.
+The `training` extra brings the download library (`huggingface-hub`).
+
 Every script documents its flags with `--help`. Other tools: `fetch_assets.py`,
 `workspace_map.py`, `show_ros2_contract.py`, `teleop_keyboard.py`, `export_scene.py`.
 
