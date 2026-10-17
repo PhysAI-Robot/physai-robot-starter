@@ -95,6 +95,13 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   `lerobot` wants `numpy<2.3`/`packaging<26` and Isaac pins `numpy==2.3.1`/`packaging==26.0`,
   `[tool.uv] override-dependencies` forces `numpy>=2.0,<2.3` and `packaging>=24.2,<26.0`;
   `uv pip check` lists the broken pins. When a release needs `numpy` 2.3 the overrides go.
+  Fifteen more packages are pinned in the same list to the versions every Isaac Sim evaluation of
+  study 1 ran with (`uvicorn` 0.53.0, `httptools` 0.8.0, `websockets` 17.1, `fastapi` 0.141.1,
+  `gymnasium` 1.3.0, `mujoco` 3.13.0, `click`, `anyio`, and a few more, plus `huggingface-hub` so one
+  resolution remains): `isaacsim-kernel` pins older versions of most of them, one pin pulls the next
+  (`uvicorn` 0.53 needs `httptools>=0.8`, which Isaac holds at 0.6.1), and a lock that followed them
+  would not be the environment the results came from. Isaac Sim ran headless on these versions;
+  its livestream and web extensions were not exercised.
   `webtest` (`httpx2`) conflicts with `isaac` (`idna`). On Windows `torch` comes from the `cu128`
   index. `OMNI_KIT_ACCEPT_EULA=YES` is set by the person running Isaac, never by this repo.
   `lerobot`'s `draccus` installs a top-level `tests` package, hence `tests/__init__.py`.
