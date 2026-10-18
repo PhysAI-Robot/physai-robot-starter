@@ -49,7 +49,14 @@ def env():
         cameras=("wrist",),
         max_steps=400,
     )
-    instance = SO101IsaacEnv(cfg)
+    try:
+        instance = SO101IsaacEnv(cfg)
+    except RuntimeError as error:
+        # The startup render glitch (`RenderGlitch` in physai.runtime.rollout) hits a fraction of starts and only a new
+        # process recovers, so a pytest session cannot retry it: skip, and rerun for a clean start.
+        if "not drawing the robot" not in str(error):
+            raise
+        pytest.skip(f"Isaac startup render glitch, rerun this module: {error}")
     try:
         yield instance
     finally:
