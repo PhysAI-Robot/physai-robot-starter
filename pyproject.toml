@@ -28,7 +28,7 @@ dependencies = [
     # dependency, so there is no audience that wants physai without the
     # ability to run its own test suite.
     "pytest>=9.1.1",
-    "ruff>=0.16.10",
+    "ruff>=0.17.0",
     "import-linter>=2.1",
 ]
 
@@ -59,7 +59,7 @@ webtest = ["httpx2>=2.13.1"]
 # "unsafe-best-match" below, no prerelease allowance needed) and a real
 # headless episode ran against actual Isaac Sim 6.1.0.0 on an RTX 3060.
 # See docs/DECISIONS.md, D.
-isaac = ["isaacsim[all,extscache]==6.1.0.0"]
+isaac = ["isaacsim[all,extscache]==6.2.0.0"]
 
 [[tool.uv.index]]
 name = "nvidia"
