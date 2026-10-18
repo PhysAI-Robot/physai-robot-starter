@@ -87,14 +87,14 @@ What this is not, so results are not over-read:
 - Gravity is cancelled on the arm's bodies by default (`EnvConfig.gravity_compensation`). The
   Menagerie actuators are soft and sag by centimetres under the arm's weight; the real servos hold
   their position. Turn it off to see the sag.
-- **Isaac Sim: physics works, camera rendering is not verified.** There is no URDF, so
-  `--sim isaac` imports the Menagerie MJCF with Isaac's own MJCF importer (the USD is built at
-  start-up into `.isaac_cache/viperx300s/`, not by `fetch_assets.py`). On the maintainer's RTX 3060 the
-  arm holds its home pose, both fingers close and reopen, and the cameras and scene render, but the
-  arm itself was not drawn in any camera frame, and the SO-101 failed the same render check in the
-  same session, so the cause was not isolated to this robot. Until a run shows the arm in the front
-  frame (`python scripts/verify_viperx300s_isaac.py` prints `robot drawn in the front camera`), treat
-  image-based Isaac results for ViperX 300 S as unverified. The scripted expert has not been run on Isaac.
+- **Isaac Sim.** There is no URDF, so `--sim isaac` imports the Menagerie MJCF with Isaac's own MJCF
+  importer (the USD is built at start-up into `.isaac_cache/viperx300s/`, not by `fetch_assets.py`).
+  On the maintainer's RTX 3060 the arm holds its home pose, both fingers close and reopen, and the
+  per-episode render check (`robot_is_rendered`) passes: Isaac draws the arm, both fingers and the cube
+  in the front and `video` views, from its own state and, with `--render isaac`, from MuJoCo's or
+  Newton's. An earlier session in which no arm was drawn did not recur. The scripted expert is
+  MuJoCo-only (it runs on Newton, and Isaac draws its episodes), so a pick and place on Isaac physics
+  has not been run for this arm.
   The importer does not read the position actuators' `kp`, so the drive gains in
   `robots/viperx300s/description.yaml` are transcribed from the MJCF; PhysX has no equality constraint,
   so the environment drives both fingers itself.
