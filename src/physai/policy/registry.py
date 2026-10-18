@@ -94,7 +94,8 @@ def _make_constant(*, env: Any = None, **_: Any) -> Policy:
 
     if env is not None and env.robot_spec.supports("base_velocity"):
         return ConstantTwistPolicy()
-    return ConstantPolicy()
+    joints = () if env is None else env.robot_spec.action_joint_names
+    return ConstantPolicy(len(joints) or 5)
 
 
 def _make_constant_twist(**_: Any) -> Policy:

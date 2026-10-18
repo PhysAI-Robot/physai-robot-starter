@@ -30,6 +30,19 @@ upstream terms.
   files until the upstream license and the referenced original model source
   terms are confirmed.
 
+### ViperX 300 S
+
+- Source: [google-deepmind/mujoco_menagerie](https://github.com/google-deepmind/mujoco_menagerie)
+- Downloaded path: `trossen_vx300s` (`vx300s.xml`, the meshes under `assets/`, and `LICENSE`)
+- Revision used by `scripts/fetch_assets.py`: `62ab00f2bc44f6f20c1c9b7a13f3fb1dd41a4e35`
+  (pinned)
+- Upstream license: BSD-3-Clause, Copyright (c) 2023 Trossen Robotics. The
+  downloader copies the upstream `LICENSE` next to the model; keep it if the files
+  are redistributed.
+- Note: the MJCF is derived by Menagerie from the Interbotix `vx300s.urdf.xacro`.
+  It is the single ViperX 300 S arm with its stock gripper, not the ALOHA 2
+  follower's custom gripper.
+
 ## Model checkpoints
 
 Checkpoints (for example an ACT policy you trained yourself, or a

@@ -600,6 +600,11 @@ class SO101IsaacEnv:
             ),
         )
 
+    def _render_check_camera(self) -> str:
+        """The camera `robot_is_rendered` compares: the first attached one, unless a
+        robot's own wrist camera cannot be relied on to see the robot (see ViperX 300 S)."""
+        return next(iter(self._camera_prims))
+
     def robot_is_rendered(self) -> bool:
         """Whether the cameras actually draw the robot.
 
@@ -612,7 +617,7 @@ class SO101IsaacEnv:
         from pxr import UsdGeom
 
         app = ensure_simulation_app()
-        camera = next(iter(self._camera_prims))
+        camera = self._render_check_camera()
         root = UsdGeom.Imageable(self.stage.GetPrimAtPath(self.robot_prim_path))
 
         def snapshot() -> np.ndarray:

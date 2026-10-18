@@ -26,6 +26,16 @@ requires_turtlebot_assets = pytest.mark.skipif(
 )
 
 
+VIPERX300S_ASSETS = (
+    Path(__file__).resolve().parents[1] / "assets" / "viperx300s" / "vx300s.xml"
+)
+
+requires_viperx300s_assets = pytest.mark.skipif(
+    not VIPERX300S_ASSETS.exists(),
+    reason="run `python scripts/fetch_assets.py --robot viperx300s`",
+)
+
+
 @pytest.fixture
 def env():
     from physai.robots.so101 import EnvConfig, SO101Env

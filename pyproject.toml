@@ -168,7 +168,7 @@ type = "forbidden"
 source_modules = ["physai"]
 forbidden_modules = ["isaacsim", "omni", "pxr"]
 # Only physai.sim.isaac (SimulationApp lifecycle, RobotDescription -> USD)
-# and robots.so101.isaac_env (the SO-101 RobotPort built on top of it) may
+# and robots.so101.isaac_env / robots.viperx300s.isaac_env (the RobotPorts built on top of it) may
 # depend on Isaac Sim; every other module reaches it only through the
 # RobotPort/RobotSpec ports, the way it reaches MuJoCo only through
 # physai.sim.mujoco. Every import below is function-local (Isaac Sim's own
@@ -186,6 +186,7 @@ ignore_imports = [
     "physai.robots.so101.isaac_env -> isaacsim",
     "physai.robots.so101.isaac_env -> omni",
     "physai.robots.so101.isaac_env -> pxr",
+    "physai.robots.viperx300s.isaac_env -> isaacsim",
 ]
 
 [[tool.importlinter.contracts]]

@@ -26,10 +26,20 @@ most of this, so treat the version pin as load-bearing):
   (`"gripper"` -> `"gripper_link"`); `RobotDescription`'s `parent_link`
   values are MJCF body names, so this module normalizes them for the USD
   side instead of the description needing two names per part.
+- A robot with no URDF (`urdf: ""`) is imported from its MJCF with Isaac's own
+  `isaacsim.asset.importer.mjcf` (verified on the ViperX 300 S ViperX 300 S). That
+  importer names each link prim after its MJCF body (no "_link" suffix), leaves
+  the same unselected `Physics` variant set, applies the MJCF joint limits,
+  `maxForce` (from `forcerange`) and armature, but does not read the position
+  actuator's `kp` ("Gain and bias prm arrays are not in the expected format"), so
+  drive gains still come from `desc.actuators`. An MJCF `<equality joint>` becomes
+  a Newton-only mimic API, so under PhysX a mimicked joint must be driven itself.
 """
 
 from __future__ import annotations
 
+import re
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -57,7 +67,8 @@ def import_robot(
     variant: str = DEFAULT_PHYSICS_VARIANT,
     fix_base: bool = True,
 ) -> tuple[str, str]:
-    """Import `desc.urdf`, select a physics variant, and return
+    """Import `desc.urdf` (or `desc.mjcf` when the robot has no URDF), select a
+    physics variant, and return
     `(usd_path, robot_prim_path)`. The stage is left open on the process's
     `omni.usd` context (`get_stage()` below returns it) — callers must not
     also open it via a bare `Usd.Stage.Open()`, which raced against this
@@ -70,23 +81,49 @@ def import_robot(
     is not something this project fetches or commits either.
     """
     import omni.usd
-    from isaacsim.asset.importer.urdf import URDFImporter, URDFImporterConfig
 
-    urdf_path = Path(assets_root) / desc.urdf
-    if not urdf_path.exists():
-        raise FileNotFoundError(
-            f"{urdf_path} not found — run `python scripts/fetch_assets.py` first."
+    if desc.urdf:
+        from isaacsim.asset.importer.urdf import URDFImporter, URDFImporterConfig
+
+        urdf_path = Path(assets_root) / desc.urdf
+        if not urdf_path.exists():
+            raise FileNotFoundError(
+                f"{urdf_path} not found — run `python scripts/fetch_assets.py` first."
+            )
+
+        config = URDFImporterConfig()
+        config.urdf_path = str(urdf_path)
+        config.usd_path = str(usd_out_dir)
+        config.fix_base = fix_base
+        config.merge_fixed_joints = False
+        config.collision_from_visuals = False
+
+        importer = URDFImporter(config)
+        usd_path = importer.import_urdf()
+    else:
+        from isaacsim.asset.importer.mjcf import MJCFImporter, MJCFImporterConfig
+
+        mjcf_path = Path(assets_root) / desc.mjcf
+        if not mjcf_path.exists():
+            raise FileNotFoundError(
+                f"{mjcf_path} not found — run `python scripts/fetch_assets.py` first."
+            )
+        # The importer never overwrites: a second import lands in `<stem>_1`, and so on,
+        # so clear this robot's earlier output first or the cache grows on every run.
+        for old in Path(usd_out_dir).glob(f"{mjcf_path.stem}*"):
+            if old.is_dir() and re.fullmatch(
+                rf"{re.escape(mjcf_path.stem)}(_\d+)?", old.name
+            ):
+                shutil.rmtree(old, ignore_errors=True)
+        mjcf_config = MJCFImporterConfig(
+            mjcf_path=str(mjcf_path),
+            usd_path=str(usd_out_dir),
+            import_scene=False,
+            fix_base=fix_base,
+            collision_from_visuals=False,
+            allow_self_collision=False,
         )
-
-    config = URDFImporterConfig()
-    config.urdf_path = str(urdf_path)
-    config.usd_path = str(usd_out_dir)
-    config.fix_base = fix_base
-    config.merge_fixed_joints = False
-    config.collision_from_visuals = False
-
-    importer = URDFImporter(config)
-    usd_path = importer.import_urdf()
+        usd_path = MJCFImporter(mjcf_config).import_mjcf()
 
     ctx = omni.usd.get_context()
     ctx.open_stage(usd_path)
@@ -95,8 +132,26 @@ def import_robot(
     ok = root.GetVariantSets().GetVariantSet("Physics").SetVariantSelection(variant)
     if not ok:
         raise ValueError(f"USD Physics variant {variant!r} not available in {usd_path}")
+    if not desc.urdf:
+        _strip_newton_mimic(stage)
     stage.GetRootLayer().Save()
     return usd_path, f"/{root.GetName()}"
+
+
+def _strip_newton_mimic(stage: Any) -> int:
+    """Drop the MJCF importer's `NewtonMimicAPI` from every prim and return how many.
+
+    The importer applies it for an `<equality joint>` but writes no `newton:mimicJoint`
+    target, which PhysX reports as an error on every stage load ("must have exactly 1
+    newton:mimicJoint relationship"). Only the Newton solver reads it, so a PhysX run
+    loses nothing; the robot drives the mimicking joint itself.
+    """
+    count = 0
+    for prim in stage.Traverse():
+        if "NewtonMimicAPI" in prim.GetAppliedSchemas():
+            prim.RemoveAppliedSchema("NewtonMimicAPI")
+            count += 1
+    return count
 
 
 def get_stage() -> Any:
@@ -328,18 +383,61 @@ def apply_contact_pad_colliders(stage: Any, desc: RobotDescription) -> None:
             )
 
 
+def articulation_root_path(stage: Any, robot_prim_path: str) -> str:
+    """The prim carrying `ArticulationRootAPI` under the robot, else the robot prim.
+
+    The MJCF importer puts the root on the base link rather than on the robot's
+    top prim, and `Articulation` wants the former.
+    """
+    from pxr import Usd, UsdPhysics
+
+    root = stage.GetPrimAtPath(robot_prim_path)
+    for prim in Usd.PrimRange(root):
+        if prim.HasAPI(UsdPhysics.ArticulationRootAPI):
+            return str(prim.GetPath())
+    return robot_prim_path
+
+
+def apply_gravity_compensation(stage: Any, robot_prim_path: str) -> int:
+    """Switch gravity off on every rigid link under the robot and return how many.
+
+    The Isaac analogue of MuJoCo's per-body `gravcomp = 1`: a soft position drive
+    (the ViperX's is as soft as a few N·m/rad) otherwise sags under the arm's
+    own weight, which a real servo with a gravity-compensated controller does not.
+    """
+    from pxr import PhysxSchema, Usd, UsdPhysics
+
+    count = 0
+    for prim in Usd.PrimRange(stage.GetPrimAtPath(robot_prim_path)):
+        if prim.HasAPI(UsdPhysics.RigidBodyAPI):
+            PhysxSchema.PhysxRigidBodyAPI.Apply(prim).CreateDisableGravityAttr(True)
+            count += 1
+    return count
+
+
+def ensure_physics_scene(stage: Any) -> None:
+    """Define a `/physicsScene` when the imported stage has none."""
+    from pxr import UsdPhysics
+
+    if not any(p.IsA(UsdPhysics.Scene) for p in stage.Traverse()):
+        UsdPhysics.Scene.Define(stage, "/physicsScene")
+
+
 def _geometry_subpath(stage: Any, mjcf_body_name: str) -> str | None:
-    """Find `<link>_link`'s path under `.../Geometry/`, or `None`.
+    """Find a link's path under `.../Geometry/`, or `None`: `<body>_link` for a
+    URDF import, `<body>` for an MJCF import.
 
     The importer nests links under their parent (see `robots/so101
     /description.yaml`'s link-tree comment), so this is a search, not a
     fixed depth.
     """
-    link_name = urdf_link_name(mjcf_body_name)
+    # A URDF import suffixes the link name; an MJCF import keeps the body name.
+    link_names = (urdf_link_name(mjcf_body_name), mjcf_body_name)
     root_name = stage.GetDefaultPrim().GetName()
     geometry_root = f"/{root_name}/Geometry"
-    for prim in stage.Traverse():
-        path = str(prim.GetPath())
-        if path.startswith(geometry_root) and prim.GetName() == link_name:
-            return path[len(geometry_root) + 1 :]
+    for link_name in link_names:
+        for prim in stage.Traverse():
+            path = str(prim.GetPath())
+            if path.startswith(geometry_root) and prim.GetName() == link_name:
+                return path[len(geometry_root) + 1 :]
     return None

@@ -194,7 +194,7 @@ class ArmKinematics:
             approach_dir = approach_dir / norm
 
         if q_init is not None:
-            q_init = np.asarray(q_init, dtype=np.float64).reshape(5)
+            q_init = np.asarray(q_init, dtype=np.float64).reshape(len(self.joint_names))
             if not np.isfinite(q_init).all():
                 raise ValueError("IK q_init must contain only finite values")
         if target_quat_wxyz is not None:

@@ -3,11 +3,13 @@
 Sources:
     TheRobotStudio/SO-ARM100, Simulation/SO101/
     turtlebot/turtlebot4, turtlebot4_description/
+    google-deepmind/mujoco_menagerie, trossen_vx300s/   (robot "viperx300s")
 The directory is listed via the GitHub contents API so we never hardcode mesh
 filenames (they change between calibration revisions).
 
     python scripts/fetch_assets.py --robot so101
     python scripts/fetch_assets.py --robot turtlebot4
+    python scripts/fetch_assets.py --robot viperx300s
     python scripts/fetch_assets.py --robot so101 --force
 """
 
@@ -51,6 +53,14 @@ SOURCES: dict[str, AssetSource] = {
         "e5d772caf426179b3d93eb91741965529239ae80",
         description_globs=("*.xml",),
         include=("turtlebot4.xml", "assets/meshes/*.stl", "assets/meshes/*.obj"),
+    ),
+    # The ViperX 300 S arm of the ALOHA follower (single arm, stock gripper), from
+    # MuJoCo Menagerie. Pinned like the others; see THIRD_PARTY_NOTICES.md.
+    "viperx300s": AssetSource(
+        "google-deepmind/mujoco_menagerie",
+        "trossen_vx300s",
+        "62ab00f2bc44f6f20c1c9b7a13f3fb1dd41a4e35",
+        include=("vx300s.xml", "assets/*.stl", "assets/*.png", "LICENSE"),
     ),
 }
 DEST_ROOT = Path(__file__).resolve().parents[1] / "assets"

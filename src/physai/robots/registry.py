@@ -288,6 +288,21 @@ def _load_builtins() -> None:
                 jog=so101_jog_resolver,
             ),
         )
+    if "viperx300s" not in _ROBOTS:
+        from .viperx300s.factory import viperx300s_env_config, make_viperx300s
+        from .viperx300s.scene import scene_defaults as viperx300s_scene_defaults
+
+        register_embodiment(
+            "viperx300s",
+            RobotDescriptor(
+                factory=make_viperx300s,
+                kind="fixed_base_manipulator",
+                simulators=("mujoco", "isaac"),
+                scene_defaults=viperx300s_scene_defaults,
+                default_task="single_cube_place",
+                env_config=viperx300s_env_config,
+            ),
+        )
     if "turtlebot4" not in _ROBOTS:
         from .turtlebot.env import TurtleBot4Config
         from .turtlebot.factory import make_turtlebot4

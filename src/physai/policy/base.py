@@ -48,16 +48,23 @@ class ConstantPolicy(Policy):
 
     name = "constant"
 
-    def __init__(self) -> None:
+    def __init__(self, joint_count: int = 5) -> None:
+        # Arm joints held, before the gripper. 5 is the SO-101's; a robot with a
+        # different arm passes its own (see `_make_constant`).
+        self._n = joint_count
         self._q = None
 
     def reset(self, observation: Observation, goal=None, instruction=None) -> None:
-        self._q = observation.joint_state.position[:5].copy()
+        self._q = observation.joint_state.position[: self._n].copy()
 
     def act(self, observation: Observation) -> Action:
         from ..contracts import GripperCommand
 
-        q = self._q if self._q is not None else observation.joint_state.position[:5]
+        q = (
+            self._q
+            if self._q is not None
+            else observation.joint_state.position[: self._n]
+        )
         return Action(joint_position=q, gripper=GripperCommand(position=1.0))
 
 

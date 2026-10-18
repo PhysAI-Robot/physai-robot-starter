@@ -45,6 +45,49 @@ Other entry points: FK/Jacobian/IK benchmark `uv run python scripts/benchmark_ik
 planner ships); this project's learning and vision baselines are plugins in
 [`physai-research`](https://github.com/PhysAI-Robot/physai-research).
 
+## ViperX 300 S (ALOHA follower arm)
+
+One six-joint ViperX 300 S arm from MuJoCo Menagerie (`trossen_vx300s`, BSD-3), a
+front camera and a D405-style wrist camera. It is the second manipulator for the same
+single-cube pick-and-place task, so the web viewer, the recorder, the task runtime and
+`eval_policy.py` work on it unchanged.
+
+```bash
+uv run python scripts/fetch_assets.py --robot viperx300s
+uv run python scripts/run_sim.py --manifest configs/manifests/viperx300s_single_cube_place.yaml --policy constant --serve --seed 0
+uv run python scripts/eval_policy.py --manifest research/configs/viperx300s_pick_place.yaml --policy scripted --episodes 100 --seed 1000
+```
+
+The first command is the idle robot in the browser with both cameras; the `scripted` expert is a
+research policy (`research/scripted_experts/viperx300s_pick_place_expert.py`, 100/100 on seeds
+1000-1099). Validate with `uv run python -m pytest tests/core/acceptance/viperx300s -q`.
+
+What this is not, so results are not over-read:
+
+- **The gripper is the stock ViperX two-finger gripper, not the ALOHA 2 follower's custom
+  gripper.** Menagerie's single-arm model has the stock one; the custom gripper exists only in
+  its bimanual `aloha` model. The arm's kinematics and joint limits match the ALOHA follower; the
+  fingers do not.
+- The gripper joint is a finger position in **metres** (0.021 closed, 0.057 open), while the core
+  declares joint positions in radians. The robot's `gripper_unit` metadata says so; commands use the
+  usual normalised 0 (closed) .. 1 (open).
+- Gravity is cancelled on the arm's bodies by default (`EnvConfig.gravity_compensation`). The
+  Menagerie actuators are soft and sag by centimetres under the arm's weight; the real servos hold
+  their position. Turn it off to see the sag.
+- **Isaac Sim: physics works, camera rendering is not verified.** There is no URDF, so
+  `--sim isaac` imports the Menagerie MJCF with Isaac's own MJCF importer (the USD is built at
+  start-up into `.isaac_cache/viperx300s/`, not by `fetch_assets.py`). On the maintainer's RTX 3060 the
+  arm holds its home pose, both fingers close and reopen, and the cameras and scene render, but the
+  arm itself was not drawn in any camera frame, and the SO-101 failed the same render check in the
+  same session, so the cause was not isolated to this robot. Until a run shows the arm in the front
+  frame (`python scripts/verify_viperx300s_isaac.py` prints `robot drawn in the front camera`), treat
+  image-based Isaac results for ViperX 300 S as unverified. The scripted expert has not been run on Isaac.
+  The importer does not read the position actuators' `kp`, so the drive gains in
+  `robots/viperx300s/description.yaml` are transcribed from the MJCF; PhysX has no equality constraint,
+  so the environment drives both fingers itself.
+- The wrist camera pose is the D405 mount of the Menagerie `aloha` model expressed on this arm's
+  gripper link; it is a plausible mount, not a calibrated one.
+
 ## TurtleBot4
 
 TurtleBot4 is maintained, not developed further.
