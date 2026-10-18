@@ -100,6 +100,7 @@ class ViperX300SIsaacEnv(SO101IsaacEnv):
 
     def __init__(self, cfg: ViperX300SIsaacEnvConfig | None = None) -> None:
         self.cfg = cfg or ViperX300SIsaacEnvConfig()
+        self.renderer = None  # another simulator's camera renderer, if any
         scene = self.cfg.scene
         if scene is not None:
             defaults = scene_defaults()
@@ -288,8 +289,8 @@ class ViperX300SIsaacEnv(SO101IsaacEnv):
     def training_contract(self) -> RobotTrainingContract:
         camera_config = {
             name: {
-                "width": self.core.camera_size[0],
-                "height": self.core.camera_size[1],
+                "width": self._render_size[0],
+                "height": self._render_size[1],
                 "encoding": "rgb8",
             }
             for name in self.cfg.cameras
@@ -353,6 +354,10 @@ class ViperX300SIsaacEnv(SO101IsaacEnv):
             self.data.qpos[start + 3 : start + 7] = np.asarray(orientations)[0]
         self.data.time = self.step_count * self.core.control_dt
         mujoco.mj_kinematics(self.model, self.data)
+        mujoco.mj_camlight(self.model, self.data)  # cameras for the mirror's renderers
+
+    def _mujoco_joint_name(self, dof_name: str) -> str:
+        return _LEFT_FINGER if dof_name == GRIPPER_JOINT_NAME else dof_name
 
     def send_action(self, action: Action) -> None:
         if action.joint_position is None:

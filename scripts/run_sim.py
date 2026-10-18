@@ -138,6 +138,7 @@ def build_manifest(
             camera_resolution=args.camera_resolution,
             policy=args.policy,
             simulator=args.simulator,
+            renderer=args.renderer,
         )
     except ValueError as exc:
         ap.error(str(exc))
@@ -173,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def run_episodes(args: argparse.Namespace, manifest: SessionManifest) -> int:
     if manifest.policy_for(manifest.robots[0]) == "idle":
-        if manifest.simulator != "mujoco":
+        if manifest.simulator == "isaac":
             raise SystemExit(
                 f"--policy is required for simulator {manifest.simulator!r}: the "
                 f"default headless policy ({default_headless_policy(manifest.robots[0].robot)!r}) needs "
@@ -290,7 +291,10 @@ def run_viewer(args: argparse.Namespace, manifest: SessionManifest) -> int:
         import mujoco
         import mujoco.viewer
     host, _session = build_host(args, manifest)
-    if manifest.simulator == "mujoco":
+    # Isaac Sim, as the simulator or the renderer, must be driven from the thread
+    # that created it, so the host loop takes the main thread.
+    isaac = "isaac" in (manifest.simulator, manifest.renderer)
+    if not isaac:
         host.start()
     server = None
     server_thread = None
@@ -300,7 +304,7 @@ def run_viewer(args: argparse.Namespace, manifest: SessionManifest) -> int:
 
             from physai.web.app import create_app
         except ImportError as exc:
-            if manifest.simulator == "mujoco":
+            if not isaac:
                 host.stop()
             raise SystemExit(
                 "fastapi/uvicorn are missing; reinstall with: uv sync"
@@ -314,16 +318,15 @@ def run_viewer(args: argparse.Namespace, manifest: SessionManifest) -> int:
             )
         )
         server_thread = threading.Thread(
-            target=server.run if manifest.simulator == "mujoco" else serve_on_own_loop,
-            args=() if manifest.simulator == "mujoco" else (server,),
+            target=serve_on_own_loop if isaac else server.run,
+            args=(server,) if isaac else (),
             daemon=True,
         )
         server_thread.start()
 
     try:
-        if manifest.simulator != "mujoco":
-            # Isaac Sim must be driven from the thread that created it, so
-            # the host loop takes the main thread; signals just stop it.
+        if isaac:
+            # Signals just stop the host loop on the main thread.
             print(f"Isaac host running. Web viewer: http://{args.host}:{args.port}/")
             print("Press Ctrl+C to stop.")
             signal.signal(signal.SIGINT, lambda *_: host.stop())

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ...sim.mujoco.scenes.common import REPO_ROOT
+from ...sim.workspace import ViewCamera
 from ..description import load_robot_description
 
 _DESCRIPTION_PATH = Path(__file__).resolve().parent / "description.yaml"
@@ -20,6 +21,10 @@ CUBE_POS = (0.32, 0.10, 0.034)
 # A camera 0.90 m in front of the base and 0.52 m up, looking at the table centre.
 FRONT_CAM_POS = (0.90, 0.0, 0.52)
 FRONT_CAM_XYAXES = (0.0, 1.0, 0.0, -0.68, 0.0, 0.73)
+# The `--video` view: the whole arm and the table from a diagonal.
+VIDEO_VIEW = ViewCamera(
+    lookat=(0.32, 0.0, 0.22), distance=1.35, azimuth=135.0, elevation=-30.0
+)
 
 
 def scene_defaults() -> dict[str, object]:
@@ -35,4 +40,5 @@ def scene_defaults() -> dict[str, object]:
         "cube_pos": CUBE_POS,
         "front_cam_pos": FRONT_CAM_POS,
         "front_cam_xyaxes": FRONT_CAM_XYAXES,
+        "video_view": VIDEO_VIEW,
     }

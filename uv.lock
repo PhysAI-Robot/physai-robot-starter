@@ -2138,6 +2138,10 @@ dependencies = [
 isaac = [
     { name = "isaacsim", extra = ["all", "extscache"], marker = "extra == 'extra-6-physai-isaac'" },
 ]
+newton = [
+    { name = "newton", extra = ["sim"] },
+    { name = "trimesh" },
+]
 training = [
     { name = "gymnasium" },
     { name = "lerobot", extra = ["diffusion"] },
@@ -2162,6 +2166,7 @@ requires-dist = [
     { name = "isaacsim", extras = ["all", "extscache"], marker = "extra == 'isaac'", specifier = "==6.2.0.0" },
     { name = "lerobot", extras = ["diffusion"], marker = "extra == 'training'", specifier = ">=0.6.1" },
     { name = "mujoco", specifier = ">=3.2" },
+    { name = "newton", extras = ["sim"], marker = "extra == 'newton'", specifier = ">=1.5" },
     { name = "numpy", specifier = ">=2.0" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pyyaml", specifier = ">=6.0" },
@@ -2171,9 +2176,10 @@ requires-dist = [
     { name = "torch", marker = "sys_platform != 'win32' and extra == 'training'", specifier = ">=2.7,<2.12" },
     { name = "torchvision", marker = "sys_platform == 'win32' and extra == 'training'", specifier = ">=0.22,<0.27", index = "https://download.pytorch.org/whl/cu128" },
     { name = "torchvision", marker = "sys_platform != 'win32' and extra == 'training'", specifier = ">=0.22,<0.27" },
+    { name = "trimesh", marker = "extra == 'newton'", specifier = ">=4.6.8" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.29" },
 ]
-provides-extras = ["training", "webtest", "isaac"]
+provides-extras = ["training", "webtest", "isaac", "newton"]
 
 [[package]]
 name = "pillow"

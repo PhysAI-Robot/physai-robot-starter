@@ -32,6 +32,10 @@ Schema (YAML)::
                                       # engine does not yet support `world`,
                                       # `backend: ros2_sim`, or a viewer
                                       # (validation 12).
+    renderer: mujoco                 # optional; default: the simulator's own.
+                                      # Which engine draws the cameras, so any
+                                      # simulator pairs with any renderer
+                                      # (validation 13).
 
     backend: direct                  # direct | ros2_sim | ros2_real
 
@@ -92,9 +96,11 @@ Validation performed at load time (see `load_manifest`):
     ``seed``/``domain_randomization``).
 11. ``simulator`` must be one every robot in the session supports (checked
     through the robot registry, without constructing any robot).
-12. A non-``"mujoco"`` ``simulator`` rejects a ``world`` block, ``backend:
-    ros2_sim``, and a ``viewer.mode`` other than ``none`` — none of those
-    paths support a second engine yet.
+12. A non-``"mujoco"`` ``simulator`` or ``renderer`` rejects a ``world`` block,
+    ``backend: ros2_sim``, and a ``viewer.mode`` other than ``none`` — none of
+    those paths support a second engine yet.
+13. ``renderer`` (optional; default: the simulator's own) names the engine that
+    draws the cameras, and must be one every robot supports.
 """
 
 from __future__ import annotations
@@ -234,6 +240,7 @@ class SessionManifest:
     plugins: tuple[str, ...] = ()
     backend: str = "direct"
     simulator: str = "mujoco"
+    renderer: str | None = None
     scene: SessionSceneConfig = field(default_factory=SessionSceneConfig)
     task: str | None = None
     task_kwargs: dict[str, Any] = field(default_factory=dict)
@@ -297,6 +304,9 @@ def parse_manifest(data: Any, config_path: Path) -> SessionManifest:
     simulator = data.get("simulator", "mujoco")
     if not isinstance(simulator, str) or not simulator:
         raise ValueError(f"{config_path}: manifest field 'simulator' must be a string")
+    renderer = data.get("renderer")
+    if renderer is not None and (not isinstance(renderer, str) or not renderer):
+        raise ValueError(f"{config_path}: manifest field 'renderer' must be a string")
 
     scene_data = data.get("scene") or {}
     if not isinstance(scene_data, dict):
@@ -396,6 +406,7 @@ def parse_manifest(data: Any, config_path: Path) -> SessionManifest:
         plugins=tuple(plugins),
         backend=backend,
         simulator=simulator,
+        renderer=renderer,
         scene=scene,
         task=task,
         task_kwargs=dict(data.get("task_kwargs", {})),
@@ -422,21 +433,29 @@ def validate_manifest(manifest: SessionManifest, source: Path) -> None:
 
 
 def _validate_simulator_support(manifest: SessionManifest, source: Path) -> None:
-    if manifest.simulator == "mujoco":
+    engine = next(
+        (
+            e
+            for e in (manifest.simulator, manifest.renderer)
+            if e not in (None, "mujoco")
+        ),
+        None,
+    )
+    if engine is None:
         return
+    pairing = f"simulator {manifest.simulator!r}" + (
+        f" with renderer {manifest.renderer!r}" if manifest.renderer else ""
+    )
     if manifest.backend == "ros2_sim":
-        raise ValueError(
-            f"{source}: simulator {manifest.simulator!r} does not support "
-            "backend='ros2_sim' yet"
-        )
+        raise ValueError(f"{source}: {pairing} does not support backend='ros2_sim' yet")
     if manifest.world is not None:
         raise ValueError(
-            f"{source}: simulator {manifest.simulator!r} does not support a "
+            f"{source}: {pairing} does not support a "
             "shared 'world' (or more than one robot, which implies one) yet"
         )
     if manifest.viewer.mode != "none":
         raise ValueError(
-            f"{source}: simulator {manifest.simulator!r} does not support "
+            f"{source}: {pairing} does not support "
             f"viewer.mode {manifest.viewer.mode!r} yet"
         )
 
@@ -454,6 +473,12 @@ def _validate_names_and_compatibility(manifest: SessionManifest, source: Path) -
                 f"support simulator {manifest.simulator!r}; available: "
                 f"{', '.join(supported)}"
             )
+        if manifest.renderer is not None and manifest.renderer not in supported:
+            raise ValueError(
+                f"{source}: robot {instance.id!r} ({instance.robot!r}) does not "
+                f"support renderer {manifest.renderer!r}; available: "
+                f"{', '.join(supported)}"
+            )
         task_name = manifest.task_for(instance)
         if task_name is not None and task_name not in known_tasks:
             raise ValueError(
@@ -469,11 +494,11 @@ def _validate_names_and_compatibility(manifest: SessionManifest, source: Path) -
                 "your own module needs that module in the manifest's `plugins:` list"
             )
         if policy_name != "idle":
-            engines = policy_traits(policy_name, instance.robot).simulators
-            if manifest.simulator not in engines:
+            traits = policy_traits(policy_name, instance.robot)
+            if not traits.runs_on(manifest.simulator):
                 raise ValueError(
                     f"{source}: policy {policy_name!r} does not support simulator "
-                    f"{manifest.simulator!r}; it supports: {', '.join(engines)}"
+                    f"{manifest.simulator!r}; it supports: {', '.join(traits.simulators)}"
                 )
         if scene_definition is not None:
             kind = robot_kind(instance.robot)

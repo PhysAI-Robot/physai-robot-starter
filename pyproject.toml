@@ -60,6 +60,10 @@ webtest = ["httpx2>=2.13.1"]
 # headless episode ran against actual Isaac Sim 6.1.0.0 on an RTX 3060.
 # See docs/DECISIONS.md, D.
 isaac = ["isaacsim[all,extscache]==6.2.0.0"]
+# Newton physics and the Newton camera renderer (physai.sim.newton). Not a conflict with
+# `isaac`: Isaac Sim already resolves newton and warp-lang, so both extras share one env
+# (`uv sync --extra isaac --extra newton`); see docs/DECISIONS.md, I.
+newton = ["newton[sim]>=1.5", "trimesh>=4.6.8"]  # trimesh loads the MJCF meshes
 
 [[tool.uv.index]]
 name = "nvidia"
@@ -91,6 +95,7 @@ markers = [
     "acceptance: validates a complete robot workflow",
     "slow: takes longer than a normal unit test",
     "isaac: requires isaacsim (uv sync --extra isaac); GPU-bound",
+    "newton: requires newton (uv sync --extra newton); GPU-bound",
 ]
 
 [tool.uv]
@@ -190,12 +195,28 @@ ignore_imports = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "mujoco and isaac backends stay independent"
+name = "newton/warp stay confined to the newton backend"
+type = "forbidden"
+source_modules = ["physai"]
+forbidden_modules = ["newton", "warp"]
+# Only physai.sim.newton (the SolverMuJoCo stepper and the tiled-camera renderer)
+# may import them, inside the classes that use them, so importing physai never
+# needs the newton extra. Everything else reaches Newton through a robot env
+# or a renderer object (docs/DECISIONS.md, I).
+ignore_imports = [
+    "physai.sim.newton.core -> newton",
+    "physai.sim.newton.core -> warp",
+    "physai.sim.newton.render -> newton",
+    "physai.sim.newton.render -> warp",
+]
+
+[[tool.importlinter.contracts]]
+name = "mujoco, isaac and newton backends stay independent"
 type = "independence"
-modules = ["physai.sim.mujoco", "physai.sim.isaac"]
-# Two peer engine backends under physai.sim; neither is the other's
-# implementation detail, so neither may import the other directly (a robot
-# that needs both, e.g. so101, depends on each separately).
+modules = ["physai.sim.mujoco", "physai.sim.isaac", "physai.sim.newton"]
+# Peer engine backends under physai.sim; none is another's implementation
+# detail, so none may import another directly (a robot that needs several, e.g.
+# so101, depends on each separately, and `robots.rendering` pairs them).
 
 [[tool.importlinter.contracts]]
 name = "the isaac backend does not depend on mujoco"

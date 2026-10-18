@@ -51,6 +51,7 @@ transports are registry-driven (`robots.adapters.register_adapter()`).
 | `physai.sim` | One subpackage per engine plus the neutral modules both read (`studio`: the common look; `workspace`: table, target, cubes, front camera) | Engine code in the namespace; importing `physai.sim` must never need an engine SDK |
 | `physai.sim.mujoco` | MuJoCo core, scene builders, the shared multi-robot world, rendering, simulation time | Robot-specific environment logic, ROS2 transport, any robot-name branch |
 | `physai.sim.isaac` | `SimulationApp` lifecycle, `RobotDescription` to USD, world extras, `add_workspace` | Robot-specific environment logic or task composition; importing `physai.sim.mujoco` |
+| `physai.sim.newton` | Newton's `SolverMuJoCo` stepper (`NewtonPhysics`, a mixin for a MuJoCo env) and the tiled-camera `NewtonRenderer` | Robot-specific environment logic; importing `physai.sim.mujoco` or `physai.sim.isaac` |
 | `physai.planner` | Instruction and image grounding, `Plan`, `SubGoal`, the planner registry | Control-rate motor commands; research planners |
 | `physai.policy` | Control-rate `Action` production, core baselines (`constant`, `constant_twist`, `replay`), the policy registry | Task scoring, robot discovery, checkpoint-backed inference |
 | `physai.control` | Action resolution, capability checks, rate limiting | High-level planning or task semantics |
@@ -74,7 +75,8 @@ Declared in `pyproject.toml`'s `[tool.importlinter]`, checked by `uv run lint-im
 | `physai`, `scripts/` and `tests/core/` must not import `research` | A plugin registers itself into a core registry on import, loaded by name from the manifest's `plugins:`; checked by an AST test, since `research/` may be absent |
 | `physai.robots.description` and `physai.sim.workspace` must not import `mujoco` or Isaac | Every engine's builder reads them ([DECISIONS.md C](DECISIONS.md#c-sim-neutral-data)) |
 | Only `physai.sim.isaac` and `physai.robots.so101.isaac_env` may import `isaacsim`, `omni`, `pxr` | Isaac is optional and GPU-only ([D](DECISIONS.md#d-isaac-sim-is-an-optional-peer-engine)) |
-| `physai.sim.mujoco` and `physai.sim.isaac` must not import each other; Isaac must not import `mujoco` | Peer engines |
+| Only `physai.sim.newton` may import `newton` or `warp` | Newton is an optional extra ([I](DECISIONS.md#i-three-engines-and-the-renderer-is-chosen-apart-from-the-physics)) |
+| `physai.sim.mujoco`, `physai.sim.isaac` and `physai.sim.newton` must not import each other; Isaac must not import `mujoco` | Peer engines; `physai.robots.rendering` pairs a simulator with another one's renderer |
 | A robot-name branch in generic code is a bug | `SharedWorld`, `Host` and the web client resolve behavior through `RobotSpec` capabilities or a registry. Enforced by review, not import-linter |
 
 ## Design patterns

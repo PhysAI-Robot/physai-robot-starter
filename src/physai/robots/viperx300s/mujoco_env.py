@@ -141,6 +141,7 @@ class ViperX300SEnv(MuJoCoSimulationCore):
             render=self.cfg.render,
             camera_width=self.cfg.scene.camera_width,
             camera_height=self.cfg.scene.camera_height,
+            video_view=self.cfg.scene.video_view,
         )
         self.rng = np.random.default_rng(self.cfg.seed)
 

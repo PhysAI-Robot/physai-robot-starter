@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import numpy as np
+
 from ..contracts import DEFAULT_CAMERA_RESOLUTION, parse_camera_resolution
 
 # MuJoCo's (sliding, torsional, rolling) friction; PhysX has one coefficient,
@@ -22,6 +24,44 @@ CUBE_FRICTION: tuple[float, float, float] = (1.2, 0.01, 0.0005)
 # The target pad is a visual-only disc on the table.
 TARGET_RGBA: tuple[float, float, float, float] = (0.2, 0.7, 0.35, 0.55)
 FRONT_CAMERA_FOVY_DEG: float = 48.0
+# The name a renderer answers to for the scene's `video_view` (see `ViewCamera`).
+VIDEO_CAMERA = "video"
+
+
+@dataclass(frozen=True)
+class ViewCamera:
+    """A free camera for videos, given as MuJoCo's own free-camera parameters.
+
+    It is not a model camera: no simulator's scene contains it, so it adds
+    nothing to observations, to camera randomization or to any seed. Each
+    renderer draws it on request under the name `VIDEO_CAMERA`. The camera
+    looks at `lookat` from `distance` metres away, `azimuth` degrees around z
+    (0 looks along +x, 90 along +y) and `elevation` degrees above the horizon
+    (negative looks down); the vertical field of view is MuJoCo's default
+    free-camera 45 degrees.
+    """
+
+    lookat: tuple[float, float, float]
+    distance: float
+    azimuth: float
+    elevation: float
+    fovy: float = 45.0
+
+    def pose(self) -> tuple[np.ndarray, np.ndarray]:
+        """`(position, xyaxes)`: where the camera is, and its right and up axes
+        (MuJoCo's `xyaxes` convention, which Isaac's converter also takes)."""
+        azimuth, elevation = np.radians(self.azimuth), np.radians(self.elevation)
+        forward = np.array(
+            [
+                np.cos(elevation) * np.cos(azimuth),
+                np.cos(elevation) * np.sin(azimuth),
+                np.sin(elevation),
+            ]
+        )
+        right = np.cross(forward, [0.0, 0.0, 1.0])
+        right /= np.linalg.norm(right)
+        up = np.cross(right, forward)
+        return np.asarray(self.lookat) - self.distance * forward, np.r_[right, up]
 
 
 @dataclass(frozen=True)
@@ -50,6 +90,11 @@ class WorkspaceConfig:
     camera_height: int = field(default=0, init=False)
     front_cam_pos: tuple[float, float, float] = (0.62, 0.0, 0.38)
     front_cam_xyaxes: tuple[float, ...] = (0.0, 1.0, 0.0, -0.45, 0.0, 0.9)
+    # Where `--video` looks from by default: the whole robot and the table from
+    # a diagonal. A robot's `scene_defaults` sizes it to its reach.
+    video_view: ViewCamera = ViewCamera(
+        lookat=(0.2, 0.0, 0.1), distance=0.62, azimuth=135.0, elevation=-30.0
+    )
 
     def __post_init__(self) -> None:
         self.camera_width, self.camera_height = parse_camera_resolution(
@@ -66,6 +111,8 @@ __all__ = [
     "FRONT_CAMERA_FOVY_DEG",
     "TABLE_FRICTION",
     "TARGET_RGBA",
+    "VIDEO_CAMERA",
     "CubeSpec",
+    "ViewCamera",
     "WorkspaceConfig",
 ]

@@ -21,7 +21,7 @@ def test_viperx300s_is_registered_as_a_mujoco_only_fixed_base_manipulator():
     assert "viperx300s" in available_robots()
     assert robot_kind("viperx300s") == "fixed_base_manipulator"
     assert default_task("viperx300s") == "single_cube_place"
-    assert available_simulators("viperx300s") == ("mujoco", "isaac")
+    assert available_simulators("viperx300s") == ("mujoco", "isaac", "newton")
     defaults = scene_defaults("viperx300s")
     assert defaults["robot_xml"].name == "vx300s.xml"
     assert defaults["description"].ee_site == "pinch"

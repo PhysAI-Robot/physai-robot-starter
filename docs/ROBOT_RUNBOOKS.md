@@ -40,6 +40,19 @@ MUJOCO_GL=egl uv run python scripts/run_ros2_sim.py --manifest configs/manifests
 uv run python scripts/show_ros2_contract.py    # prints every shared endpoint
 ```
 
+**Engines.** `--sim mujoco|isaac|newton` picks the physics and `--render mujoco|isaac|newton` the
+camera renderer (default: the simulator's own); every pairing runs the same manifest, for example
+`uv run python scripts/run_sim.py --sim newton --render isaac --policy demo --video`
+([decision I](DECISIONS.md#i-three-engines-and-the-renderer-is-chosen-apart-from-the-physics)).
+`demo` runs on MuJoCo and Newton; on Isaac use an observation-only policy such as `constant`.
+Newton needs `uv sync --extra newton` and a GPU; its first step compiles kernels (a few minutes
+the first time, cached after). Validate with
+`uv run python -m pytest tests/core/acceptance/so101/test_newton_env.py -q`.
+
+`--video` records the scene's diagonal `video` view (the whole arm and the table) with whichever
+renderer you chose; `--camera front|wrist` records an observation camera instead. A video ends in
+`_o` for a success and `_x` for a failure.
+
 Other entry points: FK/Jacobian/IK benchmark `uv run python scripts/benchmark_ik.py --targets 20
 --seed 0`; planner contract `uv run python scripts/plan_task.py --help` (only the scripted
 planner ships); this project's learning and vision baselines are plugins in
@@ -85,6 +98,10 @@ What this is not, so results are not over-read:
   The importer does not read the position actuators' `kp`, so the drive gains in
   `robots/viperx300s/description.yaml` are transcribed from the MJCF; PhysX has no equality constraint,
   so the environment drives both fingers itself.
+- **Newton** (`--sim newton`, `--render newton`) follows the MuJoCo environment (same MJCF, gravity
+  compensation and equality-constrained fingers); the scripted expert succeeds on it
+  (`uv run python -m pytest tests/core/acceptance/viperx300s/test_viperx300s_newton.py -q`). With
+  `--sim mujoco|newton --render isaac` Isaac draws the arm and both fingers from the other engine's state.
 - The wrist camera pose is the D405 mount of the Menagerie `aloha` model expressed on this arm's
   gripper link; it is a plausible mount, not a calibrated one.
 

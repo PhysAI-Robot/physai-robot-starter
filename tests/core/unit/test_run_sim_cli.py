@@ -121,7 +121,7 @@ def test_headless_episodes_run_from_a_manifest_and_name_their_video(
     monkeypatch.setattr(sys, "argv", [*video_run, "--out", str(out)])
     assert run_sim.main() == 0
     assert [path.stem for path in (out / "videos").iterdir()] == [
-        "mujoco_so101_demo_seed0000"
+        "mujoco_so101_demo_seed0000_x"
     ]
     # the recording is named like the video, with its meta next to it
     assert sorted(path.name for path in (out / "recordings").iterdir()) == [
@@ -132,7 +132,7 @@ def test_headless_episodes_run_from_a_manifest_and_name_their_video(
     # --name replaces the automatic prefix for both
     monkeypatch.setattr(sys, "argv", [*video_run, "--name", "mine", "--out", str(out)])
     assert run_sim.main() == 0
-    assert (out / "videos" / "mine_seed0000.mp4").exists()
+    assert (out / "videos" / "mine_seed0000_x.mp4").exists()
     assert (out / "recordings" / "mine_seed0000.npz").exists()
 
 

@@ -165,14 +165,26 @@ def add_camera_resolution(parser: argparse.ArgumentParser) -> None:
     )
 
 
+ENGINES = ("mujoco", "isaac", "newton")
+
+
 def add_simulator(parser: argparse.ArgumentParser, *, help: str | None = None) -> None:
-    """`--sim`: overrides the manifest's `simulator` field (default: mujoco)."""
+    """`--sim` and `--render`: override the manifest's `simulator` (default: mujoco)
+    and `renderer` (default: the simulator's own) fields."""
     parser.add_argument(
         "--sim",
         dest="simulator",
-        choices=("mujoco", "isaac"),
+        choices=ENGINES,
         default=None,
-        help=help or "override the manifest's simulator engine",
+        help=help or "override the manifest's simulator (physics) engine",
+    )
+    parser.add_argument(
+        "--render",
+        dest="renderer",
+        choices=ENGINES,
+        default=None,
+        help="engine that draws the cameras (default: the simulator's own); any "
+        "simulator pairs with any renderer",
     )
 
 
@@ -191,12 +203,15 @@ def add_run_outputs(parser: argparse.ArgumentParser) -> None:
         nargs="?",
         const="all",
         choices=VIDEO_MODES,
-        help="write a video per episode (`--video` or `--video all`), or only "
-        "for the episodes that fail (`--video failures`)",
+        help="write a video per episode (`--video` or `--video all`), only for "
+        "the episodes that fail (`--video failures`), or only for the ones that "
+        "succeed (`--video successes`)",
     )
     parser.add_argument(
         "--camera",
-        help="camera that --video records (default: the robot's first camera)",
+        help="camera that --video records (default: `video`, a diagonal view of the "
+        "whole robot and table that is not an observation; otherwise the robot's "
+        "first camera). Name `front` or `wrist` to record what a policy sees",
     )
     parser.add_argument(
         "--record",
@@ -215,5 +230,6 @@ def add_run_outputs(parser: argparse.ArgumentParser) -> None:
         type=_run_name,
         help="file name prefix for videos and recordings, replacing the automatic "
         "<simulator>_<robot>_<policy>; `_seed<seed>` and, on a repeat, `_02`, "
-        "`_03`, ... are still added",
+        "`_03`, ... are still added, and a video also gets `_o` (success) or "
+        "`_x` (failure) after the seed",
     )

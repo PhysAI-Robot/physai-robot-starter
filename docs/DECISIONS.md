@@ -89,7 +89,8 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   `--serve` runs the `Host` on the main thread (Isaac must stay on the thread that created
   `SimulationApp`) with uvicorn on a worker thread, and shows a display mirror refreshed from
   Isaac's joint and cube state.
-- **Install.** `isaac` is a normal extra (`uv sync --extra isaac --extra training`); it needs the
+- **Install.** (`newton` is the third engine and its own extra: [I](#i-three-engines-and-the-renderer-is-chosen-apart-from-the-physics).)
+  `isaac` is a normal extra (`uv sync --extra isaac --extra training`); it needs the
   NVIDIA index and `index-strategy = "unsafe-best-match"`, which `pyproject.toml` documents.
   `lerobot` is part of `training` so one checkpoint runs on both engines. Because
   `lerobot` wants `numpy<2.3`/`packaging<26` and Isaac pins `numpy==2.3.1`/`packaging==26.0`,
@@ -189,3 +190,50 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   (the `training` extra installs it through lerobot); without it the error says what to install.
 - **A revision pins a result.** Without one, `main` is used, which can change; a published number should
   name a commit. The evaluation JSON records the reference as given.
+
+## I. Three engines, and the renderer is chosen apart from the physics
+
+Goal: run one scene on MuJoCo, Isaac Sim or Newton, and draw it with any of the three, so a
+policy can be measured against a change of physics, of renderer, or both (`--sim` and `--render`).
+
+- **The MuJoCo model and data are the shared state.** Every SO-101 and ViperX 300 S env keeps its
+  scene in a MuJoCo `model`/`data`: the simulation itself on MuJoCo and Newton, the display
+  mirror (`_sync_mirror`) on Isaac. A renderer is any object with `render(camera) -> HxWx3 uint8`
+  and `close()` that draws from that pair (`MuJoCoRenderer`, `NewtonRenderer`, `IsaacRenderer`);
+  `robots/rendering.py:attach_renderer` swaps it onto `env.renderer`, and the factories take
+  `simulator` and `renderer` independently (default: the simulator's own). Any of the nine
+  pairings works for both robots.
+- **Newton physics is MuJoCo's solver on the GPU.** `SO101NewtonEnv` and `ViperX300SNewtonEnv`
+  are the MuJoCo envs with `step_simulation` replaced by Newton's `SolverMuJoCo` (`NewtonPhysics`):
+  the scene is exported to an MJCF beside the robot's meshes, one control period runs as a CUDA
+  graph, and the result is copied back into `data` so sites, kinematics, contacts and cameras keep
+  reading MuJoCo. It reproduces MuJoCo to within about 1e-4 rad away from contact and follows it
+  through a pick and place. Limits: no `domain_randomization` (it edits the MjModel after Newton is
+  built), a free joint's `qvel` is Newton's world-frame velocity, and contacts differ by a pad or
+  two where the gripper rests on the table. A policy that runs on MuJoCo runs on Newton
+  (`PolicyTraits.runs_on`).
+- **Isaac and Newton as renderers of someone else's state.** `NewtonRenderer` builds its own Newton
+  model from the scene MJCF with the studio's tiled floor and takes the state, the target pad and
+  the camera pose from `data` each frame. Isaac draws another simulator's state through
+  `show_state`, which writes the joint positions, the cube and the target into its stage and steps
+  once (a pose written through the tensor API reaches the cameras only after a step). Visual
+  randomization (`domain_randomization`, lighting scale, camera jitter) belongs to one engine's
+  scene, so a renderer other than the simulator refuses it.
+- **`--video` records a diagonal view, not an observation camera.** The ViperX `front` camera
+  is a task view with the arm cut off at the top edge, and a policy reads it, so it stays as it is.
+  Instead `WorkspaceConfig.video_view` (a `ViewCamera`, MuJoCo's free-camera parameters, sized per
+  robot in `scene_defaults`) is a free camera that every renderer draws on request under the name
+  `video`. It is not in any model, so it is no observation and no camera-randomization draw (adding
+  a model camera would shift every seeded jitter); `VideoObserver` renders it each step, and
+  `--camera front|wrist` records what a policy sees. File names end `_o` (success) or `_x` (failure).
+- **Same limits as Isaac (D).** Single-cube scenes for an Isaac simulator or renderer; no `world`
+  block, `backend: ros2_sim` or `viewer.mode` but `none` with a non-MuJoCo simulator or renderer;
+  `--viewer`, `SharedWorld`, the ROS2 bridge and TurtleBot stay MuJoCo-only. With Isaac in the pairing
+  `--serve` runs the `Host` on the main thread.
+- **One environment.** `newton` is an extra (`uv sync --extra isaac --extra newton --extra training`);
+  Isaac Sim already resolves `newton` and `warp-lang`, so the extras do not conflict and no
+  `[tool.uv] conflicts` entry or second Python is needed. One ordering rule: Kit brings its own warp,
+  and an Isaac app started after the pip warp has been imported comes up without `omni.usd`, so the
+  factories start Isaac first (`start_isaac_first`), and nothing may import `newton` or `warp`
+  at collection or import time (hence `find_spec`, not `importorskip`, in the Newton tests).
+  `mujoco` 3.13 is newer than the 3.11 `newton` declares and only warns.

@@ -41,7 +41,9 @@ class RunOutputs:
         metadata: dict | None = None,
     ) -> None:
         self._runtime, self._args, self._fps = runtime, args, fps
-        self._name = args.name or default_video_name(simulator, robot, policy)
+        self._name = args.name or default_video_name(
+            simulator, robot, policy, getattr(args, "renderer", None)
+        )
         self._video: VideoObserver | None = None
         self.recorder = (
             RunRecorder(
@@ -76,7 +78,12 @@ class RunOutputs:
         if video and video.frames and keep_video(self._args.video, success):
             path = write_video(
                 np.stack(video.frames),
-                next_video_stem(self._args.out / "videos", self._name, seed),
+                next_video_stem(
+                    self._args.out / "videos",
+                    self._name,
+                    seed,
+                    outcome="_o" if success else "_x",
+                ),
                 fps=int(self._fps),
             )
             print(f"  video -> {path}")

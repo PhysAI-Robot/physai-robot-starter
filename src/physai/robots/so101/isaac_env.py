@@ -54,7 +54,7 @@ from ...sim.isaac.scene import (
     checker_texture,
 )
 from ...sim.mujoco.scenes import ManipulationSceneConfig
-from ...sim.workspace import FRONT_CAMERA_FOVY_DEG, CubeSpec
+from ...sim.workspace import FRONT_CAMERA_FOVY_DEG, VIDEO_CAMERA, CubeSpec
 from ..base import RobotSpec, RobotTrainingContract
 from ..description import RobotDescription, load_robot_description
 from .contracts import (
@@ -170,6 +170,9 @@ class SO101IsaacEnv:
 
     def __init__(self, cfg: IsaacEnvConfig | None = None) -> None:
         self.cfg = cfg or IsaacEnvConfig()
+        # Another simulator's camera renderer (see `robots.rendering`); None
+        # draws with Isaac's own cameras.
+        self.renderer = None
         scene = self.cfg.scene
         if (
             getattr(scene, "floor_style", "checker") != "checker"
@@ -371,7 +374,7 @@ class SO101IsaacEnv:
         """
         if name == "front" and self.cfg.scene is not None:
             scene = self.cfg.scene
-            width, height = self.core.camera_size
+            width, height = self._render_size
             fovy_deg = FRONT_CAMERA_FOVY_DEG
             x_axis = np.asarray(scene.front_cam_xyaxes[:3], dtype=np.float64)
             y_axis = np.asarray(scene.front_cam_xyaxes[3:], dtype=np.float64)
@@ -488,8 +491,8 @@ class SO101IsaacEnv:
     def training_contract(self) -> RobotTrainingContract:
         camera_config = {
             name: {
-                "width": self.core.camera_size[0],
-                "height": self.core.camera_size[1],
+                "width": self._render_size[0],
+                "height": self._render_size[1],
             }
             for name in self.cfg.cameras
         }
@@ -612,8 +615,11 @@ class SO101IsaacEnv:
         (no arm, no shadow) while its physics works, so camera policies run
         blind and fail. The test needs no knowledge of colours: render the
         first camera with the robot shown and with it hidden; if the images
-        do not differ, the robot was never drawn.
+        do not differ, the robot was never drawn. With no Isaac rendering (cameras
+        off, or another simulator's renderer) there is nothing to check.
         """
+        if self.renderer is not None or not self.core.render_enabled:
+            return True
         from pxr import UsdGeom
 
         app = ensure_simulation_app()
@@ -647,10 +653,34 @@ class SO101IsaacEnv:
             )
 
     def render_camera(self, name: str) -> np.ndarray:
+        if self.renderer is not None:
+            return self.renderer.render(name)
         prim_path = self._camera_prims.get(name)
+        if prim_path is None and name == VIDEO_CAMERA:
+            prim_path = self._video_camera_prim()
         if prim_path is None:
             raise KeyError(f"camera {name!r} not attached to this description")
         return self.core.render_camera(prim_path)
+
+    def _video_camera_prim(self) -> str | None:
+        """The scene's `video_view` as a USD camera, made on first use and kept out
+        of `_camera_prims`, so it is never an observation or shifted by jitter."""
+        if getattr(self, "_video_prim", None) is None and self.cfg.scene is not None:
+            from ...sim.isaac.scene import add_world_camera, xyaxes_to_quat_wxyz
+
+            view = self.cfg.scene.video_view
+            position, xyaxes = view.pose()
+            width, height = self._render_size
+            self._video_prim = add_world_camera(
+                self.stage,
+                "/World_video_camera",
+                position=tuple(position),
+                quat_wxyz=xyaxes_to_quat_wxyz(tuple(xyaxes)),
+                fovy_deg=view.fovy,
+                width=width,
+                height=height,
+            )
+        return getattr(self, "_video_prim", None)
 
     def _sync_mirror(self, joint_state: JointState) -> None:
         """Copy Isaac's joint positions into the MuJoCo display mirror."""
@@ -666,12 +696,54 @@ class SO101IsaacEnv:
             self.data.qpos[start + 3 : start + 7] = np.asarray(orientations)[0]
         self.data.time = self.step_count * self.core.control_dt
         mujoco.mj_kinematics(self.model, self.data)
+        mujoco.mj_camlight(self.model, self.data)  # cameras for the mirror's renderers
+
+    def _mujoco_joint_name(self, dof_name: str) -> str:
+        """The MuJoCo joint that carries this Isaac dof's position."""
+        return dof_name
+
+    def show_state(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        """Pose the robot and the cube as another simulator's `data` has them, then
+        step once so the renderer sees it (a pose written through the tensor API
+        reaches the cameras only after a step). Isaac is only drawing here: the
+        targets equal the positions, so the arm holds still.
+        ponytail: the one step lets the cube settle by a hair; a physics-free
+        render would remove it."""
+        positions = np.asarray(self.articulation.get_dof_positions()).copy()
+        for index, name in enumerate(self.dof_names):
+            joint = mujoco.mj_name2id(
+                model, mujoco.mjtObj.mjOBJ_JOINT, self._mujoco_joint_name(name)
+            )
+            if joint >= 0:
+                positions[0, index] = data.qpos[model.jnt_qposadr[joint]]
+        self.articulation.set_dof_positions(positions)
+        self.articulation.set_dof_position_targets(positions)
+        self.articulation.set_dof_velocities(np.zeros_like(positions))
+        if self._cube_body is not None:
+            cube = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "cube_free")
+            adr = int(model.jnt_qposadr[cube])
+            self._cube_body.set_world_poses(
+                positions=[data.qpos[adr : adr + 3]],
+                orientations=[data.qpos[adr + 3 : adr + 7]],
+            )
+            self._cube_body.set_velocities(
+                linear_velocities=[[0.0, 0.0, 0.0]],
+                angular_velocities=[[0.0, 0.0, 0.0]],
+            )
+        if self._target_pad_path is not None:
+            from pxr import Gf, UsdGeom
+
+            pad = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "target_pad")
+            UsdGeom.Xformable(
+                self.stage.GetPrimAtPath(self._target_pad_path)
+            ).GetOrderedXformOps()[0].Set(Gf.Vec3d(*model.geom_pos[pad]))
+        self.core.step_simulation()
 
     def observe(self) -> Observation:
         joint_state = self._joint_state()
         self._sync_mirror(joint_state)
         images: dict[str, ImageFrame] = {}
-        if self.core.render_enabled:
+        if self.renderer is not None or self.core.render_enabled:
             for camera in self.cfg.cameras:
                 if camera not in self._camera_prims:
                     continue

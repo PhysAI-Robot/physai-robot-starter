@@ -20,8 +20,9 @@ one file and one registration call.
   sit between every policy and every robot; adding a robot is a descriptor, not a fork.
 - **Several robots, one world.** Heterogeneous robots (an arm and a mobile base today) share
   one scene, clock and viewer.
-- **Simulator and transport are independent.** MuJoCo by default, Isaac Sim optionally; direct
-  in-process calls for speed, ROS2 Jazzy topics for integration.
+- **Simulator, renderer and transport are independent.** MuJoCo, Isaac Sim or Newton for the
+  physics (`--sim`) and for drawing the cameras (`--render`), in any pairing; direct in-process
+  calls for speed, ROS2 Jazzy topics for integration.
 - **Reproducible runs.** Seeds, scenes and settings live in a session manifest; evaluation,
   demonstration collection and video recording share one episode loop.
 - **Your research stays outside the core.** Robots, the contracts and a minimal `demo` policy
@@ -147,6 +148,12 @@ finally:
   `eval_policy.py` (observation-only policies, single-cube scene). Constraints and results:
   [decision D](docs/DECISIONS.md#d-isaac-sim-is-an-optional-peer-engine) and
   `research/classical_control` in [`physai-research`](https://github.com/PhysAI-Robot/physai-research).
+- **Newton** (optional, GPU): `uv sync --extra newton` (or `--extra isaac --extra newton`, one
+  environment for all three engines). `--sim newton` steps the SO-101 and ViperX 300 S with
+  Newton's MuJoCo solver; `--render newton` draws any simulator's cameras with Newton, and
+  `--render isaac|mujoco` draws Newton's. For example
+  `uv run python scripts/run_sim.py --sim newton --render isaac --policy demo --video`. See
+  [decision I](docs/DECISIONS.md#i-three-engines-and-the-renderer-is-chosen-apart-from-the-physics).
 - **Docker.** `python docker/container.py build --cpu` (or `--gpu`), then `start`, `shell`,
   `stop`.
 
