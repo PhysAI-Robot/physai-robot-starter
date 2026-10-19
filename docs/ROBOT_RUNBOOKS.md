@@ -10,6 +10,8 @@ uv run python scripts/fetch_assets.py --robot so101
 uv run python scripts/run_sim.py --serve --seed 0
 uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --serve --seed 0
 uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_fixed_place.yaml --seed 0 --max-steps 500
+uv run python scripts/run_sim.py --manifest configs/manifests/so101_single_cube_randomized_place.yaml --serve --seed 0
+uv run python scripts/run_sim.py --manifest configs/manifests/so101_stack_cubes.yaml --policy demo --serve --seed 0
 ```
 
 The fetch includes the upstream `so101_new_calib_camera.xml` variant and its wrist camera mount
@@ -54,7 +56,7 @@ renderer you chose; `--camera front|wrist` records an observation camera instead
 `_o` for a success and `_x` for a failure.
 
 Other entry points: FK/Jacobian/IK benchmark `uv run python scripts/benchmark_ik.py --targets 20
---seed 0`; planner contract `uv run python scripts/plan_task.py --help` (only the scripted
+--seed 0`; planner contract `uv run python scripts/plan_task.py --manifest <session> --seed 3` (SO-101 and ViperX 300 S; only the scripted
 planner ships); this project's learning and vision baselines are plugins in
 [`physai-research`](https://github.com/PhysAI-Robot/physai-research).
 
@@ -67,7 +69,8 @@ single-cube pick-and-place task, so the web viewer, the recorder, the task runti
 
 ```bash
 uv run python scripts/fetch_assets.py --robot viperx300s
-uv run python scripts/run_sim.py --manifest configs/manifests/viperx300s_single_cube_place.yaml --policy constant --serve --seed 0
+uv run python scripts/run_sim.py --manifest configs/manifests/viperx300s_single_cube_fixed_place.yaml --policy constant --serve --seed 0
+uv run python scripts/run_sim.py --manifest configs/manifests/viperx300s_single_cube_randomized_place.yaml --policy constant --serve --seed 0
 uv run python scripts/eval_policy.py --manifest research/configs/viperx300s_pick_place.yaml --policy scripted --episodes 100 --seed 1000
 ```
 

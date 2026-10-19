@@ -21,6 +21,33 @@ instruction + camera images -> Planner -> Plan (sub-goals, optional waypoints)
 The runnable baseline is the SO-101 `demo` policy (the scripted planner with `PlanRunner`);
 your own planners, VLA policies and scenes plug into the same boundaries as plugins.
 
+### Planner, policy and `PlanRunner`
+
+- **A policy is what gets run.** It maps an observation to an action at the control rate, and
+  `eval_policy.py` measures any of them the same way: the scripted expert, ACT, visual servo, the
+  core `demo`. One pick-and-place, or a whole sorting episode whose order is fixed in code, fits
+  inside one policy.
+- **A planner decides what to do, and in what order.** It runs once per episode and returns a
+  `Plan`: a list of sub-goals (a waypoint and a gripper command each). It earns its place when the
+  goal needs decisions: which cube first, where each one goes, how high to release when stacking,
+  or reading all that from an instruction or an image. For one cube the plan is a fixed
+  sequence (pick, carry, release) and adds little.
+- **`PlanRunner` is a policy that executes a plan.** Each tick it solves IK toward the active
+  sub-goal's waypoint and moves on when it is reached. It is the only plan executor today and does
+  not hand sub-goals to other policies. `Policy.reset(goal=...)` is the seam for that, with no code
+  behind it yet.
+
+Today the core `demo` is a planner plus `PlanRunner`, packaged as one policy. For one cube the
+planner is `ScriptedPlanner`: a fixed sequence, no decisions. For the `stack_cubes` task it is `StackPlanner`,
+the first core plan that decides something: the order, the height of each level, how high a
+cube is carried over the tower, and that each cube goes on the one below it wherever that
+cube is now. The SO-101 stacks three: its top-down grasp reaches about 0.09 m and the third
+level needs 0.106 m, so it picks top-down and puts each cube down from the side, with a flat
+gripper, which reaches that height 0.32 m out (a waypoint's orientation carries the tilt and
+roll; see `approach_orientation`). The research sorting expert is a single policy that holds
+its own order, and `SortingPlanner` only turns one colour word of an instruction into a
+four-step plan.
+
 ## Execution modes
 
 A simulator simulates; ROS2 transports. They are independent axes:
@@ -120,6 +147,32 @@ boundaries) changes only with an entry in [DECISIONS.md](DECISIONS.md), a versio
 the contract (for example `SessionManifest.schema_version`) and a deprecation window of one
 minor version.
 
+## CLI conventions
+
+Every script builds its parser with `scripts/_cli.py:new_parser` (the first docstring line is the
+`--help` description, the rest the examples) and takes shared flags from
+`scripts/_common_args.py`, so the same flag means the same thing everywhere.
+
+- **A script that drives a robot takes `--manifest`**, builds the session from it
+  (`open_mujoco_session` for a script that moves the robot itself) and reads
+  `session.runtime.robot`. It never imports one robot's package: what differs between robots
+  (grasp pose, joint count, IK settings) sits behind the robot's own methods, for example
+  `grasp_reach` behind `scripts/workspace_map.py`. `tests/core/boundaries/test_import_boundaries.py`
+  fails on a script that imports `physai.robots.<robot>`, apart from the exceptions it lists.
+- **`--robot` is for the scripts with no session**: `fetch_assets.py` (which assets to download),
+  `export_scene.py` (scene defaults), `run_ros2_sim.py` (which node, also readable from `--manifest`)
+  and the navigation tools.
+
+| Flag | Meaning | Scripts |
+| --- | --- | --- |
+| `--manifest` | Session manifest whose robot, scene and settings the script uses (default: the SO-101 single-cube session) | the run, evaluation and robot-driving scripts |
+| `--sim`, `--render` | Override the manifest's physics engine; the engine that draws the cameras (default: the physics engine's own) | `run_sim.py`, `eval_policy.py` (`--sim` also `sweep_difficulty.py`) |
+| `--policy`, `--policy-arg`, `--checkpoint` | Policy to run, a constructor option as `KEY=VALUE` (repeatable), a checkpoint directory or `hf:<owner>/<repo>/<subfolder>` | `run_sim.py`, `eval_policy.py`, `sweep_difficulty.py` |
+| `--seed`, `--episodes`, `--max-steps` | Seed of the first episode (episode N uses seed + N), number of episodes, episode length in control steps (default: the manifest's) | `run_sim.py`, the evaluation scripts (`plan_task.py` takes `--seed` and `--max-steps`, `teleop_keyboard.py` `--seed`) |
+| `--camera-res` | Camera render resolution | `run_sim.py`, `eval_policy.py` |
+| `--out`, `--json` | Where to write the outputs (a directory or file); a machine-readable result file | evaluation, report and benchmark scripts |
+| `--video` | Write a video per episode (`all`, `failures` or `successes`) | `run_sim.py`, `eval_policy.py` |
+
 ## Stable contracts
 
 `Observation` carries joint state, named image frames, an optional end-effector pose, step
@@ -142,7 +195,8 @@ combination fails during composition.
 - `RobotPort` owns observation acquisition, action dispatch, lifecycle and the robot-specific
   mapping of joint names, units, gripper range, cameras and frames.
 - `KinematicsPort` owns FK, IK, Jacobian and pinch-frame operations. Kinematics are
-  embodiment-specific (the SO-101's is `robots/so101/kinematics.py`); tasks and policies
+  embodiment-specific: the solver is shared (`robots/arm_kinematics.py`) and each arm fixes its
+  joints, site and pinch offset (`robots/<robot>/kinematics.py`); tasks and policies
   request capabilities (`joint_position`, `arm_kinematics`, `base_velocity`, `odometry`),
   never robot names.
 
@@ -162,7 +216,13 @@ maintained, not a development focus ([ROADMAP.md](../ROADMAP.md)).
 Task scenes build on `sim/workspace.py` (`WorkspaceConfig`); each scene describes its cubes
 through `cubes()`, builds MuJoCo through `build_spec()`/`build_model()` and names its
 arrangement through `layout_kind`, which the robot maps to a layout strategy
-(`robots/so101/layout.py`). A new arrangement adds a layout, not an environment edit.
+(`robots/layout.py`, shared; each robot keeps its spawn defaults). A new arrangement adds a
+layout, not an environment edit.
+
+How an arm grasps (pinch height above the cube, hover, lift, gripper values, wrist direction) is
+the robot's `grasp_profile()` (`robots/reach.py:GraspProfile`). `grasp_reach` (behind
+`scripts/workspace_map.py`), the `ScriptedPlanner` and `scripts/plan_task.py` all read it, so a
+new arm states those numbers once.
 
 ## Session manifest
 

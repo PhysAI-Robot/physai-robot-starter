@@ -157,10 +157,14 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   `scene.overrides` in the researcher's manifest. A genuinely new scene registers itself with
   `register_scene`. Scenes are `ManipulationSceneConfig` today; anything else needs a seam
   extension in core first.
-- **Core still moves a robot.** `so101`'s `demo` policy (`ScriptedPlanner` + `PlanRunner`, true
-  object poses, open-loop) is the minimal proof that a policy drives the arm and the default of
-  `run_sim.py` and `eval_policy.py`. It is a demo, not a baseline to beat; a researcher's
-  expert, visual servo or ACT checkpoint comes from their plugin.
+- **Core still moves a robot.** `so101`'s `demo` policy (a planner plus `PlanRunner`, true
+  object poses, which looks each cube up again before it descends) is the minimal proof that a
+  policy drives the arm and the default of `run_sim.py` and `eval_policy.py`. It plans the
+  single cube with `ScriptedPlanner` and the `stack_cubes` task with `StackPlanner`, the one
+  core planner that decides something (order, level heights, carry height, and, when the
+  arm's top-down grasp is too low for the tower, the tilt and roll of each waypoint). It is a demo, not a
+  baseline to beat; a researcher's expert, visual servo or ACT checkpoint comes from their
+  plugin. Language grounding stays out of core: `StackPlanner` takes an order, not a sentence.
 - **A policy declares its own traits.** `register_policy` and `register_robot_policy` take
   `PolicyTraits` (`needs_images`, `simulators`); manifest validation rejects a policy on an
   engine it does not list, and `eval_policy.py` renders cameras from `needs_images`. A policy
