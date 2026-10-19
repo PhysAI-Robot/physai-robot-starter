@@ -148,6 +148,10 @@ finally:
   `eval_policy.py` (observation-only policies, single-cube scene). Constraints and results:
   [decision D](docs/DECISIONS.md#d-isaac-sim-is-an-optional-peer-engine) and
   `research/classical_control` in [`physai-research`](https://github.com/PhysAI-Robot/physai-research).
+  The Isaac Sim packages are large, and `uv` gives up on a download after 30 s by default
+  (`Failed to download ... network timeout`). Rerun with a longer limit: `$env:UV_HTTP_TIMEOUT=600`
+  in PowerShell, `export UV_HTTP_TIMEOUT=600` in bash. The packages already downloaded are cached,
+  and a failed sync left the environment as it was.
 - **Newton** (optional, GPU): `uv sync --extra newton` (or `--extra isaac --extra newton`, one
   environment for all three engines). `--sim newton` steps the SO-101 and ViperX 300 S with
   Newton's MuJoCo solver; `--render newton` draws any simulator's cameras with Newton, and
