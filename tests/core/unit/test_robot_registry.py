@@ -163,10 +163,12 @@ def test_so101_factory_dispatches_on_simulator_not_a_separate_adapter(monkeypatc
     `adapter` still wraps either one — there is no `direct_isaac` adapter.
     """
     from physai.robots import DirectAdapter
-    from physai.robots.so101 import isaac_env
+    from physai.robots.so101 import factory, isaac_env
     from physai.robots.so101.factory import make_so101
 
     built: list[object] = []
+    # Without this the factory launches a real Isaac app (isaacsim is not in CI).
+    monkeypatch.setattr(factory, "start_isaac_first", lambda simulator, renderer: None)
 
     class FakeIsaacEnv:
         def __init__(self, config):
