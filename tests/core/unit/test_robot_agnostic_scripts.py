@@ -74,3 +74,43 @@ def test_plan_task_plans_on_the_manifests_scene(monkeypatch, capsys, manifest, j
     )
     assert plan_task.main() == 0
     assert "planner: scripted_planner" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("manifest", "robot"),
+    [
+        pytest.param(
+            "configs/manifests/so101_single_cube_fixed_place.yaml",
+            "so101",
+            marks=requires_assets,
+        ),
+        pytest.param(
+            "configs/manifests/viperx300s_single_cube_fixed_place.yaml",
+            "viperx300s",
+            marks=requires_viperx300s_assets,
+        ),
+    ],
+)
+def test_export_scene_writes_the_manifests_scene(
+    monkeypatch, capsys, tmp_path, manifest, robot
+):
+    export_scene = _script(monkeypatch, "export_scene")
+    out = tmp_path / "scene.xml"
+    monkeypatch.setattr(
+        sys, "argv", ["export_scene.py", "--manifest", manifest, "--out", str(out)]
+    )
+    assert export_scene.main() == 0
+    assert "<mujoco" in out.read_text(encoding="utf-8")
+    assert f"assets/{robot}/" in capsys.readouterr().out
+
+
+def test_export_scene_says_so_when_the_robot_has_no_scene(monkeypatch):
+    export_scene = _script(monkeypatch, "export_scene")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["export_scene.py", "--manifest", "configs/manifests/turtlebot4.yaml"],
+    )
+    with pytest.raises(SystemExit) as stopped:
+        export_scene.main()
+    assert stopped.value.code == 2

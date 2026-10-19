@@ -157,7 +157,11 @@ def print_policies(manifest_path: Path, *, exclude: tuple[str, ...] = ()) -> int
 
 
 def add_out(
-    parser: argparse.ArgumentParser, *, default: Path, help: str, metavar: str = "FILE"
+    parser: argparse.ArgumentParser,
+    *,
+    default: Path | None,
+    help: str,
+    metavar: str = "FILE",
 ) -> None:
     """`--out` as a single output file (scripts that write many files use
     `--out DIR`; see the CLI conventions in docs/ARCHITECTURE.md)."""

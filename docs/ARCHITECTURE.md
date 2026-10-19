@@ -160,12 +160,12 @@ Every script builds its parser with `scripts/_cli.py:new_parser` (the first docs
   `grasp_reach` behind `scripts/workspace_map.py`. `tests/core/boundaries/test_import_boundaries.py`
   fails on a script that imports `physai.robots.<robot>`, apart from the exceptions it lists.
 - **`--robot` is for the scripts with no session**: `fetch_assets.py` (which assets to download),
-  `export_scene.py` (scene defaults), `run_ros2_sim.py` (which node, also readable from `--manifest`)
-  and the navigation tools.
+  `run_ros2_sim.py` (which node; also readable from `--manifest`, and one of the two is required:
+  no script picks a robot for you) and the navigation tools, which are TurtleBot-only for now.
 
 | Flag | Meaning | Scripts |
 | --- | --- | --- |
-| `--manifest` | Session manifest whose robot, scene and settings the script uses (default: the SO-101 single-cube session) | the run, evaluation and robot-driving scripts |
+| `--manifest` | Session manifest whose robot, scene and settings the script uses (default: the SO-101 single-cube session) | the run, evaluation and robot-driving scripts, and `export_scene.py` |
 | `--sim`, `--render` | Override the manifest's physics engine; the engine that draws the cameras (default: the physics engine's own) | `run_sim.py`, `eval_policy.py` (`--sim` also `sweep_difficulty.py`) |
 | `--policy`, `--policy-arg`, `--checkpoint` | Policy to run, a constructor option as `KEY=VALUE` (repeatable), a checkpoint directory or `hf:<owner>/<repo>/<subfolder>` | `run_sim.py`, `eval_policy.py`, `sweep_difficulty.py` |
 | `--seed`, `--episodes`, `--max-steps` | Seed of the first episode (episode N uses seed + N), number of episodes, episode length in control steps (default: the manifest's) | `run_sim.py`, the evaluation scripts (`plan_task.py` takes `--seed` and `--max-steps`, `teleop_keyboard.py` `--seed`) |

@@ -19,7 +19,7 @@ def main() -> int:
     add_robot(
         parser,
         choices=available_robots(),
-        help="robot to drive (default: the manifest's, or so101)",
+        help="robot to drive (default: the manifest's); give this or --manifest",
     )
     parser.add_argument(
         "--manifest",
@@ -55,7 +55,8 @@ def main() -> int:
                 f"{manifest.robots[0].robot!r}"
             )
         config = robot_env_config(manifest)
-    robot = robot or "so101"
+    if robot is None:
+        parser.error("give --manifest or --robot: there is no default robot")
     rclpy.init()
     node = rclpy.create_node(f"{robot}_mujoco_driver")
     driver = None
