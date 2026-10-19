@@ -20,6 +20,31 @@ DEFAULT_MANIFEST = Path("configs/manifests/so101_single_cube_fixed_place.yaml")
 SORTING_MANIFEST = Path("configs/manifests/so101_sorting.yaml")
 
 
+def add_manifest(parser: argparse.ArgumentParser, *, help: str | None = None) -> None:
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=DEFAULT_MANIFEST,
+        help=help or "session manifest whose robot and scene the script uses",
+    )
+
+
+def open_mujoco_session(manifest_path: Path, *, render: bool = False, **overrides):
+    """The manifest's session on MuJoCo with an idle policy, for scripts that drive the robot.
+
+    `overrides` are `with_overrides` fields (`seed`, `max_steps`, ...). Any robot of a
+    one-robot manifest works: the script reads `session.runtime.robot`, never a robot module.
+    """
+    from physai.config import load_manifest
+    from physai.config.compat import with_overrides
+    from physai.runtime import create_session
+
+    manifest = with_overrides(
+        load_manifest(manifest_path), simulator="mujoco", policy="idle", **overrides
+    )
+    return create_session(manifest, render=render)
+
+
 def add_seed(
     parser: argparse.ArgumentParser, *, default: int | None = 0, help: str | None = None
 ) -> None:

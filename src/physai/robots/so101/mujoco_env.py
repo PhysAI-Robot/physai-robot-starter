@@ -23,6 +23,8 @@ from ...contracts import (
 )
 from ...control.resolver import TwistToJointResolver
 from ...robots.base import RobotSpec, RobotTrainingContract
+from ...robots.reach import GraspProfile, GraspReach, grasp_reach_at
+
 from ...sim.mujoco.core import MuJoCoSimulationCore
 from ...sim.mujoco.domain_randomization import (
     DomainRandomizationConfig,
@@ -49,6 +51,24 @@ from .layout import (
     create_layout,
 )
 from .scene import scene_defaults
+
+# How this arm grasps: pinch point at the cube centre, no lift, wrist top-down, the gripper
+# open until the pinch point is at the cube. A tower is built from the side (`place_tilt` 0):
+# the top-down grasp reaches no higher than about 0.09 m, and a flat gripper reaches 0.05 m
+# and up out at 0.32 m.
+SO101_GRASP = GraspProfile(
+    grasp_dz=0.0,
+    hover=0.045,
+    carry=0.0,
+    place_hover_dz=0.055,
+    release_dz=0.029,
+    grip_open=0.55,
+    grip_hold=0.06,
+    approach_dir=(0.0, 0.0, -1.0),
+    open_descent=True,
+    place_tilt=0.0,
+    place_tilt_min_z=0.05,
+)
 
 HOME_QPOS = np.array([0.0, -1.05, 1.25, 0.75, 0.0], dtype=np.float64)
 
@@ -476,3 +496,43 @@ class SO101Env(MuJoCoSimulationCore):
         same method, backed by observed joint state instead.
         """
         return self.kin.pinch_center(self.data)
+
+    def grasp_profile(self) -> GraspProfile:
+        """How this arm grasps a cube."""
+        return SO101_GRASP
+
+    def grasp_reach_defaults(self) -> dict[str, float]:
+        """Pinch height, hover clearance and carry lift `grasp_reach` uses unless told."""
+        return self.grasp_profile().reach_defaults(self.rest_z)
+
+    def grasp_reach(
+        self,
+        x: float,
+        y: float,
+        *,
+        z: float | None = None,
+        hover: float | None = None,
+        carry: float | None = None,
+        tilt: float = 90.0,
+        q_init: np.ndarray | None = None,
+    ) -> GraspReach:
+        """Whether the arm grasps an object at (x, y) with the gripper `tilt` degrees below horizontal.
+
+        90 is top-down; below that the gripper points away from the base along (x, y).
+        `q_init` is a joint-state position vector to start the IK from (default: the
+        kinematics' own)."""
+        phi, t = np.arctan2(y, x), np.radians(tilt)
+        direction = np.array(
+            [np.cos(phi) * np.cos(t), np.sin(phi) * np.cos(t), -np.sin(t)]
+        )
+        return grasp_reach_at(
+            self.kin,
+            self.grasp_reach_defaults(),
+            x,
+            y,
+            direction,
+            z=z,
+            hover=hover,
+            carry=carry,
+            q_init=q_init,
+        )

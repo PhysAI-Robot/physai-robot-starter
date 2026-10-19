@@ -15,14 +15,10 @@ from pathlib import Path
 import _bootstrap  # noqa: F401
 import numpy as np
 from _cli import new_parser
-from _common_args import add_max_steps, add_robot, add_seed
+from _common_args import add_manifest, add_max_steps, add_seed, open_mujoco_session
 
 from physai.planner import ScriptedPlanner
 from physai.policy.plan_runner import PlanRunner
-from physai.robots import create_robot
-from physai.robots.so101 import EnvConfig
-from physai.sim.mujoco import SingleCubePlaceSceneConfig
-from physai.tasks import TaskRuntime, create_task
 
 
 def main() -> int:
@@ -32,12 +28,7 @@ def main() -> int:
         default="put the red cube on the green pad",
         help="natural-language task given to the planner",
     )
-    add_robot(
-        ap,
-        default="so101",
-        choices=["so101"],
-        help="plan_task currently supports the SO-101 manipulation workflow",
-    )
+    add_manifest(ap, help="single-cube session manifest whose robot executes the plan")
     add_seed(ap)
     add_max_steps(ap, default=800)
     ap.add_argument("--dry-run", action="store_true", help="print the plan and exit")
@@ -49,16 +40,10 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    robot = create_robot(
-        args.robot,
-        config=EnvConfig(
-            scene=SingleCubePlaceSceneConfig(),
-            seed=args.seed,
-            max_steps=args.max_steps,
-            render=True,
-        ),
+    session = open_mujoco_session(
+        args.manifest, render=True, seed=args.seed, max_steps=args.max_steps
     )
-    env = TaskRuntime(robot, create_task("single_cube_place"))
+    env = session.runtime.robot
     obs = env.reset(seed=args.seed)
 
     if args.out:
@@ -70,7 +55,8 @@ def main() -> int:
             iio.imwrite(frames / f"{name}.png", frame.data)
         print(f"frames -> {frames}")
 
-    planner = ScriptedPlanner(env.cube_pos, env.target_pos)
+    profile = env.grasp_profile()
+    planner = ScriptedPlanner(env.cube_pos, env.target_pos, profile)
     plan = planner.plan(args.instruction, obs)
     print(f"\nplanner: {planner.name}")
     print(f"notes:   {plan.notes}\n")
@@ -91,7 +77,7 @@ def main() -> int:
         print(f"\nplan -> {args.out / 'plan.json'}")
 
     if args.dry_run or not plan.subgoals:
-        env.close()
+        session.close()
         return 0
 
     print(
@@ -99,14 +85,21 @@ def main() -> int:
         f"target={np.round(env.target_pos, 3)}"
     )
 
-    runner = PlanRunner(env.kin, plan, dt=env.control_dt)
+    runner = PlanRunner(
+        env.kin,
+        plan,
+        dt=env.control_dt,
+        approach_dir=profile.approach_dir,
+        ik_kwargs=profile.ik_kwargs,
+        locate=lambda name: env.cube_pos if name == "cube" else None,
+    )
     runner.reset(obs)
     info: dict = {}
     for _ in range(args.max_steps):
         obs, _, terminated, truncated, info = env.step(runner.act(obs))
         runner.note_progress(
             env.kin.pinch_center(env.data),
-            env.joint_to_gripper(obs.joint_state.position[5]),
+            env.joint_to_gripper(obs.joint_state.position[len(env.kin.joint_names)]),
         )
         if runner.done or terminated or truncated:
             break
@@ -116,7 +109,7 @@ def main() -> int:
         f"success={bool(info.get('success'))}  "
         f"dist_cube_target={info['dist_cube_target']:.3f}"
     )
-    env.close()
+    session.close()
     return 0
 
 

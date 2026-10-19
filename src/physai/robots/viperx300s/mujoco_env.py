@@ -28,6 +28,8 @@ from ...contracts import (
     Vector3,
 )
 from ...robots.base import RobotSpec, RobotTrainingContract
+from ...robots.reach import GraspProfile, GraspReach, grasp_reach_at
+
 from ...sim.mujoco.core import MuJoCoSimulationCore
 from ...sim.mujoco.domain_randomization import (
     DomainRandomizationConfig,
@@ -38,7 +40,7 @@ from ...sim.mujoco.scenes import (
     ManipulationSceneConfig,
     SingleCubePlaceSceneConfig,
 )
-from ..so101.layout import create_layout
+from ..layout import create_layout
 from .contracts import (
     ALL_JOINT_NAMES,
     ARM_JOINT_NAMES,
@@ -48,6 +50,21 @@ from .kinematics import ViperX300SKinematics
 from .scene import scene_defaults
 
 # The Menagerie keyframe "home": arm folded up and forward, fingers open.
+# How this arm grasps: the stock fingertips reach 0.036 m below the pinch site, so the
+# pinch point is held 0.026 m above the cube centre; the wrist is pinned top-down.
+VIPERX300S_GRASP = GraspProfile(
+    grasp_dz=0.026,
+    hover=0.08,
+    carry=0.05,
+    place_hover_dz=0.09,
+    release_dz=0.03,
+    grip_open=1.0,
+    grip_hold=0.0,
+    approach_dir=(0.0, 0.0, -1.0),
+    open_descent=True,
+    ik_kwargs={"max_iters": 400},
+)
+
 HOME_QPOS = np.array([0.0, -0.96, 1.16, 0.0, -0.3, 0.0], dtype=np.float64)
 
 # MJCF names. The robot exposes the finger as `gripper`; the model calls the driven
@@ -450,3 +467,41 @@ class ViperX300SEnv(MuJoCoSimulationCore):
     def pinch_center(self) -> np.ndarray:
         """Where the gripper's pinch point currently is."""
         return self.kin.pinch_center(self.data)
+
+    def grasp_profile(self) -> GraspProfile:
+        """How this arm grasps a cube."""
+        return VIPERX300S_GRASP
+
+    def grasp_reach_defaults(self) -> dict[str, float]:
+        """Pinch height, hover clearance and carry lift `grasp_reach` uses unless told."""
+        return self.grasp_profile().reach_defaults(self.rest_z)
+
+    def grasp_reach(
+        self,
+        x: float,
+        y: float,
+        *,
+        z: float | None = None,
+        hover: float | None = None,
+        carry: float | None = None,
+        tilt: float = 90.0,
+        q_init: np.ndarray | None = None,
+    ) -> GraspReach:
+        """Whether the arm grasps at (x, y) top-down, fingers closing along the world y axis.
+
+        This is the grasp the expert asks for, so `tilt` can only be 90. `q_init` is a
+        joint-state position vector to start the IK from (default: the kinematics' own)."""
+        if tilt != 90.0:
+            raise ValueError("the ViperX 300 S grasps top-down only (tilt 90)")
+        return grasp_reach_at(
+            self.kin,
+            self.grasp_reach_defaults(),
+            x,
+            y,
+            np.array([0.0, 0.0, -1.0]),
+            z=z,
+            hover=hover,
+            carry=carry,
+            q_init=q_init,
+            max_iters=400,
+        )

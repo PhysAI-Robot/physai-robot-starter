@@ -4,6 +4,7 @@ Exercises the same `Twist -> TwistToJointResolver -> Action` chain that a VLA
 policy will use, so if teleop feels right, the closed-loop path is wired right.
 
     python scripts/teleop_keyboard.py
+    python scripts/teleop_keyboard.py --manifest configs/manifests/viperx300s_single_cube_fixed_place.yaml
 
 Keys (press inside the viewer window):
     W / S   +x / -x        A / D   +y / -y        Q / E   +z / -z
@@ -17,11 +18,10 @@ from __future__ import annotations
 import _bootstrap  # noqa: F401
 import numpy as np
 from _cli import new_parser
-from _common_args import add_seed
+from _common_args import add_manifest, add_seed, open_mujoco_session
 
 from physai.contracts import GripperCommand, Twist, Vector3
 from physai.control import TwistToJointResolver
-from physai.robots.so101 import EnvConfig, SO101Env
 
 KEYMAP = {
     ord("W"): ("lin", 0, +1.0),
@@ -36,12 +36,14 @@ KEYMAP = {
 def main() -> int:
     ap = new_parser(__doc__)
     ap.add_argument("--speed", type=float, default=0.06, help="m/s per key press")
+    add_manifest(ap, help="session manifest whose robot is jogged")
     add_seed(ap)
     args = ap.parse_args()
 
     import mujoco.viewer
 
-    env = SO101Env(EnvConfig(seed=args.seed, render=False, max_steps=10**9))
+    session = open_mujoco_session(args.manifest, seed=args.seed, max_steps=10**9)
+    env = session.runtime.robot
     obs = env.reset()
     resolver = TwistToJointResolver(env.kin, env.data, dt=env.control_dt)
 
@@ -76,7 +78,7 @@ def main() -> int:
             state["lin"] *= 0.6
             viewer.sync()
 
-    env.close()
+    session.close()
     return 0
 
 
