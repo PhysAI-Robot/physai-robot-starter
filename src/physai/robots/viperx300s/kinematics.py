@@ -1,6 +1,6 @@
 """Forward kinematics and damped-least-squares IK for the ALOHA follower arm.
 
-The SO-101 solver (`..so101.kinematics.ArmKinematics`) is joint-count agnostic; this
+The shared arm solver (`..arm_kinematics.ArmKinematics`) is joint-count agnostic; this
 subclass only fixes what is specific to the ViperX 300 S: six joints, the `pinch`
 site at the fingertip centre (so the pinch offset is zero), and a top-down grasp
 whose fingers close along the world y axis.
@@ -11,7 +11,7 @@ from __future__ import annotations
 import mujoco
 import numpy as np
 
-from ..so101.kinematics import TOP_DOWN, ArmKinematics, IKResult, top_down_quat
+from ..arm_kinematics import TOP_DOWN, ArmKinematics, IKResult, top_down_quat
 from .contracts import ARM_JOINT_NAMES
 
 # The `pinch` site is already at the fingertip centre, so there is no offset to add.
@@ -27,13 +27,7 @@ class ViperX300SKinematics(ArmKinematics):
         ee_site: str = "pinch",
         joint_names: tuple[str, ...] = ARM_JOINT_NAMES,
     ) -> None:
-        super().__init__(model, ee_site=ee_site, joint_names=joint_names)
-
-    def pinch_center(self, data: mujoco.MjData, offset=PINCH_OFFSET) -> np.ndarray:
-        return super().pinch_center(data, offset)
-
-    def pinch_center_from_qpos(self, q, offset=PINCH_OFFSET) -> np.ndarray:
-        return super().pinch_center_from_qpos(q, offset)
+        super().__init__(model, ee_site, joint_names, PINCH_OFFSET)
 
     def ik_pinch(
         self,
@@ -41,7 +35,7 @@ class ViperX300SKinematics(ArmKinematics):
         approach_dir=TOP_DOWN,
         q_init=None,
         *,
-        pinch_offset=PINCH_OFFSET,
+        pinch_offset=None,
         yaw: float | None = 0.0,
         **ik_kwargs,
     ) -> IKResult:
