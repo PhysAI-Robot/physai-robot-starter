@@ -1,6 +1,6 @@
 # The single-cube pick-and-place session for the ALOHA follower arm (ViperX 300 S).
 # Fetch the model once:   python scripts/fetch_assets.py --robot viperx300s
-# Run it with:            python scripts/run_sim.py --manifest configs/manifests/viperx300s_single_cube_place.yaml --policy constant --serve
+# Run it with:            python scripts/run_sim.py --manifest configs/manifests/viperx300s_single_cube_fixed_place.yaml --policy constant --serve
 # The scripted expert is a research policy: research/configs/viperx300s_pick_place.yaml.
 schema_version: 1
 

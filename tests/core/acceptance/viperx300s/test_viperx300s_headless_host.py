@@ -60,8 +60,8 @@ def wait_until_serving(base: str, process: subprocess.Popen, timeout: float) -> 
 @pytest.mark.parametrize(
     ("manifest", "policy"),
     [
-        ("configs/manifests/viperx300s_single_cube_place.yaml", "constant"),
-        ("research/configs/viperx300s_pick_place.yaml", "scripted"),
+        ("configs/manifests/viperx300s_single_cube_fixed_place.yaml", "constant"),
+        ("configs/manifests/viperx300s_single_cube_randomized_place.yaml", "constant"),
     ],
 )
 def test_headless_host_serves_the_viperx300s_with_both_cameras(manifest, policy):

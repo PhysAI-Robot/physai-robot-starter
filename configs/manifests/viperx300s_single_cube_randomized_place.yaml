@@ -1,0 +1,46 @@
+# ViperX 300 S single-cube pick-and-place with the cube and the target pad both random over the
+# region where a top-down grasp is reachable (scripts/workspace_map.py --manifest <this file>): x 0.12-0.45,
+# |y| <= 0.45, 0.22-0.45 m from the base, at least 8 cm apart. The map reaches 0.57 m out and |y| 0.56,
+# so this keeps about 0.12 m of margin. The table is wide enough to hold |y| 0.45.
+# Fetch the model once:   python scripts/fetch_assets.py --robot viperx300s
+# Run it with:            python scripts/run_sim.py --manifest configs/manifests/viperx300s_single_cube_randomized_place.yaml --policy constant --serve
+schema_version: 1
+
+scene:
+  name: single_cube_place
+  overrides:
+    robot_xml: assets/viperx300s/vx300s.xml
+    timestep: 0.002
+    table_pos: [0.35, 0.0, 0.01]
+    table_size: [0.25, 0.55, 0.01]
+    target_pos: [0.32, -0.11, 0.021]
+    target_radius: 0.04
+    cube_names: [cube]
+    cube_half: 0.014
+    cube_pos: [0.32, 0.10, 0.034]
+    cube_mass: 0.03
+    cube_rgba: [0.85, 0.25, 0.2, 1.0]
+
+task: single_cube_place
+task_kwargs:
+  success_xy_tol: 0.04
+success_hold_steps: 10
+
+robots:
+  - id: viperx300s
+    robot: viperx300s
+    config:
+      control_hz: 30
+      cameras: [front, wrist]
+      max_steps: 600
+      randomize_cube: true
+      cube_x_range: [0.12, 0.45]
+      cube_y_range: [-0.45, 0.45]
+      randomize_target: true
+      target_x_range: [0.12, 0.45]
+      target_y_range: [-0.45, 0.45]
+      spawn_radius_range: [0.22, 0.45]
+      min_cube_target_distance: 0.08
+
+viewer:
+  mode: none
