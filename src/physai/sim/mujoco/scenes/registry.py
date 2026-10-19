@@ -92,7 +92,7 @@ def _load_builtins() -> None:
             name="sorting_minimal",
             factory=SortingMinimalSceneConfig,
             robot_kinds=("fixed_base_manipulator",),
-            task_names=("sorting",),
+            task_names=("sorting", "stack_cubes"),
         ),
     )
     _BUILTINS_LOADED = True

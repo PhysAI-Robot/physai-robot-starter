@@ -8,11 +8,13 @@ core must not import research code. It registers itself with
 
 from .base import Plan, Planner, ScriptedPlanner, SubGoal
 from .registry import available_planners, create_planner, register_planner
+from .stack import StackPlanner
 
 __all__ = [
     "Plan",
     "Planner",
     "ScriptedPlanner",
+    "StackPlanner",
     "SubGoal",
     "available_planners",
     "create_planner",

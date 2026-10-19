@@ -40,7 +40,9 @@ def _load_builtins() -> None:
         return
     from .single_cube_place import SingleCubePlaceTask
     from .sorting_minimal import SortingTask
+    from .stack_cubes import StackCubesTask
 
     register_task("single_cube_place", SingleCubePlaceTask)
     register_task("sorting", SortingTask)
+    register_task("stack_cubes", StackCubesTask)
     _BUILTINS_LOADED = True
