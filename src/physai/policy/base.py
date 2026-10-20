@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 
 from typing import Any
 
-from ..contracts import Action, Observation, PolicyTraits, Twist, PoseStamped
+from ..contracts import Action, Observation, Twist, PoseStamped
 
 
 class Policy(ABC):

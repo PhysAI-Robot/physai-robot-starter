@@ -82,10 +82,8 @@ class Planner(ABC):
 # (a number or a (tilt, roll) pair, see `approach_orientation`)
 Step = tuple
 
-_TOP_DOWN = np.array([0.0, 0.0, -1.0])
 
-
-def _at(base, dz: float) -> np.ndarray:
+def raised(base, dz: float) -> np.ndarray:
     return np.asarray(base, dtype=np.float64) + np.array([0.0, 0.0, dz])
 
 
@@ -157,7 +155,7 @@ def rise_steps(observation: Observation, pick_xyz, profile: GraspProfile) -> lis
     if observation.ee_pose is None:
         return []
     here = observation.ee_pose.pose.position.as_array()
-    top = _at(pick_xyz, profile.grasp_dz + profile.hover)[2]
+    top = raised(pick_xyz, profile.grasp_dz + profile.hover)[2]
     return [("rise", np.array([here[0], here[1], top]), "", profile.grip_open)]
 
 
@@ -174,15 +172,15 @@ def pick_steps(
     carrying it. `transit_z` is the pinch height the cube is carried at when something
     stands in the way (a tower); it raises the lift to at least that.
     """
-    grasp = _at(pick_xyz, profile.grasp_dz)
+    grasp = raised(pick_xyz, profile.grasp_dz)
     steps: list[Step] = [
-        ("move_above", _at(grasp, profile.hover), pick_name, profile.grip_open)
+        ("move_above", raised(grasp, profile.hover), pick_name, profile.grip_open)
     ]
     if profile.open_descent:
         steps.append(("descend", grasp, pick_name, profile.grip_open))
     steps.append(("grasp", grasp, pick_name, profile.grip_hold))
     if profile.carry > 0 or transit_z is not None:
-        lift = _at(grasp, profile.carry)
+        lift = raised(grasp, profile.carry)
         if transit_z is not None:
             lift[2] = max(lift[2], transit_z)
         steps.append(("lift", lift, pick_name, profile.grip_hold))
@@ -200,8 +198,8 @@ def place_steps(
 
     Opening on the way down would drop the cube. `hover_z` replaces the profile's hover.
     """
-    release = _at(place_xyz, profile.release_dz)
-    hover = _at(place_xyz, profile.place_hover_dz)
+    release = raised(place_xyz, profile.release_dz)
+    hover = raised(place_xyz, profile.place_hover_dz)
     if hover_z is not None:
         hover[2] = hover_z
     return [

@@ -3,7 +3,6 @@ so these run in the normal test suite (see the import-linter contract
 confining those to physai.sim.isaac and robots.so101.isaac_env)."""
 
 import math
-from pathlib import Path
 
 import pytest
 from tests.conftest import requires_assets

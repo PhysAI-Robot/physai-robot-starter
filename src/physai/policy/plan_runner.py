@@ -12,7 +12,7 @@ from dataclasses import replace
 
 import numpy as np
 
-from ..contracts import Action, GripperCommand, Observation, Pose, PoseStamped, Vector3
+from ..contracts import Action, GripperCommand, Observation, PoseStamped, Vector3
 from ..control.resolver import JointRateLimiter
 from ..planner.base import Plan, approach_from_orientation, gripper_quat_wxyz
 from ..robots.base import KinematicsPort

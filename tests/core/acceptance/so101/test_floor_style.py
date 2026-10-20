@@ -1,4 +1,3 @@
-import mujoco
 import numpy as np
 import pytest
 from tests.conftest import requires_assets

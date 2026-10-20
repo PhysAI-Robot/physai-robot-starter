@@ -8,7 +8,7 @@ from ..contracts import Observation
 from .base import (
     Plan,
     Planner,
-    _at,
+    raised,
     pick_place_steps,
     pick_steps,
     plan_from_steps,
@@ -89,7 +89,7 @@ class StackPlanner(Planner):
         back toward top-down for the next pick.
         """
         profile, half = self.profile, self.cube_half
-        place = _at(self.pad_xyz, 2 * half * level)
+        place = raised(self.pad_xyz, 2 * half * level)
         release_z = max(
             place[2] + profile.release_dz - TILT_RELEASE_DROP, profile.place_tilt_min_z
         )
@@ -102,7 +102,7 @@ class StackPlanner(Planner):
         # Turning the wrist lets the held cube slip below the pinch point; leave room for it.
         carry_z = max(release_z + TILT_HOVER, clear) + TILT_TURN_ROOM
         pick = self.cube_positions[colour]
-        lift_z = _at(pick, profile.grasp_dz)[2] + profile.hover
+        lift_z = raised(pick, profile.grasp_dz)[2] + profile.hover
         flat, transit = profile.place_tilt, profile.transit_tilt
         name = "pad" if level == 0 else f"on {self.order[level - 1]} cube"
         hold, opened = profile.grip_hold, profile.grip_open
@@ -137,7 +137,7 @@ class StackPlanner(Planner):
                 steps += self._tilted_level(level, colour, last)
             return plan_from_steps(instruction, steps)
         for level, colour in enumerate(self.order):
-            place = _at(self.pad_xyz, 2 * self.cube_half * level)
+            place = raised(self.pad_xyz, 2 * self.cube_half * level)
             release_z = place[2] + profile.release_dz
             # The carried cube's underside is `grasp_dz + cube_half` below the pinch point.
             # It must clear the tower and also the cubes still lying on the table.
