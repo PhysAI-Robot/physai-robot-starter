@@ -47,9 +47,14 @@ includes ROS2). The direct simulator runs without ROS2, and CUDA is optional. In
 [`uv`](https://docs.astral.sh/uv/), then from the project root:
 
 ```bash
-uv sync --extra training      # base: MuJoCo, viewer, tests; training adds PyTorch + LeRobot
+uv sync                       # MuJoCo, viewer, tests, Newton, PyTorch + LeRobot (add --extra isaac for Isaac Sim)
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest tests/ -q
 ```
+
+There is nothing to choose: a plain `uv sync` installs MuJoCo, Newton and the training stack (PyTorch + LeRobot),
+and every version in it is the one Isaac Sim 6.2 brings, so adding Isaac later changes none of them. Isaac Sim
+is the one optional part (several GB, an NVIDIA GPU, an accepted EULA): `uv sync --extra isaac`. Tests for a part
+the machine cannot run (Isaac Sim without `OMNI_KIT_ACCEPT_EULA=YES`, Newton without an NVIDIA GPU) skip.
 
 The core, its scripts and `tests/` run without `research/`. To use a plugin repository such as
 [`physai-study-01`](https://github.com/PhysAI-Robot/physai-study-01), clone it into `research/`
@@ -104,25 +109,36 @@ and troubleshooting (including WSL2 and dual-GPU Windows).
 | `eval_policy.py` | measure a policy over N seeds (`--json`, difficulty flags); use at least 100 seeds |
 | `eval_policy_sharded.py` | run `eval_policy.py` in shards, each in its own process, and merge them; repeats a shard that hit Isaac Sim's startup render glitch |
 | `sweep_difficulty.py` | measure a policy over lighting, camera shift and clutter levels and tabulate each cell |
+| `compare_evaluations.py` | compare two evaluations of one policy (for example MuJoCo against Isaac Sim): Wilson intervals and per-seed agreement |
+| `report_evaluation.py` | summarize evaluation JSON as Markdown; `--require-all-success` and `--expect-episodes` turn it into a gate |
+| `plan_task.py` | print the plan a planner makes for a manifest's scene (SO-101 and ViperX 300 S) |
+| `workspace_map.py` | map the cube positions the robot can grasp, to size a manifest's spawn range |
 
 A policy checkpoint is a folder, or a Hugging Face reference that downloads one:
 `--checkpoint hf:<owner>/<repo>/<subfolder>[@<revision>]` fetches only that subfolder into
 `checkpoints/<owner>/<repo>/<subfolder>` (ignored by git, like `assets/`) and uses it; the
 `scripts/fetch_checkpoints.py` downloads the same folder ahead of time (for offline use). Name a revision
-for a published result; without one `main` is used. The `training` extra brings the download library
+for a published result; without one `main` is used. `uv sync` brings the download library
 (`huggingface-hub`).
 
+A manifest picks the robot, so every script below takes `--manifest`; `configs/manifests/` has
+`so101_single_cube_fixed_place`, `so101_single_cube_randomized_place`, `so101_sorting`,
+`so101_stack_cubes` and the two `viperx300s_single_cube_*` ones, plus the multi-robot and TurtleBot4 examples.
+
 Every script documents its flags with `--help`. Other tools: `fetch_assets.py`, `fetch_checkpoints.py`,
-`workspace_map.py`, `show_ros2_contract.py`, `teleop_keyboard.py`, `export_scene.py`.
+`show_ros2_contract.py`, `teleop_keyboard.py`, `benchmark_ik.py`, `export_scene.py`, `run_web.py` (browser
+viewer for a running host, see the [web viewer runbook](docs/WEB_VIEWER_RUNBOOK.md)) and the TurtleBot4
+navigation tools in the [robot runbooks](docs/ROBOT_RUNBOOKS.md).
 
 ## Supported robots
 
 | Robot | Action space | What it has |
 | --- | --- | --- |
 | SO-101 arm | joint positions | IK safety validation, front and wrist cameras, a core `demo` policy (your own come as plugins), ROS2 joint/gripper/camera/TF bridge. The development focus. |
+| ViperX 300 S arm | joint positions | Six-joint ALOHA follower arm: front and wrist cameras, grasp profile for the scripted planner, MuJoCo, Isaac Sim and Newton. No core policy; the scripted expert is a plugin ([runbook](docs/ROBOT_RUNBOOKS.md#viperx-300-s-aloha-follower-arm)). |
 | TurtleBot4 base | twist | Deterministic navigation, obstacle detection, ROS2/Nav2 acceptance path. Maintained, not extended. |
 
-Both run in one world, as in the screenshot above. Robot workflows are in the
+The SO-101 and the TurtleBot4 run in one world, as in the screenshot above. Robot workflows are in the
 [robot runbooks](docs/ROBOT_RUNBOOKS.md).
 
 ## Python API
@@ -143,7 +159,7 @@ finally:
 - **ROS2 Jazzy.** `uv run python scripts/show_ros2_contract.py` prints the message-shaped
   contract without ROS2; the `rclpy` nodes and Nav2 acceptance paths are in the
   [robot runbooks](docs/ROBOT_RUNBOOKS.md).
-- **Isaac Sim** (optional, local RTX GPU): `uv sync --extra isaac --extra training`, set
+- **Isaac Sim** (optional, local RTX GPU): `uv sync --extra isaac` installs it, set
   `OMNI_KIT_ACCEPT_EULA=YES` yourself, then add `--sim isaac` to `run_sim.py` or
   `eval_policy.py` (observation-only policies, single-cube scene). Constraints and results:
   [decision D](docs/DECISIONS.md#d-isaac-sim-is-an-optional-peer-engine) and
@@ -152,14 +168,15 @@ finally:
   (`Failed to download ... network timeout`). Rerun with a longer limit: `$env:UV_HTTP_TIMEOUT=600`
   in PowerShell, `export UV_HTTP_TIMEOUT=600` in bash. The packages already downloaded are cached,
   and a failed sync left the environment as it was.
-- **Newton** (optional, GPU): `uv sync --extra newton` (or `--extra isaac --extra newton`, one
-  environment for all three engines). `--sim newton` steps the SO-101 and ViperX 300 S with
+- **Newton** (GPU): installed by `uv sync`. It is pinned to the Newton that Isaac Sim 6.2.0.0 pins (1.6.1, with MuJoCo
+  and mujoco-warp 3.12.0), so all three engines share one environment.
+  `--sim newton` steps the SO-101 and ViperX 300 S with
   Newton's MuJoCo solver; `--render newton` draws any simulator's cameras with Newton, and
   `--render isaac|mujoco` draws Newton's. For example
   `uv run python scripts/run_sim.py --sim newton --render isaac --policy demo --video`. See
   [decision I](docs/DECISIONS.md#i-three-engines-and-the-renderer-is-chosen-apart-from-the-physics).
 - **Docker.** `python docker/container.py build --cpu` (or `--gpu`), then `start`, `shell`,
-  `stop`.
+  `stop`. On a Linux host, `docker/setup_gpu.sh` installs the NVIDIA Container Toolkit so `--gpu` can see the GPU.
 
 ## Documentation
 

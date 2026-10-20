@@ -47,7 +47,7 @@ camera renderer (default: the simulator's own); every pairing runs the same mani
 `uv run python scripts/run_sim.py --sim newton --render isaac --policy demo --video`
 ([decision I](DECISIONS.md#i-three-engines-and-the-renderer-is-chosen-apart-from-the-physics)).
 `demo` runs on MuJoCo and Newton; on Isaac use an observation-only policy such as `constant`.
-Newton needs `uv sync --extra newton` and a GPU; its first step compiles kernels (a few minutes
+Newton is installed by `uv sync` and needs a GPU; its first step compiles kernels (a few minutes
 the first time, cached after). Validate with
 `uv run python -m pytest tests/core/acceptance/so101/test_newton_env.py -q`.
 
@@ -71,12 +71,15 @@ single-cube pick-and-place task, so the web viewer, the recorder, the task runti
 uv run python scripts/fetch_assets.py --robot viperx300s
 uv run python scripts/run_sim.py --manifest configs/manifests/viperx300s_single_cube_fixed_place.yaml --policy constant --serve --seed 0
 uv run python scripts/run_sim.py --manifest configs/manifests/viperx300s_single_cube_randomized_place.yaml --policy constant --serve --seed 0
-uv run python scripts/eval_policy.py --manifest research/configs/viperx300s_pick_place.yaml --policy scripted --episodes 100 --seed 1000
+uv run python scripts/eval_policy.py --manifest research/configs/viperx300s_single_cube_randomized_place.yaml --policy scripted --episodes 100 --seed 1000
 ```
 
 The first command is the idle robot in the browser with both cameras; the `scripted` expert is a
 research policy (`research/scripted_experts/viperx300s_pick_place_expert.py`, 100/100 on seeds
 1000-1099). Validate with `uv run python -m pytest tests/core/acceptance/viperx300s -q`.
+The core `ScriptedPlanner` with `PlanRunner` also places the cube with this arm's `GraspProfile`
+(`scripts/plan_task.py --manifest configs/manifests/viperx300s_single_cube_fixed_place.yaml`), but core
+ships no ViperX policy.
 
 What this is not, so results are not over-read:
 

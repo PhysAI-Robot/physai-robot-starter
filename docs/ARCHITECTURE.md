@@ -74,13 +74,14 @@ transports are registry-driven (`robots.adapters.register_adapter()`).
 | `physai.contracts` | Shared `Observation`, `Action` and ROS2-shaped value types | Robot-specific ordering or task rules |
 | `physai.config` | Typed YAML parsing: `manifest` (session manifest, `simulation` block) and `compat` (CLI overrides, `with_overrides`) | Simulation behavior, robot construction or task evaluation |
 | `physai.robots` | Embodiment discovery, `RobotSpec`, ports, factories, environments, adapters, the backend registry, shared-world factories, the sim-neutral `RobotDescription` | Task reward, planner decisions or model SDKs |
-| `physai.tasks` | Task state, reset rules, reward, metrics, termination | Robot internals or action generation |
+| `physai.robots.reach` | `GraspProfile` (one arm's grasp heights, grips, approach direction and IK settings) and `grasp_reach`, the shared reachability probe; each arm declares its profile | Planner decisions or an arm's own kinematics |
+| `physai.tasks` | Task state, reset rules, reward, metrics, termination (`single_cube_place`, `sorting`, `stack_cubes`) | Robot internals or action generation |
 | `physai.sim` | One subpackage per engine plus the neutral modules both read (`studio`: the common look; `workspace`: table, target, cubes, front camera) | Engine code in the namespace; importing `physai.sim` must never need an engine SDK |
 | `physai.sim.mujoco` | MuJoCo core, scene builders, the shared multi-robot world, rendering, simulation time | Robot-specific environment logic, ROS2 transport, any robot-name branch |
 | `physai.sim.isaac` | `SimulationApp` lifecycle, `RobotDescription` to USD, world extras, `add_workspace` | Robot-specific environment logic or task composition; importing `physai.sim.mujoco` |
 | `physai.sim.newton` | Newton's `SolverMuJoCo` stepper (`NewtonPhysics`, a mixin for a MuJoCo env) and the tiled-camera `NewtonRenderer` | Robot-specific environment logic; importing `physai.sim.mujoco` or `physai.sim.isaac` |
-| `physai.planner` | Instruction and image grounding, `Plan`, `SubGoal`, the planner registry | Control-rate motor commands; research planners |
-| `physai.policy` | Control-rate `Action` production, core baselines (`constant`, `constant_twist`, `replay`), the policy registry | Task scoring, robot discovery, checkpoint-backed inference |
+| `physai.planner` | Instruction and image grounding, `Plan`, `SubGoal`, `ScriptedPlanner` and `StackPlanner`, the planner registry | Control-rate motor commands; research planners |
+| `physai.policy` | Control-rate `Action` production, core baselines (`constant`, `constant_twist`, `replay`), `PlanRunner`, the policy registry | Task scoring, robot discovery, checkpoint-backed inference |
 | `physai.control` | Action resolution, capability checks, rate limiting | High-level planning or task semantics |
 | `physai.data` | Episode recording, dataset and checkpoint metadata, evaluation, the Gymnasium adapter | Simulation decisions or model inference |
 | `physai.bridge` | ROS2 transport, topic and message mapping, timing, ROS2-backed adapters | Physics, task semantics or model inference |
@@ -101,8 +102,8 @@ Declared in `pyproject.toml`'s `[tool.importlinter]`, checked by `uv run lint-im
 | `physai.policy`, `tasks`, `planner` must not import `mujoco` | They depend on ports. One accepted indirect path: `policy.registry` calls `robots.registry.create_robot_policy()` |
 | `physai`, `scripts/` and `tests/core/` must not import `research` | A plugin registers itself into a core registry on import, loaded by name from the manifest's `plugins:`; checked by an AST test, since `research/` may be absent |
 | `physai.robots.description` and `physai.sim.workspace` must not import `mujoco` or Isaac | Every engine's builder reads them ([DECISIONS.md C](DECISIONS.md#c-sim-neutral-data)) |
-| Only `physai.sim.isaac` and `physai.robots.so101.isaac_env` may import `isaacsim`, `omni`, `pxr` | Isaac is optional and GPU-only ([D](DECISIONS.md#d-isaac-sim-is-an-optional-peer-engine)) |
-| Only `physai.sim.newton` may import `newton` or `warp` | Newton is an optional extra ([I](DECISIONS.md#i-three-engines-and-the-renderer-is-chosen-apart-from-the-physics)) |
+| Only `physai.sim.isaac` and the arms' `isaac_env` modules (`robots.so101`, `robots.viperx300s`) may import `isaacsim`, `omni`, `pxr` | Isaac is optional and GPU-only ([D](DECISIONS.md#d-isaac-sim-is-an-optional-peer-engine)) |
+| Only `physai.sim.newton` may import `newton` or `warp` | Newton is optional ([I](DECISIONS.md#i-three-engines-and-the-renderer-is-chosen-apart-from-the-physics)) |
 | `physai.sim.mujoco`, `physai.sim.isaac` and `physai.sim.newton` must not import each other; Isaac must not import `mujoco` | Peer engines; `physai.robots.rendering` pairs a simulator with another one's renderer |
 | A robot-name branch in generic code is a bug | `SharedWorld`, `Host` and the web client resolve behavior through `RobotSpec` capabilities or a registry. Enforced by review, not import-linter |
 
@@ -165,7 +166,7 @@ Every script builds its parser with `scripts/_cli.py:new_parser` (the first docs
 
 | Flag | Meaning | Scripts |
 | --- | --- | --- |
-| `--manifest` | Session manifest whose robot, scene and settings the script uses (default: the SO-101 single-cube session) | the run, evaluation and robot-driving scripts, and `export_scene.py` |
+| `--manifest` | Session manifest whose robot, scene and settings the script uses (default: the SO-101 single-cube session; `run_ros2_sim.py` has none) | the run, evaluation and robot-driving scripts, and `export_scene.py` |
 | `--sim`, `--render` | Override the manifest's physics engine; the engine that draws the cameras (default: the physics engine's own) | `run_sim.py`, `eval_policy.py` (`--sim` also `sweep_difficulty.py`) |
 | `--policy`, `--policy-arg`, `--checkpoint` | Policy to run, a constructor option as `KEY=VALUE` (repeatable), a checkpoint directory or `hf:<owner>/<repo>/<subfolder>` | `run_sim.py`, `eval_policy.py`, `sweep_difficulty.py` |
 | `--seed`, `--episodes`, `--max-steps` | Seed of the first episode (episode N uses seed + N), number of episodes, episode length in control steps (default: the manifest's) | `run_sim.py`, the evaluation scripts (`plan_task.py` takes `--seed` and `--max-steps`, `teleop_keyboard.py` `--seed`) |

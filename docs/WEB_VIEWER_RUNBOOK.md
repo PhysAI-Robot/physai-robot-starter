@@ -7,7 +7,7 @@ contract are in [ARCHITECTURE.md](ARCHITECTURE.md#host-and-client-api).
 The viewer is a client of an already running simulation host. The host owns the robot, task
 configuration, seed, policy, physics clock and command arbitration; the desktop viewer and
 the browser render the same state and send control intents to that one host. The browser
-viewer is in the base install; `uv sync --extra training` adds the policies that need torch.
+viewer and the policies that need torch are installed by `uv sync`.
 
 ## Start a simulation
 
