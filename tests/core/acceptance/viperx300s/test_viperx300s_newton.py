@@ -9,7 +9,7 @@ from tests.conftest import requires_viperx300s_assets
 if importlib.util.find_spec("newton") is None:
     # Not importorskip: importing newton loads warp, and Isaac Sim must start before
     # warp does (docs/DECISIONS.md, I), so collection must not import it.
-    pytest.skip("uv sync --extra newton installs newton", allow_module_level=True)
+    pytest.skip("uv sync installs newton", allow_module_level=True)
 
 from physai.contracts import Action  # noqa: E402
 from physai.robots.viperx300s.mujoco_env import (  # noqa: E402

@@ -30,40 +30,25 @@ dependencies = [
     "pytest>=9.1.1",
     "ruff>=0.17.0",
     "import-linter>=2.1",
-]
-
-[project.optional-dependencies]
-# gymnasium for the GymnasiumAdapter; torch + lerobot for ACT training and
-# inference (lerobot's `diffusion` extra brings diffusers, in the range lerobot asks
-# for, for Diffusion Policy). lerobot pins numpy<2.3.0 and isaacsim-kernel pins numpy==2.3.1, so
-# `[tool.uv] override-dependencies` below forces numpy<2.3 for both (isaac
-# runs on 2.2.x); see docs/DECISIONS.md, D.
-training = [
+    # Training and inference: gymnasium for the GymnasiumAdapter; torch + lerobot for ACT and Diffusion
+    # Policy (lerobot's `diffusion` extra brings diffusers). lerobot pins numpy<2.3.0 and isaacsim-kernel
+    # pins numpy==2.3.1, so the numpy override under [tool.uv] forces numpy<2.3 for both (Isaac runs on 2.2.x).
     "gymnasium>=1.4.0,<2.0",
     "torch>=2.7,<2.12",
     "torchvision>=0.22,<0.27",
     "lerobot[diffusion]>=0.6.1",
     "scipy>=1.11",  # used by the research plugin's image edits
+    # Newton physics and renderer (physai.sim.newton). Pinned to the Newton that isaacsim-core 6.2.0.0 pins,
+    # which also fixes mujoco and mujoco-warp (3.12.0), so adding the `isaac` extra changes none of them.
+    "newton[sim]==1.6.1",
+    "trimesh>=4.6.8",  # loads the MJCF meshes
 ]
-# httpx2 is only used by tests/core/unit/test_web_app_streaming.py (guarded
-# by pytest.importorskip("httpx2"), so it skips cleanly without this extra).
-# Kept out of base, unlike fastapi/uvicorn/pytest above: httpx2 itself
-# requires idna>=3.18, and isaacsim-kernel pins idna==3.10 exactly -- a
-# real conflict with no loosenable floor on physai's side, unlike the
-# uvicorn case. `[tool.uv] conflicts` below marks it against `isaac` so a
-# combined sync fails fast instead of `uv lock` refusing everything.
-webtest = ["httpx2>=2.13.1"]
-# isaacsim as a real extra of this project (`uv sync --extra isaac`),
-# (no separate venv).
-# Verified end to end: `uv lock` resolves it (index-strategy =
-# "unsafe-best-match" below, no prerelease allowance needed) and a real
-# headless episode ran against actual Isaac Sim 6.1.0.0 on an RTX 3060.
-# See docs/DECISIONS.md, D.
-isaac = ["isaacsim[all,extscache]==6.2.0.0"]
-# Newton physics and the Newton camera renderer (physai.sim.newton). Not a conflict with
-# `isaac`: Isaac Sim already resolves newton and warp-lang, so both extras share one env
-# (`uv sync --extra isaac --extra newton`); see docs/DECISIONS.md, I.
-newton = ["newton[sim]>=1.5", "trimesh>=4.6.8"]  # trimesh loads the MJCF meshes
+
+[project.optional-dependencies]
+# Isaac Sim, the one optional part: several GB, an NVIDIA GPU and an accepted EULA (docs/DECISIONS.md, D).
+# No macOS wheels. `uv sync --extra isaac` adds it to the default environment without changing a version
+# the default already has.
+isaac = ["isaacsim[all,extscache]==6.2.0.0; sys_platform != 'darwin'"]
 
 [[tool.uv.index]]
 name = "nvidia"
@@ -99,33 +84,10 @@ markers = [
 ]
 
 [tool.uv]
+# One override: lerobot needs numpy<2.3 and isaacsim-kernel pins numpy==2.3.1, so no resolution satisfies
+# both without it (Isaac runs on 2.2.x). Every other version follows the pins of isaacsim and lerobot.
 override-dependencies = [
-    "datasets>=5.0.1",
-    "setuptools>=83",
     "numpy>=2.0,<2.3",
-    "packaging>=24.2,<26.0",
-    # The pins below are the versions every Isaac Sim evaluation of study 1 ran with (isaac and training
-    # extras together). isaacsim-kernel pins several of them differently (uvicorn==0.29.0, httptools==0.6.1,
-    # websockets<15, fastapi==0.139.2, ...); Isaac Sim ran headless on these versions without a problem.
-    # Not exercised: its livestream and web extensions. See docs/DECISIONS.md, D.
-    "absl-py==2.5.0",
-    "anyio==4.15.1",
-    "click==8.5.0",
-    "etils==1.14.0",
-    "fastapi==0.141.1",
-    "fsspec==2026.7.0",
-    "glfw==2.10.2",
-    "gymnasium==1.3.0",
-    "httptools==0.8.0",
-    "idna==3.19",
-    "imageio==2.37.4",
-    "mujoco==3.13.0",
-    "uvicorn[standard]==0.53.0",
-    "websockets==17.1",
-    "huggingface-hub==1.16.1",
-]
-conflicts = [
-    [{ extra = "isaac" }, { extra = "webtest" }],
 ]
 index-strategy = "unsafe-best-match"
 

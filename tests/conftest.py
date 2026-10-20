@@ -1,3 +1,5 @@
+import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -45,3 +47,23 @@ def env():
     e = TaskRuntime(robot, create_task("single_cube_place"))
     yield e
     e.close()
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip what this machine cannot run, so a plain `uv sync` and `pytest` never fail on it.
+
+    Isaac Sim starts only once its EULA is accepted (`OMNI_KIT_ACCEPT_EULA=YES`, set by whoever runs it,
+    never by this repo) and Newton needs an NVIDIA GPU. A package check is not enough: both are installed
+    by `uv sync`, and importing warp at collection would break the Isaac-first ordering.
+    """
+    unavailable = {
+        "isaac": (
+            os.environ.get("OMNI_KIT_ACCEPT_EULA") != "YES",
+            "Isaac Sim needs OMNI_KIT_ACCEPT_EULA=YES",
+        ),
+        "newton": (shutil.which("nvidia-smi") is None, "Newton needs an NVIDIA GPU"),
+    }
+    for item in items:
+        for name, (missing, reason) in unavailable.items():
+            if missing and name in item.keywords:
+                item.add_marker(pytest.mark.skip(reason=reason))

@@ -1,6 +1,6 @@
 """Newton physics and rendering against MuJoCo, on the SO-101 scene.
 
-Skipped without `newton` (`uv sync --extra newton`) and a GPU.
+Skipped without `newton` (`uv sync` installs it) and a GPU.
 """
 
 import importlib.util
@@ -12,7 +12,7 @@ from tests.conftest import requires_assets
 if importlib.util.find_spec("newton") is None:
     # Not importorskip: importing newton loads warp, and Isaac Sim must start before
     # warp does (docs/DECISIONS.md, I), so collection must not import it.
-    pytest.skip("uv sync --extra newton installs newton", allow_module_level=True)
+    pytest.skip("uv sync installs newton", allow_module_level=True)
 
 from physai.contracts import Action, GripperCommand  # noqa: E402
 from physai.robots.so101.mujoco_env import HOME_QPOS, EnvConfig, SO101Env  # noqa: E402
