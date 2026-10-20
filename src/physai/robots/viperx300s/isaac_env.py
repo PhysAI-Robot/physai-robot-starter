@@ -98,6 +98,12 @@ class ViperX300SIsaacEnvConfig(IsaacEnvConfig):
 class ViperX300SIsaacEnv(SO101IsaacEnv):
     """ViperX 300 S embodiment environment backed by Isaac Sim's PhysX."""
 
+    def grasp_profile(self):
+        """How this arm grasps a cube: the profile its MuJoCo env declares."""
+        from .mujoco_env import VIPERX300S_GRASP
+
+        return VIPERX300S_GRASP
+
     def __init__(self, cfg: ViperX300SIsaacEnvConfig | None = None) -> None:
         self.cfg = cfg or ViperX300SIsaacEnvConfig()
         self.renderer = None  # another simulator's camera renderer, if any

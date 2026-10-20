@@ -455,6 +455,12 @@ class SO101IsaacEnv:
         """Where the gripper's pinch point currently is, from observed joint state."""
         return self.kin.pinch_center_from_qpos(self._arm_qpos())
 
+    def grasp_profile(self):
+        """How this arm grasps a cube: the profile its MuJoCo env declares."""
+        from .mujoco_env import SO101_GRASP
+
+        return SO101_GRASP
+
     @property
     def robot_spec(self) -> RobotSpec:
         return RobotSpec(
