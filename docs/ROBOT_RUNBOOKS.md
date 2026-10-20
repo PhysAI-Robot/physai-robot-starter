@@ -99,8 +99,9 @@ What this is not, so results are not over-read:
   per-episode render check (`robot_is_rendered`) passes: Isaac draws the arm, both fingers and the cube
   in the front and `video` views, from its own state and, with `--render isaac`, from MuJoCo's or
   Newton's. An earlier session in which no arm was drawn did not recur. The scripted expert is
-  MuJoCo-only (it runs on Newton, and Isaac draws its episodes), so a pick and place on Isaac physics
-  has not been run for this arm.
+  MuJoCo-only (it runs on Newton, and Isaac draws its episodes), so the research pick and place has not
+  been run on Isaac physics for this arm. Core's scripted planner does grasp, lift and hold the cube there
+  (`tests/core/acceptance/test_held_cube.py`: the cube moves 0.00 mm in 60 s).
   The importer does not read the position actuators' `kp`, so the drive gains in
   `robots/viperx300s/description.yaml` are transcribed from the MJCF; PhysX has no equality constraint,
   so the environment drives both fingers itself.

@@ -79,8 +79,8 @@ markers = [
     "integration: crosses multiple PhysAI module boundaries",
     "acceptance: validates a complete robot workflow",
     "slow: takes longer than a normal unit test",
-    "isaac: requires isaacsim (uv sync --extra isaac); GPU-bound",
-    "newton: requires newton (uv sync --extra newton); GPU-bound",
+    "isaac: requires isaacsim (uv sync --extra isaac) and OMNI_KIT_ACCEPT_EULA=YES; GPU-bound",
+    "newton: requires an NVIDIA GPU (newton comes with uv sync); GPU-bound",
 ]
 
 [tool.uv]

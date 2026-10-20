@@ -251,14 +251,14 @@ policy can be measured against a change of physics, of renderer, or both (`--sim
   may change it). Without a substitute the SO-101's cube creeps 15 mm in 12 s. The SO-101 sets `impratio` 30
   (the scripted pick starts to fail from about 100) and, on its pads, `condim` 6 with torsional and rolling
   friction (they stop the cube turning in the jaws) and a contact damping ratio of 2; the cube then moves
-  at most 1.2 mm in 60 s over ten seeds. The hold is measured after a 3 s settle, because the cube shifts a
-  little (up to 2 mm, turning about 10 degrees) as the jaws take its weight and then stops;
+  at most 0.7 mm in 60 s. The hold is measured after a 10 s settle, because the cube turns and seats itself
+  between the jaws as they take its weight (up to about 2.5 mm, in the first seconds) and then stops;
   `tests/core/acceptance/test_held_cube.py` checks every robot and engine at under 2 mm over the next 60 s
-  (SO-101 MuJoCo 0.01 mm, SO-101 Newton 1.1, ViperX MuJoCo 1.5, ViperX Newton 0.3).
+  (SO-101 MuJoCo 0.01 mm, SO-101 Newton 0.7, ViperX MuJoCo 1.3, ViperX Newton 0.3, both on Isaac Sim 0.00).
 - **The ViperX on MuJoCo integrates implicit-fast, with stiffer friction and a damped contact.** Its arm
   actuators are soft and damped, and with the default Euler integrator the held arm trembles and shakes a held
   cube loose (1.5-3 mm in 60 s); `implicitfast` stops that, as in Newton's solver. What is left is MuJoCo's soft
   friction, which the stock gripper (about 1 N per side) does not hold against: `impratio` 30 and a contact
   damping ratio of 3 on the pads and the cube bring the drift to at most 1.4 mm over ten seeds (60 s after a
-  10 s settle). Damping the pads alone is worse (2.9 mm), because MuJoCo averages the two geoms' `solref`.
+  10 s settle; 1.3 mm in the test's four). Damping the pads alone is worse (2.9 mm), because MuJoCo averages the two geoms' `solref`.
   No-slip is not the fix here: it drops the ViperX's cube.
