@@ -10,6 +10,7 @@ for the free-joint quaternion, which Newton stores as xyzw.
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -42,9 +43,52 @@ def qpos_from_newton(model: mujoco.MjModel, q: np.ndarray) -> np.ndarray:
     return qpos
 
 
+_SOLREF = (0.02, 1.0)
+_SOLIMP = (0.9, 0.95, 0.001, 0.5, 2.0)
+
+
+def _full_contact_params(xml: str) -> str:
+    """The MJCF with every `solref` and `solimp` written out in full.
+
+    MuJoCo's spec writes only the leading numbers that differ from the default
+    (`solref="0.004"`, `solimp="0.99 0.999"`) and reads the rest as the default.
+    Newton's parser reads the missing ones as zero: a contact with no damping and
+    an impedance with no width, which lets a held object creep out of the fingers.
+    """
+
+    def fill(defaults):
+        def expand(match: re.Match) -> str:
+            given = match.group(2).split()
+            rest = [f"{value:g}" for value in defaults[len(given) :]]
+            return f'{match.group(1)}="{" ".join(given + rest)}"'
+
+        return expand
+
+    xml = re.sub(r'(solref)="([^"]*)"', fill(_SOLREF), xml)
+    return re.sub(r'(solimp)="([^"]*)"', fill(_SOLIMP), xml)
+
+
+def _style_geoms(xml: str, styles: dict[str, dict]) -> str:
+    """The MJCF with the attributes in `styles[name]` set on the geom of that name."""
+    lines = []
+    for line in xml.splitlines():
+        match = re.search(r'<geom name="([^"]*)"', line)
+        for key, value in styles.get(match.group(1) if match else "", {}).items():
+            text = (
+                " ".join(f"{v:g}" for v in value) if isinstance(value, list) else value
+            )
+            line = re.sub(rf' {key}="[^"]*"', "", line)
+            line = line.replace("<geom ", f'<geom {key}="{text}" ', 1)
+        lines.append(line)
+    return chr(10).join(lines)
+
+
 @contextmanager
 def scene_mjcf(
-    spec: mujoco.MjSpec, model: mujoco.MjModel, robot_dir: Path
+    spec: mujoco.MjSpec,
+    model: mujoco.MjModel,
+    robot_dir: Path,
+    geom_styles: dict[str, dict] | None = None,
 ) -> Iterator[str]:
     """The scene as an MJCF file beside the robot's meshes, for Newton's parser.
 
@@ -59,7 +103,8 @@ def scene_mjcf(
         actuator.forcerange = model.actuator_forcerange[index]
         actuator.forcelimited = int(model.actuator_forcelimited[index])
     path = Path(robot_dir) / f"_newton_{os.getpid()}.xml"
-    path.write_text(spec.to_xml(), encoding="utf-8")
+    xml = _style_geoms(_full_contact_params(spec.to_xml()), geom_styles or {})
+    path.write_text(xml, encoding="utf-8")
     try:
         yield str(path)
     finally:
@@ -87,13 +132,23 @@ class NewtonPhysics:
                 "Newton physics does not support domain_randomization; "
                 "use --sim mujoco for randomized physics"
             )
-        with scene_mjcf(self.spec, self.model, robot_dir) as path:
+        description = self.cfg.scene.description
+        overrides = description.newton_overrides()
+        pads = {pad.name: overrides.get("pad", {}) for pad in description.contact_pads}
+        with scene_mjcf(self.spec, self.model, robot_dir, pads) as path:
             builder = newton.ModelBuilder()
+            newton.solvers.SolverMuJoCo.register_custom_attributes(builder)
             builder.add_mjcf(path, verbose=False, ctrl_direct=True)
         self._newton_model = builder.finalize()
         self._newton_solver = newton.solvers.SolverMuJoCo(
             self._newton_model,
             use_mujoco_contacts=True,
+            # mujoco-warp has no no-slip solver, which is what stops a held object creeping in
+            # MuJoCo. An elliptic cone with a higher friction impedance ratio is the
+            # substitute (without it a held SO-101 cube creeps 15 mm in 12 s); past about 30
+            # the scripted pick starts to fail. A robot's description may raise it.
+            cone="elliptic",
+            impratio=overrides.get("impratio", 20),
             nconmax=2048,
             njmax=4096,
         )
