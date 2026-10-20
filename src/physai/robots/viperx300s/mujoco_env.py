@@ -143,12 +143,25 @@ class ViperX300SEnv(MuJoCoSimulationCore):
         if missing:
             self.cfg = replace(self.cfg, scene=replace(self.cfg.scene, **missing))
         self.model, self.spec = self.cfg.scene.build_model()
+        # The arm's position actuators are soft (kp 8..106) and damped: with the default Euler
+        # integrator the damping is explicit and the held arm trembles, which shakes a held
+        # cube loose (1.5-3 mm in 60 s). Implicit-fast integrates it stably (0.03 mm), as
+        # Newton's solver does.
+        self.spec.option.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
+        # MuJoCo's friction is soft and the stock gripper squeezes a cube with only about 1 N per
+        # side, so a held cube creeps unless friction is stiffer (impratio) and the contact is
+        # damped (solref damping ratio 3, on the pads and the cube, whose values MuJoCo averages):
+        # 3 mm in 60 s without, under 1 mm with.
+        self.spec.option.impratio = 30.0
+        for geom in self.spec.geoms:
+            if "finger_pad" in geom.name or geom.name == "cube_geom":
+                geom.solref = [0.01, 3.0]
         if self.cfg.gravity_compensation:
             # Set on the spec and recompile: MuJoCo skips gravity compensation unless
             # the compiled model counts at least one body that has it.
             for name in _ARM_BODIES:
                 self.spec.body(name).gravcomp = 1.0
-            self.model = self.spec.compile()
+        self.model = self.spec.compile()
         self.randomization = DomainRandomizationEngine(
             self.model, self.cfg.domain_randomization
         )
