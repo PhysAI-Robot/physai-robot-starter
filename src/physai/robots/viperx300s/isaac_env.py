@@ -1,7 +1,8 @@
 """ViperX 300 S (ALOHA follower arm) environment backed by Isaac Sim.
 
-The arm is not imported from a URDF: there is none. `sim.isaac.description.import_robot`
-converts the Menagerie MJCF with Isaac's own MJCF importer (see that module's notes on
+The arm is not imported from a URDF: there is none. `fetch_assets.py` (through
+`sim.isaac.description.dump_robot_usd`) converts the Menagerie MJCF with Isaac's own MJCF
+importer into `assets/viperx300s/usd/`, which `import_robot` opens (see that module's notes on
 what the importer does and does not carry over), and everything above it is the
 SO-101's Isaac environment. This class reuses `SO101IsaacEnv`'s scene, camera, cube,
 reset and stepping machinery and overrides only what differs for this robot: six arm
@@ -145,7 +146,6 @@ class ViperX300SIsaacEnv(SO101IsaacEnv):
         usd_path, self.robot_prim_path = isaac_import_robot(
             self.description,
             self.cfg.assets_root,
-            usd_out_dir=self.cfg.usd_out_dir,
             variant=self.cfg.physics_variant,
         )
         self.usd_path = usd_path

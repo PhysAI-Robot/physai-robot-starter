@@ -195,7 +195,6 @@ class SO101IsaacEnv:
         usd_path, self.robot_prim_path = isaac_import_robot(
             self.description,
             self.cfg.assets_root,
-            usd_out_dir=self.cfg.usd_out_dir,
             variant=self.cfg.physics_variant,
         )
         self.usd_path = usd_path

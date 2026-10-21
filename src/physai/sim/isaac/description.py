@@ -59,72 +59,137 @@ def urdf_link_name(mjcf_body_name: str) -> str:
     return f"{mjcf_body_name}_link"
 
 
+def _clear_stale_imports(usd_out_dir: Path, stem: str) -> None:
+    """Remove this robot's earlier importer output (`<stem>` and the `<stem>_N` copies).
+
+    The importer never overwrites (a second import lands in `<stem>_1`, and so on, and gives
+    up after 1000), so without this a rebuilt import leaves its predecessors behind.
+    """
+    for old in Path(usd_out_dir).glob(f"{stem}*"):
+        if old.is_dir() and re.fullmatch(rf"{re.escape(stem)}(_\d+)?", old.name):
+            shutil.rmtree(old, ignore_errors=True)
+
+
+def _run_importer(
+    desc: RobotDescription, source: Path, out_dir: Path, fix_base: bool
+) -> str:
+    """Run Isaac's URDF importer (or the MJCF one when the robot has no URDF) into `out_dir`."""
+    if desc.urdf:
+        from isaacsim.asset.importer.urdf import URDFImporter, URDFImporterConfig
+
+        config = URDFImporterConfig()
+        config.urdf_path = str(source)
+        config.usd_path = str(out_dir)
+        config.fix_base = fix_base
+        config.merge_fixed_joints = False
+        config.collision_from_visuals = False
+        return URDFImporter(config).import_urdf()
+    from isaacsim.asset.importer.mjcf import MJCFImporter, MJCFImporterConfig
+
+    return MJCFImporter(
+        MJCFImporterConfig(
+            mjcf_path=str(source),
+            usd_path=str(out_dir),
+            import_scene=False,
+            fix_base=fix_base,
+            collision_from_visuals=False,
+            allow_self_collision=False,
+        )
+    ).import_mjcf()
+
+
+def usd_dir(assets_root: Path) -> Path:
+    """Where a robot's USD lives: next to its fetched description, in `assets/<robot>/usd/`."""
+    return Path(assets_root) / "usd"
+
+
+def current_usd(desc: RobotDescription, assets_root: Path) -> Path | None:
+    """The USD `dump_robot_usd` wrote for this description, or None when it is missing or
+    was written by another Isaac Sim version (the importers' output can change with it)."""
+    import importlib.metadata
+    import json
+
+    stem = Path(desc.urdf or desc.mjcf).stem
+    stamp = usd_dir(assets_root) / f"{stem}.json"
+    if not stamp.exists():
+        return None
+    info = json.loads(stamp.read_text(encoding="utf-8"))
+    usd = usd_dir(assets_root) / info["usd"]
+    if info["isaacsim"] != importlib.metadata.version("isaacsim") or not usd.exists():
+        return None
+    return usd
+
+
+def dump_robot_usd(
+    desc: RobotDescription, assets_root: Path, *, fix_base: bool = True
+) -> Path:
+    """Import the robot's description to USD under `usd_dir(assets_root)` and return the file.
+
+    This is the `fetch_assets.py` step for a robot that has an Isaac Sim env: it needs a
+    running `SimulationApp` (the importers are Kit extensions), runs once per fetched
+    description, and writes a stamp with the Isaac Sim version beside the USD, which
+    `import_robot` reads back at every start instead of importing again.
+    """
+    import importlib.metadata
+    import json
+
+    import omni.usd
+
+    source = Path(assets_root) / (desc.urdf or desc.mjcf)
+    if not source.exists():
+        raise FileNotFoundError(
+            f"{source} not found — run `python scripts/fetch_assets.py` first."
+        )
+    out = usd_dir(assets_root)
+    out.mkdir(parents=True, exist_ok=True)
+    _clear_stale_imports(out, source.stem)
+    usd_path = Path(_run_importer(desc, source, out, fix_base))
+    ctx = omni.usd.get_context()
+    ctx.open_stage(str(usd_path))
+    stage = ctx.get_stage()
+    if not desc.urdf:
+        _strip_newton_mimic(stage)
+    stage.GetRootLayer().Save()
+    (out / f"{source.stem}.json").write_text(
+        json.dumps(
+            {
+                "isaacsim": importlib.metadata.version("isaacsim"),
+                "usd": usd_path.relative_to(out).as_posix(),
+            }
+        ),
+        encoding="utf-8",
+    )
+    return usd_path
+
+
 def import_robot(
     desc: RobotDescription,
     assets_root: Path,
     *,
-    usd_out_dir: Path,
     variant: str = DEFAULT_PHYSICS_VARIANT,
-    fix_base: bool = True,
 ) -> tuple[str, str]:
-    """Import `desc.urdf` (or `desc.mjcf` when the robot has no URDF), select a
-    physics variant, and return
+    """Open the robot's USD, select a physics variant, and return
     `(usd_path, robot_prim_path)`. The stage is left open on the process's
     `omni.usd` context (`get_stage()` below returns it) — callers must not
     also open it via a bare `Usd.Stage.Open()`, which raced against this
     context's own edits and raised a USD "concurrent changes" error when
     tried during development.
 
-    `usd_out_dir` is a directory the importer may write many files under
-    (a `<urdf-stem>/` subtree, not one file); callers own its lifetime the
-    way `scripts/fetch_assets.py` owns `assets/`, since Isaac's own output
-    is not something this project fetches or commits either.
+    The USD is the one `scripts/fetch_assets.py` wrote under `assets/<robot>/usd/`
+    (`dump_robot_usd`): nothing is imported at a run's start. A USD that is missing or was
+    written by another Isaac Sim version stops the run with the command that rewrites it.
     """
     import omni.usd
 
-    if desc.urdf:
-        from isaacsim.asset.importer.urdf import URDFImporter, URDFImporterConfig
-
-        urdf_path = Path(assets_root) / desc.urdf
-        if not urdf_path.exists():
-            raise FileNotFoundError(
-                f"{urdf_path} not found — run `python scripts/fetch_assets.py` first."
-            )
-
-        config = URDFImporterConfig()
-        config.urdf_path = str(urdf_path)
-        config.usd_path = str(usd_out_dir)
-        config.fix_base = fix_base
-        config.merge_fixed_joints = False
-        config.collision_from_visuals = False
-
-        importer = URDFImporter(config)
-        usd_path = importer.import_urdf()
-    else:
-        from isaacsim.asset.importer.mjcf import MJCFImporter, MJCFImporterConfig
-
-        mjcf_path = Path(assets_root) / desc.mjcf
-        if not mjcf_path.exists():
-            raise FileNotFoundError(
-                f"{mjcf_path} not found — run `python scripts/fetch_assets.py` first."
-            )
-        # The importer never overwrites: a second import lands in `<stem>_1`, and so on,
-        # so clear this robot's earlier output first or the cache grows on every run.
-        for old in Path(usd_out_dir).glob(f"{mjcf_path.stem}*"):
-            if old.is_dir() and re.fullmatch(
-                rf"{re.escape(mjcf_path.stem)}(_\d+)?", old.name
-            ):
-                shutil.rmtree(old, ignore_errors=True)
-        mjcf_config = MJCFImporterConfig(
-            mjcf_path=str(mjcf_path),
-            usd_path=str(usd_out_dir),
-            import_scene=False,
-            fix_base=fix_base,
-            collision_from_visuals=False,
-            allow_self_collision=False,
+    usd = current_usd(desc, assets_root)
+    if usd is None:
+        robot = Path(assets_root).name
+        raise FileNotFoundError(
+            f"No current Isaac Sim USD for {robot} in {usd_dir(assets_root)} (missing, or written by "
+            f"another Isaac Sim version): run `python scripts/fetch_assets.py --robot {robot} --force` "
+            "with isaacsim installed (uv sync --extra isaac)."
         )
-        usd_path = MJCFImporter(mjcf_config).import_mjcf()
-
+    usd_path = str(usd)
     ctx = omni.usd.get_context()
     ctx.open_stage(usd_path)
     stage = ctx.get_stage()
@@ -132,9 +197,6 @@ def import_robot(
     ok = root.GetVariantSets().GetVariantSet("Physics").SetVariantSelection(variant)
     if not ok:
         raise ValueError(f"USD Physics variant {variant!r} not available in {usd_path}")
-    if not desc.urdf:
-        _strip_newton_mimic(stage)
-    stage.GetRootLayer().Save()
     return usd_path, f"/{root.GetName()}"
 
 

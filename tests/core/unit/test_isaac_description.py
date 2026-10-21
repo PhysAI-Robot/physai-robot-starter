@@ -145,3 +145,48 @@ def test_single_cube_manifests_build_a_config_for_either_simulator(manifest_path
     assert isaac.simulator == "isaac"
     accepted = {f.name for f in fields(create_env_config("so101", simulator="isaac"))}
     assert set(isaac.robots[0].config) <= accepted
+
+
+def test_clear_stale_imports_removes_only_this_robots_output(tmp_path):
+    """The importer never overwrites and gives up after 1000 copies, so a stale cache stops every Isaac start."""
+    from physai.sim.isaac.description import _clear_stale_imports
+
+    for name in (
+        "so101",
+        "so101_1",
+        "so101_999",
+        "so101_debug",
+        "other",
+    ):
+        (tmp_path / name).mkdir()
+    (tmp_path / "so101_2").write_text("a file, not an import", encoding="utf-8")
+    _clear_stale_imports(tmp_path, "so101")
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "other",
+        "so101_2",
+        "so101_debug",
+    ]
+
+
+def test_current_usd_follows_the_stamp_and_the_isaac_sim_version(tmp_path, monkeypatch):
+    """Runs read the USD fetch_assets wrote; a missing file or another Isaac Sim version means fetch again."""
+    import importlib.metadata
+    import json
+
+    from physai.robots.description import RobotDescription
+    from physai.sim.isaac.description import current_usd, usd_dir
+
+    desc = RobotDescription(urdf="robot.urdf", mjcf="robot.xml", ee_site="ee")
+    monkeypatch.setattr(importlib.metadata, "version", lambda name: "6.2.0.0")
+    assert current_usd(desc, tmp_path) is None
+    folder = usd_dir(tmp_path)
+    (folder / "robot").mkdir(parents=True)
+    stamp = folder / "robot.json"
+    stamp.write_text(
+        json.dumps({"isaacsim": "6.2.0.0", "usd": "robot/robot.usda"}), encoding="utf-8"
+    )
+    assert current_usd(desc, tmp_path) is None  # the stamp is there, the file is not
+    (folder / "robot" / "robot.usda").write_text("#usda 1.0", encoding="utf-8")
+    assert current_usd(desc, tmp_path) == folder / "robot" / "robot.usda"
+    monkeypatch.setattr(importlib.metadata, "version", lambda name: "6.3.0.0")
+    assert current_usd(desc, tmp_path) is None
