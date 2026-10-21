@@ -10,6 +10,9 @@ drawn by it.
 
 from __future__ import annotations
 
+import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import mujoco
@@ -22,6 +25,56 @@ TILE = 1 / 6
 FLOOR_LIGHT, FLOOR_DARK = (0.8902, 0.9137, 0.8941), (0.6235, 0.6902, 0.6588)
 SKY = (223, 230, 226)
 KEY_LIGHT_DIRECTION = (-0.35, 0.45, -1.0)
+
+
+@contextmanager
+def drawable_scene_mjcf(
+    spec: mujoco.MjSpec, model: mujoco.MjModel, robot_dir: Path
+) -> Iterator[str]:
+    """The scene as an MJCF file that Newton draws the way MuJoCo does.
+
+    The renderer needs the scene only to draw it, and Newton's MJCF parser differs from
+    MuJoCo's drawing in two ways, both fixed on a reloaded copy of the exported scene (the
+    robot's own files and the env's spec stay as they are):
+
+    - MuJoCo does not draw geoms of group 3 and above, the convention for the collision-only
+      copies of a robot's meshes and for contact pads. The parser loads them as colliders, and
+      `force_show_colliders` (needed for the table, cube and target, which are plain geoms)
+      then draws them in a debug palette. They are dropped.
+    - MuJoCo multiplies a material's rgba by its texture; the parser reads only the rgba, so a
+      textured material (the ViperX's black `interbotix_black`, rgba white) comes out white.
+      Each 2d texture is replaced by its mean colour in the material's rgba.
+    """
+    with scene_mjcf(spec, model, robot_dir) as exported:
+        drawable = mujoco.MjSpec.from_file(exported)
+    rgb = mujoco.mjtTextureRole.mjTEXROLE_RGB
+    for material in drawable.materials:
+        name = material.textures[rgb]
+        texture = (
+            mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_TEXTURE, name) if name else -1
+        )
+        if texture < 0 or model.tex_type[texture] != mujoco.mjtTexture.mjTEXTURE_2D:
+            continue
+        pixels = model.tex_width[texture] * model.tex_height[texture]
+        channels = model.tex_nchannel[texture]
+        start = model.tex_adr[texture]
+        colours = model.tex_data[start : start + pixels * channels]
+        mean = colours.reshape(pixels, channels)[:, :3].mean(axis=0) / 255.0
+        material.rgba = np.append(
+            np.asarray(material.rgba)[:3] * mean, material.rgba[3]
+        )
+        textures = list(material.textures)
+        textures[rgb] = ""
+        material.textures = textures
+    for geom in [g for g in drawable.geoms if g.group >= 3]:
+        drawable.delete(geom)
+    drawable.compile()
+    path = Path(robot_dir) / f"_newton_drawable_{os.getpid()}.xml"
+    path.write_text(drawable.to_xml(), encoding="utf-8")
+    try:
+        yield str(path)
+    finally:
+        path.unlink(missing_ok=True)
 
 
 class NewtonRenderer:
@@ -45,7 +98,7 @@ class NewtonRenderer:
         self.width, self.height = width, height
         self._view = view
         builder = newton.ModelBuilder()
-        with scene_mjcf(spec, model, robot_dir) as path:
+        with drawable_scene_mjcf(spec, model, robot_dir) as path:
             builder.add_mjcf(
                 path,
                 verbose=False,
