@@ -161,7 +161,10 @@ finally:
   [robot runbooks](docs/ROBOT_RUNBOOKS.md).
 - **Isaac Sim** (optional, local RTX GPU): `uv sync --extra isaac` installs it, set
   `OMNI_KIT_ACCEPT_EULA=YES` yourself, then add `--sim isaac` to `run_sim.py` or
-  `eval_policy.py` (observation-only policies, single-cube scene). Constraints and results:
+  `eval_policy.py` (observation-only policies, single-cube scene). With Isaac Sim installed,
+  `fetch_assets.py --robot <robot>` also imports the robot into USD (`assets/<robot>/usd/`); an Isaac Sim run reads
+  that USD and stops with the command to rerun if it is missing or was written by another Isaac Sim version
+  (`--force` rewrites it). Fetch again after installing or upgrading `isaacsim`. Constraints and results:
   [decision D](docs/DECISIONS.md#d-isaac-sim-is-an-optional-peer-engine) and
   `research/classical_control` in [`physai-research`](https://github.com/PhysAI-Robot/physai-research).
   The Isaac Sim packages are large, and `uv` gives up on a download after 30 s by default

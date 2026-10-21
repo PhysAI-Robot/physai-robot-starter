@@ -94,7 +94,7 @@ What this is not, so results are not over-read:
   Menagerie actuators are soft and sag by centimetres under the arm's weight; the real servos hold
   their position. Turn it off to see the sag.
 - **Isaac Sim.** There is no URDF, so `--sim isaac` imports the Menagerie MJCF with Isaac's own MJCF
-  importer (the USD is built at start-up into `.isaac_cache/viperx300s/`, not by `fetch_assets.py`).
+  importer (`fetch_assets.py --robot viperx300s` writes the USD to `assets/viperx300s/usd/` when Isaac Sim is installed; a run reads it and stops with that command if it is missing).
   On the maintainer's RTX 3060 the arm holds its home pose, both fingers close and reopen, and the
   per-episode render check (`robot_is_rendered`) passes: Isaac draws the arm, both fingers and the cube
   in the front and `video` views, from its own state and, with `--render isaac`, from MuJoCo's or
