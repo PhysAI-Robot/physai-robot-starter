@@ -28,7 +28,7 @@ dependencies = [
     # dependency, so there is no audience that wants physai without the
     # ability to run its own test suite.
     "pytest>=9.1.1",
-    "ruff>=0.17.0",
+    "ruff>=0.17.1",
     "import-linter>=2.1",
     # Training and inference: gymnasium for the GymnasiumAdapter; torch + lerobot for ACT and Diffusion
     # Policy (lerobot's `diffusion` extra brings diffusers). lerobot pins numpy<2.3.0 and isaacsim-kernel
