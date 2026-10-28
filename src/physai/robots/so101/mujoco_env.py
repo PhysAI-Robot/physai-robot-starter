@@ -287,6 +287,7 @@ class SO101Env(MuJoCoSimulationCore):
             seed=seed if seed is not None else self.cfg.seed,
             protected_xy=protected_xy,
         )
+        self.upload_textures(self.randomization.pop_dirty_textures())
         self.layout.show_target()
 
         self.data.ctrl[self.arm_act_ids] = HOME_QPOS

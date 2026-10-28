@@ -52,6 +52,14 @@ class MuJoCoRenderer:
         self._renderer.update_scene(self.data, camera=camera)
         return self._renderer.render()
 
+    def upload_textures(self, texture_ids: list[int]) -> None:
+        """Send changed texture data to the GPU (the renderer cached it when it was made)."""
+        if self._renderer is not None:
+            for texture_id in texture_ids:
+                mujoco.mjr_uploadTexture(
+                    self.model, self._renderer._mjr_context, texture_id
+                )
+
     def close(self) -> None:
         if self._renderer is not None:
             self._renderer.close()
@@ -111,6 +119,11 @@ class MuJoCoSimulationCore:
         if self.renderer is None:
             raise RuntimeError("simulation constructed with render=False")
         return self.renderer.render(name)
+
+    def upload_textures(self, texture_ids: list[int]) -> None:
+        """Tell a renderer that caches textures (MuJoCo's) that these changed; others draw from the model."""
+        if texture_ids and hasattr(self.renderer, "upload_textures"):
+            self.renderer.upload_textures(texture_ids)
 
     def close(self) -> None:
         if self.renderer is not None:

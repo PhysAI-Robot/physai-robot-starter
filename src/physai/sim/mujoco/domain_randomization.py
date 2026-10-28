@@ -34,6 +34,9 @@ class DomainRandomizationConfig:
     table_tint: tuple[float, float] = (1.0, 1.0)
     floor_tint: tuple[float, float] = (1.0, 1.0)
     floor_tile_repeat: tuple[float, float] = (6.0, 6.0)
+    # Chance per episode that the floor tiles are drawn black and white instead of the studio's greys (drawn only
+    # when above 0, so existing seeds keep their samples).
+    floor_bw_probability: float = 0.0
 
     def __post_init__(self) -> None:
         if not isinstance(self.enabled, bool):
@@ -56,6 +59,8 @@ class DomainRandomizationConfig:
                 raise ValueError(f"{name} must contain two finite values")
             if bounds[0] <= 0 or bounds[0] > bounds[1]:
                 raise ValueError(f"{name} must satisfy 0 < low <= high")
+        if not 0.0 <= self.floor_bw_probability <= 1.0:
+            raise ValueError("floor_bw_probability must be in [0, 1]")
         for name in ("clutter_x_range", "clutter_y_range"):
             bounds = getattr(self, name)
             if len(bounds) != 2 or not all(np.isfinite(bounds)):
@@ -121,7 +126,29 @@ class DomainRandomizationEngine:
         self._base_mat_texrepeat = model.mat_texrepeat.copy()
         self._base_geom_rgba = model.geom_rgba.copy()
         self._floor_mat = _id(model, mujoco.mjtObj.mjOBJ_MATERIAL, "physai_grid")
+        self._floor_tex = _id(model, mujoco.mjtObj.mjOBJ_TEXTURE, "physai_grid")
+        self._base_floor_pixels = (
+            self._floor_pixels().copy() if self._floor_tex >= 0 else None
+        )
+        self._textures_dirty = (
+            False  # the model's texture differs from what a renderer last uploaded
+        )
         self._table_geom = _id(model, mujoco.mjtObj.mjOBJ_GEOM, "table_top")
+
+    def _floor_pixels(self) -> np.ndarray:
+        """The floor texture's RGB pixels, a view into the model."""
+        tex, model = self._floor_tex, self.model
+        start = int(model.tex_adr[tex])
+        size = int(
+            model.tex_width[tex] * model.tex_height[tex] * model.tex_nchannel[tex]
+        )
+        return model.tex_data[start : start + size].reshape(-1, model.tex_nchannel[tex])
+
+    def pop_dirty_textures(self) -> list[int]:
+        """Textures changed since the last call; a renderer that cached them must upload these again."""
+        dirty = [self._floor_tex] if self._textures_dirty else []
+        self._textures_dirty = False
+        return dirty
 
     def camera_shift(self, camera_id: int) -> np.ndarray:
         """How far this episode moved a camera from its nominal mount (parent frame)."""
@@ -136,6 +163,11 @@ class DomainRandomizationEngine:
         self.model.mat_rgba[:] = self._base_mat_rgba
         self.model.mat_texrepeat[:] = self._base_mat_texrepeat
         self.model.geom_rgba[:] = self._base_geom_rgba
+        if self._base_floor_pixels is not None and not np.array_equal(
+            self._floor_pixels(), self._base_floor_pixels
+        ):
+            self._floor_pixels()[:] = self._base_floor_pixels
+            self._textures_dirty = True
 
     def apply(
         self,
@@ -241,6 +273,15 @@ class DomainRandomizationEngine:
             repeat = float(rng.uniform(low, high))
             model.mat_texrepeat[self._floor_mat] = repeat
             drawn["floor_tile_repeat"] = (repeat,)
+        probability = config.floor_bw_probability
+        if probability > 0.0 and self._floor_tex >= 0:
+            black_white = bool(rng.random() < probability)
+            drawn["floor_black_white"] = (float(black_white),)
+            if black_white:
+                pixels = self._floor_pixels()
+                bright = pixels[:, :3].mean(axis=1) >= pixels[:, :3].mean()
+                pixels[:, :3] = np.where(bright, 255, 25)[:, None]
+                self._textures_dirty = True
         return drawn
 
 

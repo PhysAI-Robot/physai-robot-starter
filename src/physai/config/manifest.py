@@ -168,6 +168,10 @@ def _parse_simulation_config(
             if not isinstance(value, (list, tuple)) or len(value) != 2:
                 raise ValueError(f"{source}: domain_randomization.{key} must be a pair")
             kwargs[key] = tuple(float(item) for item in value)
+    if "floor_bw_probability" in randomization_data:
+        kwargs["floor_bw_probability"] = float(
+            randomization_data["floor_bw_probability"]
+        )
     if "camera_position_jitter" in randomization_data:
         kwargs["camera_position_jitter"] = float(
             randomization_data["camera_position_jitter"]
