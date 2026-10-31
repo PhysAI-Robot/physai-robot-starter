@@ -570,6 +570,13 @@ class SO101IsaacEnv:
             self.stage.GetPrimAtPath(self._target_pad_path)
         ).GetOrderedXformOps()[0]
         op.Set(Gf.Vec3d(*self._target_pos))
+        # The display mirror (and a foreign renderer that draws it) places the pad too.
+        site = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SITE, "target_site")
+        pad = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, "target_pad")
+        if site >= 0:
+            self.model.site_pos[site] = self._target_pos
+        if pad >= 0:
+            self.model.geom_pos[pad] = self._target_pos
 
     def _reset_cube(self) -> tuple[float, float] | None:
         """Put the cube at this episode's starting pose, at rest.
