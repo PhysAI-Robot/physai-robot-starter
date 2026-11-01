@@ -78,3 +78,28 @@ def test_a_policys_episode_metrics_join_the_row_and_a_violation_replaces_its_rea
         == "joint limit"
     )
     assert eval_policy._policy_metrics(Plain(), "joint limit") == {}
+
+
+@pytest.mark.parametrize("sim", ["isaac", "newton"])
+def test_cube_start_is_refused_off_mujoco(monkeypatch, tmp_path, sim):
+    start = tmp_path / "start.json"
+    start.write_text('{"offset_xy": [0, 0]}', encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["eval_policy.py", "--sim", sim, "--cube-start", str(start), "--episodes", "1"],
+    )
+    with pytest.raises(SystemExit) as exc:
+        eval_policy.main()
+    assert exc.value.code == 2
+
+
+def test_cube_start_needs_an_existing_file(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["eval_policy.py", "--cube-start", str(tmp_path / "missing.json"), "--episodes", "1"],
+    )
+    with pytest.raises(SystemExit) as exc:
+        eval_policy.main()
+    assert exc.value.code == 2

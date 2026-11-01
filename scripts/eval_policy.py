@@ -198,6 +198,13 @@ def main() -> int:
     )
     add_run_outputs(ap)
     ap.add_argument(
+        "--cube-start",
+        type=Path,
+        help="study 01, O2: a JSON file (see physai.robots.cube_start) that moves "
+        "the cube's start in MuJoCo to where another simulator puts it; "
+        "--sim mujoco only, off by default",
+    )
+    ap.add_argument(
         "--sorting",
         action="store_true",
         help="evaluate the three-cube sorting task instead of pick-and-place, "
@@ -274,6 +281,17 @@ def main() -> int:
         )
         if args.clutter_count:
             overrides["scene_overrides"] = {"clutter_count": args.clutter_count}
+    if args.cube_start is not None:
+        if simulator != "mujoco":
+            ap.error("--cube-start needs --sim mujoco (Isaac Sim is where the pose comes from)")
+        if args.sorting:
+            ap.error("--cube-start supports the single-cube task only")
+        if not args.cube_start.is_file():
+            ap.error(f"--cube-start: no such file: {args.cube_start}")
+        overrides["robot_config"] = {
+            **overrides.get("robot_config", {}),
+            "cube_start": str(args.cube_start),
+        }
     try:
         manifest = with_overrides(
             manifest,
