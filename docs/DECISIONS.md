@@ -73,10 +73,10 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
 
 - **Layout.** `physai/sim/mujoco/` and `physai/sim/isaac/` are peers; `sim/__init__.py` is a
   docstring so importing `physai.sim` never needs an engine SDK. Only `physai.sim.isaac` and
-  `robots.so101.isaac_env.SO101IsaacEnv` may import `isaacsim`/`omni`/`pxr`, always
+  the arms' `isaac_env` modules (`robots.so101`, `robots.viperx300s`) may import `isaacsim`/`omni`/`pxr`, always
   function-locally (they are not import-safe before a `SimulationApp` exists). Adapters match the
   manifest `backend` one to one: `DirectAdapter`, `ROS2SimAdapter`, `ROS2HardwareAdapter`.
-- **Selection.** `RobotDescriptor.simulators` (default `("mujoco",)`; so101 also `isaac`) and the
+- **Selection.** `RobotDescriptor.simulators` (default `("mujoco",)`; the SO-101 and ViperX 300 S also `isaac` and `newton`) and the
   manifest's top-level `simulator`, validated at load: every robot must support it, and Isaac
   rejects a `world` block, `backend: ros2_sim` and any `viewer.mode` but `none`. `--sim isaac`
   overrides any manifest, so `so101_single_cube_fixed_place.yaml` is the one session both engines
@@ -89,21 +89,23 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   `--serve` runs the `Host` on the main thread (Isaac must stay on the thread that created
   `SimulationApp`) with uvicorn on a worker thread, and shows a display mirror refreshed from
   Isaac's joint and cube state.
-- **Install.** `isaac` is a normal extra (`uv sync --extra isaac --extra training`); it needs the
-  NVIDIA index and `index-strategy = "unsafe-best-match"`, which `pyproject.toml` documents.
-  `lerobot` is part of `training` so one checkpoint runs on both engines. Because
-  `lerobot` wants `numpy<2.3`/`packaging<26` and Isaac pins `numpy==2.3.1`/`packaging==26.0`,
-  `[tool.uv] override-dependencies` forces `numpy>=2.0,<2.3` and `packaging>=24.2,<26.0`;
-  `uv pip check` lists the broken pins. When a release needs `numpy` 2.3 the overrides go.
-  Fifteen more packages are pinned in the same list to the versions every Isaac Sim evaluation of
-  study 1 ran with (`uvicorn` 0.53.0, `httptools` 0.8.0, `websockets` 17.1, `fastapi` 0.141.1,
-  `gymnasium` 1.3.0, `mujoco` 3.13.0, `click`, `anyio`, and a few more, plus `huggingface-hub` so one
-  resolution remains): `isaacsim-kernel` pins older versions of most of them, one pin pulls the next
-  (`uvicorn` 0.53 needs `httptools>=0.8`, which Isaac holds at 0.6.1), and a lock that followed them
-  would not be the environment the results came from. Isaac Sim ran headless on these versions;
-  its livestream and web extensions were not exercised.
-  `webtest` (`httpx2`) conflicts with `isaac` (`idna`). On Windows `torch` comes from the `cu128`
-  index. `OMNI_KIT_ACCEPT_EULA=YES` is set by the person running Isaac, never by this repo.
+- **Install.** One extra, `isaac`. A plain `uv sync` installs MuJoCo, Newton and the training stack (torch, lerobot),
+  and `uv sync --extra isaac` adds Isaac Sim (several GB, an NVIDIA GPU, an accepted EULA; no macOS wheels, a marker
+  skips it there). Nothing in the default environment differs from the Isaac one: the lock holds one version of every
+  package, because the default is pinned to what `isaacsim-core` 6.2.0.0 pins (`newton==1.6.1`, hence `mujoco` and
+  `mujoco-warp` 3.12.0) and the resolver takes the rest from `isaacsim-kernel` (`uvicorn` 0.29.0, `fastapi`,
+  `websockets`, `idna` and others, older than the newest), so adding the extra moves no version and cannot conflict.
+  Isaac Sim needs the NVIDIA index and `index-strategy = "unsafe-best-match"`, which `pyproject.toml` documents.
+  `lerobot` wants `numpy<2.3` and Isaac pins `numpy==2.3.1`, so the one `[tool.uv] override-dependencies` entry
+  forces `numpy>=2.0,<2.3` (Isaac runs on 2.2.x; `uv pip check` lists the broken pin); when a release needs `numpy`
+  2.3 it goes. Isaac Sim's livestream and web extensions are not exercised.
+  **`isaacsim` is held at 6.2.0.0 on purpose.** Study 01 compares Isaac Sim results across its runs, so
+  every Isaac Sim number is measured on one version, and MuJoCo, mujoco-warp and Newton are whatever it pins
+  (3.12.0, 3.12.0, 1.6.1), not the 3.13 of the study's first runs. A bump means re-measuring the Isaac Sim
+  rows that a comparison uses. `.github/dependabot.yml` allows only `isaacsim` and the few packages Isaac does not pin; a Dependabot
+  bump of `isaacsim` cannot resolve alone (`newton` is pinned beside it), so it is a notice: raise both by hand.
+  On Windows `torch` comes from the `cu128` index. `OMNI_KIT_ACCEPT_EULA=YES` is set by the person running
+  Isaac, never by this repo, and the Isaac tests skip without it (the Newton tests skip without an NVIDIA GPU).
   `lerobot`'s `draccus` installs a top-level `tests` package, hence `tests/__init__.py`.
 
 ## E. One `Host`, a frozen desktop viewer, record and replay through the data path
@@ -156,10 +158,14 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   `scene.overrides` in the researcher's manifest. A genuinely new scene registers itself with
   `register_scene`. Scenes are `ManipulationSceneConfig` today; anything else needs a seam
   extension in core first.
-- **Core still moves a robot.** `so101`'s `demo` policy (`ScriptedPlanner` + `PlanRunner`, true
-  object poses, open-loop) is the minimal proof that a policy drives the arm and the default of
-  `run_sim.py` and `eval_policy.py`. It is a demo, not a baseline to beat; a researcher's
-  expert, visual servo or ACT checkpoint comes from their plugin.
+- **Core still moves a robot.** `so101`'s `demo` policy (a planner plus `PlanRunner`, true
+  object poses, which looks each cube up again before it descends) is the minimal proof that a
+  policy drives the arm and the default of `run_sim.py` and `eval_policy.py`. It plans the
+  single cube with `ScriptedPlanner` and the `stack_cubes` task with `StackPlanner`, the one
+  core planner that decides something (order, level heights, carry height, and, when the
+  arm's top-down grasp is too low for the tower, the tilt and roll of each waypoint). It is a demo, not a
+  baseline to beat; a researcher's expert, visual servo or ACT checkpoint comes from their
+  plugin. Language grounding stays out of core: `StackPlanner` takes an order, not a sentence.
 - **A policy declares its own traits.** `register_policy` and `register_robot_policy` take
   `PolicyTraits` (`needs_images`, `simulators`); manifest validation rejects a policy on an
   engine it does not list, and `eval_policy.py` renders cameras from `needs_images`. A policy
@@ -186,6 +192,73 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   any plugin's policy gets it. Unchanged files are not downloaded again; changing the revision of a folder
   replaces its files in place.
 - **Optional dependency, lazy import.** `huggingface-hub` is imported only when a reference is used
-  (the `training` extra installs it through lerobot); without it the error says what to install.
+  (`uv sync` installs it through lerobot); without it the error says what to install.
 - **A revision pins a result.** Without one, `main` is used, which can change; a published number should
   name a commit. The evaluation JSON records the reference as given.
+
+## I. Three engines, and the renderer is chosen apart from the physics
+
+Goal: run one scene on MuJoCo, Isaac Sim or Newton, and draw it with any of the three, so a
+policy can be measured against a change of physics, of renderer, or both (`--sim` and `--render`).
+
+- **The MuJoCo model and data are the shared state.** Every SO-101 and ViperX 300 S env keeps its
+  scene in a MuJoCo `model`/`data`: the simulation itself on MuJoCo and Newton, the display
+  mirror (`_sync_mirror`) on Isaac. A renderer is any object with `render(camera) -> HxWx3 uint8`
+  and `close()` that draws from that pair (`MuJoCoRenderer`, `NewtonRenderer`, `IsaacRenderer`);
+  `robots/rendering.py:attach_renderer` swaps it onto `env.renderer`, and the factories take
+  `simulator` and `renderer` independently (default: the simulator's own). Any of the nine
+  pairings works for both robots.
+- **Newton physics is MuJoCo's solver on the GPU.** `SO101NewtonEnv` and `ViperX300SNewtonEnv`
+  are the MuJoCo envs with `step_simulation` replaced by Newton's `SolverMuJoCo` (`NewtonPhysics`):
+  the scene is exported to an MJCF beside the robot's meshes, one control period runs as a CUDA
+  graph, and the result is copied back into `data` so sites, kinematics, contacts and cameras keep
+  reading MuJoCo. It reproduces MuJoCo to within about 1e-4 rad away from contact and follows it
+  through a pick and place. Limits: no `domain_randomization` (it edits the MjModel after Newton is
+  built), a free joint's `qvel` is Newton's world-frame velocity, and contacts differ by a pad or
+  two where the gripper rests on the table. A policy that runs on MuJoCo runs on Newton
+  (`PolicyTraits.runs_on`).
+- **Isaac and Newton as renderers of someone else's state.** `NewtonRenderer` builds its own Newton
+  model from the scene MJCF with the studio's tiled floor and takes the state, the target pad and
+  the camera pose from `data` each frame. Isaac draws another simulator's state through
+  `show_state`, which writes the joint positions, the cube and the target into its stage and steps
+  once (a pose written through the tensor API reaches the cameras only after a step). Visual
+  randomization (`domain_randomization`, lighting scale, camera jitter) belongs to one engine's
+  scene, so a renderer other than the simulator refuses it.
+- **`--video` records a diagonal view, not an observation camera.** The ViperX `front` camera
+  is a task view with the arm cut off at the top edge, and a policy reads it, so it stays as it is.
+  Instead `WorkspaceConfig.video_view` (a `ViewCamera`, MuJoCo's free-camera parameters, sized per
+  robot in `scene_defaults`) is a free camera that every renderer draws on request under the name
+  `video`. It is not in any model, so it is no observation and no camera-randomization draw (adding
+  a model camera would shift every seeded jitter); `VideoObserver` renders it each step, and
+  `--camera front|wrist` records what a policy sees. File names end `_o` (success) or `_x` (failure).
+- **Same limits as Isaac (D).** Single-cube scenes for an Isaac simulator or renderer; no `world`
+  block, `backend: ros2_sim` or `viewer.mode` but `none` with a non-MuJoCo simulator or renderer;
+  `--viewer`, `SharedWorld`, the ROS2 bridge and TurtleBot stay MuJoCo-only. With Isaac in the pairing
+  `--serve` runs the `Host` on the main thread.
+- **One environment.** Newton is a default dependency, pinned to the version Isaac Sim 6.2.0.0 pins
+  (`newton==1.6.1`, `mujoco-warp==3.12.0`, `mujoco==3.12.0`), so it and Isaac share one environment and one lock
+  with no conflict and nothing overridden for them. Newton 1.7 (mujoco-warp 3.15) was tried and would have split
+  them into two environments; following Isaac is what keeps one. Study 01 ran MuJoCo 3.13, so its MuJoCo numbers
+  are not reproduced here, while its Newton scores (1.6.1) are. One ordering rule: Kit brings its own warp,
+  and an Isaac app started after the pip warp has been imported comes up without `omni.usd`, so the
+  factories start Isaac first (`start_isaac_first`), and nothing may import `newton` or `warp`
+  at collection or import time (hence `find_spec`, not `importorskip`, in the Newton tests).
+- **Contact settings carry over to Newton by hand.** `SolverMuJoCo.register_custom_attributes` is called
+  before the MJCF is read, or the pads' `condim`, `solref` and `solimp` are dropped. MuJoCo's writer omits
+  trailing default numbers (`solref="0.004"`) and Newton reads them as zero, so `scene_mjcf` writes them
+  out. mujoco-warp has no no-slip solver (`noslip_iterations > 0` raises), which is what holds the SO-101's
+  cube in MuJoCo, so Newton runs `cone="elliptic"` with `impratio` 20 (the description's `sim_overrides.newton`
+  may change it). Without a substitute the SO-101's cube creeps 15 mm in 12 s. The SO-101 sets `impratio` 30
+  (the scripted pick starts to fail from about 100) and, on its pads, `condim` 6 with torsional and rolling
+  friction (they stop the cube turning in the jaws) and a contact damping ratio of 2; the cube then moves
+  at most 0.7 mm in 60 s. The hold is measured after a 10 s settle, because the cube turns and seats itself
+  between the jaws as they take its weight (up to about 2.5 mm, in the first seconds) and then stops;
+  `tests/core/acceptance/test_held_cube.py` checks every robot and engine at under 2 mm over the next 60 s
+  (SO-101 MuJoCo 0.01 mm, SO-101 Newton 0.7, ViperX MuJoCo 1.3, ViperX Newton 0.3, both on Isaac Sim 0.00).
+- **The ViperX on MuJoCo integrates implicit-fast, with stiffer friction and a damped contact.** Its arm
+  actuators are soft and damped, and with the default Euler integrator the held arm trembles and shakes a held
+  cube loose (1.5-3 mm in 60 s); `implicitfast` stops that, as in Newton's solver. What is left is MuJoCo's soft
+  friction, which the stock gripper (about 1 N per side) does not hold against: `impratio` 30 and a contact
+  damping ratio of 3 on the pads and the cube bring the drift to at most 1.4 mm over ten seeds (60 s after a
+  10 s settle; 1.3 mm in the test's four). Damping the pads alone is worse (2.9 mm), because MuJoCo averages the two geoms' `solref`.
+  No-slip is not the fix here: it drops the ViperX's cube.

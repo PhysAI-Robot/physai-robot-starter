@@ -237,10 +237,17 @@ def main() -> int:
         args.manifest or (SORTING_MANIFEST if args.sorting else DEFAULT_MANIFEST)
     )
     simulator = args.simulator or manifest.simulator
+    renderer = args.renderer or manifest.renderer or simulator
     difficulty = (
         args.camera_jitter > 0 or args.lighting_scale != 1.0 or args.clutter_count > 0
     )
     overrides: dict[str, Any] = {}
+    if (
+        renderer == "isaac"
+        and simulator != "isaac"
+        and (args.sorting or args.clutter_count)
+    ):
+        ap.error("--render isaac supports neither --sorting nor --clutter-count")
     if simulator == "isaac":
         # The same scene config MuJoCo builds from, so both engines share the
         # table, cube, target, cameras and per-seed cube layout.
@@ -276,6 +283,7 @@ def main() -> int:
             # replay builds its policy per episode, from that episode's actions
             policy="idle" if args.policy == "replay" else args.policy,
             simulator=args.simulator,
+            renderer=args.renderer,
             **overrides,
         )
     except ValueError as exc:
@@ -290,7 +298,7 @@ def main() -> int:
     try:
         session = create_session(
             manifest,
-            render=simulator == "isaac"
+            render="isaac" in (simulator, renderer)
             or needs_images
             or wants_cameras(args)
             or args.save_dataset is not None,

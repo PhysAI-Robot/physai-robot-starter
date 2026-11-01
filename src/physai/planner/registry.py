@@ -47,6 +47,8 @@ def _load_builtins() -> None:
     if _BUILTINS_LOADED:
         return
     from .base import ScriptedPlanner
+    from .stack import StackPlanner
 
     register_planner("scripted_planner", ScriptedPlanner)
+    register_planner("stack_planner", StackPlanner)
     _BUILTINS_LOADED = True

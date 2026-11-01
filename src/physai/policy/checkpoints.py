@@ -45,8 +45,7 @@ def fetch_checkpoint(
         from huggingface_hub import snapshot_download
     except ImportError as exc:
         raise RuntimeError(
-            "downloading a checkpoint needs huggingface-hub "
-            "(uv sync --extra training installs it)"
+            "downloading a checkpoint needs huggingface-hub (`uv sync` installs it)"
         ) from exc
     repo_dir = (Path(root) if root is not None else CHECKPOINT_DIR) / repo_id
     snapshot_download(

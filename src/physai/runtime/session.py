@@ -107,6 +107,7 @@ def _create_single_session(
     kwargs: dict[str, Any] = {
         "robot_kwargs": fields_,
         "simulator": manifest.simulator,
+        "renderer": manifest.renderer,
         "scene_name": scene_name,
         "scene_kwargs": _scene_kwargs(manifest),
         "task_name": task_name,

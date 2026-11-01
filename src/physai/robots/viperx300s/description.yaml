@@ -1,0 +1,55 @@
+# Sim-neutral ALOHA follower-arm data (one ViperX 300 S), loaded by
+# `physai.robots.description` and consumed by the MuJoCo scene builder.
+#
+# Source model: google-deepmind/mujoco_menagerie `trossen_vx300s` (BSD-3), fetched
+# into `assets/viperx300s/` by `python scripts/fetch_assets.py --robot viperx300s`.
+#
+# HONEST SCOPE: this is the single ViperX 300 S arm with its STOCK two-finger
+# gripper and a D405-style wrist camera added here. It is not the ALOHA 2 follower
+# with the custom 3D-printed gripper (that model is the bimanual `aloha` Menagerie
+# model, which has no single-arm file). Arm kinematics and dynamics match the ViperX 300 S
+# follower; the fingers do not.
+#
+# There is no URDF. The Isaac backend imports the MJCF directly with Isaac's own
+# MJCF importer (`sim.isaac.description.import_robot`); the importer reads joint
+# limits, force limits and armature from the MJCF but not the position actuators'
+# `kp`, so the drive gains below are transcribed from the MJCF defaults.
+urdf: ""
+mjcf: vx300s.xml
+ee_site: pinch
+
+cameras:
+  # Intel RealSense D405-style camera on the gripper, looking forward and down at the
+  # fingertips. The pose is the Menagerie `aloha` model's `wrist_cam` expressed in this
+  # model's `gripper_link` frame (both grippers share the ViperX wrist), fovy of the
+  # D405 depth stream (87 x 58 degrees: the vertical value is used).
+  - name: wrist
+    parent_link: gripper_link
+    pos: [0.02534, -0.00007, 0.08247]
+    quat: [0.596065, 0.380403, -0.379928, -0.596368]
+    fovy_deg: 58
+    width: 320
+    height: 240
+
+# The stock fingers already carry box collision pads (`left_finger_pad_*`,
+# `right_finger_pad_*`) in the Menagerie model, so no contact pads are added here.
+contact_pads: []
+
+sim_overrides:
+  mujoco: {}
+
+# Drive gains transcribed from the fetched MJCF's `vx300s` defaults at the pinned commit:
+# `stiffness` is the position actuator's `kp`, `damping` the joint's `damping` (the MJCF
+# actuators have no `kv`), `force_limit` the actuator `forcerange`. MuJoCo drives only
+# `left_finger` (the actuator named `gripper`) and ties the right finger to it with an
+# equality constraint; PhysX has no such constraint, so the Isaac env drives both
+# fingers with the same gains.
+actuators:
+  - {joint: waist, stiffness: 25.0, damping: 2.86, force_limit: 35.0, ctrl_range: [-3.14158, 3.14158]}
+  - {joint: shoulder, stiffness: 76.0, damping: 6.25, force_limit: 57.0, ctrl_range: [-1.85005, 1.25664]}
+  - {joint: elbow, stiffness: 106.0, damping: 8.15, force_limit: 25.0, ctrl_range: [-1.76278, 1.6057]}
+  - {joint: forearm_roll, stiffness: 35.0, damping: 3.07, force_limit: 10.0, ctrl_range: [-3.14158, 3.14158]}
+  - {joint: wrist_angle, stiffness: 8.0, damping: 1.18, force_limit: 35.0, ctrl_range: [-1.8675, 2.23402]}
+  - {joint: wrist_rotate, stiffness: 7.0, damping: 0.78, force_limit: 35.0, ctrl_range: [-3.14158, 3.14158]}
+  - {joint: left_finger, stiffness: 300.0, damping: 10.0, force_limit: 35.0, ctrl_range: [0.021, 0.057]}
+  - {joint: right_finger, stiffness: 300.0, damping: 10.0, force_limit: 35.0, ctrl_range: [-0.057, -0.021]}

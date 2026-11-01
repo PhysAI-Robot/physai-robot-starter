@@ -44,12 +44,16 @@ def shard_ranges(seed: int, episodes: int, shard_size: int) -> list[tuple[int, i
 
 
 def run_shard(
-    start: int, count: int, out: Path, passthrough: list[str]
+    start: int,
+    count: int,
+    out: Path,
+    passthrough: list[str],
+    eval_script: Path = EVAL_SCRIPT,
 ) -> tuple[int, bool, float]:
     """Run one shard; return (exit code, hit the render glitch, seconds)."""
     command = [
         sys.executable,
-        str(EVAL_SCRIPT),
+        str(eval_script),
         "--seed",
         str(start),
         "--episodes",
@@ -109,6 +113,13 @@ def main() -> int:
         "starts after a 90 s pause in 1 of 5 (Fisher p = 0.36, so only suggestive)",
     )
     ap.add_argument(
+        "--eval-script",
+        type=Path,
+        default=EVAL_SCRIPT,
+        help="a script that takes eval_policy.py's arguments (a wrapper that "
+        "changes the setup first, as a study does); default eval_policy.py",
+    )
+    ap.add_argument(
         "passthrough",
         nargs=argparse.REMAINDER,
         help="after `--`: the eval_policy.py arguments every shard runs with",
@@ -128,7 +139,9 @@ def main() -> int:
             if args.cooldown > 0 and (parts or attempt > 1):
                 time.sleep(args.cooldown)
             stamp = datetime.now().isoformat(timespec="seconds")
-            code, glitch, seconds = run_shard(start, count, out, passthrough)
+            code, glitch, seconds = run_shard(
+                start, count, out, passthrough, args.eval_script
+            )
             record = {
                 "shard": start,
                 "attempt": attempt,

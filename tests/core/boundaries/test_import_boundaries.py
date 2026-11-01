@@ -56,3 +56,40 @@ def test_core_never_imports_research():
             if any(name.split(".")[0] == "research" for name in names):
                 offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
     assert not offenders, f"core must not import research: {offenders}"
+
+
+# Scripts that may name one robot's package, and why. A script that drives a robot takes a
+# manifest and reads `session.runtime.robot` (see scripts/_common_args.py); everything else
+# belongs behind the robot's own methods, not in a script.
+ROBOT_SPECIFIC_SCRIPTS = {
+    "send_nav_goal.py": "Nav2 acceptance result of the TurtleBot",
+}
+
+
+def test_scripts_do_not_import_one_robots_package():
+    robots = REPO_ROOT / "src" / "physai" / "robots"
+    packages = {p.name for p in robots.iterdir() if (p / "__init__.py").exists()}
+    offenders = []
+    for path in (REPO_ROOT / "scripts").glob("*.py"):
+        if path.name in ROBOT_SPECIFIC_SCRIPTS:
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                module = node.module or ""
+                names = [module, *(f"{module}.{alias.name}" for alias in node.names)]
+            else:
+                continue
+            for name in names:
+                parts = name.split(".")
+                if (
+                    parts[:2] == ["physai", "robots"]
+                    and parts[2:3]
+                    and parts[2] in packages
+                ):
+                    offenders.append(f"{path.name}:{node.lineno} imports {name}")
+    assert not offenders, (
+        "scripts must stay robot-agnostic (take a manifest, or add the behavior to the "
+        f"robot and call it); allowed exceptions: {sorted(ROBOT_SPECIFIC_SCRIPTS)}: {offenders}"
+    )

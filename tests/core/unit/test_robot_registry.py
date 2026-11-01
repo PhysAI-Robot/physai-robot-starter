@@ -163,10 +163,12 @@ def test_so101_factory_dispatches_on_simulator_not_a_separate_adapter(monkeypatc
     `adapter` still wraps either one — there is no `direct_isaac` adapter.
     """
     from physai.robots import DirectAdapter
-    from physai.robots.so101 import isaac_env
+    from physai.robots.so101 import factory, isaac_env
     from physai.robots.so101.factory import make_so101
 
     built: list[object] = []
+    # Without this the factory launches a real Isaac app (isaacsim is not in CI).
+    monkeypatch.setattr(factory, "start_isaac_first", lambda simulator, renderer: None)
 
     class FakeIsaacEnv:
         def __init__(self, config):
@@ -189,7 +191,7 @@ def test_the_registry_validates_simulator_support_before_building():
     from physai.robots import create_robot
     from physai.robots.registry import available_simulators, create_env_config
 
-    assert available_simulators("so101") == ("mujoco", "isaac")
+    assert available_simulators("so101") == ("mujoco", "isaac", "newton")
     assert available_simulators("turtlebot4") == ("mujoco",)
     with pytest.raises(ValueError, match="turtlebot4.*does not support"):
         create_robot("turtlebot4", simulator="isaac")

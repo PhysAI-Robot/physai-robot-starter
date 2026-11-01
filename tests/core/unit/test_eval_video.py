@@ -20,6 +20,8 @@ NAME = _video.default_video_name("mujoco", "so101", "visual_servo")
         ("all", False, True),
         ("failures", True, False),
         ("failures", False, True),
+        ("successes", True, True),
+        ("successes", False, False),
     ],
 )
 def test_keep_video_follows_the_mode_and_the_outcome(mode, success, kept):
@@ -63,3 +65,54 @@ def test_the_default_name_starts_with_the_simulator_and_an_override_replaces_it(
     assert (
         _video.next_video_stem(tmp_path, "my_run", 7) == tmp_path / "my_run_seed0007_02"
     )
+
+
+def test_a_video_stem_ends_with_its_outcome_and_each_outcome_counts_alone(tmp_path):
+    ok = tmp_path / "mujoco_so101_visual_servo_seed0101_o"
+    assert _video.next_video_stem(tmp_path, NAME, 101, outcome="_o") == ok
+    ok.with_suffix(".mp4").touch()
+    assert (
+        _video.next_video_stem(tmp_path, NAME, 101, outcome="_o")
+        == tmp_path / "mujoco_so101_visual_servo_seed0101_o_02"
+    )
+    # A failure of the same seed starts its own count; a recording stem is unaffected.
+    assert (
+        _video.next_video_stem(tmp_path, NAME, 101, outcome="_x")
+        == tmp_path / "mujoco_so101_visual_servo_seed0101_x"
+    )
+    assert _video.next_video_stem(tmp_path, NAME, 101, (".npz",)) == (
+        tmp_path / "mujoco_so101_visual_servo_seed0101"
+    )
+
+
+def test_a_view_camera_looks_at_its_target_from_the_given_side():
+    import numpy as np
+    from physai.sim.workspace import ViewCamera
+
+    view = ViewCamera(lookat=(0.2, 0.0, 0.1), distance=2.0, azimuth=135, elevation=-30)
+    position, xyaxes = view.pose()
+    right, up = xyaxes[:3], xyaxes[3:]
+    forward = np.cross(up, right)  # MuJoCo cameras look along -z = x cross y
+    assert np.linalg.norm(position - view.lookat) == pytest.approx(2.0)
+    assert forward == pytest.approx((np.asarray(view.lookat) - position) / 2.0)
+    assert position[0] > 0.2 and position[1] < 0.0 and position[2] > 0.1
+    assert right @ up == pytest.approx(0.0) and up[2] > 0
+
+
+def test_the_video_observer_prefers_the_view_and_falls_back_to_a_camera():
+    from types import SimpleNamespace
+
+    from physai.sim.workspace import VIDEO_CAMERA, WorkspaceConfig
+
+    spec = SimpleNamespace(camera_frames={"front": "camera_front"})
+    robot = SimpleNamespace(
+        cfg=SimpleNamespace(scene=WorkspaceConfig()), render_camera=lambda name: [name]
+    )
+    runtime = SimpleNamespace(robot=robot, robot_spec=spec)
+    assert _video.VideoObserver(runtime).camera == VIDEO_CAMERA
+    assert _video.VideoObserver(runtime, "front").camera == "front"
+
+    bare = SimpleNamespace(robot=SimpleNamespace(), robot_spec=spec)
+    assert _video.VideoObserver(bare).camera == "front"
+    with pytest.raises(ValueError, match="no `video` view"):
+        _video.VideoObserver(bare, VIDEO_CAMERA)

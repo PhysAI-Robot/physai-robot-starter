@@ -1,6 +1,7 @@
-"""Benchmark SO-101 FK/IK metrics over a deterministic reachable target set.
+"""Benchmark FK/IK metrics of a manifest's arm over a deterministic reachable target set.
 
 uv run python scripts/benchmark_ik.py --targets 20 --json outputs/ik_benchmark.json
+uv run python scripts/benchmark_ik.py --manifest configs/manifests/viperx300s_single_cube_fixed_place.yaml
 """
 
 from __future__ import annotations
@@ -14,11 +15,9 @@ import _bootstrap  # noqa: F401
 import mujoco
 import numpy as np
 from _cli import new_parser
-from _common_args import add_seed
+from _common_args import add_manifest, add_seed, open_mujoco_session
 
-from physai.robots.so101 import EnvConfig, SO101Env
-from physai.robots.so101.kinematics import top_down_quat
-from physai.sim.mujoco import SingleCubePlaceSceneConfig
+from physai.robots.arm_kinematics import top_down_quat
 
 TARGET_OFFSETS = (
     (0.00, -0.03, 0.01),
@@ -30,17 +29,12 @@ TARGET_OFFSETS = (
 
 
 def benchmark(args: argparse.Namespace) -> dict:
-    env = SO101Env(
-        EnvConfig(
-            scene=SingleCubePlaceSceneConfig(),
-            render=False,
-            max_steps=1,
-        )
-    )
+    session = open_mujoco_session(args.manifest, max_steps=1)
+    env = session.runtime.robot
     results: list[dict] = []
     try:
         observation = env.reset(seed=args.seed)
-        q_init = observation.joint_state.position[:5]
+        q_init = observation.joint_state.position[: len(env.kin.joint_names)]
         base_position = env.cube_pos.copy()
         target_quat = top_down_quat()
         offsets = [
@@ -81,7 +75,7 @@ def benchmark(args: argparse.Namespace) -> dict:
                 }
             )
     finally:
-        env.close()
+        session.close()
 
     position_errors = [item["position_error"] for item in results]
     orientation_errors = [item["orientation_error"] for item in results]
@@ -121,6 +115,7 @@ def main() -> int:
         default=20,
         help="number of reachable target poses to test",
     )
+    add_manifest(parser, help="session manifest whose robot's arm is benchmarked")
     add_seed(parser)
     parser.add_argument(
         "--json", type=Path, help="write the metrics as JSON to this file"

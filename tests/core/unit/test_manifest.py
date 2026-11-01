@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from tests.conftest import requires_assets
+from tests.conftest import requires_assets, requires_viperx300s_assets
 
 
 def _write(tmp_path: Path, data: dict) -> Path:
@@ -232,3 +232,42 @@ def test_a_policy_must_support_the_manifests_simulator(tmp_path):
 
     data["policy"] = "constant"  # registered for both engines
     assert load_manifest(_write(tmp_path, data)).simulator == "isaac"
+
+
+@pytest.mark.parametrize(
+    "manifest",
+    [
+        pytest.param(
+            "configs/manifests/so101_single_cube_randomized_place.yaml",
+            marks=requires_assets,
+        ),
+        pytest.param(
+            "configs/manifests/viperx300s_single_cube_randomized_place.yaml",
+            marks=requires_viperx300s_assets,
+        ),
+    ],
+)
+def test_randomized_manifests_spawn_cube_and_target_inside_the_reach_region(manifest):
+    import numpy as np
+
+    from physai.config import load_manifest
+    from physai.runtime import create_session
+
+    session = create_session(load_manifest(manifest), render=False)
+    try:
+        env = session.runtime.robot
+        cfg = env.cfg
+        low, high = cfg.spawn_radius_range
+        for seed in range(30):
+            env.reset(seed=seed)
+            cube, target = env.cube_pos[:2], env.target_pos[:2]
+            for xy, x_range, y_range in (
+                (cube, cfg.cube_x_range, cfg.cube_y_range),
+                (target, cfg.target_x_range, cfg.target_y_range),
+            ):
+                assert x_range[0] <= xy[0] <= x_range[1], (seed, xy)
+                assert y_range[0] <= xy[1] <= y_range[1], (seed, xy)
+                assert low <= np.hypot(*xy) <= high, (seed, xy)
+            assert np.hypot(*(cube - target)) >= cfg.min_cube_target_distance, seed
+    finally:
+        session.close()

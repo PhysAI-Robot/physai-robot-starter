@@ -59,7 +59,7 @@ def test_traits_come_from_the_registration_generic_or_robot_owned():
     from physai.contracts import PolicyTraits
     from physai.policy import policy_traits
 
-    assert policy_traits("constant").simulators == ("mujoco", "isaac")
+    assert policy_traits("constant").simulators == ("mujoco", "isaac", "newton")
     assert policy_traits("demo", "so101") == PolicyTraits()
     with pytest.raises(ValueError, match="unknown policy"):
         policy_traits("demo")  # robot-owned: needs the robot to resolve

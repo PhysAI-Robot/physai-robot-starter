@@ -1,6 +1,6 @@
 """MuJoCo simulation core, scene builders, and simulation utilities."""
 
-from .core import MuJoCoSimulationCore
+from .core import MuJoCoRenderer, MuJoCoSimulationCore
 from .domain_randomization import (
     DomainRandomizationConfig,
     DomainRandomizationEngine,
@@ -22,6 +22,7 @@ __all__ = [
     "DomainRandomizationConfig",
     "DomainRandomizationEngine",
     "ManipulationSceneConfig",
+    "MuJoCoRenderer",
     "MuJoCoSimulationCore",
     "SingleCubePlaceSceneConfig",
     "RandomizationMetadata",

@@ -167,3 +167,41 @@ def test_appearance_randomization_tints_within_bounds_restores_and_keeps_old_see
     assert np.array_equal(model.mat_rgba, base_rgba)
     assert np.array_equal(model.mat_texrepeat, base_repeat)
     assert np.array_equal(model.geom_rgba, base_geom)
+
+
+@requires_assets
+def test_floor_black_white_recolours_the_texture_restores_it_and_keeps_old_seeds():
+    import mujoco
+
+    from physai.robots.registry import scene_defaults
+    from physai.sim.mujoco import (
+        DomainRandomizationConfig,
+        DomainRandomizationEngine,
+        SingleCubePlaceSceneConfig,
+    )
+
+    model, _ = SingleCubePlaceSceneConfig(**scene_defaults("so101")).build_model()
+    texture = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_TEXTURE, "physai_grid")
+    base = model.tex_data.copy()
+    tint = dict(enabled=True, floor_tint=(0.5, 1.0))
+
+    off = DomainRandomizationEngine(model, DomainRandomizationConfig(**tint))
+    reference = off.apply(np.random.default_rng(3), seed=3).appearance
+    assert np.array_equal(model.tex_data, base) and off.pop_dirty_textures() == []
+
+    config = DomainRandomizationConfig(**tint, floor_bw_probability=1.0)
+    engine = DomainRandomizationEngine(model, config)
+    meta = engine.apply(np.random.default_rng(3), seed=3)
+    assert meta.appearance["floor_black_white"] == (1.0,)
+    assert (
+        meta.appearance["floor_tint"] == reference["floor_tint"]
+    )  # draws before it are the same
+    assert set(np.unique(model.tex_data[model.tex_adr[texture] :][:1000])) <= {25, 255}
+    assert (
+        engine.pop_dirty_textures() == [texture] and engine.pop_dirty_textures() == []
+    )
+
+    engine.config = DomainRandomizationConfig(**tint)
+    engine.apply(np.random.default_rng(3), seed=3)
+    assert np.array_equal(model.tex_data, base)  # restored
+    assert engine.pop_dirty_textures() == [texture]  # and the renderer is told

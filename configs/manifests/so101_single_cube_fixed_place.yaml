@@ -32,6 +32,8 @@ robots:
       randomize_cube: true
       cube_x_range: [0.20, 0.24]
       cube_y_range: [0.05, 0.13]
+      # The far corner of the box is past the top-down reach (0.263 m, scripts/workspace_map.py).
+      spawn_radius_range: [0.16, 0.255]
       randomize_target: false
 
 viewer:

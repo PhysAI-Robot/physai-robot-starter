@@ -1,0 +1,34 @@
+# SO-101 stacks the three coloured cubes on the pad: red at the bottom, blue on it, yellow on top.
+# The cubes start shuffled in three lateral bands (the sorting scene), in front of the base and
+# clear of the home gripper. The pad is 0.32 m out: the arm grasps top-down, which reaches no
+# higher than about 0.09 m, so it puts the cubes down from the side, and a flat gripper only
+# reaches the height of the second and third level that far out (scripts/workspace_map.py).
+# Run it with: python scripts/run_sim.py --manifest configs/manifests/so101_stack_cubes.yaml --policy demo
+schema_version: 1
+
+scene:
+  name: sorting_minimal
+  overrides:
+    target_pos: [0.32, 0.0, 0.021]
+
+task: stack_cubes
+task_kwargs:
+  order: [red, blue, yellow]
+success_hold_steps: 10
+
+robots:
+  - id: so101
+    robot: so101
+    config:
+      control_hz: 30
+      cameras: [front, wrist]
+      max_steps: 3000
+      randomize_cube: true
+      # In front of the base but clear of the home gripper (pinch point at x 0.217), which
+      # would push a cube spawned under it into its neighbour.
+      cube_x_range: [0.16, 0.185]
+      # Past 0.255 m from the base the top-down grasp is at the edge of its reach.
+      spawn_radius_range: [0.16, 0.255]
+
+viewer:
+  mode: none

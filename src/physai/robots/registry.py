@@ -128,9 +128,19 @@ def available_simulators(name: str) -> tuple[str, ...]:
 
 
 def create_robot(
-    name: str, *, adapter: str = "direct", simulator: str = "mujoco", **kwargs: Any
+    name: str,
+    *,
+    adapter: str = "direct",
+    simulator: str = "mujoco",
+    renderer: str | None = None,
+    **kwargs: Any,
 ) -> RobotPort:
-    """Create a robot through the selected simulator engine and transport adapter."""
+    """Create a robot through the selected simulator engine and transport adapter.
+
+    `renderer` names the engine that draws its cameras (default: the
+    simulator's own); a robot supports as renderers the engines it supports as
+    simulators.
+    """
     _load_builtins()
     try:
         descriptor = _ROBOTS[name]
@@ -143,6 +153,14 @@ def create_robot(
             f"robot {name!r} does not support simulator {simulator!r}; "
             f"available: {choices}"
         )
+    if renderer not in (None, simulator):
+        if renderer not in descriptor.simulators:
+            choices = ", ".join(descriptor.simulators)
+            raise ValueError(
+                f"robot {name!r} does not support renderer {renderer!r}; "
+                f"available: {choices}"
+            )
+        kwargs["renderer"] = renderer
     return descriptor.factory(adapter=adapter, simulator=simulator, **kwargs)
 
 
@@ -278,7 +296,7 @@ def _load_builtins() -> None:
             RobotDescriptor(
                 factory=make_so101,
                 kind="fixed_base_manipulator",
-                simulators=("mujoco", "isaac"),
+                simulators=("mujoco", "isaac", "newton"),
                 scene_defaults=so101_scene_defaults,
                 default_task="single_cube_place",
                 env_config=so101_env_config,
@@ -286,6 +304,21 @@ def _load_builtins() -> None:
                 shared_attach=so101_shared_attach,
                 shared_instance=SO101SharedInstance,
                 jog=so101_jog_resolver,
+            ),
+        )
+    if "viperx300s" not in _ROBOTS:
+        from .viperx300s.factory import viperx300s_env_config, make_viperx300s
+        from .viperx300s.scene import scene_defaults as viperx300s_scene_defaults
+
+        register_embodiment(
+            "viperx300s",
+            RobotDescriptor(
+                factory=make_viperx300s,
+                kind="fixed_base_manipulator",
+                simulators=("mujoco", "isaac", "newton"),
+                scene_defaults=viperx300s_scene_defaults,
+                default_task="single_cube_place",
+                env_config=viperx300s_env_config,
             ),
         )
     if "turtlebot4" not in _ROBOTS:

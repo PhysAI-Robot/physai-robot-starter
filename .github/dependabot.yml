@@ -6,6 +6,21 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 3
+    # `isaacsim` and the packages Isaac Sim does not pin. isaacsim-core / -kernel 6.2.0.0 pin 96 packages exactly
+    # (mujoco, newton, numpy, fastapi, uvicorn, torch, ... and most of what they pull in), and the lock keeps one
+    # version of each with or without the `isaac` extra, so isaacsim is the one lever: every other version
+    # follows it. A bump of the others on their own cannot resolve, so they are left out. A bump of isaacsim alone
+    # cannot resolve either (`newton` is pinned beside it in pyproject.toml to the version it pins), so that PR
+    # is a notice: raise isaacsim and newton by hand together, run `uv lock`, and re-measure the Isaac Sim rows
+    # (docs/DECISIONS.md, D). A dependency added to pyproject.toml that Isaac does not pin belongs in this list.
+    allow:
+      - dependency-name: "isaacsim"
+      - dependency-name: "pytest"
+      - dependency-name: "ruff"
+      - dependency-name: "import-linter"
+      - dependency-name: "imageio-ffmpeg"
+      - dependency-name: "gymnasium"
+      - dependency-name: "lerobot"
     ignore:
       - dependency-name: "*"
         update-types:

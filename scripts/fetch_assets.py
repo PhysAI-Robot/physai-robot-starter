@@ -1,18 +1,27 @@
-"""Download the SO-101 robot description (MJCF + meshes) into assets/so101/.
+"""Download a robot description (MJCF + meshes) into assets/<robot>/, and its USD for Isaac Sim.
 
 Sources:
     TheRobotStudio/SO-ARM100, Simulation/SO101/
     turtlebot/turtlebot4, turtlebot4_description/
+    google-deepmind/mujoco_menagerie, trossen_vx300s/   (robot "viperx300s")
 The directory is listed via the GitHub contents API so we never hardcode mesh
 filenames (they change between calibration revisions).
 
     python scripts/fetch_assets.py --robot so101
     python scripts/fetch_assets.py --robot turtlebot4
+    python scripts/fetch_assets.py --robot viperx300s
     python scripts/fetch_assets.py --robot so101 --force
+
+When Isaac Sim is installed (`uv sync --extra isaac`; set OMNI_KIT_ACCEPT_EULA=YES) the robots that have an
+Isaac Sim env (so101, viperx300s) also get their USD, written to assets/<robot>/usd/ by Isaac's own importer.
+Isaac Sim runs read that USD and stop with an error that points back here when it is missing or was written
+by another Isaac Sim version, so fetch again (--force rewrites it) after installing or upgrading isaacsim.
 """
 
 from __future__ import annotations
 
+import importlib
+import importlib.util
 import json
 import os
 import sys
@@ -21,6 +30,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
+import _bootstrap  # noqa: F401
 from _cli import add_robot, new_parser
 
 
@@ -52,7 +62,16 @@ SOURCES: dict[str, AssetSource] = {
         description_globs=("*.xml",),
         include=("turtlebot4.xml", "assets/meshes/*.stl", "assets/meshes/*.obj"),
     ),
+    # The ViperX 300 S arm of the ALOHA follower (single arm, stock gripper), from
+    # MuJoCo Menagerie. Pinned like the others; see THIRD_PARTY_NOTICES.md.
+    "viperx300s": AssetSource(
+        "google-deepmind/mujoco_menagerie",
+        "trossen_vx300s",
+        "62ab00f2bc44f6f20c1c9b7a13f3fb1dd41a4e35",
+        include=("vx300s.xml", "assets/*.stl", "assets/*.png", "LICENSE"),
+    ),
 }
+ISAAC_ROBOTS = ("so101", "viperx300s")  # the robots with an Isaac Sim env
 DEST_ROOT = Path(__file__).resolve().parents[1] / "assets"
 
 API = "https://api.github.com/repos/{repo}/contents/{path}?ref={ref}"
@@ -129,6 +148,32 @@ def walk(
     return n_files, n_bytes
 
 
+def dump_usd(robot: str, dest: Path, force: bool) -> None:
+    """Write the robot's USD for Isaac Sim into `dest/usd/`, when Isaac Sim is installed."""
+    if robot not in ISAAC_ROBOTS:
+        return
+    if importlib.util.find_spec("isaacsim") is None:
+        print(
+            "\nIsaac Sim is not installed, so no USD was written. Isaac Sim runs need it: "
+            "`uv sync --extra isaac`, then run this again."
+        )
+        return
+    from physai.robots.description import load_robot_description
+    from physai.sim.isaac import current_usd, dump_robot_usd, ensure_simulation_app
+
+    module = importlib.import_module(f"physai.robots.{robot}")
+    description = load_robot_description(
+        Path(module.__file__).parent / "description.yaml"
+    )
+    existing = current_usd(description, dest)
+    if existing is not None and not force:
+        print(f"\nIsaac Sim USD is current: {existing}")
+        return
+    print("\nImporting the robot into USD with Isaac Sim (this starts the simulator)")
+    ensure_simulation_app()
+    print(f"Isaac Sim USD: {dump_robot_usd(description, dest)}")
+
+
 def main() -> int:
     ap = new_parser(__doc__)
     add_robot(ap, choices=sorted(SOURCES), default="so101")
@@ -179,6 +224,7 @@ def main() -> int:
     print("Robot description files available:")
     for description in descriptions:
         print(f"  {description}")
+    dump_usd(args.robot, dest, args.force)
     return 0
 
 

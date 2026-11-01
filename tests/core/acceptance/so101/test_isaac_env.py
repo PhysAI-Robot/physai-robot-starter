@@ -1,6 +1,6 @@
 """Smoke tests against real Isaac Sim: URDF import, actuator step response and
-render health. Skipped wherever `isaacsim` is not installed; `uv sync --extra isaac`
-installs it into this project's own venv (see `docs/DECISIONS.md`, D).
+render health. Skipped wherever `isaacsim` is not installed (`uv sync --extra isaac` installs
+it, see `docs/DECISIONS.md`, D) or `OMNI_KIT_ACCEPT_EULA=YES` is not set.
 
 One `SimulationApp` per process is a hard Isaac Sim constraint (see
 `physai.sim.isaac.core`), so every test in this module shares one

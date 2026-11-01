@@ -19,6 +19,7 @@ def with_overrides(
     camera_resolution: str | None = None,
     policy: str | None = None,
     simulator: str | None = None,
+    renderer: str | None = None,
     domain_randomization: DomainRandomizationConfig | None = None,
     scene_overrides: dict[str, Any] | None = None,
     robot_config: dict[str, Any] | None = None,
@@ -59,8 +60,10 @@ def with_overrides(
         )
     if simulator is not None:
         changes["simulator"] = simulator
+    if renderer is not None:
+        changes["renderer"] = renderer
     updated = replace(manifest, **changes)
-    if simulator is not None or policy is not None:
+    if simulator is not None or renderer is not None or policy is not None:
         # A bare `replace()` skips registry/cross-field checks; --sim can
         # select a simulator a robot does not support or that conflicts with
         # world/backend/viewer, and --policy a name no registry (or plugin the

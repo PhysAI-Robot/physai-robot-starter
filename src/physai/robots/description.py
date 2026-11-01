@@ -113,6 +113,9 @@ class RobotDescription:
     def mujoco_overrides(self) -> dict[str, Any]:
         return self.sim_overrides.get("mujoco", {})
 
+    def newton_overrides(self) -> dict[str, Any]:
+        return self.sim_overrides.get("newton", {})
+
 
 def _vec3(value: Any) -> Vec3:
     x, y, z = value

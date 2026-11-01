@@ -180,7 +180,7 @@ def main() -> int:
     )
     ap.add_argument(
         "--sim",
-        choices=("mujoco", "isaac"),
+        choices=("mujoco", "isaac", "newton"),
         help="simulator engine (default: the manifest's); isaac runs only the "
         "baseline, the lighting levels and the uncalibrated camera shifts, the "
         "cells eval_policy.py supports there",

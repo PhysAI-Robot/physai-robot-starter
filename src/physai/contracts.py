@@ -561,3 +561,10 @@ class PolicyTraits:
 
     needs_images: bool = False  # the run must render the cameras
     simulators: tuple[str, ...] = ("mujoco",)  # engines it can run on
+
+    def runs_on(self, simulator: str) -> bool:
+        """Whether it can run on this engine. A Newton env is a MuJoCo env stepped by
+        another solver (same model and data), so a policy that runs on MuJoCo runs on it."""
+        return simulator in self.simulators or (
+            simulator == "newton" and "mujoco" in self.simulators
+        )

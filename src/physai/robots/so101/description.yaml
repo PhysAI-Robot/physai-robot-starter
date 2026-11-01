@@ -134,6 +134,13 @@ sim_overrides:
       solimp: [0.99, 0.999, 0.001, 0.5, 2.0]
       solref: [0.004, 1.0]
       group: 3
+  newton:
+    # mujoco-warp has no no-slip solver, so Newton holds the cube by other means: a
+    # higher friction impedance ratio, and torsional and rolling friction on the pads
+    # (condim 6), which stop the cube turning in the jaws, and a contact damping ratio of 2.
+    # With them a held cube moves about 1 mm in 60 s at most; without, 15 mm in 12 s.
+    impratio: 30
+    pad: {condim: 6, friction: [2.0, 0.1, 0.01], solref: [0.004, 2.0]}
 
 # Reference values the contact-pad fit above was derived at (not consumed by
 # any scene builder): `pad_align_gripper_q` is the gripper joint angle at

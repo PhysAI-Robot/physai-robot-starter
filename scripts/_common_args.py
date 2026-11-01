@@ -20,6 +20,31 @@ DEFAULT_MANIFEST = Path("configs/manifests/so101_single_cube_fixed_place.yaml")
 SORTING_MANIFEST = Path("configs/manifests/so101_sorting.yaml")
 
 
+def add_manifest(parser: argparse.ArgumentParser, *, help: str | None = None) -> None:
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=DEFAULT_MANIFEST,
+        help=help or "session manifest whose robot and scene the script uses",
+    )
+
+
+def open_mujoco_session(manifest_path: Path, *, render: bool = False, **overrides):
+    """The manifest's session on MuJoCo with an idle policy, for scripts that drive the robot.
+
+    `overrides` are `with_overrides` fields (`seed`, `max_steps`, ...). Any robot of a
+    one-robot manifest works: the script reads `session.runtime.robot`, never a robot module.
+    """
+    from physai.config import load_manifest
+    from physai.config.compat import with_overrides
+    from physai.runtime import create_session
+
+    manifest = with_overrides(
+        load_manifest(manifest_path), simulator="mujoco", policy="idle", **overrides
+    )
+    return create_session(manifest, render=render)
+
+
 def add_seed(
     parser: argparse.ArgumentParser, *, default: int | None = 0, help: str | None = None
 ) -> None:
@@ -132,7 +157,11 @@ def print_policies(manifest_path: Path, *, exclude: tuple[str, ...] = ()) -> int
 
 
 def add_out(
-    parser: argparse.ArgumentParser, *, default: Path, help: str, metavar: str = "FILE"
+    parser: argparse.ArgumentParser,
+    *,
+    default: Path | None,
+    help: str,
+    metavar: str = "FILE",
 ) -> None:
     """`--out` as a single output file (scripts that write many files use
     `--out DIR`; see the CLI conventions in docs/ARCHITECTURE.md)."""
@@ -165,14 +194,26 @@ def add_camera_resolution(parser: argparse.ArgumentParser) -> None:
     )
 
 
+ENGINES = ("mujoco", "isaac", "newton")
+
+
 def add_simulator(parser: argparse.ArgumentParser, *, help: str | None = None) -> None:
-    """`--sim`: overrides the manifest's `simulator` field (default: mujoco)."""
+    """`--sim` and `--render`: override the manifest's `simulator` (default: mujoco)
+    and `renderer` (default: the simulator's own) fields."""
     parser.add_argument(
         "--sim",
         dest="simulator",
-        choices=("mujoco", "isaac"),
+        choices=ENGINES,
         default=None,
-        help=help or "override the manifest's simulator engine",
+        help=help or "override the manifest's simulator (physics) engine",
+    )
+    parser.add_argument(
+        "--render",
+        dest="renderer",
+        choices=ENGINES,
+        default=None,
+        help="engine that draws the cameras (default: the simulator's own); any "
+        "simulator pairs with any renderer",
     )
 
 
@@ -191,12 +232,15 @@ def add_run_outputs(parser: argparse.ArgumentParser) -> None:
         nargs="?",
         const="all",
         choices=VIDEO_MODES,
-        help="write a video per episode (`--video` or `--video all`), or only "
-        "for the episodes that fail (`--video failures`)",
+        help="write a video per episode (`--video` or `--video all`), only for "
+        "the episodes that fail (`--video failures`), or only for the ones that "
+        "succeed (`--video successes`)",
     )
     parser.add_argument(
         "--camera",
-        help="camera that --video records (default: the robot's first camera)",
+        help="camera that --video records (default: `video`, a diagonal view of the "
+        "whole robot and table that is not an observation; otherwise the robot's "
+        "first camera). Name `front` or `wrist` to record what a policy sees",
     )
     parser.add_argument(
         "--record",
@@ -215,5 +259,6 @@ def add_run_outputs(parser: argparse.ArgumentParser) -> None:
         type=_run_name,
         help="file name prefix for videos and recordings, replacing the automatic "
         "<simulator>_<robot>_<policy>; `_seed<seed>` and, on a repeat, `_02`, "
-        "`_03`, ... are still added",
+        "`_03`, ... are still added, and a video also gets `_o` (success) or "
+        "`_x` (failure) after the seed",
     )

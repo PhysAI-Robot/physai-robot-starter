@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 from ..adapters import create_adapter
 from ..base import RobotPort
+from ..rendering import attach_renderer, start_isaac_first
 from .mujoco_env import EnvConfig, SO101Env
 
 
@@ -15,9 +17,24 @@ def so101_env_config(*, simulator: str = "mujoco", **kwargs: Any) -> Any:
         from .isaac_env import IsaacEnvConfig
 
         return IsaacEnvConfig(**kwargs)
-    if simulator == "mujoco":
+    if simulator in ("mujoco", "newton"):
         return EnvConfig(**kwargs)
-    raise ValueError(f"unknown simulator {simulator!r}; available: isaac, mujoco")
+    raise ValueError(
+        f"unknown simulator {simulator!r}; available: isaac, mujoco, newton"
+    )
+
+
+def _render_only_isaac_env(scene: Any) -> Any:
+    from .isaac_env import IsaacEnvConfig, SO101IsaacEnv
+
+    return SO101IsaacEnv(
+        IsaacEnvConfig(
+            scene=scene,
+            camera_resolution=scene.camera_resolution,
+            cameras=(),
+            render=True,
+        )
+    )
 
 
 def make_so101(
@@ -25,6 +42,7 @@ def make_so101(
     *,
     adapter: str = "direct",
     simulator: str = "mujoco",
+    renderer: str | None = None,
     transport: Any = None,
     hardware: RobotPort | None = None,
     codec: Any = None,
@@ -32,35 +50,34 @@ def make_so101(
 ) -> RobotPort:
     """Build the SO-101 through the selected simulator and robot port adapter.
 
-    `simulator` picks which physics engine builds the direct port
-    (`mujoco` -> `SO101Env`, `isaac` -> `SO101IsaacEnv`); `adapter` then
-    wraps whichever one was built. `DirectAdapter` only wraps a generic
-    `RobotPort` (observe/reset/step/send_action/close plus a safety gate)
-    and has no simulator-specific behavior itself, so it is the right
-    wrapper for either simulator — there is no separate "direct_isaac"
-    adapter to register.
+    `simulator` picks which physics engine builds the direct port and
+    `renderer` which engine draws its cameras (default: the simulator's own),
+    so any pairing works. The adapter wrapper (`ros2_sim`, `ros2_real`,
+    `direct`) takes the direct port and has no simulator-specific behavior.
     """
     if config is not None and kwargs:
         raise TypeError("pass either config or a config's keyword fields, not both")
-    if adapter == "ros2_real":
-        if config is not None or kwargs:
-            raise TypeError(
-                "robot config is not used by adapter='ros2_real'; "
-                "configure the hardware port instead"
-            )
-        return create_adapter(
-            adapter, None, transport=transport, hardware=hardware, codec=codec
-        )
+    config = config or so101_env_config(simulator=simulator, **kwargs)
+    start_isaac_first(simulator, renderer)
+    foreign = renderer not in (None, simulator) and config.render
+    if foreign and simulator == "isaac":
+        config = replace(config, render=False)  # another renderer draws the cameras
     if simulator == "isaac":
         from .isaac_env import SO101IsaacEnv
 
-        direct: RobotPort = SO101IsaacEnv(
-            config or so101_env_config(simulator="isaac", **kwargs)
-        )
+        direct: RobotPort = SO101IsaacEnv(config)
     elif simulator == "mujoco":
-        direct = SO101Env(config or so101_env_config(simulator="mujoco", **kwargs))
+        direct = SO101Env(config)
+    elif simulator == "newton":
+        from .newton_env import SO101NewtonEnv
+
+        direct = SO101NewtonEnv(config)
     else:
-        raise ValueError(f"unknown simulator {simulator!r}; available: isaac, mujoco")
+        raise ValueError(
+            f"unknown simulator {simulator!r}; available: isaac, mujoco, newton"
+        )
+    if foreign:
+        attach_renderer(direct, simulator, renderer, _render_only_isaac_env)
     return create_adapter(
         adapter, direct, transport=transport, hardware=hardware, codec=codec
     )

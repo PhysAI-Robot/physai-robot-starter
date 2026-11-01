@@ -34,7 +34,7 @@ def __getattr__(name: str):
         if exc.name != "gymnasium":
             raise
         raise ModuleNotFoundError(
-            "GymnasiumAdapter requires the optional training dependency; "
-            "install it with `uv sync --extra training`"
+            "GymnasiumAdapter requires gymnasium; "
+            "install the project dependencies with `uv sync`"
         ) from exc
     return GymnasiumAdapter

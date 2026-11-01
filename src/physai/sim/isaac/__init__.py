@@ -17,6 +17,8 @@ from .description import (
     apply_cameras,
     apply_contact_friction,
     apply_frames,
+    current_usd,
+    dump_robot_usd,
     get_stage,
     import_robot,
     urdf_link_name,
@@ -35,6 +37,8 @@ __all__ = [
     "close_simulation_app",
     "ensure_simulation_app",
     "get_stage",
+    "current_usd",
+    "dump_robot_usd",
     "import_robot",
     "urdf_link_name",
 ]

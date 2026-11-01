@@ -79,7 +79,7 @@ def _load_builtins() -> None:
     if _BUILTINS_LOADED:
         return
 
-    both_engines = PolicyTraits(simulators=("mujoco", "isaac"))
+    both_engines = PolicyTraits(simulators=("mujoco", "isaac", "newton"))
     register_policy("constant", _make_constant, traits=both_engines)
     register_policy("constant_twist", _make_constant_twist)
     register_policy("replay", _make_replay, traits=both_engines)
@@ -94,7 +94,8 @@ def _make_constant(*, env: Any = None, **_: Any) -> Policy:
 
     if env is not None and env.robot_spec.supports("base_velocity"):
         return ConstantTwistPolicy()
-    return ConstantPolicy()
+    joints = () if env is None else env.robot_spec.action_joint_names
+    return ConstantPolicy(len(joints) or 5)
 
 
 def _make_constant_twist(**_: Any) -> Policy:
