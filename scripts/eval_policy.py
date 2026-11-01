@@ -283,7 +283,9 @@ def main() -> int:
             overrides["scene_overrides"] = {"clutter_count": args.clutter_count}
     if args.cube_start is not None:
         if simulator != "mujoco":
-            ap.error("--cube-start needs --sim mujoco (Isaac Sim is where the pose comes from)")
+            ap.error(
+                "--cube-start needs --sim mujoco (Isaac Sim is where the pose comes from)"
+            )
         if args.sorting:
             ap.error("--cube-start supports the single-cube task only")
         if not args.cube_start.is_file():

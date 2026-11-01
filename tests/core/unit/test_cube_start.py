@@ -72,15 +72,23 @@ def test_off_or_zero_offset_changes_nothing_and_a_table_moves_only_the_cube(
     plain.close()
 
     zero = _write(tmp_path, {"offset_xy": [0.0, 0.0]})
-    same = env_cls(config_cls(render=False, randomize_target=True, cube_start=str(zero)))
+    same = env_cls(
+        config_cls(render=False, randomize_target=True, cube_start=str(zero))
+    )
     same.reset(seed=1003)
     np.testing.assert_array_equal(same.data.qpos, qpos0)
     same.close()
 
-    table = _write(tmp_path, {"xy_by_seed": {"1003": [cube0[0] + 0.003, cube0[1] + 0.0086]}})
-    moved = env_cls(config_cls(render=False, randomize_target=True, cube_start=str(table)))
+    table = _write(
+        tmp_path, {"xy_by_seed": {"1003": [cube0[0] + 0.003, cube0[1] + 0.0086]}}
+    )
+    moved = env_cls(
+        config_cls(render=False, randomize_target=True, cube_start=str(table))
+    )
     moved.reset(seed=1003)
-    np.testing.assert_allclose(moved.cube_pos[:2], cube0[:2] + [0.003, 0.0086], atol=1e-9)
+    np.testing.assert_allclose(
+        moved.cube_pos[:2], cube0[:2] + [0.003, 0.0086], atol=1e-9
+    )
     np.testing.assert_allclose(moved.cube_pos[2], cube0[2], atol=1e-9)
     np.testing.assert_array_equal(moved.target_pos, target0)
     moved.close()

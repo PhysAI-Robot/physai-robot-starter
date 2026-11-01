@@ -98,7 +98,13 @@ def test_cube_start_needs_an_existing_file(monkeypatch, tmp_path):
     monkeypatch.setattr(
         sys,
         "argv",
-        ["eval_policy.py", "--cube-start", str(tmp_path / "missing.json"), "--episodes", "1"],
+        [
+            "eval_policy.py",
+            "--cube-start",
+            str(tmp_path / "missing.json"),
+            "--episodes",
+            "1",
+        ],
     )
     with pytest.raises(SystemExit) as exc:
         eval_policy.main()
