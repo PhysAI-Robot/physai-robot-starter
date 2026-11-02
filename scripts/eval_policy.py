@@ -115,6 +115,15 @@ class _EpisodeTrace(EpisodeObserver):
         if observation.ee_pose is not None:
             p = observation.ee_pose.pose.position
             self._ee.append((p.x, p.y, p.z))
+            return
+        # an engine that sends no ee_pose (Isaac Sim): forward kinematics of the arm joints the
+        # policy saw, with the robot's MuJoCo kinematic model, so "moved" means the same everywhere
+        kin = getattr(self._robot, "kin", None)
+        if kin is None or observation.joint_state is None:
+            return
+        names = list(observation.joint_state.name)
+        q = [observation.joint_state.position[names.index(n)] for n in kin.joint_names]
+        self._ee.append(tuple(kin.qpos_to_site_pose(q)[0]))
 
     def after_step(self, observation, action, next_observation, *_) -> None:
         self._track(next_observation)
