@@ -12,7 +12,7 @@ dependencies = [
     "mujoco>=3.2",
     "numpy>=2.0",
     "imageio>=2.34",
-    "imageio-ffmpeg>=0.6.0",
+    "imageio-ffmpeg>=0.8.1",
     "PyYAML>=6.0",
     # The browser viewer (physai.web, --serve). Base, not a "web" extra:
     # --viewer needs neither this nor an extra (mujoco.viewer ships with
@@ -27,8 +27,8 @@ dependencies = [
     # clone and work in directly, not a library installed as someone else's
     # dependency, so there is no audience that wants physai without the
     # ability to run its own test suite.
-    "pytest>=9.1.1",
-    "ruff>=0.17.0",
+    "pytest>=9.2.0",
+    "ruff>=0.17.3",
     "import-linter>=2.1",
     # Training and inference: gymnasium for the GymnasiumAdapter; torch + lerobot for ACT and Diffusion
     # Policy (lerobot's `diffusion` extra brings diffusers). lerobot pins numpy<2.3.0 and isaacsim-kernel
