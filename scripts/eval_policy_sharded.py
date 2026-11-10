@@ -66,7 +66,11 @@ def run_shard(
     ]
     began = time.monotonic()
     completed = subprocess.run(
-        command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        errors="replace",  # Kit writes bytes the console code page cannot decode
     )
     out.with_suffix(".log").write_text(completed.stdout, encoding="utf-8")
     # Kit swallows the exit status of a Python error raised under the app (a
