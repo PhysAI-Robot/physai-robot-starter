@@ -115,6 +115,15 @@ class _EpisodeTrace(EpisodeObserver):
         if observation.ee_pose is not None:
             p = observation.ee_pose.pose.position
             self._ee.append((p.x, p.y, p.z))
+            return
+        # an engine that sends no ee_pose (Isaac Sim): forward kinematics of the arm joints the
+        # policy saw, with the robot's MuJoCo kinematic model, so "moved" means the same everywhere
+        kin = getattr(self._robot, "kin", None)
+        if kin is None or observation.joint_state is None:
+            return
+        names = list(observation.joint_state.name)
+        q = [observation.joint_state.position[names.index(n)] for n in kin.joint_names]
+        self._ee.append(tuple(kin.qpos_to_site_pose(q)[0]))
 
     def after_step(self, observation, action, next_observation, *_) -> None:
         self._track(next_observation)
@@ -198,6 +207,13 @@ def main() -> int:
     )
     add_run_outputs(ap)
     ap.add_argument(
+        "--cube-start",
+        type=Path,
+        help="study 01: a JSON file (see physai.robots.cube_start) that moves "
+        "the cube's start in MuJoCo to where another simulator puts it; "
+        "--sim mujoco only, off by default",
+    )
+    ap.add_argument(
         "--sorting",
         action="store_true",
         help="evaluate the three-cube sorting task instead of pick-and-place, "
@@ -274,6 +290,19 @@ def main() -> int:
         )
         if args.clutter_count:
             overrides["scene_overrides"] = {"clutter_count": args.clutter_count}
+    if args.cube_start is not None:
+        if simulator != "mujoco":
+            ap.error(
+                "--cube-start needs --sim mujoco (Isaac Sim is where the pose comes from)"
+            )
+        if args.sorting:
+            ap.error("--cube-start supports the single-cube task only")
+        if not args.cube_start.is_file():
+            ap.error(f"--cube-start: no such file: {args.cube_start}")
+        overrides["robot_config"] = {
+            **overrides.get("robot_config", {}),
+            "cube_start": str(args.cube_start),
+        }
     try:
         manifest = with_overrides(
             manifest,

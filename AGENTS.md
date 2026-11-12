@@ -17,22 +17,17 @@ Keep each document focused on one audience:
   edit it in place (git history keeps the old text).
 - `docs/ROBOT_RUNBOOKS.md` and `docs/WEB_VIEWER_RUNBOOK.md` are the operational
   runbooks for the robots and the browser viewer.
-- `research/<topic>/README.md` is that research topic's own runbook (setup,
-  commands, workflow). Detailed research workflows belong there, not in
-  `docs/ROBOT_RUNBOOKS.md`, which links to the relevant
-  `research/<topic>/README.md` instead of embedding its commands.
-  What was measured and tried behind a research result goes in that topic's
-  `FINDINGS.md` as causes, final numbers and one line per failed experiment,
-  not as trace logs; git history keeps the trace.
+- `research/` is a separate checkout (a research plugin such as
+  `physai-study-01`), not part of this repository. Each research repository
+  documents its own setup, commands and results in its README. Detailed research
+  workflows belong there, not in `docs/ROBOT_RUNBOOKS.md`, which links to the
+  research README instead of embedding its commands.
 - `CONTRIBUTING.md` is the contributor-facing source of truth for workflow and
   commit message conventions.
 - `AGENTS.md` is the agent-facing workflow, validation, and repository hygiene
   guide.
 - `ROADMAP.md` records planned framework features and should not be treated as
   current behavior.
-- `research/studies/<NN>_<name>.md` is one study's plan (question, frozen task,
-  milestones, paper). Results stay in the topic `FINDINGS.md`/README. A finished
-  study is not reopened; follow-up work is a new study file.
 
 Do not copy detailed architecture, setup commands, or agent instructions into
 the other documents. Link to the owning document instead, and when a fact
@@ -72,8 +67,8 @@ boundaries merely to make a local test pass.
   This is checked by `tests/core/boundaries/test_import_boundaries.py` (an AST
   scan for the research rule, import-linter via `uv run lint-imports` for the
   other rules). Research-only scripts and tests live in `research/`, not here.
-- `research/` is a git-ignored folder holding a separate plugin repository: the private
-  `PhysAI-Robot/physai-research` here, `physai-study-NN` for a published study
+- `research/` is a git-ignored folder holding a separate plugin repository: `physai-study-NN`
+  for a published study, or your own repository
   ([DECISIONS.md F](docs/DECISIONS.md#f-research-is-a-folder-you-fill-with-a-plugin-repo-a-paper-ships-as-its-own-repo)).
   It has its own git history; commit there, not in this repository, and pin a milestone with a
   tag in both. Scripts, `tests/core` and CI must keep working when it is absent; core tests use

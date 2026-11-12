@@ -242,3 +242,17 @@ def test_trajectory_metrics_on_a_straight_constant_speed_line():
     assert metrics["completion_time_s"] == pytest.approx(3.0)
     assert metrics["path_length_m"] == pytest.approx(0.3)
     assert metrics["rms_jerk"] == pytest.approx(0.0, abs=1e-9)
+    assert metrics["first_move_step"] == 1  # 1 cm at 1 cm per tick
+
+
+def test_first_move_step_is_minus_one_when_the_arm_never_leaves_the_start():
+    import numpy as np
+
+    from physai.data.evaluation import trajectory_metrics
+
+    still = np.zeros((20, 3))
+    still[:, 2] = 0.004  # a drift below the 1 cm threshold
+    still[5:, 2] = 0.009
+    assert trajectory_metrics(still, dt=0.1)["first_move_step"] == -1
+    still[12:, 2] = 0.02
+    assert trajectory_metrics(still, dt=0.1)["first_move_step"] == 12

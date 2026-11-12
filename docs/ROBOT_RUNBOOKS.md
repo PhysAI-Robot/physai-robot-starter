@@ -22,7 +22,7 @@ display) is a fallback. The default `demo` policy is a privileged open-loop pick
 (true object poses, `ScriptedPlanner` + `PlanRunner`): a proof that a policy drives the arm, not
 a baseline. Your own policies and scenes come from a plugin named in the manifest
 ([README](../README.md#bring-your-own-research)); this project's own expert, visual servo and
-ACT workflows are in `research/` in [`physai-research`](https://github.com/PhysAI-Robot/physai-research).
+ACT workflows are in [`physai-study-01`](https://github.com/PhysAI-Robot/physai-study-01) (clone it as `research/`).
 
 Validate the contracts (the second check covers the ROS2 transport and needs no ROS2):
 
@@ -57,8 +57,8 @@ renderer you chose; `--camera front|wrist` records an observation camera instead
 
 Other entry points: FK/Jacobian/IK benchmark `uv run python scripts/benchmark_ik.py --targets 20
 --seed 0`; planner contract `uv run python scripts/plan_task.py --manifest <session> --seed 3` (SO-101 and ViperX 300 S; only the scripted
-planner ships); this project's learning and vision baselines are plugins in
-[`physai-research`](https://github.com/PhysAI-Robot/physai-research).
+planner ships); this project's learning and vision baselines are in the plugin
+[`physai-study-01`](https://github.com/PhysAI-Robot/physai-study-01).
 
 ## ViperX 300 S (ALOHA follower arm)
 

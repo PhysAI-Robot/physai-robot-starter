@@ -35,6 +35,7 @@ from ...sim.mujoco.scenes import (
     ManipulationSceneConfig,
     SingleCubePlaceSceneConfig,
 )
+from ..cube_start import CubeStart
 from .contracts import (
     ALL_JOINT_NAMES,
     ARM_JOINT_NAMES,
@@ -105,8 +106,12 @@ class EnvConfig:
     # 20-50x a cube's weight and makes the contact chatter. visual_servo's
     # shallow grip needs the cap; the scripted expert's deeper squeeze does not,
     # but the shared default stays for its other callers. Measurements are in
-    # the private `physai-research` repo.
+    # `physai-study-01`.
     gripper_force_limit: float = 0.3
+    # Study 01: a JSON file (see `physai.robots.cube_start`) that moves the
+    # cube's start to where another simulator puts it. Off by default; with it off
+    # a reset is exactly what it was.
+    cube_start: str | None = None
 
 
 class SO101Env(MuJoCoSimulationCore):
@@ -166,6 +171,9 @@ class SO101Env(MuJoCoSimulationCore):
             self.model.actuator_forcerange[self.grip_act_id] = [-limit, limit]
 
         self.layout = create_layout(self.model, self.cfg.scene)
+        self._cube_start = (
+            CubeStart.load(self.cfg.cube_start) if self.cfg.cube_start else None
+        )
         self.target_sid = mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_SITE, "target_site"
         )
@@ -282,6 +290,13 @@ class SO101Env(MuJoCoSimulationCore):
         self._jog_target = HOME_QPOS.copy()
 
         protected_xy = self.layout.reset(self.data, self.rng, self.cfg)
+        if self._cube_start is not None:
+            protected_xy = self.layout.move_cube_start(
+                self.data,
+                protected_xy,
+                self._cube_start,
+                seed if seed is not None else self.cfg.seed,
+            )
         self.randomization_metadata = self.randomization.apply(
             self.rng,
             seed=seed if seed is not None else self.cfg.seed,

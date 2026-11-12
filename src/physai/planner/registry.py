@@ -1,8 +1,7 @@
 """Registry for planner implementations.
 
 Mirrors `tasks/registry.py`. `ScriptedPlanner` is a core baseline and
-registers here directly; a research planner (e.g. `SortingPlanner`, in the private
-`physai-research` repo) registers
+registers here directly; a research planner (e.g. `SortingPlanner`, in a plugin) registers
 itself under its own name when its module is imported, so this registry
 never imports research code.
 """

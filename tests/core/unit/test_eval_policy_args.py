@@ -78,3 +78,62 @@ def test_a_policys_episode_metrics_join_the_row_and_a_violation_replaces_its_rea
         == "joint limit"
     )
     assert eval_policy._policy_metrics(Plain(), "joint limit") == {}
+
+
+@pytest.mark.parametrize("sim", ["isaac", "newton"])
+def test_cube_start_is_refused_off_mujoco(monkeypatch, tmp_path, sim):
+    start = tmp_path / "start.json"
+    start.write_text('{"offset_xy": [0, 0]}', encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["eval_policy.py", "--sim", sim, "--cube-start", str(start), "--episodes", "1"],
+    )
+    with pytest.raises(SystemExit) as exc:
+        eval_policy.main()
+    assert exc.value.code == 2
+
+
+def test_cube_start_needs_an_existing_file(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "eval_policy.py",
+            "--cube-start",
+            str(tmp_path / "missing.json"),
+            "--episodes",
+            "1",
+        ],
+    )
+    with pytest.raises(SystemExit) as exc:
+        eval_policy.main()
+    assert exc.value.code == 2
+
+
+def test_episode_trace_falls_back_to_forward_kinematics_without_an_ee_pose():
+    """An engine that sends no ee_pose (Isaac Sim) is traced from the joint angles, so first_move_step exists for it."""
+    import mujoco
+    import numpy as np
+
+    from physai.contracts import JointState, Observation
+    from physai.robots.description import load_robot_description
+    from physai.robots.so101.contracts import ARM_JOINT_NAMES
+    from physai.robots.so101.isaac_env import _DESCRIPTION_PATH, REPO_ROOT
+    from physai.robots.so101.kinematics import ArmKinematics
+
+    description = load_robot_description(_DESCRIPTION_PATH)
+    model = mujoco.MjModel.from_xml_path(
+        str(REPO_ROOT / "assets" / "so101" / description.mjcf)
+    )
+    kin = ArmKinematics(model)
+    robot = type("Robot", (), {"kin": kin, "cfg": type("Cfg", (), {"control_hz": 30})})
+    trace = eval_policy._EpisodeTrace(robot)
+    home = np.array([0.0, -1.05, 1.25, 0.75, 0.0])
+    for shoulder_pan in (0.0, 0.0, 0.2):  # the arm turns by 0.2 rad: far more than 1 cm
+        q = home.copy()
+        q[0] = shoulder_pan
+        trace.on_reset(
+            Observation(joint_state=JointState(name=ARM_JOINT_NAMES, position=q))
+        )
+    assert trace.metrics()["first_move_step"] == 2

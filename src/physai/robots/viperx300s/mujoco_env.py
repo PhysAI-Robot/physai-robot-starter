@@ -40,6 +40,7 @@ from ...sim.mujoco.scenes import (
     ManipulationSceneConfig,
     SingleCubePlaceSceneConfig,
 )
+from ..cube_start import CubeStart
 from ..layout import create_layout
 from .contracts import (
     ALL_JOINT_NAMES,
@@ -127,6 +128,10 @@ class EnvConfig:
     # servos hold their position stiffly, so by default gravity is cancelled on the
     # arm's bodies (not the cube) and the actuators only have to follow commands.
     gravity_compensation: bool = True
+    # Study 01: a JSON file (see `physai.robots.cube_start`) that moves the
+    # cube's start to where another simulator puts it. Off by default; with it off
+    # a reset is exactly what it was.
+    cube_start: str | None = None
 
 
 class ViperX300SEnv(MuJoCoSimulationCore):
@@ -204,6 +209,9 @@ class ViperX300SEnv(MuJoCoSimulationCore):
             self.model.actuator_forcerange[self.grip_act_id] = [-limit, limit]
 
         self.layout = create_layout(self.model, self.cfg.scene)
+        self._cube_start = (
+            CubeStart.load(self.cfg.cube_start) if self.cfg.cube_start else None
+        )
         self.target_sid = mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_SITE, "target_site"
         )
@@ -291,6 +299,13 @@ class ViperX300SEnv(MuJoCoSimulationCore):
         self._set_fingers(self.gripper_to_joint(1.0))
 
         protected_xy = self.layout.reset(self.data, self.rng, self.cfg)
+        if self._cube_start is not None:
+            protected_xy = self.layout.move_cube_start(
+                self.data,
+                protected_xy,
+                self._cube_start,
+                seed if seed is not None else self.cfg.seed,
+            )
         self.randomization_metadata = self.randomization.apply(
             self.rng,
             seed=seed if seed is not None else self.cfg.seed,

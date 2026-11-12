@@ -46,5 +46,5 @@ MUJOCO_LOG.TXT
 # container mode recorded by docker/container.py
 docker/.mode
 
-# plugin checkout (any repo cloned here: physai-study-01, your own, or physai-research)
+# plugin checkout (any repo cloned here: physai-study-01 or your own)
 research/

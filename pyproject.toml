@@ -49,6 +49,8 @@ dependencies = [
 # No macOS wheels. `uv sync --extra isaac` adds it to the default environment without changing a version
 # the default already has.
 isaac = ["isaacsim[all,extscache]==6.2.0.0; sys_platform != 'darwin'"]
+# SmolVLA (study 01): transformers, accelerate and num2words on top of the default environment.
+smolvla = ["lerobot[smolvla]>=0.6.1"]
 
 [[tool.uv.index]]
 name = "nvidia"

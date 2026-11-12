@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING, Protocol
 import mujoco
 import numpy as np
 
+from .cube_start import CubeStart
+
 if TYPE_CHECKING:
     from ...sim.mujoco.scenes import ManipulationSceneConfig
 
@@ -126,6 +128,19 @@ class ObjectLayout(ABC):
     @abstractmethod
     def _cube_xy(self, data: mujoco.MjData) -> list[XY]: ...
 
+    def move_cube_start(
+        self,
+        data: mujoco.MjData,
+        protected_xy: tuple[XY, ...],
+        start: CubeStart,
+        seed: int | None,
+    ) -> tuple[XY, ...]:
+        """Move the cube to `start`'s xy for this seed, after `reset` drew it; return
+        the xy that clutter must avoid (the target first, then the cube)."""
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support a cube start from a file"
+        )
+
     def reset(
         self, data: mujoco.MjData, rng: np.random.Generator, cfg: LayoutConfig
     ) -> tuple[XY, ...]:
@@ -182,6 +197,12 @@ class SingleCubeLayout(ObjectLayout):
 
     def _cube_xy(self, data) -> list[XY]:
         return [tuple(float(v) for v in data.qpos[self._qadr : self._qadr + 2])]
+
+    def move_cube_start(self, data, protected_xy, start, seed):
+        drawn = self._cube_xy(data)[0]
+        x, y = start.apply(seed, drawn)
+        data.qpos[self._qadr : self._qadr + 2] = (x, y)
+        return (protected_xy[0], (x, y))
 
 
 class SortingLayout(ObjectLayout):

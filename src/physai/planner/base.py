@@ -306,7 +306,7 @@ class ScriptedPlanner(Planner):
 
 
 # SortingPlanner (a task-coupled VLM stand-in that parses instruction text)
-# is research content, kept in the private `physai-research` repo. It is
+# is research content, kept outside core in a plugin. It is
 # not defined here because core must not own task-specific language
 # grounding — only the Planner contract and the generic ScriptedPlanner
 # baseline above do.
