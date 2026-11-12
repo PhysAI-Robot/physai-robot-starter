@@ -5,6 +5,8 @@ import json
 import numpy as np
 import pytest
 
+from tests.conftest import requires_assets, requires_viperx300s_assets
+
 
 def _write(tmp_path, body):
     path = tmp_path / "start.json"
@@ -60,7 +62,13 @@ def _envs():
     return [(SO101Env, SO101Config), (ViperX300SEnv, ViperXConfig)]
 
 
-@pytest.mark.parametrize("index", [0, 1])
+@pytest.mark.parametrize(
+    "index",
+    [
+        pytest.param(0, marks=requires_assets),
+        pytest.param(1, marks=requires_viperx300s_assets),
+    ],
+)
 def test_off_or_zero_offset_changes_nothing_and_a_table_moves_only_the_cube(
     tmp_path, index
 ):
