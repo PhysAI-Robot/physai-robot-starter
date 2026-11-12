@@ -209,7 +209,7 @@ def main() -> int:
     ap.add_argument(
         "--cube-start",
         type=Path,
-        help="study 01, O2: a JSON file (see physai.robots.cube_start) that moves "
+        help="study 01: a JSON file (see physai.robots.cube_start) that moves "
         "the cube's start in MuJoCo to where another simulator puts it; "
         "--sim mujoco only, off by default",
     )

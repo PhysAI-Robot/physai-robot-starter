@@ -1,4 +1,4 @@
-"""Where the cube starts, taken from another simulator (study 01, O2).
+"""Where the cube starts, taken from another simulator (study 01).
 
 Off unless an env config names a file. The file is JSON in metres with one of:
 

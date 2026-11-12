@@ -128,7 +128,7 @@ class EnvConfig:
     # servos hold their position stiffly, so by default gravity is cancelled on the
     # arm's bodies (not the cube) and the actuators only have to follow commands.
     gravity_compensation: bool = True
-    # O2 of study 01: a JSON file (see `physai.robots.cube_start`) that moves the
+    # Study 01: a JSON file (see `physai.robots.cube_start`) that moves the
     # cube's start to where another simulator puts it. Off by default; with it off
     # a reset is exactly what it was.
     cube_start: str | None = None

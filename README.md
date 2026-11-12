@@ -165,8 +165,8 @@ finally:
   `fetch_assets.py --robot <robot>` also imports the robot into USD (`assets/<robot>/usd/`); an Isaac Sim run reads
   that USD and stops with the command to rerun if it is missing or was written by another Isaac Sim version
   (`--force` rewrites it). Fetch again after installing or upgrading `isaacsim`. Constraints and results:
-  [decision D](docs/DECISIONS.md#d-isaac-sim-is-an-optional-peer-engine) and
-  `research/classical_control` in [`physai-research`](https://github.com/PhysAI-Robot/physai-research).
+  [decision D](docs/DECISIONS.md#d-isaac-sim-is-an-optional-peer-engine) and the
+  study code (visual servo, ACT) in [`physai-study-01`](https://github.com/PhysAI-Robot/physai-study-01).
   The Isaac Sim packages are large, and `uv` gives up on a download after 30 s by default
   (`Failed to download ... network timeout`). Rerun with a longer limit: `$env:UV_HTTP_TIMEOUT=600`
   in PowerShell, `export UV_HTTP_TIMEOUT=600` in bash. The packages already downloaded are cached,
@@ -186,8 +186,8 @@ finally:
 - [Architecture](docs/ARCHITECTURE.md): module ownership, contracts, extension seams.
 - [Design decisions](docs/DECISIONS.md): why the frozen design is shaped this way.
 - Runbooks: [robots](docs/ROBOT_RUNBOOKS.md) and [web viewer](docs/WEB_VIEWER_RUNBOOK.md).
-- [Research](https://github.com/PhysAI-Robot/physai-research) (private): scripted experts,
-  classical control and imitation learning, with results, and the plan for each study.
+- [Study 1](https://github.com/PhysAI-Robot/physai-study-01): scripted experts, visual servo, ACT, Diffusion Policy and SmolVLA, the code
+  behind the paper (checkpoints and per-seed results on [Hugging Face](https://huggingface.co/rizgiak/physai-study-01-checkpoints)).
 - [Contributing](CONTRIBUTING.md), [agent guide](AGENTS.md), [roadmap](ROADMAP.md) and
   [third-party notices](THIRD_PARTY_NOTICES.md).
 

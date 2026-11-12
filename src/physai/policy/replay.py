@@ -7,7 +7,7 @@ core because `ReplayPolicy` — the integration test for this whole seam —
 needs it and core must not import research code.
 
 Checkpoint-backed subclasses (`LeRobotPolicy`) are research content, kept in the
-private `physai-research` repo.
+plugin `physai-study-01`.
 
 Observation keys follow the LeRobot convention so a checkpoint fine-tuned on a
 dataset recorded from a robot contract needs no remapping:

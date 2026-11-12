@@ -2,7 +2,7 @@
 
 `physai-robot-starter` is an open-source starter kit for embodied AI and robotics research. It provides stable robot, task, observation and action contracts so the same policy can be evaluated across transports (direct, ROS2, and in the future real robots) and simulator engines (MuJoCo, Isaac Sim, Newton).
 
-This roadmap lists framework features. Research studies built on the framework are listed in the private [`physai-research`](https://github.com/PhysAI-Robot/physai-research) repo (`research/README.md#studies`). `[x]` is shipped, `[ ]` is planned or partial. Design rationale is in [DECISIONS.md](docs/DECISIONS.md).
+This roadmap lists framework features. Studies built on the framework live in their own plugin repositories, for example [`physai-study-01`](https://github.com/PhysAI-Robot/physai-study-01). `[x]` is shipped, `[ ]` is planned or partial. Design rationale is in [DECISIONS.md](docs/DECISIONS.md).
 
 Simulation only for now; no hardware work is planned.
 

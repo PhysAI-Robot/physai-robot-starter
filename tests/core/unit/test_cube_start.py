@@ -1,4 +1,4 @@
-"""The cube-start file of O2 (study 01): format, and that it changes nothing when off."""
+"""The cube-start file (study 01): format, and that it changes nothing when off."""
 
 import json
 

@@ -317,8 +317,8 @@ scene plus `scene.overrides`. A scene that is not a `ManipulationSceneConfig` ne
 extension first. Core keeps minimal baselines (`ScriptedPlanner`, `PlanRunner`, the SO-101
 `demo` policy, `ReplayPolicy`/`VLAPolicy`, `SortingTask`, `GymnasiumAdapter`, TurtleBot4
 navigation). ACT is a low-level policy checkpoint format behind the policy boundary, never a
-planner. This repository's CI runs only `tests/core/`; this project's own studies are a plugin
-in the private `physai-research` repo, which runs its tests itself so torch and LeRobot stay
+planner. This repository's CI runs only `tests/core/`; this project's own study is a plugin
+(`physai-study-01`), which runs its tests itself so torch and LeRobot stay
 isolated.
 
 ## Demonstration data

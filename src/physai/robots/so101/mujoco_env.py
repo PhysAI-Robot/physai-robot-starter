@@ -106,9 +106,9 @@ class EnvConfig:
     # 20-50x a cube's weight and makes the contact chatter. visual_servo's
     # shallow grip needs the cap; the scripted expert's deeper squeeze does not,
     # but the shared default stays for its other callers. Measurements are in
-    # the private `physai-research` repo.
+    # `physai-study-01`.
     gripper_force_limit: float = 0.3
-    # O2 of study 01: a JSON file (see `physai.robots.cube_start`) that moves the
+    # Study 01: a JSON file (see `physai.robots.cube_start`) that moves the
     # cube's start to where another simulator puts it. Off by default; with it off
     # a reset is exactly what it was.
     cube_start: str | None = None

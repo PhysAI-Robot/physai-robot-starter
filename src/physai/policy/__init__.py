@@ -1,7 +1,7 @@
 """Control-rate policies.
 
 SO-101's "scripted" and "visual_servo" policies, and the checkpoint-backed
-"lerobot" policy, are research modules (in the private ``physai-research`` repo) and
+"lerobot" policy, are research modules (in the plugin `physai-study-01`) and
 are looked up by name through the registry, not imported here.
 """
 

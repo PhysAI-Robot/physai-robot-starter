@@ -127,8 +127,7 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
 ## F. `research/` is a folder you fill with a plugin repo; a paper ships as its own repo
 
 - **Not a submodule.** `research/` is git-ignored, like `assets/` and `checkpoints/`. Whatever repository
-  you clone into it is the plugin: `physai-study-NN` for a published study, your own lab's repo, or the
-  private `PhysAI-Robot/physai-research` that holds every unpublished study. The folder name stays
+  you clone into it is the plugin: `physai-study-NN` for a published study, or your own lab's repo. The folder name stays
   `research/` because the plugins import themselves as `research...` (`plugins: [research.plugin]` in a
   manifest), so the run commands do not change from one repo to the next. A submodule pointer to a private
   repository would show every public user a URL they cannot clone and fail `--recurse-submodules` for them.
@@ -138,8 +137,8 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
   the plugin's own tests run in its repository against a tagged or `dev` core.
 - **One public repo per paper.** When a paper is out, publish just that study's runnable code (topic modules,
   manifests, tests; no findings or plans) as `PhysAI-Robot/physai-study-NN`, with checkpoints and data on
-  Hugging Face. It is tagged like the core (`study-NN-v1` on both), and its README says to clone the core
-  at that tag and the study into `research/`. `physai-research` itself never goes public.
+  Hugging Face. It is tagged like the core (`study-NN` on both), and its README says to clone the core
+  at that tag and the study into `research/`.
 - **Pinning.** A plugin version is a tag in the plugin repo; the matching core version is the same tag
   here. There is no pointer in this repository to update.
 
@@ -147,7 +146,7 @@ Goal: evaluate a MuJoCo-tuned policy on a second engine to measure the sim-to-si
 ## G. Plugins load by name from the manifest; core ships a demo policy
 
 - **Physai is the framework; research is a plugin.** Anyone researches in their own folder with
-  their own scenes, tasks and policies. `physai-research` is one such folder, not a special
+  their own scenes, tasks and policies. A study repository is one such folder, not a special
   one: core has no code path that names it.
 - **The manifest is the loader.** An optional `plugins: [module, ...]` list is imported by
   `physai.plugins.load_plugins` before any name is validated, so one manifest is self-contained
